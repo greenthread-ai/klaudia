@@ -4263,7 +4263,7 @@ var qW1 = E(() => {
         .boolean()
         .optional()
         .describe(
-          `Set to true to run this agent in the background. The tool result will include an output_file path - use ${n4} tool or ${l4} tail to check on output.`,
+          `Set to true to run this agent in the background. The tool result will include an output_file path - use ${READ_TOOL_NAME} tool or ${BASH_TOOL_NAME} tail to check on output.`,
         ),
       max_turns: x
         .number()
@@ -4729,7 +4729,7 @@ var qW1 = E(() => {
             }
           }),
         );
-        let G6 = J.options.tools.some((v6) => B5(v6, n4) || B5(v6, l4));
+        let G6 = J.options.tools.some((v6) => B5(v6, READ_TOOL_NAME) || B5(v6, BASH_TOOL_NAME));
         return {
           data: {
             isAsync: !0,
@@ -4906,7 +4906,7 @@ var qW1 = E(() => {
                         }
                       }));
                     let d6 = J.options.tools.some(
-                      (o6) => B5(o6, n4) || B5(o6, l4),
+                      (o6) => B5(o6, READ_TOOL_NAME) || B5(o6, BASH_TOOL_NAME),
                     );
                     return {
                       data: {
@@ -5073,7 +5073,7 @@ The agent is working in the background. You will be notified automatically when 
           z = A.canReadOutputFile
             ? `Do not duplicate this agent's work — avoid working with the same files or topics it is using. Work on non-overlapping tasks, or briefly tell the user what you launched and end your response.
 output_file: ${A.outputFile}
-If asked, you can check progress before completion by using ${n4} or ${l4} tail on the output file.`
+If asked, you can check progress before completion by using ${READ_TOOL_NAME} or ${BASH_TOOL_NAME} tail on the output file.`
             : "Briefly tell the user what you launched and end your response. Do not generate any other text — agent results will arrive in a subsequent message.",
           w = `${Y}
 ${z}`;
@@ -5654,7 +5654,7 @@ ${A.result}`,
 });
 function yUY() {
   return `
-- You must use your \`${n4}\` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file. `;
+- You must use your \`${READ_TOOL_NAME}\` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file. `;
 }
 function hs4() {
   return RUY();
@@ -10491,7 +10491,7 @@ var Sz6 = E(() => {
   f1();
   N8();
   YD();
-  dcY = new Set([Lq, U3, o0]);
+  dcY = new Set([EDIT_TOOL_NAME, WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
 });
 function ccY(A, q) {
   return ex.createElement(T, { key: q }, ex.createElement(M3, null, A));
@@ -11506,7 +11506,7 @@ var xz6 = E(() => {
   r1();
   ye();
   rM = {
-    name: Lq,
+    name: EDIT_TOOL_NAME,
     maxResultSizeChars: 1e5,
     strict: !0,
     async description() {
@@ -11622,7 +11622,7 @@ var xz6 = E(() => {
         return {
           result: !1,
           behavior: "ask",
-          message: `File is a Jupyter Notebook. Use the ${o0} to edit this file.`,
+          message: `File is a Jupyter Notebook. Use the ${NOTEBOOK_EDIT_TOOL_NAME} to edit this file.`,
           errorCode: 5,
         };
       let J = q.readFileState.get(_);
@@ -12132,7 +12132,7 @@ var T16 = E(() => {
       }),
     )),
     (oM = {
-      name: U3,
+      name: WRITE_TOOL_NAME,
       maxResultSizeChars: 1e5,
       strict: !0,
       input_examples: [
@@ -12665,7 +12665,7 @@ var MT6 = E(() => {
     }),
   )),
     (qb = {
-      name: k5,
+      name: GREP_TOOL_NAME,
       maxResultSizeChars: 20000,
       strict: !0,
       input_examples: [
@@ -13028,7 +13028,7 @@ var $l6 = E(() => {
       }),
     )),
     (ZF = {
-      name: Sz,
+      name: GLOB_TOOL_NAME,
       maxResultSizeChars: 1e5,
       async description() {
         return ez8;
@@ -13385,7 +13385,7 @@ var Ol6 = E(() => {
       }),
     )),
     (Wi = {
-      name: o0,
+      name: NOTEBOOK_EDIT_TOOL_NAME,
       maxResultSizeChars: 1e5,
       shouldDefer: !0,
       async description() {
@@ -29513,7 +29513,7 @@ var I7q = E(() => {
 });
 function ooY(A) {
   try {
-    let q = tM.inputSchema.safeParse(A);
+    let q = webFetchTool.inputSchema.safeParse(A);
     if (!q.success) return `input:${A.toString()}`;
     let { url: K } = q.data;
     return `domain:${new URL(K).hostname}`;
@@ -29526,12 +29526,14 @@ function x7q(A) {
     {
       type: "addRules",
       destination: "localSettings",
-      rules: [{ toolName: HX, ruleContent: A }],
+      rules: [{ toolName: WEB_FETCH_TOOL_NAME, ruleContent: A }],
       behavior: "allow",
     },
   ];
 }
-var noY, roY, tM;
+// Klaudia: SERVER-SIDE TOOL — WebFetch
+// To replace with local implementation, swap webFetchTool.call() below
+var webFetchInputSchema, webFetchOutputSchema, webFetchTool;
 var IT6 = E(() => {
   K4();
   ct();
@@ -29539,13 +29541,13 @@ var IT6 = E(() => {
   tj();
   KB8();
   I7q();
-  ((noY = i6(() =>
+  ((webFetchInputSchema = i6(() =>
     x.strictObject({
       url: x.string().url().describe("The URL to fetch content from"),
       prompt: x.string().describe("The prompt to run on the fetched content"),
     }),
   )),
-    (roY = i6(() =>
+    (webFetchOutputSchema = i6(() =>
       x.object({
         bytes: x.number().describe("Size of the fetched content in bytes"),
         code: x.number().describe("HTTP response code"),
@@ -29559,8 +29561,8 @@ var IT6 = E(() => {
         url: x.string().describe("The URL that was fetched"),
       }),
     )));
-  tM = {
-    name: HX,
+  webFetchTool = {
+    name: WEB_FETCH_TOOL_NAME,
     maxResultSizeChars: 1e5,
     shouldDefer: !0,
     async description(A) {
@@ -29583,10 +29585,10 @@ var IT6 = E(() => {
       return !0;
     },
     get inputSchema() {
-      return noY();
+      return webFetchInputSchema();
     },
     get outputSchema() {
-      return roY();
+      return webFetchOutputSchema();
     },
     isConcurrencySafe() {
       return !0;
@@ -29622,22 +29624,22 @@ var IT6 = E(() => {
             };
       } catch {}
       let z = ooY(A),
-        w = ax(Y, tM, "deny").get(z);
+        w = ax(Y, webFetchTool, "deny").get(z);
       if (w)
         return {
           behavior: "deny",
-          message: `${tM.name} denied access to ${z}.`,
+          message: `${webFetchTool.name} denied access to ${z}.`,
           decisionReason: { type: "rule", rule: w },
         };
-      let _ = ax(Y, tM, "ask").get(z);
+      let _ = ax(Y, webFetchTool, "ask").get(z);
       if (_)
         return {
           behavior: "ask",
-          message: `Claude requested permissions to use ${tM.name}, but you haven't granted it yet.`,
+          message: `Claude requested permissions to use ${webFetchTool.name}, but you haven't granted it yet.`,
           decisionReason: { type: "rule", rule: _ },
           suggestions: x7q(z),
         };
-      let $ = ax(Y, tM, "allow").get(z);
+      let $ = ax(Y, webFetchTool, "allow").get(z);
       if ($)
         return {
           behavior: "allow",
@@ -29646,7 +29648,7 @@ var IT6 = E(() => {
         };
       return {
         behavior: "ask",
-        message: `Claude requested permissions to use ${tM.name}, but you haven't granted it yet.`,
+        message: `Claude requested permissions to use ${webFetchTool.name}, but you haven't granted it yet.`,
         suggestions: x7q(z),
       };
     },
@@ -30626,10 +30628,12 @@ function HaY(A, q, K) {
   if (z.length) Y.push(z.trim());
   return { query: q, results: Y, durationSeconds: K };
 }
-var waY,
-  _aY,
-  $aY,
-  OaY = (A) => {
+// Klaudia: SERVER-SIDE TOOL — WebSearch
+// To replace with local implementation, swap webSearchTool.call() below
+var webSearchInputSchema,
+  webSearchResultSchema,
+  webSearchOutputSchema,
+  buildWebSearchToolDef = (A) => {
     return {
       type: "web_search_20250305",
       name: "web_search",
@@ -30638,8 +30642,8 @@ var waY,
       max_uses: 8,
     };
   },
-  gv1;
-var MB8 = E(() => {
+  webSearchTool;
+var initWebSearch = E(() => {
   K4();
   TK6();
   b$();
@@ -30650,7 +30654,7 @@ var MB8 = E(() => {
   h1();
   r7q();
   r1();
-  ((waY = i6(() =>
+  ((webSearchInputSchema = i6(() =>
     x.strictObject({
       query: x.string().min(2).describe("The search query to use"),
       allowed_domains: x
@@ -30663,7 +30667,7 @@ var MB8 = E(() => {
         .describe("Never include search results from these domains"),
     }),
   )),
-    (_aY = i6(() => {
+    (webSearchResultSchema = i6(() => {
       let A = x.object({
         title: x.string().describe("The title of the search result"),
         url: x.string().describe("The URL of the search result"),
@@ -30673,19 +30677,19 @@ var MB8 = E(() => {
         content: x.array(A).describe("Array of search hits"),
       });
     })),
-    ($aY = i6(() =>
+    (webSearchOutputSchema = i6(() =>
       x.object({
         query: x.string().describe("The search query that was executed"),
         results: x
-          .array(x.union([_aY(), x.string()]))
+          .array(x.union([webSearchResultSchema(), x.string()]))
           .describe("Search results and/or text commentary from the model"),
         durationSeconds: x
           .number()
           .describe("Time taken to complete the search operation"),
       }),
     )));
-  gv1 = {
-    name: uy,
+  webSearchTool = {
+    name: WEB_SEARCH_TOOL_NAME,
     maxResultSizeChars: 1e5,
     shouldDefer: !0,
     async description(A) {
@@ -30713,10 +30717,10 @@ var MB8 = E(() => {
       return !1;
     },
     get inputSchema() {
-      return waY();
+      return webSearchInputSchema();
     },
     get outputSchema() {
-      return $aY();
+      return webSearchOutputSchema();
     },
     isConcurrencySafe() {
       return !0;
@@ -30755,10 +30759,10 @@ var MB8 = E(() => {
       let w = performance.now(),
         { query: _ } = A,
         $ = K8({ content: "Perform a web search for the query: " + _ }),
-        O = OaY(A),
+        O = buildWebSearchToolDef(A),
         H = jA("tengu_plum_vx3", !1),
         j = await q.getAppState(),
-        J = hG6({
+        J = callModel({
           messages: [$],
           systemPrompt: Qq([
             "You are an assistant for performing a web search tool use",
@@ -35678,13 +35682,13 @@ function R16() {
     ZF,
     qb,
     eM,
-    l9,
+    readTool,
     rM,
     oM,
     Wi,
-    tM,
+    webFetchTool,
     aN,
-    gv1,
+    webSearchTool,
     uv1,
     xT6,
     D16,
@@ -35738,7 +35742,7 @@ var SKq = null,
   uKq = null,
   FsY,
   A0 = (A) => {
-    if (X1(process.env.CLAUDE_CODE_SIMPLE)) return FT6([Yq, l9, rM], A);
+    if (X1(process.env.CLAUDE_CODE_SIMPLE)) return FT6([Yq, readTool, rM], A);
     let q = new Set([
         bc.name,
         uc.name,
@@ -35768,7 +35772,7 @@ var oP = E(() => {
   IT6();
   OB8();
   DB8();
-  MB8();
+  initWebSearch();
   yP6();
   Sl6();
   z4q();
@@ -36310,7 +36314,7 @@ function QsY(A, q) {
   if (K?.type !== "connected") return;
   return VD(K.config);
 }
-async function* Rc6(A, q, K, Y) {
+async function* dispatchToolUse(A, q, K, Y) {
   let z = A.name,
     w = q5(Y.options.tools, z);
   if (!w) {
@@ -36539,7 +36543,7 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
         },
       ]
     );
-  if (A.name === l4 && J.data && "command" in J.data) {
+  if (A.name === BASH_TOOL_NAME && J.data && "command" in J.data) {
     let h = await Y.getAppState();
     if (
       nKq(
@@ -36553,7 +36557,7 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
   }
   let X = [],
     M = J.data;
-  if (A.name === l4 && M && typeof M === "object" && "_simulatedSedEdit" in M) {
+  if (A.name === BASH_TOOL_NAME && M && typeof M === "object" && "_simulatedSedEdit" in M) {
     let { _simulatedSedEdit: h, ...F } = M;
     M = F;
   }
@@ -36611,10 +36615,10 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
   p_6()?.observe("pre_tool_hook_duration_ms", N);
   let V = {};
   if (M && typeof M === "object") {
-    if (A.name === n4 && "file_path" in M) V.file_path = String(M.file_path);
-    else if ((A.name === Lq || A.name === U3) && "file_path" in M)
+    if (A.name === READ_TOOL_NAME && "file_path" in M) V.file_path = String(M.file_path);
+    else if ((A.name === EDIT_TOOL_NAME || A.name === WRITE_TOOL_NAME) && "file_path" in M)
       V.file_path = String(M.file_path);
-    else if (A.name === l4 && "command" in M) {
+    else if (A.name === BASH_TOOL_NAME && "command" in M) {
       let h = M;
       V.full_command = h.command;
     }
@@ -36741,7 +36745,7 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
   )
     M = v.updatedInput;
   let L = {};
-  if (A.name === l4 && "command" in M) {
+  if (A.name === BASH_TOOL_NAME && "command" in M) {
     let h = M;
     L = {
       bash_command: h.command.trim().split(/\s+/)[0] || "",
@@ -36778,19 +36782,19 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
       F = Date.now() - B;
     if ((qs6(F), h.data && typeof h.data === "object")) {
       let v6 = {};
-      if (A.name === n4 && "content" in h.data) {
+      if (A.name === READ_TOOL_NAME && "content" in h.data) {
         if ("file_path" in M) v6.file_path = String(M.file_path);
         v6.content = String(h.data.content);
       }
-      if ((A.name === Lq || A.name === U3) && "file_path" in M) {
+      if ((A.name === EDIT_TOOL_NAME || A.name === WRITE_TOOL_NAME) && "file_path" in M) {
         if (
           ((v6.file_path = String(M.file_path)),
-          A.name === Lq && "diff" in h.data)
+          A.name === EDIT_TOOL_NAME && "diff" in h.data)
         )
           v6.diff = String(h.data.diff);
-        if (A.name === U3 && "content" in M) v6.content = String(M.content);
+        if (A.name === WRITE_TOOL_NAME && "content" in M) v6.content = String(M.content);
       }
-      if (A.name === l4 && "command" in M) {
+      if (A.name === BASH_TOOL_NAME && "command" in M) {
         let T6 = M;
         if (((v6.bash_command = T6.command), "output" in h.data))
           v6.output = String(h.data.output);
@@ -36810,11 +36814,11 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
       c = !U ? 0 : typeof U === "string" ? U.length : p6(U).length,
       d;
     if (M && typeof M === "object") {
-      if ((A.name === n4 || A.name === Lq || A.name === U3) && "file_path" in M)
+      if ((A.name === READ_TOOL_NAME || A.name === EDIT_TOOL_NAME || A.name === WRITE_TOOL_NAME) && "file_path" in M)
         d = Fl6(String(M.file_path));
-      else if (A.name === o0 && "notebook_path" in M)
+      else if (A.name === NOTEBOOK_EDIT_TOOL_NAME && "notebook_path" in M)
         d = Fl6(String(M.notebook_path));
-      else if (A.name === l4 && "command" in M) {
+      else if (A.name === BASH_TOOL_NAME && "command" in M) {
         let v6 = M;
         d = aKq(v6.command, v6._simulatedSedEdit?.filePath);
       }
@@ -36843,7 +36847,7 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
           : {}),
       }),
       b44(A.name),
-      A.name === l4 &&
+      A.name === BASH_TOOL_NAME &&
         "command" in M &&
         M.command.match(/\bgit\s+commit\b/) &&
         h.data &&
@@ -37050,7 +37054,7 @@ var jx8 = E(() => {
   UKq();
   F7();
 });
-class pl6 {
+class StreamingToolExecutor {
   toolDefinitions;
   canUseTool;
   tools = [];
@@ -37189,7 +37193,7 @@ class pl6 {
     }
   }
   allToolsAreWriteOrEdit() {
-    return this.tools.every(({ block: { name: A } }) => A === U3 || A === Lq);
+    return this.tools.every(({ block: { name: A } }) => A === WRITE_TOOL_NAME || A === EDIT_TOOL_NAME);
   }
   updateInterruptibleState() {
     let A = this.tools.filter((q) => q.status === "executing");
@@ -37216,7 +37220,7 @@ class pl6 {
             this.updateInterruptibleState());
           return;
         }
-        let _ = Rc6(
+        let _ = dispatchToolUse(
             A.block,
             A.assistantMessage,
             this.canUseTool,
@@ -37690,7 +37694,7 @@ var _3q = E(() => {
 });
 import { randomUUID as osY } from "crypto";
 function $3q() {
-  return { callModel: hG6, microcompact: Lg, autocompact: JX4, uuid: osY };
+  return { callModel: callModel, microcompact: microcompact, autocompact: autocompactFn, uuid: osY };
 }
 var O3q = E(() => {
   b$();
@@ -37751,7 +37755,7 @@ function* qg8(A, q) {
       });
   }
 }
-async function* JC(A) {
+async function* agentLoop(A) {
   let {
       systemPrompt: q,
       userContext: K,
@@ -37861,7 +37865,7 @@ async function* JC(A) {
       c = [];
     L3("query_setup_start");
     let a = J.gates.streamingToolExecution
-        ? new pl6(X.options.tools, z, X)
+        ? new StreamingToolExecutor(X.options.tools, z, X)
         : null,
       e = await X.getAppState(),
       j6 = e.toolPermissionContext.mode,
@@ -37873,7 +37877,7 @@ async function* JC(A) {
     L3("query_setup_end");
     let f6 = J.gates.isAnt ? TX4(X.agentId ?? J.sessionId) : void 0;
     if (!u && _ !== "compact" && _ !== "session_memory") {
-      let { isAtBlockingLimit: t } = tc(ak(I), X.options.mainLoopModel);
+      let { isAtBlockingLimit: t } = calculateTokenThresholds(countMessageTokens(I), X.options.mainLoopModel);
       if (t)
         return (
           yield kY({ content: Oc, error: "invalid_request" }),
@@ -37934,7 +37938,7 @@ async function* JC(A) {
                 (c.length = 0),
                 a)
               )
-                (a.discard(), (a = new pl6(X.options.tools, z, X)));
+                (a.discard(), (a = new StreamingToolExecutor(X.options.tools, z, X)));
             }
             if (!Ag8?.isWithheldPromptTooLong(O6)) yield O6;
             if (O6.type === "assistant") {
@@ -37967,7 +37971,7 @@ async function* JC(A) {
               (c.length = 0),
               a)
             )
-              (a.discard(), (a = new pl6(X.options.tools, z, X)));
+              (a.discard(), (a = new StreamingToolExecutor(X.options.tools, z, X)));
             ((X.options.mainLoopModel = w),
               n("tengu_model_fallback_triggered", {
                 original_model: t.originalModel,
@@ -38838,7 +38842,7 @@ async function lR({
     ),
       (v = N.length > 0 ? N[N.length - 1].uuid : null));
   try {
-    for await (let S of JC({
+    for await (let S of agentLoop({
       messages: N,
       systemPrompt: M,
       userContext: P,
@@ -41794,17 +41798,17 @@ s1(y5q, {
 });
 function E5q(A, q) {
   switch (A) {
-    case n4: {
-      let K = l9.inputSchema.safeParse(q);
+    case READ_TOOL_NAME: {
+      let K = readTool.inputSchema.safeParse(q);
       return K.success ? K.data.file_path : null;
     }
-    case Lq: {
+    case EDIT_TOOL_NAME: {
       let K = pV1().safeParse(q);
       if (K.success) return K.data.file_path;
       let Y = QV1().safeParse(q);
       return Y.success ? Y.data.file_path : null;
     }
-    case U3: {
+    case WRITE_TOOL_NAME: {
       let K = oM.inputSchema.safeParse(q);
       return K.success ? K.data.file_path : null;
     }
@@ -41814,12 +41818,12 @@ function E5q(A, q) {
 }
 function L5q(A, q) {
   switch (A) {
-    case n4: {
-      let K = l9.inputSchema.safeParse(q);
+    case READ_TOOL_NAME: {
+      let K = readTool.inputSchema.safeParse(q);
       if (!K.success) return null;
       return oQ6(K.data.file_path);
     }
-    case k5: {
+    case GREP_TOOL_NAME: {
       let K = qb.inputSchema.safeParse(q);
       if (!K.success) return null;
       if (K.data.path) {
@@ -41832,7 +41836,7 @@ function L5q(A, q) {
       }
       return null;
     }
-    case Sz: {
+    case GLOB_TOOL_NAME: {
       let K = ZF.inputSchema.safeParse(q);
       if (!K.success) return null;
       if (K.data.path) {
@@ -41865,21 +41869,21 @@ async function keY(A, q, K) {
     switch (
       (n("tengu_memdir_accessed", { tool: A.tool_name, ...w }), A.tool_name)
     ) {
-      case n4:
+      case READ_TOOL_NAME:
         n("tengu_memdir_file_read", { ...w });
         break;
-      case Lq:
+      case EDIT_TOOL_NAME:
         n("tengu_memdir_file_edit", { ...w });
         break;
-      case U3:
+      case WRITE_TOOL_NAME:
         n("tengu_memdir_file_write", { ...w });
         break;
     }
   if (!1)
     switch (A.tool_name) {
-      case n4:
-      case Lq:
-      case U3:
+      case READ_TOOL_NAME:
+      case EDIT_TOOL_NAME:
+      case WRITE_TOOL_NAME:
     }
   return {};
 }
@@ -41887,11 +41891,11 @@ function EeY() {
   let A = { type: "callback", callback: keY, timeout: 1, internal: !0 };
   mA6({
     PostToolUse: [
-      { matcher: n4, hooks: [A] },
-      { matcher: k5, hooks: [A] },
-      { matcher: Sz, hooks: [A] },
-      { matcher: Lq, hooks: [A] },
-      { matcher: U3, hooks: [A] },
+      { matcher: READ_TOOL_NAME, hooks: [A] },
+      { matcher: GREP_TOOL_NAME, hooks: [A] },
+      { matcher: GLOB_TOOL_NAME, hooks: [A] },
+      { matcher: EDIT_TOOL_NAME, hooks: [A] },
+      { matcher: WRITE_TOOL_NAME, hooks: [A] },
     ],
   });
 }
@@ -42052,7 +42056,7 @@ var Gk1 = E(() => {
   ow();
   r0();
   YD();
-  CeY = new Set([n4, k5, Sz, Lq, U3]);
+  CeY = new Set([READ_TOOL_NAME, GREP_TOOL_NAME, GLOB_TOOL_NAME, EDIT_TOOL_NAME, WRITE_TOOL_NAME]);
 });
 function IeY() {
   let { commit: A } = AN6();
@@ -42958,8 +42962,8 @@ var Y6z = async (A, q) => {
         };
       }
     }
-    let _ = (await Lg(Y, q)).messages,
-      $ = await SG6(_, q, await z6z(q, _), !1, z, !1);
+    let _ = (await microcompact(Y, q)).messages,
+      $ = await compactConversation(_, q, await z6z(q, _), !1, z, !1);
     (d96(void 0), LG6(), Q_.cache.clear?.(), se());
     let O = _Y6("tip"),
       H = VP("app:toggleTranscript", "Global", "ctrl+o"),
@@ -47585,7 +47589,7 @@ async function $1z(A, q) {
       options: { mainLoopModel: z, tools: w },
     } = q,
     _ = DV(K),
-    { messages: $ } = await Lg(_),
+    { messages: $ } = await microcompact(_),
     O = process.stdout.columns || 80,
     H = await Y(),
     j = await XP1(
@@ -47620,7 +47624,7 @@ async function O1z(A, q) {
       options: { mainLoopModel: z, tools: w, agentDefinitions: _ },
     } = q,
     $ = DV(K),
-    { messages: O } = await Lg($),
+    { messages: O } = await microcompact($),
     H = await Y(),
     j = await XP1(
       O,
@@ -49700,7 +49704,7 @@ function Q1z(A, q, K) {
     (_) => _.ruleValue.toolName === Y && _.ruleValue.ruleContent === void 0,
   );
   if (!w) return { shadowed: !1 };
-  if (Y === l4 && K.sandboxAutoAllowEnabled) {
+  if (Y === BASH_TOOL_NAME && K.sandboxAutoAllowEnabled) {
     if (!p1z(w.source)) return { shadowed: !1 };
   }
   return { shadowed: !0, shadowedBy: w, shadowType: "ask" };
@@ -80538,7 +80542,7 @@ function Rjq(A) {
   else W = q[6];
   let G, Z;
   if (q[7] === Symbol.for("react.memo_cache_sentinel"))
-    ((G = uz.createElement(T, { bold: !0 }, v5({ toolName: tM.name }))),
+    ((G = uz.createElement(T, { bold: !0 }, v5({ toolName: webFetchTool.name }))),
       (Z = uz.createElement(T, { bold: !1 }, " or ")),
       (q[7] = G),
       (q[8] = Z));
@@ -87877,10 +87881,10 @@ var XT,
         ZF.name,
         qb.name,
         eM.name,
-        l9.name,
-        tM.name,
+        readTool.name,
+        webFetchTool.name,
         aN.name,
-        gv1.name,
+        webSearchTool.name,
         uv1.name,
         Bv1.name,
         bc.name,
@@ -87913,7 +87917,7 @@ var MU8 = E(() => {
   lI();
   IT6();
   yP6();
-  MB8();
+  initWebSearch();
   OB8();
   DB8();
   hM1();
@@ -103699,7 +103703,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
   return AY([K8({ content: z, isMeta: !0 })]);
 }
 function Ajz() {
-  let A = [n4, Sz, k5],
+  let A = [READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME],
     { allowedTools: q } = aw();
   return (q && q.length > 0 ? A.filter((Y) => q.includes(Y)) : A).join(", ");
 }
@@ -103830,38 +103834,38 @@ ${A.snippet}`,
       let K = A.content;
       switch (K.type) {
         case "image":
-          return AY([Nn6(l9.name, { file_path: A.filename }), Tn6(l9, K)]);
+          return AY([Nn6(readTool.name, { file_path: A.filename }), Tn6(readTool, K)]);
         case "text":
           return AY([
-            Nn6(l9.name, { file_path: A.filename }),
-            Tn6(l9, K),
+            Nn6(readTool.name, { file_path: A.filename }),
+            Tn6(readTool, K),
             ...(A.truncated
               ? [
                   K8({
-                    content: `Note: The file ${A.filename} was too large and has been truncated to the first ${qb6} lines. Don't tell the user about this truncation. Use ${l9.name} to read more of the file if you need.`,
+                    content: `Note: The file ${A.filename} was too large and has been truncated to the first ${qb6} lines. Don't tell the user about this truncation. Use ${readTool.name} to read more of the file if you need.`,
                     isMeta: !0,
                   }),
                 ]
               : []),
           ]);
         case "notebook":
-          return AY([Nn6(l9.name, { file_path: A.filename }), Tn6(l9, K)]);
+          return AY([Nn6(readTool.name, { file_path: A.filename }), Tn6(readTool, K)]);
         case "pdf":
-          return AY([Nn6(l9.name, { file_path: A.filename }), Tn6(l9, K)]);
+          return AY([Nn6(readTool.name, { file_path: A.filename }), Tn6(readTool, K)]);
       }
       break;
     }
     case "compact_file_reference":
       return AY([
         K8({
-          content: `Note: ${A.filename} was read before the last conversation was summarized, but the contents are too large to include. Use ${l9.name} tool if you need to access it.`,
+          content: `Note: ${A.filename} was read before the last conversation was summarized, but the contents are too large to include. Use ${readTool.name} tool if you need to access it.`,
           isMeta: !0,
         }),
       ]);
     case "pdf_reference":
       return AY([
         K8({
-          content: `PDF file: ${A.filename} (${A.pageCount} pages, ${v3(A.fileSize)}). This PDF is too large to read all at once. You MUST use the ${n4} tool with the pages parameter to read specific page ranges (e.g., pages: "1-5"). Do NOT call ${n4} without the pages parameter or it will fail. Start by reading the first few pages to understand the structure, then read more as needed. Maximum 20 pages per request.`,
+          content: `PDF file: ${A.filename} (${A.pageCount} pages, ${v3(A.fileSize)}). This PDF is too large to read all at once. You MUST use the ${READ_TOOL_NAME} tool with the pages parameter to read specific page ranges (e.g., pages: "1-5"). Do NOT call ${READ_TOOL_NAME} without the pages parameter or it will fail. Start by reading the first few pages to understand the structure, then read more as needed. Maximum 20 pages per request.`,
           isMeta: !0,
         }),
       ]);
@@ -104771,7 +104775,7 @@ function Jjz(A, q) {
   }
   return Y;
 }
-async function PP1(A, q) {
+async function buildToolSchema(A, q) {
   let K = Jw("tengu_tool_pear"),
     Y =
       "inputJSONSchema" in A && A.inputJSONSchema
@@ -105301,7 +105305,7 @@ async function mF({
 }) {
   let _;
   for await (let $ of lW8(A, async function* () {
-    yield* $Wq(A, q, K, Y, z, w);
+    yield* streamApiRequest(A, q, K, Y, z, w);
   }))
     if ($.type === "assistant") _ = $;
   if (!_) {
@@ -105310,7 +105314,7 @@ async function mF({
   }
   return _;
 }
-async function* hG6({
+async function* callModel({
   messages: A,
   systemPrompt: q,
   thinkingConfig: K,
@@ -105319,7 +105323,7 @@ async function* hG6({
   options: w,
 }) {
   return yield* lW8(A, async function* () {
-    yield* $Wq(A, q, K, Y, z, w);
+    yield* streamApiRequest(A, q, K, Y, z, w);
   });
 }
 function Gjz(A) {
@@ -105399,7 +105403,8 @@ function fjz(A, q) {
     return w === K ? Y : { ...Y, message: { ...Y.message, content: _ } };
   });
 }
-async function* $Wq(A, q, K, Y, z, w) {
+// Klaudia: MAIN API REQUEST — builds tools array, streams response, dispatches tool calls
+async function* streamApiRequest(A, q, K, Y, z, w) {
   if (
     !Y7() &&
     (await yg("tengu-off-switch", { activated: !1 })).activated &&
@@ -105451,7 +105456,7 @@ async function* $Wq(A, q, K, Y, z, w) {
   let f = P ? (Z ? "none" : "system_prompt") : "none",
     N = await Promise.all(
       J.map((L6) =>
-        PP1(L6, {
+        buildToolSchema(L6, {
           getToolPermissionContext: w.getToolPermissionContext,
           tools: Y,
           agents: w.agents,
@@ -105521,6 +105526,7 @@ ${L6}
       querySource: w.querySource,
     }),
     B = H.length > 0,
+    // Klaudia: TOOL MERGE POINT — local tools (N) + server-side tools (extraToolSchemas)
     h = [...N, ...(w.extraToolSchemas ?? [])],
     F = xq() && ZJ() && !mB() && fj(w.model) && !!w.fastMode,
     g = yD()
@@ -105755,6 +105761,8 @@ ${L6}
           }
           case "content_block_start":
             switch (M1.content_block.type) {
+              // Klaudia: TOOL RESPONSE DISCRIMINATION
+              // tool_use = local execution needed, server_tool_use = handled by API
               case "tool_use":
                 z6[M1.index] = { ...M1.content_block, input: "" };
                 break;
@@ -107258,7 +107266,7 @@ Git Safety Protocol:
 - When staging files, prefer adding specific files by name rather than using "git add -A" or "git add .", which can accidentally include sensitive files (.env, credentials) or large binaries
 - NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTANT to only commit when explicitly asked, otherwise the user will feel that you are being too proactive
 
-1. ${A} run the following bash commands in parallel, each using the ${l4} tool:
+1. ${A} run the following bash commands in parallel, each using the ${BASH_TOOL_NAME} tool:
   - Run a git status command to see all untracked files. IMPORTANT: Never use the -uall flag as it can cause memory issues on large repos.
   - Run a git diff command to see both staged and unstaged changes that will be committed.
   - Run a git log command to see recent commit messages, so that you can follow this repository's commit message style.
@@ -107305,7 +107313,7 @@ Use the gh command via the Bash tool for ALL GitHub-related tasks including work
 
 IMPORTANT: When the user asks you to create a pull request, follow these steps carefully:
 
-1. ${A} run the following bash commands in parallel using the ${l4} tool, in order to understand the current state of the branch since it diverged from the main branch:
+1. ${A} run the following bash commands in parallel using the ${BASH_TOOL_NAME} tool, in order to understand the current state of the branch since it diverged from the main branch:
    - Run a git status command to see all untracked files (never use -uall flag)
    - Run a git diff command to see both staged and unstaged changes that will be committed
    - Check if the current branch tracks a remote branch and is up to date with the remote, so you know if you need to push to the remote
@@ -107405,16 +107413,16 @@ function pjz() {
 }
 function fWq() {
   let A = [
-      `File search: Use ${Sz} (NOT find or ls)`,
-      `Content search: Use ${k5} (NOT grep or rg)`,
-      `Read files: Use ${n4} (NOT cat/head/tail)`,
-      `Edit files: Use ${Lq} (NOT sed/awk)`,
-      `Write files: Use ${U3} (NOT echo >/cat <<EOF)`,
+      `File search: Use ${GLOB_TOOL_NAME} (NOT find or ls)`,
+      `Content search: Use ${GREP_TOOL_NAME} (NOT grep or rg)`,
+      `Read files: Use ${READ_TOOL_NAME} (NOT cat/head/tail)`,
+      `Edit files: Use ${EDIT_TOOL_NAME} (NOT sed/awk)`,
+      `Write files: Use ${WRITE_TOOL_NAME} (NOT echo >/cat <<EOF)`,
       "Communication: Output text directly (NOT echo/printf)",
     ],
     q = [
-      `If the commands are independent and can run in parallel, make multiple ${l4} tool calls in a single message. Example: if you need to run "git status" and "git diff", send a single message with two ${l4} tool calls in parallel.`,
-      `If the commands depend on each other and must run sequentially, use a single ${l4} call with '&&' to chain them together.`,
+      `If the commands are independent and can run in parallel, make multiple ${BASH_TOOL_NAME} tool calls in a single message. Example: if you need to run "git status" and "git diff", send a single message with two ${BASH_TOOL_NAME} tool calls in parallel.`,
+      `If the commands depend on each other and must run sequentially, use a single ${BASH_TOOL_NAME} call with '&&' to chain them together.`,
       "Use ';' only when you need to run commands sequentially but don't care if earlier commands fail.",
       "DO NOT use newlines to separate commands (newlines are ok in quoted strings).",
     ],
@@ -107454,7 +107462,7 @@ function fWq() {
     "IMPORTANT: Avoid using this tool to run `find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo` commands, unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Instead, use the appropriate dedicated tool as this will provide a much better experience for the user:",
     "",
     ...Pc(A),
-    `While the ${l4} tool can do similar things, it’s better to use the built-in tools as they provide a better user experience and make it easier to review tool calls and give permission.`,
+    `While the ${BASH_TOOL_NAME} tool can do similar things, it’s better to use the built-in tools as they provide a better user experience and make it easier to review tool calls and give permission.`,
     "",
     "# Instructions",
     ...Pc(w),
@@ -108080,7 +108088,7 @@ For commands that are harder to parse at a glance (piped commands, obscure flags
     }),
   );
   Yq = {
-    name: l4,
+    name: BASH_TOOL_NAME,
     maxResultSizeChars: 30000,
     strict: !0,
     async description({ description: A }) {

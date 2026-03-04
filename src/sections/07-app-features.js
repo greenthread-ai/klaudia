@@ -1394,7 +1394,7 @@ async function nJz(A, q, K, Y, z, w) {
   }
   return null;
 }
-async function rJz(A, q, K, Y, z) {
+async function checkToolPermissions(A, q, K, Y, z) {
   if (K.abortController.signal.aborted) throw new j2();
   let w = await K.getAppState(),
     _ = jGq(w.toolPermissionContext, A);
@@ -1415,7 +1415,7 @@ async function rJz(A, q, K, Y, z) {
   if (O) {
     if (
       !(
-        A.name === l4 &&
+        A.name === BASH_TOOL_NAME &&
         xA.isSandboxingEnabled() &&
         xA.isAutoAllowBashIfSandboxedEnabled() &&
         ri(q)
@@ -1554,7 +1554,7 @@ function JGq(A, q) {
 }
 var jc8,
   GD = async (A, q, K, Y, z) => {
-    let w = await rJz(A, q, K, Y, z);
+    let w = await checkToolPermissions(A, q, K, Y, z);
     if (w.behavior === "allow") {
       let _ = await K.getAppState();
       return w;
@@ -3811,7 +3811,7 @@ When done, return your result using the ${yX} tool with:
       let g = null,
         u = 0,
         U = !1;
-      for await (let c of JC({
+      for await (let c of agentLoop({
         messages: M,
         systemPrompt: S,
         userContext: {},
@@ -10046,9 +10046,9 @@ function tZq(A, q, K) {
   let Y = (() => {
       switch (q) {
         case "edit":
-          return Lq;
+          return EDIT_TOOL_NAME;
         case "read":
-          return n4;
+          return READ_TOOL_NAME;
       }
     })(),
     z = Dc8(A, Y, K),
@@ -18877,7 +18877,7 @@ function TWz(A) {
     let K = A[q];
     if (K?.type !== "assistant") continue;
     let Y = K.message.content.find(
-      (_) => _.type === "tool_use" && _.name === Bt,
+      (_) => _.type === "tool_use" && _.name === TODO_WRITE_TOOL_NAME,
     );
     if (!Y || Y.type !== "tool_use") continue;
     let z = Y.input;
@@ -20291,8 +20291,8 @@ function nNq(A) {
   return A.some(
     (q) =>
       q.ruleBehavior === "allow" &&
-      (q.ruleValue.toolName === l4 ||
-        q.ruleValue.toolName.startsWith(l4 + "(")),
+      (q.ruleValue.toolName === BASH_TOOL_NAME ||
+        q.ruleValue.toolName.startsWith(BASH_TOOL_NAME + "(")),
   );
 }
 function eNq() {
@@ -20617,7 +20617,7 @@ function pWz(A) {
   );
 }
 function QWz(A) {
-  return A === l4 || A.startsWith(l4 + "(");
+  return A === BASH_TOOL_NAME || A.startsWith(BASH_TOOL_NAME + "(");
 }
 function UWz(A) {
   return (
@@ -20628,7 +20628,7 @@ function UWz(A) {
   );
 }
 function dWz(A) {
-  return A === l4 || A.startsWith(l4 + "(");
+  return A === BASH_TOOL_NAME || A.startsWith(BASH_TOOL_NAME + "(");
 }
 var ZT;
 var $Vq = E(() => {
@@ -20914,7 +20914,7 @@ function eWz(A, q) {
   return K;
 }
 function AGz(A) {
-  let q = ak(A);
+  let q = countMessageTokens(A);
   if (!uD4()) {
     if (!BD4(q)) return !1;
     mD4();
@@ -20941,7 +20941,7 @@ async function qGz(A) {
   } catch ($) {
     if ($.code !== "EEXIST") throw $;
   }
-  let z = await l9.call({ file_path: Y }, A),
+  let z = await readTool.call({ file_path: Y }, A),
     w = "",
     _ = z.data;
   if (_.type === "text") w = _.file.content;
@@ -20958,7 +20958,7 @@ function MVq() {
 function zGz(A) {
   return async (q, K) => {
     if (
-      q.name === Lq &&
+      q.name === EDIT_TOOL_NAME &&
       typeof K === "object" &&
       K !== null &&
       "file_path" in K
@@ -20969,10 +20969,10 @@ function zGz(A) {
     }
     return {
       behavior: "deny",
-      message: `only ${Lq} on ${A} is allowed`,
+      message: `only ${EDIT_TOOL_NAME} on ${A} is allowed`,
       decisionReason: {
         type: "other",
-        reason: `only ${Lq} on ${A} is allowed`,
+        reason: `only ${EDIT_TOOL_NAME} on ${A} is allowed`,
       },
     };
   };
@@ -21048,7 +21048,7 @@ var PVq = E(() => {
         config_min_tokens_between_update: j.minimumTokensBetweenUpdate,
         config_tool_calls_between_updates: j.toolCallsBetweenUpdates,
       }),
-        bD4(ak(q)),
+        bD4(countMessageTokens(q)),
         wGz(q),
         SD4());
     })));
@@ -22680,7 +22680,7 @@ Use the ${tq} tool to launch all three agents concurrently in a single message. 
 
 For each change:
 
-1. **Search for existing utilities and helpers** that could replace newly written code. Use ${k5} to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+1. **Search for existing utilities and helpers** that could replace newly written code. Use ${GREP_TOOL_NAME} to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
 2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
 3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
 
@@ -28483,7 +28483,7 @@ function hZz() {
   return {
     agentType: "magic-docs",
     whenToUse: "Update Magic Docs",
-    tools: [Lq],
+    tools: [EDIT_TOOL_NAME],
     model: "sonnet",
     source: "built-in",
     baseDir: "built-in",
@@ -28510,7 +28510,7 @@ async function IZz(A, q) {
     }
     throw W;
   }
-  let j = await l9.call({ file_path: A.path }, O),
+  let j = await readTool.call({ file_path: A.path }, O),
     J = "",
     D = j.data;
   if (D.type === "text") J = D.file.content;
@@ -28522,7 +28522,7 @@ async function IZz(A, q) {
   let M = await evq(J, A.path, X.title, X.instructions),
     P = async (W, G) => {
       if (
-        W.name === Lq &&
+        W.name === EDIT_TOOL_NAME &&
         typeof G === "object" &&
         G !== null &&
         "file_path" in G
@@ -28533,8 +28533,8 @@ async function IZz(A, q) {
       }
       return {
         behavior: "deny",
-        message: `only ${Lq} is allowed for ${A.path}`,
-        decisionReason: { type: "other", reason: `only ${Lq} is allowed` },
+        message: `only ${EDIT_TOOL_NAME} is allowed for ${A.path}`,
+        decisionReason: { type: "other", reason: `only ${EDIT_TOOL_NAME} is allowed` },
       };
     };
   for await (let W of jC({
@@ -33210,7 +33210,7 @@ class dkq {
       h6,
       g6 = null,
       y6 = P ? gd8(this.mutableMessages, yX) : 0;
-    for await (let C6 of JC({
+    for await (let C6 of agentLoop({
       messages: D6,
       systemPrompt: d,
       userContext: c,
@@ -35352,9 +35352,9 @@ var DEq = E(() => {
   HEq();
   Vz();
 });
-var NEq = {};
-s1(NEq, {
-  runHeadless: () => hTz,
+var headlessExports = {};
+s1(headlessExports, {
+  runHeadless: () => runHeadless,
   removeInterruptedMessage: () => GEq,
   reconcileMcpServers: () => TEq,
   handleOrphanedPermissionResponse: () => ZEq,
@@ -35371,7 +35371,7 @@ function STz(A) {
   }
   return !0;
 }
-async function hTz(A, q, K, Y, z, w, _, $) {
+async function runHeadless(A, q, K, Y, z, w, _, $) {
   if (
     (qH.subscribe((L) => {
       if ((un6(L, K), xq()))
@@ -35404,7 +35404,7 @@ async function hTz(A, q, K, Y, z, w, _, $) {
       _3(1));
     return;
   }
-  let O = BTz(A, $);
+  let O = buildOutputWriter(A, $);
   if (xA.isSandboxingEnabled())
     try {
       await xA.initialize(O.createSandboxAskCallback());
@@ -35467,7 +35467,7 @@ async function hTz(A, q, K, Y, z, w, _, $) {
       messages: j,
       turnInterruptionState: J,
       agentSetting: D,
-    } = await mTz(K, {
+    } = await loadSessionHistory(K, {
       continue: $.continue,
       teleport: $.teleport,
       resume: $.resume,
@@ -35541,7 +35541,7 @@ async function hTz(A, q, K, Y, z, w, _, $) {
   (Ka8(), await tw7());
   let N = [],
     V = null;
-  for await (let L of ITz(
+  for await (let L of headlessAgentLoop(
     O,
     H.mcp.clients,
     [...Y, ...H.mcp.commands],
@@ -35621,7 +35621,7 @@ async function hTz(A, q, K, Y, z, w, _, $) {
   }
   (Ck8(), _3(v?.type === "result" && v?.is_error ? 1 : 0));
 }
-function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
+function headlessAgentLoop(A, q, K, Y, z, w, _, $, O, H, j, J) {
   let D = !1,
     X = !1,
     M = !1,
@@ -37207,7 +37207,7 @@ function GEq(A, q) {
   let K = A.findIndex((Y) => Y.uuid === q.uuid);
   if (K !== -1) A.splice(K, 2);
 }
-async function mTz(A, q) {
+async function loadSessionHistory(A, q) {
   let K = !ML();
   if (q.continue)
     try {
@@ -37316,7 +37316,7 @@ async function mTz(A, q) {
     }
   return { messages: await xP("startup") };
 }
-function BTz(A, q) {
+function buildOutputWriter(A, q) {
   let K;
   if (typeof A === "string")
     if (A.trim() !== "")
@@ -37525,7 +37525,7 @@ Shut down your team and prepare your final response for the user.`,
   MEq = 1e4,
   tR1,
   aR1;
-var VEq = E(() => {
+var initHeadless = E(() => {
   fkq();
   IZ6();
   QR1();
@@ -37640,9 +37640,9 @@ var On8 = E(() => {
   e6();
   ((lV6 = Y6(W6(), 1)), (vEq = lV6.createContext(void 0)));
 });
-var LEq = {};
-s1(LEq, { App: () => gTz });
-function gTz(A) {
+var appExports = {};
+s1(appExports, { App: () => AppComponent });
+function AppComponent(A) {
   let q = w6(9),
     { getFpsMetrics: K, stats: Y, initialState: z, children: w } = A,
     _;
@@ -37673,7 +37673,7 @@ function gTz(A) {
   return O;
 }
 var eR1;
-var yEq = E(() => {
+var initApp = E(() => {
   e6();
   On8();
   Hi8();
@@ -38365,7 +38365,7 @@ function tTz(A, q) {
       D = [
         {
           type: "addRules",
-          rules: [{ toolName: Lq, ruleContent: J }],
+          rules: [{ toolName: EDIT_TOOL_NAME, ruleContent: J }],
           behavior: "allow",
           destination: "session",
         },
@@ -42656,7 +42656,7 @@ var rLq = E(() => {
 });
 function vVz(A) {
   try {
-    let q = tM.inputSchema.safeParse(A);
+    let q = webFetchTool.inputSchema.safeParse(A);
     if (!q.success) return `input:${A.toString()}`;
     let { url: K } = q.data;
     return `domain:${new URL(K).hostname}`;
@@ -42765,7 +42765,7 @@ function oLq(A) {
   let f = Z,
     N;
   if (q[14] !== $ || q[15] !== K.input || q[16] !== w)
-    ((N = tM.renderToolUseMessage(K.input, { theme: $, verbose: w })),
+    ((N = webFetchTool.renderToolUseMessage(K.input, { theme: $, verbose: w })),
       (q[14] = $),
       (q[15] = K.input),
       (q[16] = w),
@@ -46102,7 +46102,7 @@ function tVz(A) {
       return oVz ?? tV6;
     case aVz:
       return sVz ?? tV6;
-    case tM:
+    case webFetchTool:
       return oLq;
     case Wi:
       return eLq;
@@ -46116,7 +46116,7 @@ function tVz(A) {
       return Gyq;
     case ZF:
     case qb:
-    case l9:
+    case readTool:
       return nLq;
     default:
       return tV6;
@@ -48568,7 +48568,7 @@ function dyq(A) {
     { tokenUsage: K, model: Y } = A,
     z;
   if (q[0] !== Y || q[1] !== K)
-    ((z = tc(K, Y)), (q[0] = Y), (q[1] = K), (q[2] = z));
+    ((z = calculateTokenThresholds(K, Y)), (q[0] = Y), (q[1] = K), (q[2] = z));
   else z = q[2];
   let {
       percentLeft: w,
@@ -48624,7 +48624,7 @@ var cyq = E(() => {
   zw6 = Y6(W6(), 1);
 });
 function lyq(A, q) {
-  return tc(A, q).isAboveWarningThreshold;
+  return calculateTokenThresholds(A, q).isAboveWarningThreshold;
 }
 var iyq = E(() => {
   vg();
@@ -63384,7 +63384,7 @@ function Syz(A) {
       if (Y.type !== "tool_use" || !("name" in Y)) continue;
       let z = Y.name;
       if (z.startsWith("mcp__")) return !1;
-      if (z === l4) {
+      if (z === BASH_TOOL_NAME) {
         let _ = Y.input?.command || "";
         if (Ryz.some(($) => $.test(_))) return !1;
       }
@@ -65017,7 +65017,7 @@ function Ir8({
           appendSystemPrompt: X,
         });
         (L3("query_query_start"), Uh1(), dh1(), ch1());
-        for await (let ZY of JC({
+        for await (let ZY of agentLoop({
           messages: V1,
           systemPrompt: v_,
           userContext: A1,
@@ -65758,7 +65758,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
               if (U8) {
                 let h4 = {
                   type: "addRules",
-                  rules: [{ toolName: HX, ruleContent: `domain:${x7}` }],
+                  rules: [{ toolName: WEB_FETCH_TOOL_NAME, ruleContent: `domain:${x7}` }],
                   behavior: m8 ? "allow" : "deny",
                   destination: "localSettings",
                 };
@@ -65838,7 +65838,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
               ) {
                 let j7 = {
                   type: "addRules",
-                  rules: [{ toolName: HX, ruleContent: `domain:${x7}` }],
+                  rules: [{ toolName: WEB_FETCH_TOOL_NAME, ruleContent: `domain:${x7}` }],
                   behavior: "allow",
                   destination: "localSettings",
                 };

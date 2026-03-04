@@ -1,14 +1,14 @@
 var Sbq = {};
 s1(Sbq, {
   startDeferredPrefetches: () => Fr8,
-  showSetupScreens: () => Cbq,
-  main: () => MCz,
-  completeOnboarding: () => Rbq,
+  showSetupScreens: () => showSetupScreens,
+  main: () => cliMain,
+  completeOnboarding: () => completeOnboarding,
 });
 import { existsSync as ybq, readFileSync as Ebq } from "fs";
 import { cwd as qCz } from "process";
 import { resolve as DS1 } from "path";
-function KCz() {
+function loadManagedSettings() {
   try {
     let A = pA("policySettings");
     if (A) {
@@ -20,7 +20,7 @@ function KCz() {
     }
   } catch {}
 }
-function YCz() {
+function isDebuggerAttached() {
   let A = gO6(),
     q = process.execArgv.some((Y) => {
       if (A) return /--inspect(-brk)?/.test(Y);
@@ -35,7 +35,7 @@ function YCz() {
     return q || K;
   }
 }
-function Rbq() {
+function completeOnboarding() {
   J8((A) => ({
     ...A,
     hasCompletedOnboarding: !0,
@@ -75,7 +75,7 @@ function jp(A, q, K) {
 async function To6(A, q) {
   (A.render(q), Fr8(), await A.waitUntilExit(), await rq(0));
 }
-async function Cbq(A, q, K, Y, z) {
+async function showSetupScreens(A, q, K, Y, z) {
   if (X1(!1) || process.env.IS_DEMO) return !1;
   let w = k1(),
     _ = !1;
@@ -90,7 +90,7 @@ async function Cbq(A, q, K, Y, z) {
       (O) =>
         r$.default.createElement($, {
           onDone: () => {
-            (Rbq(), O());
+            (completeOnboarding(), O());
           },
         }),
       { onChangeAppState: h86 },
@@ -287,7 +287,7 @@ function XCz(A) {
   }
   process.env.CLAUDE_CODE_ENTRYPOINT = A ? "sdk-cli" : "cli";
 }
-async function MCz() {
+async function cliMain() {
   (Bq("main_function_start"),
     (process.env.NoDefaultCurrentDirectoryInExePath = "1"),
     PTq(),
@@ -329,7 +329,7 @@ async function MCz() {
     DCz(),
     Bq("main_before_run"),
     (process.title = "claude"),
-    await GCz(),
+    await setupCommander(),
     Bq("main_after_run"));
 }
 function PCz(A) {
@@ -386,7 +386,7 @@ async function WCz(A, q) {
   }
   return A;
 }
-async function GCz() {
+async function setupCommander() {
   Bq("run_function_start");
   function A() {
     let _ = ($) =>
@@ -1217,7 +1217,7 @@ ${U6}`
           ((v4 = await O7(F8.renderOptions)),
             y("[STARTUP] Running showSetupScreens()..."));
           let U6 = Date.now(),
-            r6 = await Cbq(v4, X6, J, Z1, g6);
+            r6 = await showSetupScreens(v4, X6, J, Z1, g6);
           if (
             (y(
               `[STARTUP] showSetupScreens() completed in ${Date.now() - U6}ms`,
@@ -1338,7 +1338,7 @@ ${U6}`
           }),
           KWq(UK, S6),
           NP1(null, "initialization"),
-          KCz(),
+          loadManagedSettings(),
           s)
         )
           (await oG8(), Bq("action_after_plugins_init"), Lv8());
@@ -1387,7 +1387,7 @@ ${U6}`
               .then(() => (xi8(), Mkq))
               .then((L1) => L1.startBackgroundHousekeeping()));
           let { runHeadless: N1 } = await Promise.resolve().then(
-            () => (VEq(), NEq),
+            () => (initHeadless(), headlessExports),
           );
           N1(
             j1,
@@ -1427,7 +1427,7 @@ ${U6}`
           );
           return;
         }
-        let { App: SY } = await Promise.resolve().then(() => (yEq(), LEq));
+        let { App: SY } = await Promise.resolve().then(() => (initApp(), appExports));
         n("tengu_startup_manual_model_config", {
           cli_flag: $.model,
           env_var: process.env.ANTHROPIC_MODEL,
@@ -2645,7 +2645,7 @@ var hbq = E(() => {
   Bq("main_tsx_entry");
   sGq();
   Bq("main_tsx_imports_loaded");
-  if (YCz()) process.exit(1);
+  if (isDebuggerAttached()) process.exit(1);
 });
 process.env.COREPACK_ENABLE_AUTO_PIN = "0";
 if (process.env.CLAUDE_CODE_REMOTE === "true") {

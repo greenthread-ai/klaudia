@@ -110,22 +110,26 @@ All Go tools are built with `CGO_ENABLED=0` (pure Go, no C dependencies).
 ### Architecture
 ```
 klaudia/
-  src/cli.js        # Prettified bundle (Go tools wired in via spawn)
+  src/sections/     # Source split into 9 section files
+    00-runtime.js   # esbuild E()/C()/s1() helpers
+    01-lodash.js    # Lodash, Zod, early utils
+    02-network.js   # ws, AJV, Axios
+    03-providers.js # OpenTelemetry, AWS, gRPC, Azure
+    04-react-ink.js # React, Ink, yoga-layout, tool name constants
+    05-app-core.js  # Tools, permissions, MCP, API client
+    06-app-ui.js    # UI, dialogs, WebSearch/WebFetch tools
+    07-app-features.js # Tree-sitter, screenshot, voice, REPL
+    08-entry.js     # Main bootstrap
   tools/            # Go tool source
     search/main.go  # ✅ Replaces ripgrep
     pdf/main.go     # ✅ Replaces pdfinfo + pdftoppm
     bash-parser/    # ✅ Replaces tree-sitter-bash.wasm
-      main.go
     screenshot/     # ✅ Replaces resvg.wasm
-      main.go
   vendor/           # Built Go binaries + original fallbacks
-    klaudia-search
-    klaudia-pdf
-    klaudia-bash-parser
-    klaudia-screenshot
-    ripgrep/        # Fallback
-  dist/             # Built output
-  build.mjs         # esbuild config
+  dist/cli.js       # Built output (sections concatenated)
+  docs/             # Architecture docs
+    server-side-tools.md  # Server-side tool inventory
+  build.mjs         # Section concatenator (+ watch mode)
   package.json
   go.mod
 ```
@@ -138,7 +142,53 @@ Go tools are spawned as child processes. Each follows the conventions of what it
 
 The JS layer checks for Go binaries first (`vendor/klaudia-*`), falling back to the original tools if not found.
 
-## Phase 3: Extended Tooling
+## Phase 2.5: Tool Separation (Done)
+
+**Goal:** Cleanly separate local tools from server-side tools for future replacement.
+
+### Completed
+- **Renamed tool constants** — 9 tool name constants renamed from mangled 2-char identifiers to readable names (`BASH_TOOL_NAME`, `READ_TOOL_NAME`, `WEB_SEARCH_TOOL_NAME`, etc.) across all section files
+- **Renamed server-side tool objects** — `webSearchTool`, `webFetchTool`, `buildWebSearchToolDef`, schemas, and init functions
+- **Renamed dispatch functions** — `streamApiRequest` (main API request builder), `buildToolSchema` (tool schema assembler)
+- **Marked tool boundaries** — `// Klaudia:` comment markers at tool merge point, response discrimination, and server-side tool definitions
+- **Documented server-side tools** — Full inventory in `docs/server-side-tools.md` with request/response formats
+
+### Key Architecture (for future replacement)
+
+**Tool merge point:** `06-app-ui.js` in `streamApiRequest()`:
+```
+h = [...N, ...(w.extraToolSchemas ?? [])]
+//    ^local    ^server-side (web_search, web_fetch, code_execution)
+```
+
+**Response discrimination:** Same function handles `server_tool_use` (no-op locally) vs `tool_use` (needs local dispatch).
+
+**To swap WebSearch for a local implementation:**
+1. Replace `webSearchTool.call()` in `06-app-ui.js` — currently delegates to API
+2. Implement local search (e.g., SearXNG API, Brave Search API)
+3. Return results matching the `webSearchOutputSchema` format
+
+**To swap WebFetch for a local implementation:**
+1. Replace `webFetchTool.call()` in `06-app-ui.js`
+2. Implement local HTTP fetch + content extraction
+3. Return results matching `webFetchOutputSchema` format
+
+See `docs/server-side-tools.md` for full request/response schemas.
+
+## Phase 3: Server-Side Tool Replacement
+
+**Goal:** Replace Anthropic server-side tools with local implementations.
+
+### Priority
+1. **WebSearch** — Local search via SearXNG or Brave Search API
+2. **WebFetch** — Local HTTP fetch with content extraction (node-fetch + readability)
+3. **MCP** — Already works locally via stdio; keep as-is
+
+### Lower Priority
+4. **Code Execution** — Local sandboxed execution (Docker/nsjail)
+5. **Browser Automation** — Local browser bridge (Playwright MCP server)
+
+## Phase 4: Extended Tooling
 
 **Goal:** Add custom tools beyond what Claude Code ships with.
 

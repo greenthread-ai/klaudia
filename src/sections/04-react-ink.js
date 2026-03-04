@@ -32328,7 +32328,7 @@ var vN = E(() => {
   xm();
   qG();
 });
-var l4 = "Bash";
+var BASH_TOOL_NAME = "Bash";
 function MA(A, q) {
   if (!process.env.SRT_DEBUG) return;
   let K = q?.level || "info",
@@ -36489,7 +36489,7 @@ ${
 }
 `;
 }
-var HX = "WebFetch",
+var WEB_FETCH_TOOL_NAME = "WebFetch",
   lz8 = `
 - Fetches content from a specified URL and processes it using an AI model
 - Takes a URL and a prompt as input
@@ -36509,7 +36509,7 @@ Usage notes:
   - When a URL redirects to a different host, the tool will inform you and provide the redirect URL in a special format. You should then make a new WebFetch request with the redirect URL to fetch the content.
   - For GitHub URLs, prefer using the gh CLI via Bash instead (e.g., gh pr view, gh issue view, gh api).
 `;
-var Lq = "Edit",
+var EDIT_TOOL_NAME = "Edit",
   lz1 = "/.claude/**",
   iz1 = "~/.claude/**",
   ex6 =
@@ -36545,7 +36545,7 @@ var nz1 = E(() => {
   Q2();
   sg5 = new Set(["pdf"]);
 });
-var n4 = "Read",
+var READ_TOOL_NAME = "Read",
   qb6 = 2000,
   tg5 = 2000,
   Af7 = "Read a file from the local filesystem.",
@@ -36570,7 +36570,7 @@ ${eg5}
       : ""
   }
 - This tool can read Jupyter notebooks (.ipynb files) and returns all cells with their outputs, combining code, text, and visualizations.
-- This tool can only read files, not directories. To read a directory, use an ls command via the ${l4} tool.
+- This tool can only read files, not directories. To read a directory, use an ls command via the ${BASH_TOOL_NAME} tool.
 - You can call multiple tools in a single response. It is always better to speculatively read multiple potentially useful files in parallel.
 - You will regularly be asked to read screenshots. If the user provides a path to a screenshot, ALWAYS use this tool to view the file at the path. This tool will work with all temporary file paths.
 - If you read a file that exists but has empty contents you will receive a system reminder warning in place of file contents.`;
@@ -36618,20 +36618,20 @@ function rz1(A) {
     for (let M of X?.sandbox?.network?.allowedDomains || []) K.push(M);
     for (let M of X?.permissions?.allow || []) {
       let P = LX6(M);
-      if (P.toolName === HX && P.ruleContent?.startsWith("domain:"))
+      if (P.toolName === WEB_FETCH_TOOL_NAME && P.ruleContent?.startsWith("domain:"))
         K.push(P.ruleContent.substring(7));
     }
   } else {
     for (let X of A.sandbox?.network?.allowedDomains || []) K.push(X);
     for (let X of q.allow || []) {
       let M = LX6(X);
-      if (M.toolName === HX && M.ruleContent?.startsWith("domain:"))
+      if (M.toolName === WEB_FETCH_TOOL_NAME && M.ruleContent?.startsWith("domain:"))
         K.push(M.ruleContent.substring(7));
     }
   }
   for (let X of q.deny || []) {
     let M = LX6(X);
-    if (M.toolName === HX && M.ruleContent?.startsWith("domain:"))
+    if (M.toolName === WEB_FETCH_TOOL_NAME && M.ruleContent?.startsWith("domain:"))
       Y.push(M.ruleContent.substring(7));
   }
   let z = [".", Bm()],
@@ -36656,12 +36656,12 @@ function rz1(A) {
     if (M?.permissions) {
       for (let W of M.permissions.allow || []) {
         let G = LX6(W);
-        if (G.toolName === Lq && G.ruleContent) z.push(fK6(G.ruleContent, X));
+        if (G.toolName === EDIT_TOOL_NAME && G.ruleContent) z.push(fK6(G.ruleContent, X));
       }
       for (let W of M.permissions.deny || []) {
         let G = LX6(W);
-        if (G.toolName === Lq && G.ruleContent) w.push(fK6(G.ruleContent, X));
-        if (G.toolName === n4 && G.ruleContent) _.push(fK6(G.ruleContent, X));
+        if (G.toolName === EDIT_TOOL_NAME && G.ruleContent) w.push(fK6(G.ruleContent, X));
+        if (G.toolName === READ_TOOL_NAME && G.ruleContent) _.push(fK6(G.ruleContent, X));
       }
     }
     let P = M?.sandbox?.filesystem;
@@ -36752,7 +36752,7 @@ function _F5() {
     for (let w of [...(K.allow || []), ...(K.deny || [])]) {
       let _ = LX6(w);
       if (
-        (_.toolName === Lq || _.toolName === n4) &&
+        (_.toolName === EDIT_TOOL_NAME || _.toolName === READ_TOOL_NAME) &&
         _.ruleContent &&
         z(_.ruleContent)
       )
@@ -36853,10 +36853,10 @@ function az8(A, q) {
     z = A;
   if (q) {
     let w = q.filter(
-      (_) => _.type === "addRules" && _.rules.some(($) => $.toolName === l4),
+      (_) => _.type === "addRules" && _.rules.some(($) => $.toolName === BASH_TOOL_NAME),
     );
     if (w.length > 0 && w[0].type === "addRules") {
-      let _ = w[0].rules.find(($) => $.toolName === l4);
+      let _ = w[0].rules.find(($) => $.toolName === BASH_TOOL_NAME);
       if (_?.ruleContent) z = KF5(_.ruleContent) || _.ruleContent;
     }
   }
@@ -37145,9 +37145,9 @@ var tz8 = E(() => {
 var VF5 = null,
   $d;
 var hX6 = E(() => {
-  $d = [l4, VF5].filter((A) => A != null);
+  $d = [BASH_TOOL_NAME, VF5].filter((A) => A != null);
 });
-var Sz = "Glob",
+var GLOB_TOOL_NAME = "Glob",
   ez8 = `- Fast file pattern matching tool that works with any codebase size
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
 - Returns matching file paths sorted by modification time
@@ -37158,7 +37158,7 @@ function A28() {
   return `A powerful search tool built on ripgrep
 
   Usage:
-  - ALWAYS use ${k5} for search tasks. NEVER invoke \`grep\` or \`rg\` as a ${l4} command. The ${k5} tool has been optimized for correct permissions and access.
+  - ALWAYS use ${GREP_TOOL_NAME} for search tasks. NEVER invoke \`grep\` or \`rg\` as a ${BASH_TOOL_NAME} command. The ${GREP_TOOL_NAME} tool has been optimized for correct permissions and access.
   - Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")
   - Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust")
   - Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default), "count" shows match counts
@@ -37167,11 +37167,11 @@ function A28() {
   - Multiline matching: By default patterns match within single lines only. For cross-line patterns like \`struct \\{[\\s\\S]*?field\`, use \`multiline: true\`
 `;
 }
-var k5 = "Grep";
+var GREP_TOOL_NAME = "Grep";
 var r0 = () => {};
 function vF5() {
   return `
-- If this is an existing file, you MUST use the ${n4} tool first to read the file's contents. This tool will fail if you did not read the file first.`;
+- If this is an existing file, you MUST use the ${READ_TOOL_NAME} tool first to read the file's contents. This tool will fail if you did not read the file first.`;
 }
 function Hf7() {
   return `Writes a file to the local filesystem.
@@ -37182,11 +37182,11 @@ Usage:
 - NEVER create documentation files (*.md) or README files unless explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.`;
 }
-var U3 = "Write";
+var WRITE_TOOL_NAME = "Write";
 var YD = E(() => {
   ow();
 });
-var o0 = "NotebookEdit";
+var NOTEBOOK_EDIT_TOOL_NAME = "NotebookEdit";
 function IX6() {
   let A = new Date(),
     q = A.getFullYear(),
@@ -37226,7 +37226,7 @@ IMPORTANT - Use the correct year in search queries:
   - Example: If the user asks for "latest React docs", search for "React documentation" with the current year, NOT last year
 `;
 }
-var uy = "WebSearch";
+var WEB_SEARCH_TOOL_NAME = "WebSearch";
 var TK6 = () => {};
 function Mf7(A) {
   let { hasThinking: q = !1 } = A ?? {},
@@ -37247,7 +37247,7 @@ var Pf7 = E(() => {
   ow();
   YD();
   TK6();
-  ((kF5 = [...$d, Sz, k5, n4, HX, uy]), (EF5 = [Lq, U3, o0]));
+  ((kF5 = [...$d, GLOB_TOOL_NAME, GREP_TOOL_NAME, READ_TOOL_NAME, WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME]), (EF5 = [EDIT_TOOL_NAME, WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]));
 });
 function NK6(A) {
   let q = A.toLowerCase();
