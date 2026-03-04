@@ -38,8 +38,8 @@ var R_7, C_7, y_7;
 var c0 = E(() => {
   K4();
   gh6();
-  ((R_7 = i6(() => I4.enum(Wy))),
-    (C_7 = i6(() => I4.enum(fa))),
+  ((R_7 = lazyOnce(() => I4.enum(Wy))),
+    (C_7 = lazyOnce(() => I4.enum(fa))),
     (y_7 = {
       default: {
         title: "Default",
@@ -375,7 +375,7 @@ var gK8 = E(() => {
   Gy();
   g_7();
   Pv5 = new Set([]);
-  Y51 = i6(() =>
+  Y51 = lazyOnce(() =>
     x.string().superRefine((A, q) => {
       let K = BK8(A);
       if (!K.valid) {
@@ -547,7 +547,7 @@ var U_7, d_7, Zy;
 var z51 = E(() => {
   K4();
   iJ6();
-  ((U_7 = i6(() => {
+  ((U_7 = lazyOnce(() => {
     let {
       BashCommandHookSchema: A,
       PromptHookSchema: q,
@@ -556,7 +556,7 @@ var z51 = E(() => {
     } = Gv5();
     return x.discriminatedUnion("type", [A, q, K, Y]);
   })),
-    (d_7 = i6(() =>
+    (d_7 = lazyOnce(() =>
       x.object({
         matcher: x
           .string()
@@ -567,12 +567,12 @@ var z51 = E(() => {
           .describe("List of hooks to execute when the matcher matches"),
       }),
     )),
-    (Zy = i6(() => x.partialRecord(x.enum(Wm), x.array(d_7())))));
+    (Zy = lazyOnce(() => x.partialRecord(x.enum(Wm), x.array(d_7())))));
 });
 var FK8, zZ2, pK8, c_7, Zv5, fv5, Tv5, Nv5, Vv5, vv5, kv5, Gm, l_7;
 var yq6 = E(() => {
   K4();
-  ((FK8 = i6(() =>
+  ((FK8 = lazyOnce(() =>
     x.enum([
       "local",
       "user",
@@ -583,8 +583,8 @@ var yq6 = E(() => {
       "managed",
     ]),
   )),
-    (zZ2 = i6(() => x.enum(["stdio", "sse", "sse-ide", "http", "ws", "sdk"]))),
-    (pK8 = i6(() =>
+    (zZ2 = lazyOnce(() => x.enum(["stdio", "sse", "sse-ide", "http", "ws", "sdk"]))),
+    (pK8 = lazyOnce(() =>
       x.object({
         type: x.literal("stdio").optional(),
         command: x.string().min(1, "Command cannot be empty"),
@@ -592,13 +592,13 @@ var yq6 = E(() => {
         env: x.record(x.string(), x.string()).optional(),
       }),
     )),
-    (c_7 = i6(() =>
+    (c_7 = lazyOnce(() =>
       x.object({
         clientId: x.string().optional(),
         callbackPort: x.number().int().positive().optional(),
       }),
     )),
-    (Zv5 = i6(() =>
+    (Zv5 = lazyOnce(() =>
       x.object({
         type: x.literal("sse"),
         url: x.string(),
@@ -607,7 +607,7 @@ var yq6 = E(() => {
         oauth: c_7().optional(),
       }),
     )),
-    (fv5 = i6(() =>
+    (fv5 = lazyOnce(() =>
       x.object({
         type: x.literal("sse-ide"),
         url: x.string(),
@@ -615,7 +615,7 @@ var yq6 = E(() => {
         ideRunningInWindows: x.boolean().optional(),
       }),
     )),
-    (Tv5 = i6(() =>
+    (Tv5 = lazyOnce(() =>
       x.object({
         type: x.literal("ws-ide"),
         url: x.string(),
@@ -624,7 +624,7 @@ var yq6 = E(() => {
         ideRunningInWindows: x.boolean().optional(),
       }),
     )),
-    (Nv5 = i6(() =>
+    (Nv5 = lazyOnce(() =>
       x.object({
         type: x.literal("http"),
         url: x.string(),
@@ -633,7 +633,7 @@ var yq6 = E(() => {
         oauth: c_7().optional(),
       }),
     )),
-    (Vv5 = i6(() =>
+    (Vv5 = lazyOnce(() =>
       x.object({
         type: x.literal("ws"),
         url: x.string(),
@@ -641,18 +641,18 @@ var yq6 = E(() => {
         headersHelper: x.string().optional(),
       }),
     )),
-    (vv5 = i6(() => x.object({ type: x.literal("sdk"), name: x.string() }))),
-    (kv5 = i6(() =>
+    (vv5 = lazyOnce(() => x.object({ type: x.literal("sdk"), name: x.string() }))),
+    (kv5 = lazyOnce(() =>
       x.object({
         type: x.literal("claudeai-proxy"),
         url: x.string(),
         id: x.string(),
       }),
     )),
-    (Gm = i6(() =>
+    (Gm = lazyOnce(() =>
       x.union([pK8(), Zv5(), fv5(), Tv5(), Nv5(), Vv5(), vv5(), kv5()]),
     )),
-    (l_7 = i6(() => x.object({ mcpServers: x.record(x.string(), Gm()) }))));
+    (l_7 = lazyOnce(() => x.object({ mcpServers: x.record(x.string(), Gm()) }))));
 });
 function Qh6(A, q) {
   let K = A.toLowerCase();
@@ -743,9 +743,9 @@ var YX = E(() => {
   ((Lv5 =
     /(?:official[^a-z0-9]*(anthropic|claude)|(?:anthropic|claude)[^a-z0-9]*official|^(?:anthropic|claude)[^a-z0-9]*(marketplace|plugins|official))/i),
     (yv5 = /[^\u0020-\u007E]/));
-  ((hU = i6(() => x.string().startsWith("./"))),
-    (nJ6 = i6(() => hU().endsWith(".json"))),
-    (i_7 = i6(() =>
+  ((hU = lazyOnce(() => x.string().startsWith("./"))),
+    (nJ6 = lazyOnce(() => hU().endsWith(".json"))),
+    (i_7 = lazyOnce(() =>
       x.union([
         hU()
           .refine((A) => A.endsWith(".mcpb") || A.endsWith(".dxt"), {
@@ -761,9 +761,9 @@ var YX = E(() => {
           .describe("URL to MCPB file"),
       ]),
     )),
-    (QK8 = i6(() => hU().endsWith(".md"))),
-    (UK8 = i6(() => x.union([QK8(), hU()]))),
-    (a_7 = i6(() =>
+    (QK8 = lazyOnce(() => hU().endsWith(".md"))),
+    (UK8 = lazyOnce(() => x.union([QK8(), hU()]))),
+    (a_7 = lazyOnce(() =>
       x.object({
         name: x
           .string()
@@ -779,7 +779,7 @@ var YX = E(() => {
           .describe("Website, GitHub profile, or organization URL"),
       }),
     )),
-    (Cv5 = i6(() =>
+    (Cv5 = lazyOnce(() =>
       x.object({
         name: x
           .string()
@@ -825,7 +825,7 @@ var YX = E(() => {
           .describe("Tags for plugin discovery and categorization"),
       }),
     )),
-    (s_7 = i6(() =>
+    (s_7 = lazyOnce(() =>
       x.object({
         description: x
           .string()
@@ -840,7 +840,7 @@ var YX = E(() => {
           ),
       }),
     )),
-    (Sv5 = i6(() =>
+    (Sv5 = lazyOnce(() =>
       x.object({
         hooks: x.union([
           nJ6().describe(
@@ -866,7 +866,7 @@ var YX = E(() => {
         ]),
       }),
     )),
-    (hv5 = i6(() =>
+    (hv5 = lazyOnce(() =>
       x
         .object({
           source: UK8()
@@ -898,7 +898,7 @@ var YX = E(() => {
             'Command must have either "source" (file path) or "content" (inline markdown), but not both',
         }),
     )),
-    (Iv5 = i6(() =>
+    (Iv5 = lazyOnce(() =>
       x.object({
         commands: x.union([
           UK8().describe(
@@ -921,7 +921,7 @@ var YX = E(() => {
         ]),
       }),
     )),
-    (xv5 = i6(() =>
+    (xv5 = lazyOnce(() =>
       x.object({
         agents: x.union([
           QK8().describe(
@@ -937,7 +937,7 @@ var YX = E(() => {
         ]),
       }),
     )),
-    (bv5 = i6(() =>
+    (bv5 = lazyOnce(() =>
       x.object({
         skills: x.union([
           hU().describe(
@@ -953,7 +953,7 @@ var YX = E(() => {
         ]),
       }),
     )),
-    (uv5 = i6(() =>
+    (uv5 = lazyOnce(() =>
       x.object({
         outputStyles: x.union([
           hU().describe(
@@ -971,8 +971,8 @@ var YX = E(() => {
         ]),
       }),
     )),
-    (n_7 = i6(() => x.string().min(1))),
-    (mv5 = i6(() =>
+    (n_7 = lazyOnce(() => x.string().min(1))),
+    (mv5 = lazyOnce(() =>
       x
         .string()
         .min(2)
@@ -981,7 +981,7 @@ var YX = E(() => {
             'File extensions must start with dot (e.g., ".ts", not "ts")',
         }),
     )),
-    (Bv5 = i6(() =>
+    (Bv5 = lazyOnce(() =>
       x.object({
         mcpServers: x.union([
           nJ6().describe(
@@ -1009,7 +1009,7 @@ var YX = E(() => {
         ]),
       }),
     )),
-    (rJ6 = i6(() =>
+    (rJ6 = lazyOnce(() =>
       x.strictObject({
         command: x
           .string()
@@ -1089,7 +1089,7 @@ var YX = E(() => {
           .describe("Maximum number of restart attempts before giving up"),
       }),
     )),
-    (gv5 = i6(() =>
+    (gv5 = lazyOnce(() =>
       x.object({
         lspServers: x.union([
           nJ6().describe(
@@ -1113,7 +1113,7 @@ var YX = E(() => {
         ]),
       }),
     )),
-    (t_7 = i6(() =>
+    (t_7 = lazyOnce(() =>
       x
         .string()
         .refine(
@@ -1126,7 +1126,7 @@ var YX = E(() => {
           return q.test(A) || K.test(A);
         }, "Invalid npm package name format"),
     )),
-    (Fv5 = i6(() =>
+    (Fv5 = lazyOnce(() =>
       x.object({
         settings: x
           .record(x.string(), x.unknown())
@@ -1136,7 +1136,7 @@ var YX = E(() => {
           ),
       }),
     )),
-    (Rq6 = i6(() =>
+    (Rq6 = lazyOnce(() =>
       x
         .object({
           ...Cv5().shape,
@@ -1151,7 +1151,7 @@ var YX = E(() => {
         })
         .strict(),
     )),
-    (Uh6 = i6(() =>
+    (Uh6 = lazyOnce(() =>
       x.discriminatedUnion("source", [
         x.object({
           source: x.literal("url"),
@@ -1231,7 +1231,7 @@ var YX = E(() => {
         }),
       ]),
     )),
-    (r_7 = i6(() =>
+    (r_7 = lazyOnce(() =>
       x
         .string()
         .length(40)
@@ -1240,7 +1240,7 @@ var YX = E(() => {
           "Must be a full 40-character lowercase git commit SHA",
         ),
     )),
-    (pv5 = i6(() =>
+    (pv5 = lazyOnce(() =>
       x.union([
         hU().describe(
           "Path to the plugin root, relative to the marketplace directory",
@@ -1314,7 +1314,7 @@ var YX = E(() => {
         }),
       ]),
     )));
-  ((Qv5 = i6(() =>
+  ((Qv5 = lazyOnce(() =>
     Rq6()
       .partial()
       .extend({
@@ -1347,7 +1347,7 @@ var YX = E(() => {
       })
       .strict(),
   )),
-    (Na = i6(() =>
+    (Na = lazyOnce(() =>
       x.object({
         name: x
           .string()
@@ -1386,7 +1386,7 @@ var YX = E(() => {
           .describe("Optional marketplace metadata"),
       }),
     )),
-    (oJ6 = i6(() =>
+    (oJ6 = lazyOnce(() =>
       x
         .string()
         .regex(
@@ -1394,7 +1394,7 @@ var YX = E(() => {
           "Plugin ID must be in format: plugin@marketplace",
         ),
     )),
-    (jZ2 = i6(() =>
+    (jZ2 = lazyOnce(() =>
       x.union([
         oJ6(),
         x.object({
@@ -1414,7 +1414,7 @@ var YX = E(() => {
         }),
       ]),
     )),
-    (Uv5 = i6(() =>
+    (Uv5 = lazyOnce(() =>
       x.object({
         version: x.string().describe("Currently installed version"),
         installedAt: x.string().describe("ISO 8601 timestamp of installation"),
@@ -1433,7 +1433,7 @@ var YX = E(() => {
           ),
       }),
     )),
-    (dh6 = i6(() =>
+    (dh6 = lazyOnce(() =>
       x.object({
         version: x.literal(1).describe("Schema version 1"),
         plugins: x
@@ -1441,8 +1441,8 @@ var YX = E(() => {
           .describe("Map of plugin IDs to their installation metadata"),
       }),
     )),
-    (dv5 = i6(() => x.enum(["managed", "user", "project", "local"]))),
-    (cv5 = i6(() =>
+    (dv5 = lazyOnce(() => x.enum(["managed", "user", "project", "local"]))),
+    (cv5 = lazyOnce(() =>
       x.object({
         scope: dv5().describe("Installation scope"),
         projectPath: x
@@ -1467,7 +1467,7 @@ var YX = E(() => {
           .describe("Git commit SHA for git-based plugins"),
       }),
     )),
-    (ch6 = i6(() =>
+    (ch6 = lazyOnce(() =>
       x.object({
         version: x.literal(2).describe("Schema version 2"),
         plugins: x
@@ -1475,8 +1475,8 @@ var YX = E(() => {
           .describe("Map of plugin IDs to arrays of installation entries"),
       }),
     )),
-    (JZ2 = i6(() => x.union([dh6(), ch6()]))),
-    (lv5 = i6(() =>
+    (JZ2 = lazyOnce(() => x.union([dh6(), ch6()]))),
+    (lv5 = lazyOnce(() =>
       x.object({
         source: Uh6().describe("Where to fetch the marketplace from"),
         installLocation: x
@@ -1493,12 +1493,12 @@ var YX = E(() => {
           ),
       }),
     )),
-    (aJ6 = i6(() => x.record(x.string(), lv5()))));
+    (aJ6 = lazyOnce(() => x.record(x.string(), lv5()))));
 });
 var iv5, nv5, e_7;
 var A$7 = E(() => {
   K4();
-  ((iv5 = i6(() =>
+  ((iv5 = lazyOnce(() =>
     x
       .object({
         allowedDomains: x.array(x.string()).optional(),
@@ -1526,7 +1526,7 @@ var A$7 = E(() => {
       })
       .optional(),
   )),
-    (nv5 = i6(() =>
+    (nv5 = lazyOnce(() =>
       x
         .object({
           allowWrite: x
@@ -1550,7 +1550,7 @@ var A$7 = E(() => {
         })
         .optional(),
     )),
-    (e_7 = i6(() =>
+    (e_7 = lazyOnce(() =>
       x
         .object({
           enabled: x.boolean().optional(),
@@ -1600,8 +1600,8 @@ var vh = E(() => {
   A$7();
   z51();
   z51();
-  ((rv5 = i6(() => x.record(x.string(), x.coerce.string()))),
-    (ov5 = i6(() =>
+  ((rv5 = lazyOnce(() => x.record(x.string(), x.coerce.string()))),
+    (ov5 = lazyOnce(() =>
       x
         .object({
           allow: x
@@ -1635,7 +1635,7 @@ var vh = E(() => {
         })
         .passthrough(),
     )),
-    (av5 = i6(() =>
+    (av5 = lazyOnce(() =>
       x.object({
         source: Uh6().describe("Where to fetch the marketplace from"),
         installLocation: x
@@ -1652,7 +1652,7 @@ var vh = E(() => {
           ),
       }),
     )),
-    (sv5 = i6(() =>
+    (sv5 = lazyOnce(() =>
       x
         .object({
           serverName: x
@@ -1698,7 +1698,7 @@ var vh = E(() => {
           },
         ),
     )),
-    (tv5 = i6(() =>
+    (tv5 = lazyOnce(() =>
       x
         .object({
           serverName: x
@@ -1742,7 +1742,7 @@ var vh = E(() => {
           },
         ),
     )),
-    (DM = i6(() =>
+    (DM = lazyOnce(() =>
       x
         .object({
           $schema: x
@@ -4951,7 +4951,7 @@ var v51 = E(() => {
 function P38({ onlyFirst: A = !1 } = {}) {
   let K = [
     "[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?(?:\\u0007|\\u001B\\u005C|\\u009C))",
-    "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))",
+    "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-u\x79=><~]))",
   ].join("|");
   return new RegExp(K, A ? void 0 : "g");
 }
@@ -22616,10 +22616,10 @@ var X98 = E(() => {
     (lJ7 = [...Object.values(cJ7), "backspace"]));
 });
 function SR5() {
-  return k1().theme;
+  return getSettings().theme;
 }
 function hR5(A) {
-  J8((q) => ({ ...q, theme: A }));
+  updateSettings((q) => ({ ...q, theme: A }));
 }
 function g91(A) {
   let q = w6(22),
@@ -27897,7 +27897,7 @@ var ZY1 = E(() => {
   GY1 = Y6(W6(), 1);
 });
 function tI6() {
-  return pA("policySettings")?.allowManagedPermissionRulesOnly === !0;
+  return getConfigValue("policySettings")?.allowManagedPermissionRulesOnly === !0;
 }
 function la() {
   return !tI6();
@@ -27933,13 +27933,13 @@ function fY1() {
   return A;
 }
 function sI6(A) {
-  let q = pA(A);
+  let q = getConfigValue(A);
   return pI5(q, A);
 }
 function aM7(A) {
   if (!QI5.includes(A.source)) return !1;
   let q = v5(A.ruleValue),
-    K = pA(A.source);
+    K = getConfigValue(A.source);
   if (!K || !K.permissions) return !1;
   let Y = K.permissions[A.ruleBehavior];
   if (!Y) return !1;
@@ -27967,7 +27967,7 @@ function sM7({ ruleValues: A, ruleBehavior: q }, K) {
   if (tI6()) return !1;
   if (A.length < 1) return !0;
   let Y = A.map(v5),
-    z = pA(K) || FI5(K) || UI5();
+    z = getConfigValue(K) || FI5(K) || UI5();
   try {
     let w = z.permissions || {},
       _ = w[q] || [],
@@ -28108,7 +28108,7 @@ function hm(A) {
       y(
         `Persisting ${A.directories.length} director${A.directories.length === 1 ? "y" : "ies"} to ${A.destination}`,
       );
-      let K = pA(A.destination)?.permissions?.additionalDirectories || [],
+      let K = getConfigValue(A.destination)?.permissions?.additionalDirectories || [],
         Y = A.directories.filter((z) => !K.includes(z));
       if (Y.length > 0) {
         let z = [...K, ...Y];
@@ -28120,7 +28120,7 @@ function hm(A) {
       y(
         `Removing ${A.rules.length} ${A.behavior} rule(s) from ${A.destination}`,
       );
-      let Y = (pA(A.destination)?.permissions || {})[A.behavior] || [],
+      let Y = (getConfigValue(A.destination)?.permissions || {})[A.behavior] || [],
         z = new Set(A.rules.map(v5)),
         w = Y.filter((_) => {
           let $ = v5(KX(_));
@@ -28133,7 +28133,7 @@ function hm(A) {
       y(
         `Removing ${A.directories.length} director${A.directories.length === 1 ? "y" : "ies"} from ${A.destination}`,
       );
-      let K = pA(A.destination)?.permissions?.additionalDirectories || [],
+      let K = getConfigValue(A.destination)?.permissions?.additionalDirectories || [],
         Y = new Set(A.directories),
         z = K.filter((w) => !Y.has(w));
       iA(A.destination, { permissions: { additionalDirectories: z } });
@@ -32328,7 +32328,7 @@ var vN = E(() => {
   xm();
   qG();
 });
-var l4 = "Bash";
+var BASH_TOOL_NAME = "Bash";
 function MA(A, q) {
   if (!process.env.SRT_DEBUG) return;
   let K = q?.level || "info",
@@ -36489,7 +36489,7 @@ ${
 }
 `;
 }
-var HX = "WebFetch",
+var WEB_FETCH_TOOL_NAME = "WebFetch",
   lz8 = `
 - Fetches content from a specified URL and processes it using an AI model
 - Takes a URL and a prompt as input
@@ -36509,7 +36509,7 @@ Usage notes:
   - When a URL redirects to a different host, the tool will inform you and provide the redirect URL in a special format. You should then make a new WebFetch request with the redirect URL to fetch the content.
   - For GitHub URLs, prefer using the gh CLI via Bash instead (e.g., gh pr view, gh issue view, gh api).
 `;
-var Lq = "Edit",
+var EDIT_TOOL_NAME = "Edit",
   lz1 = "/.claude/**",
   iz1 = "~/.claude/**",
   ex6 =
@@ -36545,7 +36545,7 @@ var nz1 = E(() => {
   Q2();
   sg5 = new Set(["pdf"]);
 });
-var n4 = "Read",
+var READ_TOOL_NAME = "Read",
   qb6 = 2000,
   tg5 = 2000,
   Af7 = "Read a file from the local filesystem.",
@@ -36570,7 +36570,7 @@ ${eg5}
       : ""
   }
 - This tool can read Jupyter notebooks (.ipynb files) and returns all cells with their outputs, combining code, text, and visualizations.
-- This tool can only read files, not directories. To read a directory, use an ls command via the ${l4} tool.
+- This tool can only read files, not directories. To read a directory, use an ls command via the ${BASH_TOOL_NAME} tool.
 - You can call multiple tools in a single response. It is always better to speculatively read multiple potentially useful files in parallel.
 - You will regularly be asked to read screenshots. If the user provides a path to a screenshot, ALWAYS use this tool to view the file at the path. This tool will work with all temporary file paths.
 - If you read a file that exists but has empty contents you will receive a system reminder warning in place of file contents.`;
@@ -36607,31 +36607,31 @@ function fK6(A, q) {
   return A;
 }
 function RX6() {
-  return pA("policySettings")?.sandbox?.network?.allowManagedDomainsOnly === !0;
+  return getConfigValue("policySettings")?.sandbox?.network?.allowManagedDomainsOnly === !0;
 }
 function rz1(A) {
   let q = A.permissions || {},
     K = [],
     Y = [];
   if (RX6()) {
-    let X = pA("policySettings");
+    let X = getConfigValue("policySettings");
     for (let M of X?.sandbox?.network?.allowedDomains || []) K.push(M);
     for (let M of X?.permissions?.allow || []) {
       let P = LX6(M);
-      if (P.toolName === HX && P.ruleContent?.startsWith("domain:"))
+      if (P.toolName === WEB_FETCH_TOOL_NAME && P.ruleContent?.startsWith("domain:"))
         K.push(P.ruleContent.substring(7));
     }
   } else {
     for (let X of A.sandbox?.network?.allowedDomains || []) K.push(X);
     for (let X of q.allow || []) {
       let M = LX6(X);
-      if (M.toolName === HX && M.ruleContent?.startsWith("domain:"))
+      if (M.toolName === WEB_FETCH_TOOL_NAME && M.ruleContent?.startsWith("domain:"))
         K.push(M.ruleContent.substring(7));
     }
   }
   for (let X of q.deny || []) {
     let M = LX6(X);
-    if (M.toolName === HX && M.ruleContent?.startsWith("domain:"))
+    if (M.toolName === WEB_FETCH_TOOL_NAME && M.ruleContent?.startsWith("domain:"))
       Y.push(M.ruleContent.substring(7));
   }
   let z = [".", Bm()],
@@ -36652,16 +36652,16 @@ function rz1(A) {
   let J = new Set([...(A.permissions?.additionalDirectories || []), ...mT()]);
   z.push(...J);
   for (let X of ZN) {
-    let M = pA(X);
+    let M = getConfigValue(X);
     if (M?.permissions) {
       for (let W of M.permissions.allow || []) {
         let G = LX6(W);
-        if (G.toolName === Lq && G.ruleContent) z.push(fK6(G.ruleContent, X));
+        if (G.toolName === EDIT_TOOL_NAME && G.ruleContent) z.push(fK6(G.ruleContent, X));
       }
       for (let W of M.permissions.deny || []) {
         let G = LX6(W);
-        if (G.toolName === Lq && G.ruleContent) w.push(fK6(G.ruleContent, X));
-        if (G.toolName === n4 && G.ruleContent) _.push(fK6(G.ruleContent, X));
+        if (G.toolName === EDIT_TOOL_NAME && G.ruleContent) w.push(fK6(G.ruleContent, X));
+        if (G.toolName === READ_TOOL_NAME && G.ruleContent) _.push(fK6(G.ruleContent, X));
       }
     }
     let P = M?.sandbox?.filesystem;
@@ -36752,7 +36752,7 @@ function _F5() {
     for (let w of [...(K.allow || []), ...(K.deny || [])]) {
       let _ = LX6(w);
       if (
-        (_.toolName === Lq || _.toolName === n4) &&
+        (_.toolName === EDIT_TOOL_NAME || _.toolName === READ_TOOL_NAME) &&
         _.ruleContent &&
         z(_.ruleContent)
       )
@@ -36766,7 +36766,7 @@ function _F5() {
 function $F5() {
   let A = ["flagSettings", "policySettings"];
   for (let q of A) {
-    let K = pA(q);
+    let K = getConfigValue(q);
     if (
       K?.sandbox?.enabled !== void 0 ||
       K?.sandbox?.autoAllowBashIfSandboxed !== void 0 ||
@@ -36777,7 +36777,7 @@ function $F5() {
   return !1;
 }
 async function OF5(A) {
-  let q = pA("localSettings");
+  let q = getConfigValue("localSettings");
   iA("localSettings", {
     sandbox: {
       ...q?.sandbox,
@@ -36848,15 +36848,15 @@ async function XF5() {
   );
 }
 function az8(A, q) {
-  let K = pA("localSettings"),
+  let K = getConfigValue("localSettings"),
     Y = K?.sandbox?.excludedCommands || [],
     z = A;
   if (q) {
     let w = q.filter(
-      (_) => _.type === "addRules" && _.rules.some(($) => $.toolName === l4),
+      (_) => _.type === "addRules" && _.rules.some(($) => $.toolName === BASH_TOOL_NAME),
     );
     if (w.length > 0 && w[0].type === "addRules") {
-      let _ = w[0].rules.find(($) => $.toolName === l4);
+      let _ = w[0].rules.find(($) => $.toolName === BASH_TOOL_NAME);
       if (_?.ruleContent) z = KF5(_.ruleContent) || _.ruleContent;
     }
   }
@@ -37145,9 +37145,9 @@ var tz8 = E(() => {
 var VF5 = null,
   $d;
 var hX6 = E(() => {
-  $d = [l4, VF5].filter((A) => A != null);
+  $d = [BASH_TOOL_NAME, VF5].filter((A) => A != null);
 });
-var Sz = "Glob",
+var GLOB_TOOL_NAME = "Glob",
   ez8 = `- Fast file pattern matching tool that works with any codebase size
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
 - Returns matching file paths sorted by modification time
@@ -37158,7 +37158,7 @@ function A28() {
   return `A powerful search tool built on ripgrep
 
   Usage:
-  - ALWAYS use ${k5} for search tasks. NEVER invoke \`grep\` or \`rg\` as a ${l4} command. The ${k5} tool has been optimized for correct permissions and access.
+  - ALWAYS use ${GREP_TOOL_NAME} for search tasks. NEVER invoke \`grep\` or \`rg\` as a ${BASH_TOOL_NAME} command. The ${GREP_TOOL_NAME} tool has been optimized for correct permissions and access.
   - Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")
   - Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust")
   - Output modes: "content" shows matching lines, "files_with_matches" shows only file paths (default), "count" shows match counts
@@ -37167,11 +37167,11 @@ function A28() {
   - Multiline matching: By default patterns match within single lines only. For cross-line patterns like \`struct \\{[\\s\\S]*?field\`, use \`multiline: true\`
 `;
 }
-var k5 = "Grep";
+var GREP_TOOL_NAME = "Grep";
 var r0 = () => {};
 function vF5() {
   return `
-- If this is an existing file, you MUST use the ${n4} tool first to read the file's contents. This tool will fail if you did not read the file first.`;
+- If this is an existing file, you MUST use the ${READ_TOOL_NAME} tool first to read the file's contents. This tool will fail if you did not read the file first.`;
 }
 function Hf7() {
   return `Writes a file to the local filesystem.
@@ -37182,11 +37182,11 @@ Usage:
 - NEVER create documentation files (*.md) or README files unless explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.`;
 }
-var U3 = "Write";
+var WRITE_TOOL_NAME = "Write";
 var YD = E(() => {
   ow();
 });
-var o0 = "NotebookEdit";
+var NOTEBOOK_EDIT_TOOL_NAME = "NotebookEdit";
 function IX6() {
   let A = new Date(),
     q = A.getFullYear(),
@@ -37226,7 +37226,7 @@ IMPORTANT - Use the correct year in search queries:
   - Example: If the user asks for "latest React docs", search for "React documentation" with the current year, NOT last year
 `;
 }
-var uy = "WebSearch";
+var WEB_SEARCH_TOOL_NAME = "WebSearch";
 var TK6 = () => {};
 function Mf7(A) {
   let { hasThinking: q = !1 } = A ?? {},
@@ -37247,7 +37247,7 @@ var Pf7 = E(() => {
   ow();
   YD();
   TK6();
-  ((kF5 = [...$d, Sz, k5, n4, HX, uy]), (EF5 = [Lq, U3, o0]));
+  ((kF5 = [...$d, GLOB_TOOL_NAME, GREP_TOOL_NAME, READ_TOOL_NAME, WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME]), (EF5 = [EDIT_TOOL_NAME, WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]));
 });
 function NK6(A) {
   let q = A.toLowerCase();
@@ -45690,17 +45690,17 @@ import { homedir as nr5 } from "os";
 import { join as rr5 } from "path";
 import { stat as aN7 } from "fs/promises";
 function or5(A) {
-  J8((q) => ({
+  updateSettings((q) => ({
     ...q,
     appleTerminalSetupInProgress: !0,
     appleTerminalBackupPath: A,
   }));
 }
 function aX6() {
-  J8((A) => ({ ...A, appleTerminalSetupInProgress: !1 }));
+  updateSettings((A) => ({ ...A, appleTerminalSetupInProgress: !1 }));
 }
 function ar5() {
-  let A = k1();
+  let A = getSettings();
   return {
     inProgress: A.appleTerminalSetupInProgress ?? !1,
     backupPath: A.appleTerminalBackupPath || null,
@@ -45890,7 +45890,7 @@ async function jw1(A) {
       break;
   }
   return (
-    J8((K) => {
+    updateSettings((K) => {
       if (
         ["vscode", "cursor", "windsurf", "alacritty", "zed"].includes(
           s8.terminal ?? "",
@@ -45909,14 +45909,14 @@ async function jw1(A) {
   );
 }
 function Iw8() {
-  return k1().shiftEnterKeyBindingInstalled === !0;
+  return getSettings().shiftEnterKeyBindingInstalled === !0;
 }
 function xw8() {
-  return k1().hasUsedBackslashReturn === !0;
+  return getSettings().hasUsedBackslashReturn === !0;
 }
 function bw8() {
-  if (!k1().hasUsedBackslashReturn)
-    J8((q) => ({ ...q, hasUsedBackslashReturn: !0 }));
+  if (!getSettings().hasUsedBackslashReturn)
+    updateSettings((q) => ({ ...q, hasUsedBackslashReturn: !0 }));
 }
 async function Ko5(A, q, K) {
   if (s8.terminal && s8.terminal in Hw1) {
@@ -54932,7 +54932,7 @@ var kE7 = E(() => {
   rI6();
   sm = Y6(W6(), 1);
 });
-function Z8(A) {
+function ScrollableContent(A) {
   let q = w6(8),
     { children: K, height: Y } = A;
   if (EE7.useContext(LE7)) return K;

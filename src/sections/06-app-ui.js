@@ -2450,7 +2450,7 @@ var AT6 = E(() => {
   u1();
   F7();
   f1();
-  bQY = i6(() =>
+  bQY = lazyOnce(() =>
     x.object({
       method: x.literal("log_event"),
       params: x.object({
@@ -2473,7 +2473,7 @@ import { copyFile as gQY, link as FQY, mkdir as pQY } from "fs/promises";
 function V2() {
   if (C7()) return QQY();
   return (
-    k1().fileCheckpointingEnabled !== !1 &&
+    getSettings().fileCheckpointingEnabled !== !1 &&
     !X1(process.env.CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING)
   );
 }
@@ -4243,7 +4243,7 @@ var qW1 = E(() => {
   Hi();
   ((Bb8 = Y6(W6(), 1)),
     (VV1 = X1(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS)));
-  ((PUY = i6(() =>
+  ((PUY = lazyOnce(() =>
     x.object({
       description: x
         .string()
@@ -4263,7 +4263,7 @@ var qW1 = E(() => {
         .boolean()
         .optional()
         .describe(
-          `Set to true to run this agent in the background. The tool result will include an output_file path - use ${n4} tool or ${l4} tail to check on output.`,
+          `Set to true to run this agent in the background. The tool result will include an output_file path - use ${READ_TOOL_NAME} tool or ${BASH_TOOL_NAME} tail to check on output.`,
         ),
       max_turns: x
         .number()
@@ -4275,7 +4275,7 @@ var qW1 = E(() => {
         ),
     }),
   )),
-    (Ns4 = i6(() => {
+    (Ns4 = lazyOnce(() => {
       let A = x.object({
         name: x.string().optional().describe("Name for the spawned agent"),
         team_name: x
@@ -4301,8 +4301,8 @@ var qW1 = E(() => {
             ),
         });
     })),
-    (dI8 = i6(() => (VV1 ? Ns4().omit({ run_in_background: !0 }) : Ns4()))),
-    (WUY = i6(() =>
+    (dI8 = lazyOnce(() => (VV1 ? Ns4().omit({ run_in_background: !0 }) : Ns4()))),
+    (WUY = lazyOnce(() =>
       x.object({
         agentId: x.string(),
         content: x.array(
@@ -4332,7 +4332,7 @@ var qW1 = E(() => {
         }),
       }),
     )),
-    (GUY = i6(() => {
+    (GUY = lazyOnce(() => {
       let A = WUY().extend({
           status: x.literal("completed"),
           prompt: x.string(),
@@ -4729,7 +4729,7 @@ var qW1 = E(() => {
             }
           }),
         );
-        let G6 = J.options.tools.some((v6) => B5(v6, n4) || B5(v6, l4));
+        let G6 = J.options.tools.some((v6) => B5(v6, READ_TOOL_NAME) || B5(v6, BASH_TOOL_NAME));
         return {
           data: {
             isAsync: !0,
@@ -4906,7 +4906,7 @@ var qW1 = E(() => {
                         }
                       }));
                     let d6 = J.options.tools.some(
-                      (o6) => B5(o6, n4) || B5(o6, l4),
+                      (o6) => B5(o6, READ_TOOL_NAME) || B5(o6, BASH_TOOL_NAME),
                     );
                     return {
                       data: {
@@ -5073,7 +5073,7 @@ The agent is working in the background. You will be notified automatically when 
           z = A.canReadOutputFile
             ? `Do not duplicate this agent's work — avoid working with the same files or topics it is using. Work on non-overlapping tasks, or briefly tell the user what you launched and end your response.
 output_file: ${A.outputFile}
-If asked, you can check progress before completion by using ${n4} or ${l4} tail on the output file.`
+If asked, you can check progress before completion by using ${READ_TOOL_NAME} or ${BASH_TOOL_NAME} tail on the output file.`
             : "Briefly tell the user what you launched and end your response. Do not generate any other text — agent results will arrive in a subsequent message.",
           w = `${Y}
 ${z}`;
@@ -5119,7 +5119,7 @@ duration_ms: ${A.totalDurationMs}</usage>`,
 function vs4(A) {
   if ("status" in A && A.status === "forked")
     return E5.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       E5.createElement(T, null, E5.createElement(t8, null, ["Done"])),
     );
@@ -5130,7 +5130,7 @@ function vs4(A) {
   }
   if ("model" in A && A.model) q.push(A.model);
   return E5.createElement(
-    Z8,
+    ScrollableContent,
     { height: 1 },
     E5.createElement(T, null, E5.createElement(t8, null, q)),
   );
@@ -5144,7 +5144,7 @@ function ks4({ skill: A }, { commands: q }) {
 function vV1(A, { tools: q, verbose: K }) {
   if (!A.length)
     return E5.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       E5.createElement(T, { dimColor: !0 }, NUY),
     );
@@ -5152,7 +5152,7 @@ function vV1(A, { tools: q, verbose: K }) {
     z = A.length - Y.length,
     { inProgressToolUseIDs: w } = Pc6(A.map((_) => _.data));
   return E5.createElement(
-    Z8,
+    ScrollableContent,
     null,
     E5.createElement(
       m,
@@ -5353,7 +5353,7 @@ var kV1 = E(() => {
   wx();
   kA();
   ON1();
-  ((vUY = i6(() =>
+  ((vUY = lazyOnce(() =>
     x.object({
       skill: x
         .string()
@@ -5361,7 +5361,7 @@ var kV1 = E(() => {
       args: x.string().optional().describe("Optional arguments for the skill"),
     }),
   )),
-    (kUY = i6(() => {
+    (kUY = lazyOnce(() => {
       let A = x.object({
           success: x.boolean().describe("Whether the skill is valid"),
           commandName: x.string().describe("The name of the skill"),
@@ -5654,7 +5654,7 @@ ${A.result}`,
 });
 function yUY() {
   return `
-- You must use your \`${n4}\` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file. `;
+- You must use your \`${READ_TOOL_NAME}\` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file. `;
 }
 function hs4() {
   return RUY();
@@ -9977,7 +9977,7 @@ var P16 = E(() => {
 var pV1, Pu8, Qe4, QV1;
 var _l6 = E(() => {
   K4();
-  ((pV1 = i6(() =>
+  ((pV1 = lazyOnce(() =>
     x.strictObject({
       file_path: x.string().describe("The absolute path to the file to modify"),
       old_string: x.string().describe("The text to replace"),
@@ -9993,7 +9993,7 @@ var _l6 = E(() => {
         .describe("Replace all occurrences of old_string (default false)"),
     }),
   )),
-    (Pu8 = i6(() =>
+    (Pu8 = lazyOnce(() =>
       x.object({
         oldStart: x.number(),
         oldLines: x.number(),
@@ -10002,7 +10002,7 @@ var _l6 = E(() => {
         lines: x.array(x.string()),
       }),
     )),
-    (Qe4 = i6(() =>
+    (Qe4 = lazyOnce(() =>
       x.object({
         filePath: x.string().describe("The file path that was edited"),
         oldString: x.string().describe("The original string that was replaced"),
@@ -10031,7 +10031,7 @@ var _l6 = E(() => {
           .optional(),
       }),
     )),
-    (QV1 = i6(() =>
+    (QV1 = lazyOnce(() =>
       x.object({
         file_path: x
           .string()
@@ -10491,7 +10491,7 @@ var Sz6 = E(() => {
   f1();
   N8();
   YD();
-  dcY = new Set([Lq, U3, o0]);
+  dcY = new Set([EDIT_TOOL_NAME, WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME]);
 });
 function ccY(A, q) {
   return ex.createElement(T, { key: q }, ex.createElement(M3, null, A));
@@ -10647,7 +10647,7 @@ function UV1(A) {
       let N;
       if (q[9] !== O)
         ((N = nY.createElement(
-          Z8,
+          ScrollableContent,
           null,
           nY.createElement(T, { dimColor: !0 }, O),
         )),
@@ -10695,7 +10695,7 @@ function UV1(A) {
   let f;
   if (q[24] !== G || q[25] !== Z)
     ((f = nY.createElement(
-      Z8,
+      ScrollableContent,
       null,
       nY.createElement(m, { flexDirection: "column" }, G, Z),
     )),
@@ -10957,7 +10957,7 @@ function Iz6(A) {
   if (O === "condensed" && !H) {
     let Z;
     if (q[10] !== P)
-      ((Z = tz.createElement(Z8, null, P)), (q[10] = P), (q[11] = Z));
+      ((Z = tz.createElement(ScrollableContent, null, P)), (q[10] = P), (q[11] = Z));
     else Z = q[11];
     return Z;
   }
@@ -10999,7 +10999,7 @@ function Iz6(A) {
     let I;
     if (q[23] !== L || q[24] !== S || q[25] !== P)
       ((I = tz.createElement(
-        Z8,
+        ScrollableContent,
         null,
         tz.createElement(m, { flexDirection: "column" }, P, L, S),
       )),
@@ -11013,7 +11013,7 @@ function Iz6(A) {
   if (!z || z.length === 0) {
     let Z;
     if (q[27] !== P)
-      ((Z = tz.createElement(Z8, null, P)), (q[27] = P), (q[28] = Z));
+      ((Z = tz.createElement(ScrollableContent, null, P)), (q[27] = P), (q[28] = Z));
     else Z = q[28];
     return Z;
   }
@@ -11051,7 +11051,7 @@ function Iz6(A) {
   let G;
   if (q[40] !== W || q[41] !== P)
     ((G = tz.createElement(
-      Z8,
+      ScrollableContent,
       null,
       tz.createElement(m, { flexDirection: "column" }, P, W),
     )),
@@ -11167,7 +11167,7 @@ function H6q(A, q) {
     return (
       $6(H),
       zw.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         zw.createElement(T, null, "(No changes)"),
       )
@@ -11180,18 +11180,18 @@ function j6q(A, q) {
     let Y = zq(A, "tool_use_error");
     if (Y?.includes("File has not been read yet"))
       return zw.createElement(
-        Z8,
+        ScrollableContent,
         null,
         zw.createElement(T, { dimColor: !0 }, "File must be read first"),
       );
     if (Y?.includes(RG))
       return zw.createElement(
-        Z8,
+        ScrollableContent,
         null,
         zw.createElement(T, { color: "error" }, "File not found"),
       );
     return zw.createElement(
-      Z8,
+      ScrollableContent,
       null,
       zw.createElement(T, { color: "error" }, "Error editing file"),
     );
@@ -11506,7 +11506,7 @@ var xz6 = E(() => {
   r1();
   ye();
   rM = {
-    name: Lq,
+    name: EDIT_TOOL_NAME,
     maxResultSizeChars: 1e5,
     strict: !0,
     async description() {
@@ -11622,7 +11622,7 @@ var xz6 = E(() => {
         return {
           result: !1,
           behavior: "ask",
-          message: `File is a Jupyter Notebook. Use the ${o0} to edit this file.`,
+          message: `File is a Jupyter Notebook. Use the ${NOTEBOOK_EDIT_TOOL_NAME} to edit this file.`,
           errorCode: 5,
         };
       let J = q.readFileState.get(_);
@@ -11915,7 +11915,7 @@ function NlY(A) {
   let G;
   if (q[21] !== D || q[22] !== P || q[23] !== W)
     ((G = sK.createElement(
-      Z8,
+      ScrollableContent,
       null,
       sK.createElement(m, { flexDirection: "column" }, D, P, W),
     )),
@@ -11979,14 +11979,14 @@ function N6q({ file_path: A, content: q }, { style: K, verbose: Y }) {
   } catch (z) {
     return (
       $6(z),
-      sK.createElement(Z8, null, sK.createElement(T, null, "(No changes)"))
+      sK.createElement(ScrollableContent, null, sK.createElement(T, null, "(No changes)"))
     );
   }
 }
 function V6q(A, { verbose: q }) {
   if (!q && typeof A === "string" && zq(A, "tool_use_error"))
     return sK.createElement(
-      Z8,
+      ScrollableContent,
       null,
       sK.createElement(T, { color: "error" }, "Error writing file"),
     );
@@ -12005,7 +12005,7 @@ function k6q(
       if (A.startsWith(kP()) && !$) {
         if (_ !== "condensed")
           return sK.createElement(
-            Z8,
+            ScrollableContent,
             null,
             sK.createElement(T, { dimColor: !0 }, "/plan to preview"),
           );
@@ -12089,7 +12089,7 @@ var T16 = E(() => {
   nV1();
   N8();
   ye();
-  ((klY = i6(() =>
+  ((klY = lazyOnce(() =>
     x.strictObject({
       file_path: x
         .string()
@@ -12099,7 +12099,7 @@ var T16 = E(() => {
       content: x.string().describe("The content to write to the file"),
     }),
   )),
-    (ElY = i6(() =>
+    (ElY = lazyOnce(() =>
       x.object({
         type: x
           .enum(["create", "update"])
@@ -12132,7 +12132,7 @@ var T16 = E(() => {
       }),
     )),
     (oM = {
-      name: U3,
+      name: WRITE_TOOL_NAME,
       maxResultSizeChars: 1e5,
       strict: !0,
       input_examples: [
@@ -12455,7 +12455,7 @@ function Ru8(A) {
   let P;
   if (q[21] !== J || q[22] !== X || q[23] !== M)
     ((P = Pj.default.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       Pj.default.createElement(T, null, J, X, " ", M),
     )),
@@ -12479,12 +12479,12 @@ function C6q(A, { verbose: q }) {
   if (!q && typeof A === "string" && zq(A, "tool_use_error")) {
     if (zq(A, "tool_use_error")?.includes(RG))
       return Pj.default.createElement(
-        Z8,
+        ScrollableContent,
         null,
         Pj.default.createElement(T, { color: "error" }, "File not found"),
       );
     return Pj.default.createElement(
-      Z8,
+      ScrollableContent,
       null,
       Pj.default.createElement(T, { color: "error" }, "Error searching files"),
     );
@@ -12574,7 +12574,7 @@ var MT6 = E(() => {
   yz();
   $7();
   I6q();
-  ((ylY = i6(() =>
+  ((ylY = lazyOnce(() =>
     x.strictObject({
       pattern: x
         .string()
@@ -12652,7 +12652,7 @@ var MT6 = E(() => {
     }),
   )),
     (RlY = [".git", ".svn", ".hg", ".bzr"]));
-  ((ClY = i6(() =>
+  ((ClY = lazyOnce(() =>
     x.object({
       mode: x.enum(["content", "files_with_matches", "count"]).optional(),
       numFiles: x.number(),
@@ -12665,7 +12665,7 @@ var MT6 = E(() => {
     }),
   )),
     (qb = {
-      name: k5,
+      name: GREP_TOOL_NAME,
       maxResultSizeChars: 20000,
       strict: !0,
       input_examples: [
@@ -12961,12 +12961,12 @@ function m6q(A, { verbose: q }) {
   if (!q && typeof A === "string" && zq(A, "tool_use_error")) {
     if (zq(A, "tool_use_error")?.includes(RG))
       return uz6.default.createElement(
-        Z8,
+        ScrollableContent,
         null,
         uz6.default.createElement(T, { color: "error" }, "File not found"),
       );
     return uz6.default.createElement(
-      Z8,
+      ScrollableContent,
       null,
       uz6.default.createElement(T, { color: "error" }, "Error searching files"),
     );
@@ -13002,7 +13002,7 @@ var $l6 = E(() => {
   BY();
   $7();
   F6q();
-  ((SlY = i6(() =>
+  ((SlY = lazyOnce(() =>
     x.strictObject({
       pattern: x.string().describe("The glob pattern to match files against"),
       path: x
@@ -13013,7 +13013,7 @@ var $l6 = E(() => {
         ),
     }),
   )),
-    (hlY = i6(() =>
+    (hlY = lazyOnce(() =>
       x.object({
         durationMs: x
           .number()
@@ -13028,7 +13028,7 @@ var $l6 = E(() => {
       }),
     )),
     (ZF = {
-      name: Sz,
+      name: GLOB_TOOL_NAME,
       maxResultSizeChars: 1e5,
       async description() {
         return ez8;
@@ -13209,7 +13209,7 @@ function d6q(A) {
   let W;
   if (q[17] !== M || q[18] !== P)
     ((W = tP.createElement(
-      Z8,
+      ScrollableContent,
       null,
       tP.createElement(m, { flexDirection: "column" }, M, P),
     )),
@@ -13265,7 +13265,7 @@ function i6q(A, { verbose: q }) {
 function n6q(A, { verbose: q }) {
   if (!q && typeof A === "string" && zq(A, "tool_use_error"))
     return y9.createElement(
-      Z8,
+      ScrollableContent,
       null,
       y9.createElement(T, { color: "error" }, "Error editing notebook"),
     );
@@ -13277,12 +13277,12 @@ function r6q() {
 function o6q({ cell_id: A, new_source: q, error: K }) {
   if (K)
     return y9.createElement(
-      Z8,
+      ScrollableContent,
       null,
       y9.createElement(T, { color: "error" }, K),
     );
   return y9.createElement(
-    Z8,
+    ScrollableContent,
     null,
     y9.createElement(
       m,
@@ -13327,7 +13327,7 @@ var Ol6 = E(() => {
   CV();
   a6q();
   r1();
-  ((blY = i6(() =>
+  ((blY = lazyOnce(() =>
     x.strictObject({
       notebook_path: x
         .string()
@@ -13355,7 +13355,7 @@ var Ol6 = E(() => {
         ),
     }),
   )),
-    (ulY = i6(() =>
+    (ulY = lazyOnce(() =>
       x.object({
         new_source: x
           .string()
@@ -13385,7 +13385,7 @@ var Ol6 = E(() => {
       }),
     )),
     (Wi = {
-      name: o0,
+      name: NOTEBOOK_EDIT_TOOL_NAME,
       maxResultSizeChars: 1e5,
       shouldDefer: !0,
       async description() {
@@ -29449,7 +29449,7 @@ function C7q(A, { verbose: q }) {
 }
 function S7q() {
   return bV.default.createElement(
-    Z8,
+    ScrollableContent,
     { height: 1 },
     bV.default.createElement(T, { dimColor: !0 }, "Fetching…"),
   );
@@ -29461,7 +29461,7 @@ function h7q({ bytes: A, code: q, codeText: K, result: Y }, z, { verbose: w }) {
       m,
       { flexDirection: "column" },
       bV.default.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         bV.default.createElement(
           T,
@@ -29482,7 +29482,7 @@ function h7q({ bytes: A, code: q, codeText: K, result: Y }, z, { verbose: w }) {
       ),
     );
   return bV.default.createElement(
-    Z8,
+    ScrollableContent,
     { height: 1 },
     bV.default.createElement(
       T,
@@ -29513,7 +29513,7 @@ var I7q = E(() => {
 });
 function ooY(A) {
   try {
-    let q = tM.inputSchema.safeParse(A);
+    let q = webFetchTool.inputSchema.safeParse(A);
     if (!q.success) return `input:${A.toString()}`;
     let { url: K } = q.data;
     return `domain:${new URL(K).hostname}`;
@@ -29526,12 +29526,12 @@ function x7q(A) {
     {
       type: "addRules",
       destination: "localSettings",
-      rules: [{ toolName: HX, ruleContent: A }],
+      rules: [{ toolName: WEB_FETCH_TOOL_NAME, ruleContent: A }],
       behavior: "allow",
     },
   ];
 }
-var noY, roY, tM;
+var webFetchInputSchema, webFetchOutputSchema, webFetchTool;
 var IT6 = E(() => {
   K4();
   ct();
@@ -29539,13 +29539,13 @@ var IT6 = E(() => {
   tj();
   KB8();
   I7q();
-  ((noY = i6(() =>
+  ((webFetchInputSchema = lazyOnce(() =>
     x.strictObject({
       url: x.string().url().describe("The URL to fetch content from"),
       prompt: x.string().describe("The prompt to run on the fetched content"),
     }),
   )),
-    (roY = i6(() =>
+    (webFetchOutputSchema = lazyOnce(() =>
       x.object({
         bytes: x.number().describe("Size of the fetched content in bytes"),
         code: x.number().describe("HTTP response code"),
@@ -29559,8 +29559,8 @@ var IT6 = E(() => {
         url: x.string().describe("The URL that was fetched"),
       }),
     )));
-  tM = {
-    name: HX,
+  webFetchTool = {
+    name: WEB_FETCH_TOOL_NAME,
     maxResultSizeChars: 1e5,
     shouldDefer: !0,
     async description(A) {
@@ -29583,10 +29583,10 @@ var IT6 = E(() => {
       return !0;
     },
     get inputSchema() {
-      return noY();
+      return webFetchInputSchema();
     },
     get outputSchema() {
-      return roY();
+      return webFetchOutputSchema();
     },
     isConcurrencySafe() {
       return !0;
@@ -29622,22 +29622,22 @@ var IT6 = E(() => {
             };
       } catch {}
       let z = ooY(A),
-        w = ax(Y, tM, "deny").get(z);
+        w = ax(Y, webFetchTool, "deny").get(z);
       if (w)
         return {
           behavior: "deny",
-          message: `${tM.name} denied access to ${z}.`,
+          message: `${webFetchTool.name} denied access to ${z}.`,
           decisionReason: { type: "rule", rule: w },
         };
-      let _ = ax(Y, tM, "ask").get(z);
+      let _ = ax(Y, webFetchTool, "ask").get(z);
       if (_)
         return {
           behavior: "ask",
-          message: `Claude requested permissions to use ${tM.name}, but you haven't granted it yet.`,
+          message: `Claude requested permissions to use ${webFetchTool.name}, but you haven't granted it yet.`,
           decisionReason: { type: "rule", rule: _ },
           suggestions: x7q(z),
         };
-      let $ = ax(Y, tM, "allow").get(z);
+      let $ = ax(Y, webFetchTool, "allow").get(z);
       if ($)
         return {
           behavior: "allow",
@@ -29646,7 +29646,7 @@ var IT6 = E(() => {
         };
       return {
         behavior: "ask",
-        message: `Claude requested permissions to use ${tM.name}, but you haven't granted it yet.`,
+        message: `Claude requested permissions to use ${webFetchTool.name}, but you haven't granted it yet.`,
         suggestions: x7q(z),
       };
     },
@@ -29769,7 +29769,7 @@ function p7q(A, q, { verbose: K }) {
   let Y = A.command ?? "",
     z = K ? Y : soY(Y);
   return Cl6.default.createElement(
-    Z8,
+    ScrollableContent,
     null,
     Cl6.default.createElement(
       T,
@@ -29833,7 +29833,7 @@ var OB8 = E(() => {
   r1();
   bx();
   $B8();
-  ((toY = i6(() =>
+  ((toY = lazyOnce(() =>
     x.strictObject({
       task_id: x
         .string()
@@ -29845,7 +29845,7 @@ var OB8 = E(() => {
         .describe("Deprecated: use task_id instead"),
     }),
   )),
-    (eoY = i6(() =>
+    (eoY = lazyOnce(() =>
       x.object({
         message: x.string().describe("Status message about the operation"),
         task_id: x.string().describe("The ID of the task that was stopped"),
@@ -30030,7 +30030,7 @@ function YaY(A) {
     let X;
     if (q[2] === Symbol.for("react.memo_cache_sentinel"))
       ((X = X9.default.createElement(
-        Z8,
+        ScrollableContent,
         null,
         X9.default.createElement(
           T,
@@ -30170,7 +30170,7 @@ function YaY(A) {
       let W;
       if (q[29] !== _)
         ((W = X9.default.createElement(
-          Z8,
+          ScrollableContent,
           null,
           X9.default.createElement(
             T,
@@ -30189,7 +30189,7 @@ function YaY(A) {
       let W;
       if (q[31] === Symbol.for("react.memo_cache_sentinel"))
         ((W = X9.default.createElement(
-          Z8,
+          ScrollableContent,
           null,
           X9.default.createElement(
             T,
@@ -30205,7 +30205,7 @@ function YaY(A) {
       let W;
       if (q[32] === Symbol.for("react.memo_cache_sentinel"))
         ((W = X9.default.createElement(
-          Z8,
+          ScrollableContent,
           null,
           X9.default.createElement(
             T,
@@ -30220,7 +30220,7 @@ function YaY(A) {
     let P;
     if (q[33] === Symbol.for("react.memo_cache_sentinel"))
       ((P = X9.default.createElement(
-        Z8,
+        ScrollableContent,
         null,
         X9.default.createElement(T, { dimColor: !0 }, "Task not ready"),
       )),
@@ -30339,7 +30339,7 @@ var DB8 = E(() => {
   JB8();
   i_();
   ((X9 = Y6(W6(), 1)),
-    (qaY = i6(() =>
+    (qaY = lazyOnce(() =>
       x.strictObject({
         task_id: x.string().describe("The task ID to get output from"),
         block: x
@@ -30538,13 +30538,13 @@ function i7q(A) {
   switch (K.type) {
     case "query_update":
       return VF.default.createElement(
-        Z8,
+        ScrollableContent,
         null,
         VF.default.createElement(T, { dimColor: !0 }, "Searching: ", K.query),
       );
     case "search_results_received":
       return VF.default.createElement(
-        Z8,
+        ScrollableContent,
         null,
         VF.default.createElement(
           T,
@@ -30570,7 +30570,7 @@ function n7q(A) {
     m,
     { justifyContent: "space-between", width: "100%" },
     VF.default.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       VF.default.createElement(
         T,
@@ -30650,7 +30650,7 @@ var MB8 = E(() => {
   h1();
   r7q();
   r1();
-  ((waY = i6(() =>
+  ((waY = lazyOnce(() =>
     x.strictObject({
       query: x.string().min(2).describe("The search query to use"),
       allowed_domains: x
@@ -30663,7 +30663,7 @@ var MB8 = E(() => {
         .describe("Never include search results from these domains"),
     }),
   )),
-    (_aY = i6(() => {
+    (_aY = lazyOnce(() => {
       let A = x.object({
         title: x.string().describe("The title of the search result"),
         url: x.string().describe("The URL of the search result"),
@@ -30673,7 +30673,7 @@ var MB8 = E(() => {
         content: x.array(A).describe("Array of search hits"),
       });
     })),
-    ($aY = i6(() =>
+    ($aY = lazyOnce(() =>
       x.object({
         query: x.string().describe("The search query that was executed"),
         results: x
@@ -30685,7 +30685,7 @@ var MB8 = E(() => {
       }),
     )));
   gv1 = {
-    name: uy,
+    name: WEB_SEARCH_TOOL_NAME,
     maxResultSizeChars: 1e5,
     shouldDefer: !0,
     async description(A) {
@@ -30933,7 +30933,7 @@ function t7q(A, q, { theme: K }) {
         b3.createElement(T, null, " Plan submitted for team lead approval"),
       ),
       b3.createElement(
-        Z8,
+        ScrollableContent,
         null,
         b3.createElement(
           m,
@@ -30957,7 +30957,7 @@ function t7q(A, q, { theme: K }) {
       b3.createElement(T, null, " User approved Claude's plan"),
     ),
     b3.createElement(
-      Z8,
+      ScrollableContent,
       null,
       b3.createElement(
         m,
@@ -31024,7 +31024,7 @@ var Sl6 = E(() => {
   WH();
   WB8();
   B1();
-  ((jaY = i6(() =>
+  ((jaY = lazyOnce(() =>
     x.object({
       tool: x.enum(["Bash"]).describe("The tool this prompt applies to"),
       prompt: x
@@ -31034,7 +31034,7 @@ var Sl6 = E(() => {
         ),
     }),
   )),
-    (Y4q = i6(() =>
+    (Y4q = lazyOnce(() =>
       x
         .strictObject({
           allowedPrompts: x
@@ -31046,7 +31046,7 @@ var Sl6 = E(() => {
         })
         .passthrough(),
     )),
-    (UF_ = i6(() =>
+    (UF_ = lazyOnce(() =>
       Y4q().extend({
         plan: x
           .string()
@@ -31056,7 +31056,7 @@ var Sl6 = E(() => {
           ),
       }),
     )),
-    (JaY = i6(() =>
+    (JaY = lazyOnce(() =>
       x.object({
         plan: x
           .string()
@@ -31247,7 +31247,7 @@ ${q}`,
 var iF_;
 var z4q = E(() => {
   K4();
-  iF_ = i6(() => x.strictObject({}));
+  iF_ = lazyOnce(() => x.strictObject({}));
 });
 function PaY(A) {
   let q = w6(3),
@@ -31269,7 +31269,7 @@ function PaY(A) {
       { flexDirection: "column", marginTop: 1 },
       Y,
       VH.createElement(
-        Z8,
+        ScrollableContent,
         null,
         VH.createElement(
           m,
@@ -31298,7 +31298,7 @@ var Qv1 = E(() => {
   c0();
   B1();
   ((VH = Y6(W6(), 1)),
-    (w4q = i6(() =>
+    (w4q = lazyOnce(() =>
       x.object({
         label: x
           .string()
@@ -31318,7 +31318,7 @@ var Qv1 = E(() => {
           ),
       }),
     )),
-    (GB8 = i6(() =>
+    (GB8 = lazyOnce(() =>
       x.object({
         question: x
           .string()
@@ -31345,7 +31345,7 @@ var Qv1 = E(() => {
           ),
       }),
     )),
-    (_4q = i6(() => {
+    (_4q = lazyOnce(() => {
       let A = x.object({
         markdown: x
           .string()
@@ -31378,7 +31378,7 @@ var Qv1 = E(() => {
       message:
         "Question texts must be unique, option labels must be unique within each question",
     }),
-    ($4q = i6(() => ({
+    ($4q = lazyOnce(() => ({
       answers: x
         .record(x.string(), x.string())
         .optional()
@@ -31398,7 +31398,7 @@ var Qv1 = E(() => {
           "Optional metadata for tracking and analytics purposes. Not displayed to user.",
         ),
     }))),
-    (DaY = i6(() =>
+    (DaY = lazyOnce(() =>
       x
         .strictObject({
           questions: x
@@ -31410,7 +31410,7 @@ var Qv1 = E(() => {
         })
         .refine(pv1.check, { message: pv1.message }),
     )),
-    (XaY = i6(() =>
+    (XaY = lazyOnce(() =>
       x.object({
         questions: x.array(GB8()).describe("The questions that were asked"),
         answers: x
@@ -31421,7 +31421,7 @@ var Qv1 = E(() => {
         annotations: _4q(),
       }),
     )),
-    (O4q = i6(() => {
+    (O4q = lazyOnce(() => {
       let A = w4q().omit({ markdown: !0 });
       return GB8().extend({
         options: x
@@ -31433,11 +31433,11 @@ var Qv1 = E(() => {
           ),
       });
     })),
-    (MaY = i6(() => {
+    (MaY = lazyOnce(() => {
       let { annotations: A, ...q } = $4q();
       return q;
     })),
-    (wp_ = i6(() =>
+    (wp_ = lazyOnce(() =>
       x
         .strictObject({
           questions: x
@@ -31449,7 +31449,7 @@ var Qv1 = E(() => {
         })
         .refine(pv1.check, { message: pv1.message }),
     )),
-    (_p_ = i6(() =>
+    (_p_ = lazyOnce(() =>
       x.object({
         questions: x.array(O4q()).describe("The questions that were asked"),
         answers: x
@@ -31542,7 +31542,7 @@ ${_.markdown}`);
 var H4q;
 var j4q = E(() => {
   K4();
-  H4q = i6(() => {
+  H4q = lazyOnce(() => {
     let A = x.strictObject({
         operation: x.literal("goToDefinition"),
         filePath: x
@@ -32142,7 +32142,7 @@ function TaY(A) {
   let P;
   if (q[19] !== J || q[20] !== X || q[21] !== M)
     ((P = MJ.default.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       MJ.default.createElement(T, null, J, X, " ", M),
     )),
@@ -32192,7 +32192,7 @@ function y4q() {
 function R4q(A, { verbose: q }) {
   if (!q && typeof A === "string" && zq(A, "tool_use_error"))
     return MJ.default.createElement(
-      Z8,
+      ScrollableContent,
       null,
       MJ.default.createElement(T, { color: "error" }, "LSP operation failed"),
     );
@@ -32211,7 +32211,7 @@ function S4q(A, q, { verbose: K }) {
       verbose: K,
     });
   return MJ.default.createElement(
-    Z8,
+    ScrollableContent,
     null,
     MJ.default.createElement(T, null, A.result),
   );
@@ -32473,7 +32473,7 @@ var b4q = E(() => {
   f1();
   cq();
   h4q();
-  ((vaY = i6(() =>
+  ((vaY = lazyOnce(() =>
     x.strictObject({
       operation: x
         .enum([
@@ -32503,7 +32503,7 @@ var b4q = E(() => {
         .describe("The character offset (1-based, as shown in editors)"),
     }),
   )),
-    (kaY = i6(() =>
+    (kaY = lazyOnce(() =>
       x.object({
         operation: x
           .enum([
@@ -32926,8 +32926,8 @@ var kB8 = E(() => {
   g4q();
   c4q();
   cz6();
-  ((baY = i6(() => x.strictObject({}))),
-    (uaY = i6(() =>
+  ((baY = lazyOnce(() => x.strictObject({}))),
+    (uaY = lazyOnce(() =>
       x.object({
         message: x.string().describe("Confirmation that plan mode was entered"),
       }),
@@ -33089,7 +33089,7 @@ var e4q = E(() => {
   GF();
   VX();
   u1();
-  ((maY = i6(() =>
+  ((maY = lazyOnce(() =>
     x.strictObject({
       name: x
         .string()
@@ -33099,7 +33099,7 @@ var e4q = E(() => {
         ),
     }),
   )),
-    (BaY = i6(() =>
+    (BaY = lazyOnce(() =>
       x.object({
         worktreePath: x.string(),
         worktreeBranch: x.string().optional(),
@@ -33737,7 +33737,7 @@ var Mqq = E(() => {
   h1();
   r1();
   rJ1();
-  ((lU_ = i6(() =>
+  ((lU_ = lazyOnce(() =>
     x.strictObject({
       setting: x
         .string()
@@ -33750,7 +33750,7 @@ var Mqq = E(() => {
         .describe("The new value. Omit to get current value."),
     }),
   )),
-    (iU_ = i6(() =>
+    (iU_ = lazyOnce(() =>
       x.object({
         success: x.boolean(),
         operation: x.enum(["get", "set"]).optional(),
@@ -33833,7 +33833,7 @@ var kqq = E(() => {
   K4();
   Gqq();
   U_();
-  ((zsY = i6(() =>
+  ((zsY = lazyOnce(() =>
     x.strictObject({
       subject: x.string().describe("A brief title for the task"),
       description: x
@@ -33851,7 +33851,7 @@ var kqq = E(() => {
         .describe("Arbitrary metadata to attach to the task"),
     }),
   )),
-    (wsY = i6(() =>
+    (wsY = lazyOnce(() =>
       x.object({ task: x.object({ id: x.string(), subject: x.string() }) }),
     )),
     (vqq = {
@@ -33964,12 +33964,12 @@ var _sY, $sY, Iqq;
 var xqq = E(() => {
   K4();
   U_();
-  ((_sY = i6(() =>
+  ((_sY = lazyOnce(() =>
     x.strictObject({
       taskId: x.string().describe("The ID of the task to retrieve"),
     }),
   )),
-    ($sY = i6(() =>
+    ($sY = lazyOnce(() =>
       x.object({
         task: x
           .object({
@@ -34161,7 +34161,7 @@ var Uqq = E(() => {
   oz();
   WH();
   Hj();
-  ((OsY = i6(() => {
+  ((OsY = lazyOnce(() => {
     let A = R56().or(x.literal("deleted"));
     return x.strictObject({
       taskId: x.string().describe("The ID of the task to update"),
@@ -34194,7 +34194,7 @@ var Uqq = E(() => {
         ),
     });
   })),
-    (HsY = i6(() =>
+    (HsY = lazyOnce(() =>
       x.object({
         success: x.boolean(),
         taskId: x.string(),
@@ -34458,8 +34458,8 @@ var tqq = E(() => {
   K4();
   lqq();
   U_();
-  ((jsY = i6(() => x.strictObject({}))),
-    (JsY = i6(() =>
+  ((jsY = lazyOnce(() => x.strictObject({}))),
+    (JsY = lazyOnce(() =>
       x.object({
         tasks: x.array(
           x.object({
@@ -34725,7 +34725,7 @@ var HKq = E(() => {
   r1();
   VY();
   _Kq();
-  MsY = i6(() =>
+  MsY = lazyOnce(() =>
     x.strictObject({
       team_name: x.string().describe("Name for the new team to create."),
       description: x.string().optional().describe("Team description/purpose."),
@@ -34907,7 +34907,7 @@ var ZKq = E(() => {
   u1();
   U_();
   WKq();
-  ((ZsY = i6(() => x.strictObject({}))),
+  ((ZsY = lazyOnce(() => x.strictObject({}))),
     (fsY = {
       name: Dc6,
       maxResultSizeChars: 1e5,
@@ -35161,7 +35161,7 @@ function EKq(A, q, { verbose: K }) {
   if ("routing" in Y && Y.routing) return null;
   if ("request_id" in Y && "target" in Y) return null;
   return Bl6.default.createElement(
-    Z8,
+    ScrollableContent,
     null,
     Bl6.default.createElement(T, { dimColor: !0 }, Y.message),
   );
@@ -35484,7 +35484,7 @@ var CKq = E(() => {
   hw();
   KC();
   r1();
-  ((TsY = i6(() =>
+  ((TsY = lazyOnce(() =>
     x.object({
       type: x.literal("message"),
       recipient: x.string(),
@@ -35496,7 +35496,7 @@ var CKq = E(() => {
         ),
     }),
   )),
-    (NsY = i6(() =>
+    (NsY = lazyOnce(() =>
       x.object({
         type: x.literal("broadcast"),
         content: x.string(),
@@ -35507,14 +35507,14 @@ var CKq = E(() => {
           ),
       }),
     )),
-    (VsY = i6(() =>
+    (VsY = lazyOnce(() =>
       x.object({
         type: x.literal("shutdown_request"),
         recipient: x.string(),
         content: x.string().optional(),
       }),
     )),
-    (vsY = i6(() =>
+    (vsY = lazyOnce(() =>
       x.object({
         type: x.literal("shutdown_response"),
         request_id: x.string(),
@@ -35522,7 +35522,7 @@ var CKq = E(() => {
         content: x.string().optional(),
       }),
     )),
-    (ksY = i6(() =>
+    (ksY = lazyOnce(() =>
       x.object({
         type: x.literal("plan_approval_response"),
         request_id: x.string(),
@@ -35531,7 +35531,7 @@ var CKq = E(() => {
         content: x.string().optional(),
       }),
     )),
-    (EsY = i6(() =>
+    (EsY = lazyOnce(() =>
       x.discriminatedUnion("type", [TsY(), NsY(), VsY(), vsY(), ksY()]),
     )));
   ((bsY = {
@@ -35678,11 +35678,11 @@ function R16() {
     ZF,
     qb,
     eM,
-    l9,
+    readTool,
     rM,
     oM,
     Wi,
-    tM,
+    webFetchTool,
     aN,
     gv1,
     uv1,
@@ -35738,7 +35738,7 @@ var SKq = null,
   uKq = null,
   FsY,
   A0 = (A) => {
-    if (X1(process.env.CLAUDE_CODE_SIMPLE)) return FT6([Yq, l9, rM], A);
+    if (X1(process.env.CLAUDE_CODE_SIMPLE)) return FT6([Yq, readTool, rM], A);
     let q = new Set([
         bc.name,
         uc.name,
@@ -36539,7 +36539,7 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
         },
       ]
     );
-  if (A.name === l4 && J.data && "command" in J.data) {
+  if (A.name === BASH_TOOL_NAME && J.data && "command" in J.data) {
     let h = await Y.getAppState();
     if (
       nKq(
@@ -36553,7 +36553,7 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
   }
   let X = [],
     M = J.data;
-  if (A.name === l4 && M && typeof M === "object" && "_simulatedSedEdit" in M) {
+  if (A.name === BASH_TOOL_NAME && M && typeof M === "object" && "_simulatedSedEdit" in M) {
     let { _simulatedSedEdit: h, ...F } = M;
     M = F;
   }
@@ -36611,10 +36611,10 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
   p_6()?.observe("pre_tool_hook_duration_ms", N);
   let V = {};
   if (M && typeof M === "object") {
-    if (A.name === n4 && "file_path" in M) V.file_path = String(M.file_path);
-    else if ((A.name === Lq || A.name === U3) && "file_path" in M)
+    if (A.name === READ_TOOL_NAME && "file_path" in M) V.file_path = String(M.file_path);
+    else if ((A.name === EDIT_TOOL_NAME || A.name === WRITE_TOOL_NAME) && "file_path" in M)
       V.file_path = String(M.file_path);
-    else if (A.name === l4 && "command" in M) {
+    else if (A.name === BASH_TOOL_NAME && "command" in M) {
       let h = M;
       V.full_command = h.command;
     }
@@ -36741,7 +36741,7 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
   )
     M = v.updatedInput;
   let L = {};
-  if (A.name === l4 && "command" in M) {
+  if (A.name === BASH_TOOL_NAME && "command" in M) {
     let h = M;
     L = {
       bash_command: h.command.trim().split(/\s+/)[0] || "",
@@ -36778,19 +36778,19 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
       F = Date.now() - B;
     if ((qs6(F), h.data && typeof h.data === "object")) {
       let v6 = {};
-      if (A.name === n4 && "content" in h.data) {
+      if (A.name === READ_TOOL_NAME && "content" in h.data) {
         if ("file_path" in M) v6.file_path = String(M.file_path);
         v6.content = String(h.data.content);
       }
-      if ((A.name === Lq || A.name === U3) && "file_path" in M) {
+      if ((A.name === EDIT_TOOL_NAME || A.name === WRITE_TOOL_NAME) && "file_path" in M) {
         if (
           ((v6.file_path = String(M.file_path)),
-          A.name === Lq && "diff" in h.data)
+          A.name === EDIT_TOOL_NAME && "diff" in h.data)
         )
           v6.diff = String(h.data.diff);
-        if (A.name === U3 && "content" in M) v6.content = String(M.content);
+        if (A.name === WRITE_TOOL_NAME && "content" in M) v6.content = String(M.content);
       }
-      if (A.name === l4 && "command" in M) {
+      if (A.name === BASH_TOOL_NAME && "command" in M) {
         let T6 = M;
         if (((v6.bash_command = T6.command), "output" in h.data))
           v6.output = String(h.data.output);
@@ -36810,11 +36810,11 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
       c = !U ? 0 : typeof U === "string" ? U.length : p6(U).length,
       d;
     if (M && typeof M === "object") {
-      if ((A.name === n4 || A.name === Lq || A.name === U3) && "file_path" in M)
+      if ((A.name === READ_TOOL_NAME || A.name === EDIT_TOOL_NAME || A.name === WRITE_TOOL_NAME) && "file_path" in M)
         d = Fl6(String(M.file_path));
-      else if (A.name === o0 && "notebook_path" in M)
+      else if (A.name === NOTEBOOK_EDIT_TOOL_NAME && "notebook_path" in M)
         d = Fl6(String(M.notebook_path));
-      else if (A.name === l4 && "command" in M) {
+      else if (A.name === BASH_TOOL_NAME && "command" in M) {
         let v6 = M;
         d = aKq(v6.command, v6._simulatedSedEdit?.filePath);
       }
@@ -36843,7 +36843,7 @@ async function dsY(A, q, K, Y, z, w, _, $, O, H, j) {
           : {}),
       }),
       b44(A.name),
-      A.name === l4 &&
+      A.name === BASH_TOOL_NAME &&
         "command" in M &&
         M.command.match(/\bgit\s+commit\b/) &&
         h.data &&
@@ -37189,7 +37189,7 @@ class pl6 {
     }
   }
   allToolsAreWriteOrEdit() {
-    return this.tools.every(({ block: { name: A } }) => A === U3 || A === Lq);
+    return this.tools.every(({ block: { name: A } }) => A === WRITE_TOOL_NAME || A === EDIT_TOOL_NAME);
   }
   updateInterruptibleState() {
     let A = this.tools.filter((q) => q.status === "executing");
@@ -37751,7 +37751,7 @@ function* qg8(A, q) {
       });
   }
 }
-async function* JC(A) {
+async function* agentLoop(A) {
   let {
       systemPrompt: q,
       userContext: K,
@@ -37873,7 +37873,7 @@ async function* JC(A) {
     L3("query_setup_end");
     let f6 = J.gates.isAnt ? TX4(X.agentId ?? J.sessionId) : void 0;
     if (!u && _ !== "compact" && _ !== "session_memory") {
-      let { isAtBlockingLimit: t } = tc(ak(I), X.options.mainLoopModel);
+      let { isAtBlockingLimit: t } = tc(countMessageTokens(I), X.options.mainLoopModel);
       if (t)
         return (
           yield kY({ content: Oc, error: "invalid_request" }),
@@ -38838,7 +38838,7 @@ async function lR({
     ),
       (v = N.length > 0 ? N[N.length - 1].uuid : null));
   try {
-    for await (let S of JC({
+    for await (let S of agentLoop({
       messages: N,
       systemPrompt: M,
       userContext: P,
@@ -39135,7 +39135,7 @@ async function OtY(A, q, K) {
   if (!Y)
     return (A("Usage: /btw <your question>", { display: "system" }), null);
   return (
-    J8((z) => ({ ...z, btwUseCount: z.btwUseCount + 1 })),
+    updateSettings((z) => ({ ...z, btwUseCount: z.btwUseCount + 1 })),
     J_.createElement(_tY, { question: Y, context: q, onDone: A })
   );
 }
@@ -41070,7 +41070,7 @@ async function zeY() {
   let A = AbortSignal.timeout(1e4);
   try {
     let q = U7(),
-      K = k1(),
+      K = getSettings(),
       Y = q.respectGitignore ?? K.respectGitignore ?? !0,
       z = y1(),
       [w, _] = await Promise.all([YeY(A, Y), KeY(z)]),
@@ -41794,17 +41794,17 @@ s1(y5q, {
 });
 function E5q(A, q) {
   switch (A) {
-    case n4: {
-      let K = l9.inputSchema.safeParse(q);
+    case READ_TOOL_NAME: {
+      let K = readTool.inputSchema.safeParse(q);
       return K.success ? K.data.file_path : null;
     }
-    case Lq: {
+    case EDIT_TOOL_NAME: {
       let K = pV1().safeParse(q);
       if (K.success) return K.data.file_path;
       let Y = QV1().safeParse(q);
       return Y.success ? Y.data.file_path : null;
     }
-    case U3: {
+    case WRITE_TOOL_NAME: {
       let K = oM.inputSchema.safeParse(q);
       return K.success ? K.data.file_path : null;
     }
@@ -41814,12 +41814,12 @@ function E5q(A, q) {
 }
 function L5q(A, q) {
   switch (A) {
-    case n4: {
-      let K = l9.inputSchema.safeParse(q);
+    case READ_TOOL_NAME: {
+      let K = readTool.inputSchema.safeParse(q);
       if (!K.success) return null;
       return oQ6(K.data.file_path);
     }
-    case k5: {
+    case GREP_TOOL_NAME: {
       let K = qb.inputSchema.safeParse(q);
       if (!K.success) return null;
       if (K.data.path) {
@@ -41832,7 +41832,7 @@ function L5q(A, q) {
       }
       return null;
     }
-    case Sz: {
+    case GLOB_TOOL_NAME: {
       let K = ZF.inputSchema.safeParse(q);
       if (!K.success) return null;
       if (K.data.path) {
@@ -41865,21 +41865,21 @@ async function keY(A, q, K) {
     switch (
       (n("tengu_memdir_accessed", { tool: A.tool_name, ...w }), A.tool_name)
     ) {
-      case n4:
+      case READ_TOOL_NAME:
         n("tengu_memdir_file_read", { ...w });
         break;
-      case Lq:
+      case EDIT_TOOL_NAME:
         n("tengu_memdir_file_edit", { ...w });
         break;
-      case U3:
+      case WRITE_TOOL_NAME:
         n("tengu_memdir_file_write", { ...w });
         break;
     }
   if (!1)
     switch (A.tool_name) {
-      case n4:
-      case Lq:
-      case U3:
+      case READ_TOOL_NAME:
+      case EDIT_TOOL_NAME:
+      case WRITE_TOOL_NAME:
     }
   return {};
 }
@@ -41887,11 +41887,11 @@ function EeY() {
   let A = { type: "callback", callback: keY, timeout: 1, internal: !0 };
   mA6({
     PostToolUse: [
-      { matcher: n4, hooks: [A] },
-      { matcher: k5, hooks: [A] },
-      { matcher: Sz, hooks: [A] },
-      { matcher: Lq, hooks: [A] },
-      { matcher: U3, hooks: [A] },
+      { matcher: READ_TOOL_NAME, hooks: [A] },
+      { matcher: GREP_TOOL_NAME, hooks: [A] },
+      { matcher: GLOB_TOOL_NAME, hooks: [A] },
+      { matcher: EDIT_TOOL_NAME, hooks: [A] },
+      { matcher: WRITE_TOOL_NAME, hooks: [A] },
     ],
   });
 }
@@ -42052,7 +42052,7 @@ var Gk1 = E(() => {
   ow();
   r0();
   YD();
-  CeY = new Set([n4, k5, Sz, Lq, U3]);
+  CeY = new Set([READ_TOOL_NAME, GREP_TOOL_NAME, GLOB_TOOL_NAME, EDIT_TOOL_NAME, WRITE_TOOL_NAME]);
 });
 function IeY() {
   let { commit: A } = AN6();
@@ -42240,7 +42240,7 @@ function QeY(A) {
   if (q[8] !== Y || q[9] !== K || q[10] !== z)
     ((J = async function (Z) {
       if (Z === "always") {
-        if (!k1().copyFullResponse) J8(UeY);
+        if (!getSettings().copyFullResponse) updateSettings(UeY);
         n("tengu_copy", { block_count: Y.length, always: !0 });
         let N = await Zk1(K, "response.md");
         z(`${N}
@@ -42344,7 +42344,7 @@ var ol6,
     let z = BeY(Y);
     if (!z) return (A("No text content to copy"), null);
     let w = geY(z),
-      _ = k1();
+      _ = getSettings();
     if (w.length === 0 || _.copyFullResponse) {
       n("tengu_copy", { always: _.copyFullResponse, block_count: w.length });
       let $ = await Zk1(z, "response.md");
@@ -45045,8 +45045,8 @@ function V9q({
   onSearchModeChange: w,
 }) {
   let [_, $] = E7(),
-    [O, H] = KZ.useState(k1()),
-    j = o1.useRef(k1()),
+    [O, H] = KZ.useState(getSettings()),
+    j = o1.useRef(getSettings()),
     [J, D] = KZ.useState(U7()),
     X = o1.useRef(U7()),
     [M, P] = KZ.useState(J?.outputStyle || nM),
@@ -45103,8 +45103,8 @@ function V9q({
       }));
   }
   function X6(r) {
-    (J8((Z6) => ({ ...Z6, verbose: r })),
-      H({ ...k1(), verbose: r }),
+    (updateSettings((Z6) => ({ ...Z6, verbose: r })),
+      H({ ...getSettings(), verbose: r }),
       j6((Z6) => ({ ...Z6, verbose: r })),
       f6((Z6) => {
         if ("verbose" in Z6) {
@@ -45121,8 +45121,8 @@ function V9q({
         value: O.autoCompactEnabled,
         type: "boolean",
         onChange(r) {
-          (J8((Z6) => ({ ...Z6, autoCompactEnabled: r })),
-            H({ ...k1(), autoCompactEnabled: r }),
+          (updateSettings((Z6) => ({ ...Z6, autoCompactEnabled: r })),
+            H({ ...getSettings(), autoCompactEnabled: r }),
             n("tengu_auto_compact_setting_changed", { enabled: r }));
         },
       },
@@ -45213,8 +45213,8 @@ function V9q({
               value: O.fileCheckpointingEnabled,
               type: "boolean",
               onChange(r) {
-                (J8((Z6) => ({ ...Z6, fileCheckpointingEnabled: r })),
-                  H({ ...k1(), fileCheckpointingEnabled: r }),
+                (updateSettings((Z6) => ({ ...Z6, fileCheckpointingEnabled: r })),
+                  H({ ...getSettings(), fileCheckpointingEnabled: r }),
                   n("tengu_file_history_snapshots_setting_changed", {
                     enabled: r,
                   }));
@@ -45235,8 +45235,8 @@ function V9q({
         value: O.terminalProgressBarEnabled,
         type: "boolean",
         onChange(r) {
-          (J8((Z6) => ({ ...Z6, terminalProgressBarEnabled: r })),
-            H({ ...k1(), terminalProgressBarEnabled: r }),
+          (updateSettings((Z6) => ({ ...Z6, terminalProgressBarEnabled: r })),
+            H({ ...getSettings(), terminalProgressBarEnabled: r }),
             n("tengu_terminal_progress_bar_setting_changed", { enabled: r }));
         },
       },
@@ -45281,8 +45281,8 @@ function V9q({
         value: O.respectGitignore,
         type: "boolean",
         onChange(r) {
-          (J8((Z6) => ({ ...Z6, respectGitignore: r })),
-            H({ ...k1(), respectGitignore: r }),
+          (updateSettings((Z6) => ({ ...Z6, respectGitignore: r })),
+            H({ ...getSettings(), respectGitignore: r }),
             n("tengu_respect_gitignore_setting_changed", { enabled: r }));
         },
       },
@@ -45292,8 +45292,8 @@ function V9q({
         value: O.copyFullResponse,
         type: "boolean",
         onChange(r) {
-          (J8((Z6) => ({ ...Z6, copyFullResponse: r })),
-            H({ ...k1(), copyFullResponse: r }),
+          (updateSettings((Z6) => ({ ...Z6, copyFullResponse: r })),
+            H({ ...getSettings(), copyFullResponse: r }),
             n("tengu_config_changed", {
               setting: "copyFullResponse",
               value: String(r),
@@ -45337,8 +45337,8 @@ function V9q({
         ],
         type: "enum",
         onChange(r) {
-          (J8((Z6) => ({ ...Z6, preferredNotifChannel: r })),
-            H({ ...k1(), preferredNotifChannel: r }));
+          (updateSettings((Z6) => ({ ...Z6, preferredNotifChannel: r })),
+            H({ ...getSettings(), preferredNotifChannel: r }));
         },
       },
       {
@@ -45362,8 +45362,8 @@ function V9q({
         options: ["normal", "vim"],
         type: "enum",
         onChange(r) {
-          (J8((Z6) => ({ ...Z6, editorMode: r })),
-            H({ ...k1(), editorMode: r }),
+          (updateSettings((Z6) => ({ ...Z6, editorMode: r })),
+            H({ ...getSettings(), editorMode: r }),
             n("tengu_editor_mode_changed", {
               mode: r,
               source: "config_panel",
@@ -45378,11 +45378,11 @@ function V9q({
               value: O.prStatusFooterEnabled ?? !0,
               type: "boolean",
               onChange(r) {
-                (J8((Z6) => {
+                (updateSettings((Z6) => {
                   if (Z6.prStatusFooterEnabled === r) return Z6;
                   return { ...Z6, prStatusFooterEnabled: r };
                 }),
-                  H({ ...k1(), prStatusFooterEnabled: r }),
+                  H({ ...getSettings(), prStatusFooterEnabled: r }),
                   n("tengu_pr_status_footer_setting_changed", { enabled: r }));
               },
             },
@@ -45404,8 +45404,8 @@ function V9q({
               options: ["terminal", "auto"],
               type: "enum",
               onChange(r) {
-                (J8((Z6) => ({ ...Z6, diffTool: r })),
-                  H({ ...k1(), diffTool: r }),
+                (updateSettings((Z6) => ({ ...Z6, diffTool: r })),
+                  H({ ...getSettings(), diffTool: r }),
                   n("tengu_diff_tool_changed", {
                     tool: r,
                     source: "config_panel",
@@ -45422,8 +45422,8 @@ function V9q({
               value: O.autoConnectIde ?? !1,
               type: "boolean",
               onChange(r) {
-                (J8((Z6) => ({ ...Z6, autoConnectIde: r })),
-                  H({ ...k1(), autoConnectIde: r }),
+                (updateSettings((Z6) => ({ ...Z6, autoConnectIde: r })),
+                  H({ ...getSettings(), autoConnectIde: r }),
                   n("tengu_auto_connect_ide_changed", {
                     enabled: r,
                     source: "config_panel",
@@ -45440,8 +45440,8 @@ function V9q({
               value: O.autoInstallIdeExtension ?? !0,
               type: "boolean",
               onChange(r) {
-                (J8((Z6) => ({ ...Z6, autoInstallIdeExtension: r })),
-                  H({ ...k1(), autoInstallIdeExtension: r }),
+                (updateSettings((Z6) => ({ ...Z6, autoInstallIdeExtension: r })),
+                  H({ ...getSettings(), autoInstallIdeExtension: r }),
                   n("tengu_auto_install_ide_extension_changed", {
                     enabled: r,
                     source: "config_panel",
@@ -45456,8 +45456,8 @@ function V9q({
         value: O.claudeInChromeDefaultEnabled ?? !0,
         type: "boolean",
         onChange(r) {
-          (J8((Z6) => ({ ...Z6, claudeInChromeDefaultEnabled: r })),
-            H({ ...k1(), claudeInChromeDefaultEnabled: r }),
+          (updateSettings((Z6) => ({ ...Z6, claudeInChromeDefaultEnabled: r })),
+            H({ ...getSettings(), claudeInChromeDefaultEnabled: r }),
             n("tengu_claude_in_chrome_setting_changed", { enabled: r }));
         },
       },
@@ -45475,8 +45475,8 @@ function V9q({
                   if (S6 !== "auto" && S6 !== "tmux" && S6 !== "in-process")
                     return;
                   (px8(S6),
-                    J8((C6) => ({ ...C6, teammateMode: S6 })),
-                    H({ ...k1(), teammateMode: S6 }),
+                    updateSettings((C6) => ({ ...C6, teammateMode: S6 })),
+                    H({ ...getSettings(), teammateMode: S6 }),
                     n("tengu_teammate_mode_changed", { mode: S6 }));
                 },
               },
@@ -45496,19 +45496,19 @@ function V9q({
               type: "enum",
               onChange(r) {
                 if (r === "default")
-                  (J8((S6) => {
+                  (updateSettings((S6) => {
                     if (S6.remoteControlAtStartup === void 0) return S6;
                     let C6 = { ...S6 };
                     return (delete C6.remoteControlAtStartup, C6);
                   }),
-                    H({ ...k1(), remoteControlAtStartup: void 0 }));
+                    H({ ...getSettings(), remoteControlAtStartup: void 0 }));
                 else {
                   let S6 = r === "true";
-                  (J8((C6) => {
+                  (updateSettings((C6) => {
                     if (C6.remoteControlAtStartup === S6) return C6;
                     return { ...C6, remoteControlAtStartup: S6 };
                   }),
-                    H({ ...k1(), remoteControlAtStartup: S6 }));
+                    H({ ...getSettings(), remoteControlAtStartup: S6 }));
                 }
                 let Z6 = L16();
                 j6((S6) => {
@@ -45557,7 +45557,7 @@ function V9q({
               ),
               type: "boolean",
               onChange(r) {
-                (J8((Z6) => {
+                (updateSettings((Z6) => {
                   let S6 = { ...Z6 };
                   if (!S6.customApiKeyResponses)
                     S6.customApiKeyResponses = { approved: [], rejected: [] };
@@ -45602,7 +45602,7 @@ function V9q({
                   }
                   return S6;
                 }),
-                  H(k1()));
+                  H(getSettings()));
               },
             },
           ]
@@ -46046,8 +46046,8 @@ function V9q({
                             onChange: (r) => {
                               (v6(null),
                                 K(!1),
-                                J8((Z6) => ({ ...Z6, autoUpdates: !0 })),
-                                H({ ...k1(), autoUpdates: !0 }),
+                                updateSettings((Z6) => ({ ...Z6, autoUpdates: !0 })),
+                                H({ ...getSettings(), autoUpdates: !0 }),
                                 iA("userSettings", {
                                   autoUpdatesChannel: r,
                                   minimumVersion: void 0,
@@ -49700,7 +49700,7 @@ function Q1z(A, q, K) {
     (_) => _.ruleValue.toolName === Y && _.ruleValue.ruleContent === void 0,
   );
   if (!w) return { shadowed: !1 };
-  if (Y === l4 && K.sandboxAutoAllowEnabled) {
+  if (Y === BASH_TOOL_NAME && K.sandboxAutoAllowEnabled) {
     if (!p1z(w.source)) return { shadowed: !1 };
   }
   return { shadowed: !0, shadowedBy: w, shadowType: "ask" };
@@ -51243,7 +51243,7 @@ var Qk1 = E(() => {
     ($26 = Q8z));
 });
 function m16() {
-  return k1().editorMode === "vim";
+  return getSettings().editorMode === "vim";
 }
 function UYq() {
   if (s8.terminal === "Apple_Terminal" && process.platform === "darwin")
@@ -51955,7 +51955,7 @@ function sYq(A) {
   if (q[0] !== K)
     ((Y = async (j) => {
       let J = j === "yes";
-      (J8((D) => ({
+      (updateSettings((D) => ({
         ...D,
         autoConnectIde: J,
         hasIdeAutoConnectDialogBeenShown: !0,
@@ -52013,7 +52013,7 @@ function sYq(A) {
   return H;
 }
 function tYq() {
-  let A = k1();
+  let A = getSettings();
   return (
     !vD() &&
     A.autoConnectIde !== !0 &&
@@ -52027,7 +52027,7 @@ function eYq(A) {
   if (q[0] !== K)
     ((Y = (J) => {
       let D = J === "yes";
-      if (D) J8(i8z);
+      if (D) updateSettings(i8z);
       K(D);
     }),
       (q[0] = K),
@@ -52085,7 +52085,7 @@ function i8z(A) {
   return { ...A, autoConnectIde: !1 };
 }
 function Azq() {
-  let A = k1();
+  let A = getSettings();
   return !vD() && A.autoConnectIde === !0;
 }
 var MN6;
@@ -55356,7 +55356,7 @@ Need help? Common issues:
       selected_claude_review_workflow: w.includes("claude-review"),
       ...$,
     }),
-      J8((M) => ({
+      updateSettings((M) => ({
         ...M,
         githubActionSetupCount: (M.githubActionSetupCount ?? 0) + 1,
       })));
@@ -56240,7 +56240,7 @@ s1(M2q, { call: () => RAz });
 async function RAz() {
   if (
     (n("tengu_install_slack_app_clicked", {}),
-    J8((q) => ({
+    updateSettings((q) => ({
       ...q,
       slackAppInstallCount: (q.slackAppInstallCount ?? 0) + 1,
     })),
@@ -59641,7 +59641,7 @@ function S2q({
         q6 = v === "details";
       (P(!0), G(null), f(null), V(null));
       try {
-        let A6 = pA("userSettings"),
+        let A6 = getConfigValue("userSettings"),
           D6 = 0,
           G6 = 0;
         for (let t of f6) {
@@ -61536,7 +61536,7 @@ function B2q({
             if (g6) E6 = j7z(g6.marketplaceInstallLocation, X6.entry.source);
           }
           await sk(X6.pluginId, X6.entry, "user", void 0, E6);
-          let h6 = { ...pA("userSettings")?.enabledPlugins, [X6.pluginId]: !0 };
+          let h6 = { ...getConfigValue("userSettings")?.enabledPlugins, [X6.pluginId]: !0 };
           (iA("userSettings", { enabledPlugins: h6 }),
             s++,
             n("tengu_plugin_installed", {
@@ -62195,7 +62195,7 @@ function kN6() {
     { scope: "flag", source: "flagSettings" },
   ];
   for (let { scope: Y, source: z } of K) {
-    let w = pA(z);
+    let w = getConfigValue(z);
     if (!w?.enabledPlugins) continue;
     for (let [_, $] of Object.entries(w.enabledPlugins)) {
       if (!_.includes("@")) continue;
@@ -62247,7 +62247,7 @@ async function mF8(A) {
 async function BF8(A, q, K = "user") {
   let Y = K !== "user" ? y1() : void 0,
     z = vR(K),
-    w = pA(z),
+    w = getConfigValue(z),
     _ = { ...w?.enabledPlugins },
     $ = [],
     O = [];
@@ -62390,7 +62390,7 @@ async function p2q(A, q = "user") {
   }
   await sk(O, $, q, H, j);
   let D = vR(q),
-    M = { ...pA(D)?.enabledPlugins, [O]: !0 },
+    M = { ...getConfigValue(D)?.enabledPlugins, [O]: !0 },
     { error: P } = iA(D, { enabledPlugins: M });
   if (P)
     return { success: !1, message: `Failed to update settings: ${P.message}` };
@@ -62411,7 +62411,7 @@ async function RN6(A, q = "user") {
     z = [...K, ...Y],
     w = Z7z(A, z),
     _ = vR(q),
-    $ = pA(_),
+    $ = getConfigValue(_),
     O,
     H;
   if (w) ((O = G7z(A, w, $)), (H = w.name));
@@ -62487,7 +62487,7 @@ async function pF8(A, q, K) {
     };
   try {
     let D = vR(J.scope),
-      M = (pA(D) || {}).enabledPlugins || {},
+      M = (getConfigValue(D) || {}).enabledPlugins || {},
       { error: P } = iA(D, { enabledPlugins: { ...M, [O]: q } });
     if (P) throw P;
     Lw();
@@ -65692,7 +65692,7 @@ async function OE1(A, q) {
   for (let [_, $] of w)
     if (Object.keys($).length > 0) {
       let O = vR(_),
-        H = pA(O);
+        H = getConfigValue(O);
       iA(O, { ...H, enabledPlugins: { ...H?.enabledPlugins, ...$ } });
     }
   return { installed: K, failed: Y };
@@ -70965,14 +70965,14 @@ function sp8() {
   return l5z(_A(), "cache", "changelog.md");
 }
 async function g$q() {
-  let A = k1();
+  let A = getSettings();
   if (!A.cachedChangelog) return;
   let q = sp8();
   try {
     (await m$q(b$q(q), { recursive: !0 }),
       await u$q(q, A.cachedChangelog, { encoding: "utf-8", flag: "wx" }));
   } catch {}
-  J8(({ cachedChangelog: K, ...Y }) => Y);
+  updateSettings(({ cachedChangelog: K, ...Y }) => Y);
 }
 async function tp8() {
   if (C7()) return;
@@ -70985,7 +70985,7 @@ async function tp8() {
       await u$q(K, q, { encoding: "utf-8" }),
       (QN6 = q));
     let Y = Date.now();
-    J8((z) => ({ ...z, changelogLastFetched: Y }));
+    updateSettings((z) => ({ ...z, changelogLastFetched: Y }));
   }
 }
 async function NE1() {
@@ -72170,7 +72170,7 @@ var HOq = E(() => {
 function jOq(A) {
   let q = w6(3),
     { agentDefinitions: K } = A === void 0 ? {} : A,
-    Y = k1(),
+    Y = getSettings(),
     z = V5()?.organizationUuid,
     _ = !(z && Y.hasShownOpus46Notice?.[z]),
     $ = { config: Y, showOpus46Notice: _, agentDefinitions: K },
@@ -72181,7 +72181,7 @@ function jOq(A) {
       let M = O.some(W9z);
       if (M) n("tengu_opus_46_notice_shown", {});
       if (M)
-        J8((P) => ({
+        updateSettings((P) => ({
           ...P,
           ...(M && {
             hasShownOpus46Notice: { ...P.hasShownOpus46Notice, [z]: !0 },
@@ -72681,7 +72681,7 @@ function rN6() {
   if (!IOq()) return { eligible: !1, needsRefresh: !1, hasCache: !1 };
   let A = V5()?.organizationUuid;
   if (!A) return { eligible: !1, needsRefresh: !1, hasCache: !1 };
-  let K = k1().passesEligibilityCache?.[A];
+  let K = getSettings().passesEligibilityCache?.[A];
   if (!K) return { eligible: !1, needsRefresh: !0, hasCache: !1 };
   let { eligible: Y, timestamp: z } = K,
     _ = Date.now() - z > SOq;
@@ -72696,12 +72696,12 @@ function a16(A) {
 function s16() {
   let A = V5()?.organizationUuid;
   if (!A) return null;
-  return k1().passesEligibilityCache?.[A]?.referrer_reward ?? null;
+  return getSettings().passesEligibilityCache?.[A]?.referrer_reward ?? null;
 }
 function IE1() {
   let A = V5()?.organizationUuid;
   if (!A) return null;
-  return k1().passesEligibilityCache?.[A]?.remaining_passes ?? null;
+  return getSettings().passesEligibilityCache?.[A]?.remaining_passes ?? null;
 }
 async function COq() {
   if (mi6) return (y("Passes: Reusing in-flight eligibility fetch"), mi6);
@@ -72713,7 +72713,7 @@ async function COq() {
         let q = await N9z(),
           K = { ...q, timestamp: Date.now() };
         return (
-          J8((Y) => ({
+          updateSettings((Y) => ({
             ...Y,
             passesEligibilityCache: { ...Y.passesEligibilityCache, [A]: K },
           })),
@@ -72733,7 +72733,7 @@ async function _Q8() {
   if (!IOq()) return null;
   let A = V5()?.organizationUuid;
   if (!A) return null;
-  let K = k1().passesEligibilityCache?.[A],
+  let K = getSettings().passesEligibilityCache?.[A],
     Y = Date.now();
   if (!K)
     return (
@@ -72859,9 +72859,9 @@ var BOq = E(() => {
 function k9z() {
   let A = IE1();
   if (A == null || A <= 0) return;
-  let K = k1().passesLastSeenRemaining ?? 0;
+  let K = getSettings().passesLastSeenRemaining ?? 0;
   if (A > K)
-    J8((Y) => ({
+    updateSettings((Y) => ({
       ...Y,
       passesUpsellSeenCount: 0,
       hasVisitedPasses: !1,
@@ -72872,7 +72872,7 @@ function E9z() {
   let { eligible: A, hasCache: q } = rN6();
   if (!A || !q) return !1;
   k9z();
-  let K = k1();
+  let K = getSettings();
   if ((K.passesUpsellSeenCount ?? 0) >= 3) return !1;
   if (K.hasVisitedPasses) return !1;
   return !0;
@@ -72885,8 +72885,8 @@ function L9z() {
   return E9z();
 }
 function uE1() {
-  let q = (k1().passesUpsellSeenCount ?? 0) + 1;
-  (J8((K) => ({ ...K, passesUpsellSeenCount: q })),
+  let q = (getSettings().passesUpsellSeenCount ?? 0) + 1;
+  (updateSettings((K) => ({ ...K, passesUpsellSeenCount: q })),
     n("tengu_guest_passes_upsell_shown", { seen_count: q }));
 }
 function FOq() {
@@ -73107,12 +73107,12 @@ var UOq = E(() => {
 });
 function OQ8() {
   let A = gi6.useMemo(h9z, []),
-    q = gi6.useMemo(() => k1().lastShownEmergencyTip, []),
+    q = gi6.useMemo(() => getSettings().lastShownEmergencyTip, []),
     K = A.tip && A.tip !== q;
   if (
     (gi6.useEffect(() => {
       if (K)
-        J8((Y) => {
+        updateSettings((Y) => {
           if (Y.lastShownEmergencyTip === A.tip) return Y;
           return { ...Y, lastShownEmergencyTip: A.tip };
         });
@@ -73157,7 +73157,7 @@ function cOq(A) {
     z = Y.prefersReducedMotion ?? !1,
     w = XOq(K, z),
     _ = TOq(),
-    $ = k1().oauthAccount?.displayName ?? "",
+    $ = getSettings().oauthAccount?.displayName ?? "",
     { columns: O } = zA(),
     H;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -73171,7 +73171,7 @@ function cOq(A) {
   let D = J,
     X = bE1(),
     M = T1(x9z),
-    P = k1(),
+    P = getSettings(),
     W;
   try {
     W = VOq(3);
@@ -73191,7 +73191,7 @@ function cOq(A) {
   if (q[2] === Symbol.for("react.memo_cache_sentinel"))
     ((N = () => {
       if (
-        k1().lastReleaseNotesSeen ===
+        getSettings().lastReleaseNotesSeen ===
         {
           ISSUES_EXPLAINER:
             "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -73203,7 +73203,7 @@ function cOq(A) {
         }.VERSION
       )
         return;
-      if ((J8(I9z), j)) rN7();
+      if ((updateSettings(I9z), j)) rN7();
     }),
       (q[2] = N));
   else N = q[2];
@@ -73321,7 +73321,7 @@ function cOq(A) {
     return qA;
   }
   let U = WOq(O),
-    c = k1().theme,
+    c = getSettings().theme,
     d = ` ${bA("claude", c)("Claude Code")} ${bA("inactive", c)(`v${S}`)} `,
     a = bA("claude", c)(" Claude Code ");
   if (U === "compact") {
@@ -74398,7 +74398,7 @@ var PY,
       C6;
     if (q[34] === Symbol.for("react.memo_cache_sentinel"))
       ((C6 =
-        k1().terminalProgressBarEnabled && !(d9z?.isProactiveActive() ?? !1)),
+        getSettings().terminalProgressBarEnabled && !(d9z?.isProactiveActive() ?? !1)),
         (q[34] = C6));
     else C6 = q[34];
     let d6 = C6,
@@ -76702,7 +76702,7 @@ function vQ8(A) {
   else $ = q[4];
   let O;
   if (q[5] !== K)
-    ((O = D5.createElement(Z8, null, D5.createElement(T, null, K))),
+    ((O = D5.createElement(ScrollableContent, null, D5.createElement(T, null, K))),
       (q[5] = K),
       (q[6] = O));
   else O = q[6];
@@ -79897,11 +79897,11 @@ var Mjq = E(() => {
 var Pjq = {};
 s1(Pjq, { call: () => wzz });
 var wzz = async () => {
-  let q = k1().editorMode || "normal";
+  let q = getSettings().editorMode || "normal";
   if (q === "emacs") q = "normal";
   let K = q === "normal" ? "vim" : "normal";
   return (
-    J8((Y) => ({ ...Y, editorMode: K })),
+    updateSettings((Y) => ({ ...Y, editorMode: K })),
     n("tengu_editor_mode_changed", { mode: K, source: "command" }),
     {
       type: "text",
@@ -80538,7 +80538,7 @@ function Rjq(A) {
   else W = q[6];
   let G, Z;
   if (q[7] === Symbol.for("react.memo_cache_sentinel"))
-    ((G = uz.createElement(T, { bold: !0 }, v5({ toolName: tM.name }))),
+    ((G = uz.createElement(T, { bold: !0 }, v5({ toolName: webFetchTool.name }))),
       (Z = uz.createElement(T, { bold: !1 }, " or ")),
       (q[7] = G),
       (q[8] = Z));
@@ -81964,7 +81964,7 @@ function ljq(A) {
 }
 function V26(A = !0, q = !1) {
   if (!A) return J66;
-  let K = k1().theme;
+  let K = getSettings().theme;
   if (q) return H1.dim(bA("promptBorder", K)(J66));
   return bA("fastMode", K)(J66);
 }
@@ -82465,10 +82465,10 @@ var sjq = E(() => {
 var tjq = {};
 s1(tjq, { call: () => czz });
 async function czz(A) {
-  let K = !k1().hasVisitedPasses;
+  let K = !getSettings().hasVisitedPasses;
   if (K) {
     let Y = IE1();
-    J8((z) => ({
+    updateSettings((z) => ({
       ...z,
       hasVisitedPasses: !0,
       passesLastSeenRemaining: Y ?? z.passesLastSeenRemaining,
@@ -84477,8 +84477,8 @@ function xJq(A) {
     ((M = (Z1) => {
       if (Z1 === "policySettings") {
         let A8 = SA()?.disableAllHooks === !0;
-        (J(A8 && pA("policySettings")?.disableAllHooks === !0),
-          X(pA("policySettings")?.allowManagedHooksOnly === !0));
+        (J(A8 && getConfigValue("policySettings")?.disableAllHooks === !0),
+          X(getConfigValue("policySettings")?.allowManagedHooksOnly === !0));
       }
     }),
       (q[2] = M));
@@ -85327,11 +85327,11 @@ function _2z(A) {
   return A.mcp;
 }
 function $2z() {
-  return pA("policySettings")?.allowManagedHooksOnly === !0;
+  return getConfigValue("policySettings")?.allowManagedHooksOnly === !0;
 }
 function O2z() {
   return (
-    SA()?.disableAllHooks === !0 && pA("policySettings")?.disableAllHooks === !0
+    SA()?.disableAllHooks === !0 && getConfigValue("policySettings")?.disableAllHooks === !0
   );
 }
 var m3, Mb;
@@ -87877,8 +87877,8 @@ var XT,
         ZF.name,
         qb.name,
         eM.name,
-        l9.name,
-        tM.name,
+        readTool.name,
+        webFetchTool.name,
         aN.name,
         gv1.name,
         uv1.name,
@@ -91330,7 +91330,7 @@ function GL1(A) {
   if (A === !1) return !1;
   if (X1(process.env.CLAUDE_CODE_ENABLE_CFC)) return !0;
   if (Qw(process.env.CLAUDE_CODE_ENABLE_CFC)) return !1;
-  let q = k1();
+  let q = getSettings();
   if (q.claudeInChromeDefaultEnabled !== void 0)
     return q.claudeInChromeDefaultEnabled;
   return !1;
@@ -91486,10 +91486,10 @@ exec ${A}
 function bwz() {
   return (
     Fi().then((q) => {
-      if (k1().cachedChromeExtensionInstalled !== q)
-        J8((Y) => ({ ...Y, cachedChromeExtensionInstalled: q }));
+      if (getSettings().cachedChromeExtensionInstalled !== q)
+        updateSettings((Y) => ({ ...Y, cachedChromeExtensionInstalled: q }));
     }),
-    k1().cachedChromeExtensionInstalled ?? !1
+    getSettings().cachedChromeExtensionInstalled ?? !1
   );
 }
 async function Fi() {
@@ -91576,7 +91576,7 @@ function gwz(A) {
         }
         case "toggle-default": {
           let P6 = !j;
-          (J8((f6) => ({ ...f6, claudeInChromeDefaultEnabled: P6 })), J(P6));
+          (updateSettings((f6) => ({ ...f6, claudeInChromeDefaultEnabled: P6 })), J(P6));
         }
       }
     }),
@@ -91826,7 +91826,7 @@ var Wz,
   Bwz = "https://clau.de/chrome/reconnect",
   cwz = async function (A) {
     let q = await Fi(),
-      K = k1(),
+      K = getSettings(),
       Y = Y7(),
       z = s8.isWslEnvironment();
     return Wz.default.createElement(gwz, {
@@ -93120,7 +93120,7 @@ async function LMq() {
       for (let _ = ZN.length - 1; _ >= 0; _--) {
         let $ = ZN[_];
         if (!$ || $ === "flagSettings") continue;
-        if (pA($)?.remote?.defaultEnvironmentId === K) {
+        if (getConfigValue($)?.remote?.defaultEnvironmentId === K) {
           z = $;
           break;
         }
@@ -96238,7 +96238,7 @@ function f0q(A, q, K) {
     _ = [];
     for (let P of A) for (let W = 0; W < M; W++) _.push(P);
   }
-  let $ = aW(k1().theme),
+  let $ = aW(getSettings().theme),
     O = [W91($.suggestion), W91($.success), W91($.warning)],
     H = [],
     j = [],
@@ -96313,7 +96313,7 @@ function d$z(A, q) {
 }
 function c$z(A) {
   let q = [],
-    K = aW(k1().theme),
+    K = aW(getSettings().theme),
     Y = (W) => UU(W, K.claude),
     z = 18,
     w = 40,
@@ -98656,7 +98656,7 @@ function g0q({ onDone: A }) {
     q.current("dismiss");
   }, []);
   $Z.useEffect(() => {
-    J8((w) => {
+    updateSettings((w) => {
       if (w.remoteDialogSeen) return w;
       return { ...w, remoteDialogSeen: !0 };
     });
@@ -98710,7 +98710,7 @@ function g0q({ onDone: A }) {
   );
 }
 function F0q() {
-  if (k1().remoteDialogSeen) return !1;
+  if (getSettings().remoteDialogSeen) return !1;
   if (!Ei()) return !1;
   if (!z4()?.accessToken) return !1;
   return !0;
@@ -103682,7 +103682,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
   return AY([K8({ content: z, isMeta: !0 })]);
 }
 function Ajz() {
-  let A = [n4, Sz, k5],
+  let A = [READ_TOOL_NAME, GLOB_TOOL_NAME, GREP_TOOL_NAME],
     { allowedTools: q } = aw();
   return (q && q.length > 0 ? A.filter((Y) => q.includes(Y)) : A).join(", ");
 }
@@ -103813,38 +103813,38 @@ ${A.snippet}`,
       let K = A.content;
       switch (K.type) {
         case "image":
-          return AY([Nn6(l9.name, { file_path: A.filename }), Tn6(l9, K)]);
+          return AY([Nn6(readTool.name, { file_path: A.filename }), Tn6(readTool, K)]);
         case "text":
           return AY([
-            Nn6(l9.name, { file_path: A.filename }),
-            Tn6(l9, K),
+            Nn6(readTool.name, { file_path: A.filename }),
+            Tn6(readTool, K),
             ...(A.truncated
               ? [
                   K8({
-                    content: `Note: The file ${A.filename} was too large and has been truncated to the first ${qb6} lines. Don't tell the user about this truncation. Use ${l9.name} to read more of the file if you need.`,
+                    content: `Note: The file ${A.filename} was too large and has been truncated to the first ${qb6} lines. Don't tell the user about this truncation. Use ${readTool.name} to read more of the file if you need.`,
                     isMeta: !0,
                   }),
                 ]
               : []),
           ]);
         case "notebook":
-          return AY([Nn6(l9.name, { file_path: A.filename }), Tn6(l9, K)]);
+          return AY([Nn6(readTool.name, { file_path: A.filename }), Tn6(readTool, K)]);
         case "pdf":
-          return AY([Nn6(l9.name, { file_path: A.filename }), Tn6(l9, K)]);
+          return AY([Nn6(readTool.name, { file_path: A.filename }), Tn6(readTool, K)]);
       }
       break;
     }
     case "compact_file_reference":
       return AY([
         K8({
-          content: `Note: ${A.filename} was read before the last conversation was summarized, but the contents are too large to include. Use ${l9.name} tool if you need to access it.`,
+          content: `Note: ${A.filename} was read before the last conversation was summarized, but the contents are too large to include. Use ${readTool.name} tool if you need to access it.`,
           isMeta: !0,
         }),
       ]);
     case "pdf_reference":
       return AY([
         K8({
-          content: `PDF file: ${A.filename} (${A.pageCount} pages, ${v3(A.fileSize)}). This PDF is too large to read all at once. You MUST use the ${n4} tool with the pages parameter to read specific page ranges (e.g., pages: "1-5"). Do NOT call ${n4} without the pages parameter or it will fail. Start by reading the first few pages to understand the structure, then read more as needed. Maximum 20 pages per request.`,
+          content: `PDF file: ${A.filename} (${A.pageCount} pages, ${v3(A.fileSize)}). This PDF is too large to read all at once. You MUST use the ${READ_TOOL_NAME} tool with the pages parameter to read specific page ranges (e.g., pages: "1-5"). Do NOT call ${READ_TOOL_NAME} without the pages parameter or it will fail. Start by reading the first few pages to understand the structure, then read more as needed. Maximum 20 pages per request.`,
           isMeta: !0,
         }),
       ]);
@@ -107241,7 +107241,7 @@ Git Safety Protocol:
 - When staging files, prefer adding specific files by name rather than using "git add -A" or "git add .", which can accidentally include sensitive files (.env, credentials) or large binaries
 - NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTANT to only commit when explicitly asked, otherwise the user will feel that you are being too proactive
 
-1. ${A} run the following bash commands in parallel, each using the ${l4} tool:
+1. ${A} run the following bash commands in parallel, each using the ${BASH_TOOL_NAME} tool:
   - Run a git status command to see all untracked files. IMPORTANT: Never use the -uall flag as it can cause memory issues on large repos.
   - Run a git diff command to see both staged and unstaged changes that will be committed.
   - Run a git log command to see recent commit messages, so that you can follow this repository's commit message style.
@@ -107288,7 +107288,7 @@ Use the gh command via the Bash tool for ALL GitHub-related tasks including work
 
 IMPORTANT: When the user asks you to create a pull request, follow these steps carefully:
 
-1. ${A} run the following bash commands in parallel using the ${l4} tool, in order to understand the current state of the branch since it diverged from the main branch:
+1. ${A} run the following bash commands in parallel using the ${BASH_TOOL_NAME} tool, in order to understand the current state of the branch since it diverged from the main branch:
    - Run a git status command to see all untracked files (never use -uall flag)
    - Run a git diff command to see both staged and unstaged changes that will be committed
    - Check if the current branch tracks a remote branch and is up to date with the remote, so you know if you need to push to the remote
@@ -107388,16 +107388,16 @@ function pjz() {
 }
 function fWq() {
   let A = [
-      `File search: Use ${Sz} (NOT find or ls)`,
-      `Content search: Use ${k5} (NOT grep or rg)`,
-      `Read files: Use ${n4} (NOT cat/head/tail)`,
-      `Edit files: Use ${Lq} (NOT sed/awk)`,
-      `Write files: Use ${U3} (NOT echo >/cat <<EOF)`,
+      `File search: Use ${GLOB_TOOL_NAME} (NOT find or ls)`,
+      `Content search: Use ${GREP_TOOL_NAME} (NOT grep or rg)`,
+      `Read files: Use ${READ_TOOL_NAME} (NOT cat/head/tail)`,
+      `Edit files: Use ${EDIT_TOOL_NAME} (NOT sed/awk)`,
+      `Write files: Use ${WRITE_TOOL_NAME} (NOT echo >/cat <<EOF)`,
       "Communication: Output text directly (NOT echo/printf)",
     ],
     q = [
-      `If the commands are independent and can run in parallel, make multiple ${l4} tool calls in a single message. Example: if you need to run "git status" and "git diff", send a single message with two ${l4} tool calls in parallel.`,
-      `If the commands depend on each other and must run sequentially, use a single ${l4} call with '&&' to chain them together.`,
+      `If the commands are independent and can run in parallel, make multiple ${BASH_TOOL_NAME} tool calls in a single message. Example: if you need to run "git status" and "git diff", send a single message with two ${BASH_TOOL_NAME} tool calls in parallel.`,
+      `If the commands depend on each other and must run sequentially, use a single ${BASH_TOOL_NAME} call with '&&' to chain them together.`,
       "Use ';' only when you need to run commands sequentially but don't care if earlier commands fail.",
       "DO NOT use newlines to separate commands (newlines are ok in quoted strings).",
     ],
@@ -107437,7 +107437,7 @@ function fWq() {
     "IMPORTANT: Avoid using this tool to run `find`, `grep`, `cat`, `head`, `tail`, `sed`, `awk`, or `echo` commands, unless explicitly instructed or after you have verified that a dedicated tool cannot accomplish your task. Instead, use the appropriate dedicated tool as this will provide a much better experience for the user:",
     "",
     ...Pc(A),
-    `While the ${l4} tool can do similar things, it’s better to use the built-in tools as they provide a better user experience and make it easier to review tool calls and give permission.`,
+    `While the ${BASH_TOOL_NAME} tool can do similar things, it’s better to use the built-in tools as they provide a better user experience and make it easier to review tool calls and give permission.`,
     "",
     "# Instructions",
     ...Pc(w),
@@ -107937,7 +107937,7 @@ var WP = E(() => {
     ])));
   ((qJz = ["sleep"]),
     (zy1 = X1(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS)),
-    (kWq = i6(() =>
+    (kWq = lazyOnce(() =>
       x.strictObject({
         command: x.string().describe("The command to execute"),
         timeout: x
@@ -107974,7 +107974,7 @@ For commands that are harder to parse at a glance (piped commands, obscure flags
           .describe("Internal: pre-computed sed edit result from preview"),
       }),
     )),
-    (EWq = i6(() =>
+    (EWq = lazyOnce(() =>
       zy1
         ? kWq().omit({ run_in_background: !0, _simulatedSedEdit: !0 })
         : kWq().omit({ _simulatedSedEdit: !0 }),
@@ -108003,7 +108003,7 @@ For commands that are harder to parse at a glance (piped commands, obscure flags
       "watch",
       "dev",
     ]));
-  YJz = i6(() =>
+  YJz = lazyOnce(() =>
     x.object({
       stdout: x.string().describe("The standard output of the command"),
       stderr: x.string().describe("The standard error output of the command"),
@@ -108063,7 +108063,7 @@ For commands that are harder to parse at a glance (piped commands, obscure flags
     }),
   );
   Yq = {
-    name: l4,
+    name: BASH_TOOL_NAME,
     maxResultSizeChars: 30000,
     strict: !0,
     async description({ description: A }) {

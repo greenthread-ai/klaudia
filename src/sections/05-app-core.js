@@ -37,7 +37,7 @@ function m69(A) {
   let O;
   if (q[5] !== K)
     ((O = hs.default.createElement(
-      Z8,
+      ScrollableContent,
       null,
       hs.default.createElement(T, null, K),
     )),
@@ -15965,7 +15965,7 @@ var rh = E(() => {
   B1();
 });
 async function tC7() {
-  let q = k1().oauthAccount?.accountUuid,
+  let q = getSettings().oauthAccount?.accountUuid,
     K = fk();
   if (!q || !K) return;
   let Y = `${r7().BASE_API_URL}/api/claude_cli_profile`;
@@ -16097,7 +16097,7 @@ async function $u6(A, { scopes: q } = {}) {
       H = _u6(z.scope);
     n("tengu_oauth_token_refresh_success", {});
     let j = await Z_1(w);
-    if (k1().oauthAccount) {
+    if (getSettings().oauthAccount) {
       let D = {};
       if (j.displayName !== void 0) D.displayName = j.displayName;
       if (typeof j.hasExtraUsageEnabled === "boolean")
@@ -16108,7 +16108,7 @@ async function $u6(A, { scopes: q } = {}) {
       if (j.subscriptionCreatedAt !== void 0)
         D.subscriptionCreatedAt = j.subscriptionCreatedAt;
       if (Object.keys(D).length > 0)
-        J8((X) => ({
+        updateSettings((X) => ({
           ...X,
           oauthAccount: X.oauthAccount
             ? { ...X.oauthAccount, ...D }
@@ -16152,9 +16152,9 @@ async function F$8(A) {
   if (q.status !== 200)
     throw Error(`Failed to fetch user roles: ${q.statusText}`);
   let K = q.data;
-  if (!k1().oauthAccount)
+  if (!getSettings().oauthAccount)
     throw Error("OAuth account information not found in config");
-  (J8((z) => ({
+  (updateSettings((z) => ({
     ...z,
     oauthAccount: z.oauthAccount
       ? {
@@ -16229,7 +16229,7 @@ async function Z_1(A) {
   return (n("tengu_oauth_profile_fetch_success", {}), { ...z, rawProfile: q });
 }
 async function ny() {
-  let q = k1().oauthAccount?.organizationUuid;
+  let q = getSettings().oauthAccount?.organizationUuid;
   if (q) return q;
   let K = z4()?.accessToken;
   if (K === void 0) return null;
@@ -16243,11 +16243,11 @@ async function Q$8() {
     K = process.env.CLAUDE_CODE_ORGANIZATION_UUID,
     Y = Boolean(A && q && K);
   if (A && q && K) {
-    if (!k1().oauthAccount)
+    if (!getSettings().oauthAccount)
       FM6({ accountUuid: A, emailAddress: q, organizationUuid: K });
   }
   await HO();
-  let z = k1();
+  let z = getSettings();
   if (
     (z.oauthAccount &&
       z.oauthAccount.billingType !== void 0 &&
@@ -16302,7 +16302,7 @@ function FM6({
     subscriptionCreatedAt: $,
   };
   if (Y) O.displayName = Y;
-  J8((H) => {
+  updateSettings((H) => {
     if (
       H.oauthAccount?.accountUuid === O.accountUuid &&
       H.oauthAccount?.emailAddress === O.emailAddress &&
@@ -16542,7 +16542,7 @@ var bN = E(() => {
   K4();
   r1();
   ((eC7 = [2000, 4000, 8000, 16000]), (d$8 = eC7.length));
-  JK9 = i6(() =>
+  JK9 = lazyOnce(() =>
     I4.object({
       id: I4.string(),
       title: I4.string(),
@@ -56630,8 +56630,8 @@ function z14(A) {
 }
 function w14(A) {
   let q = A.get("anthropic-ratelimit-unified-overage-disabled-reason") ?? null;
-  if (k1().cachedExtraUsageDisabledReason !== q)
-    J8((Y) => ({ ...Y, cachedExtraUsageDisabledReason: q }));
+  if (getSettings().cachedExtraUsageDisabledReason !== q)
+    updateSettings((Y) => ({ ...Y, cachedExtraUsageDisabledReason: q }));
 }
 function cP8(A) {
   let q = Y7();
@@ -60249,10 +60249,10 @@ async function Ng9() {
 async function vg9() {
   try {
     let A = await Vg9(),
-      q = k1().clientDataCache;
+      q = getSettings().clientDataCache;
     if (oT(q?.data, A)) return A;
     return (
-      J8((K) => ({
+      updateSettings((K) => ({
         ...K,
         clientDataCache: { data: A, timestamp: Date.now() },
       })),
@@ -60270,7 +60270,7 @@ function kg9(A, q) {
 function Eg9(A) {
   vg9();
   try {
-    let q = k1().clientDataCache;
+    let q = getSettings().clientDataCache;
     return q ? kg9(q.data, A) : null;
   } catch {
     return null;
@@ -64103,11 +64103,11 @@ function p74(A) {
       "When looking for past context:",
       "1. Search topic files in your memory directory:",
       "```",
-      `${k5} with pattern="<search term>" path="${K}" glob="*.md"`,
+      `${GREP_TOOL_NAME} with pattern="<search term>" path="${K}" glob="*.md"`,
       "```",
       "2. Session transcript logs (last resort — large files, slow):",
       "```",
-      `${k5} with pattern="<search term>" path="${O}/" glob="*.jsonl"`,
+      `${GREP_TOOL_NAME} with pattern="<search term>" path="${O}/" glob="*.jsonl"`,
       "```",
       "Use narrow search terms (error messages, file paths, function names) rather than broad keywords.",
       "",
@@ -64210,11 +64210,11 @@ function Q74(A, q, K) {
       "When looking for past context:",
       "1. Search topic files in your memory directory:",
       "```",
-      `${k5} with pattern="<search term>" path="${q}" glob="*.md"`,
+      `${GREP_TOOL_NAME} with pattern="<search term>" path="${q}" glob="*.md"`,
       "```",
       "2. Session transcript logs (last resort — large files, slow):",
       "```",
-      `${k5} with pattern="<search term>" path="${z}/" glob="*.jsonl"`,
+      `${GREP_TOOL_NAME} with pattern="<search term>" path="${z}/" glob="*.jsonl"`,
       "```",
       "Use narrow search terms (error messages, file paths, function names) rather than broad keywords.",
       "",
@@ -64309,11 +64309,11 @@ function _p9(A) {
     "When looking for past context:",
     "1. Search topic files in your memory directory:",
     "```",
-    `${k5} with pattern="<search term>" path="${A}" glob="*.md"`,
+    `${GREP_TOOL_NAME} with pattern="<search term>" path="${A}" glob="*.md"`,
     "```",
     "2. Session transcript logs (last resort — large files, slow):",
     "```",
-    `${k5} with pattern="<search term>" path="${q}/" glob="*.jsonl"`,
+    `${GREP_TOOL_NAME} with pattern="<search term>" path="${q}/" glob="*.jsonl"`,
     "```",
     "Use narrow search terms (error messages, file paths, function names) rather than broad keywords.",
     "",
@@ -65140,7 +65140,7 @@ The assistant did not use the todo list because this is an informational request
 <example>
 User: Can you add a comment to the calculateTotal function to explain what it does?
 Assistant: Sure, let me add a comment to the calculateTotal function to explain what it does.
-* Uses the ${Lq} tool to add a comment to the calculateTotal function *
+* Uses the ${EDIT_TOOL_NAME} tool to add a comment to the calculateTotal function *
 
 <reasoning>
 The assistant did not use the todo list because this is a single, straightforward task confined to one location in the code. Adding a comment doesn't require tracking multiple steps or systematic organization.
@@ -65205,15 +65205,15 @@ When in doubt, use this tool. Being proactive with task management demonstrates 
 var Tp9, Np9, EP6;
 var fG8 = E(() => {
   K4();
-  ((Tp9 = i6(() => x.enum(["pending", "in_progress", "completed"]))),
-    (Np9 = i6(() =>
+  ((Tp9 = lazyOnce(() => x.enum(["pending", "in_progress", "completed"]))),
+    (Np9 = lazyOnce(() =>
       x.object({
         content: x.string().min(1, "Content cannot be empty"),
         status: Tp9(),
         activeForm: x.string().min(1, "Active form cannot be empty"),
       }),
     )),
-    (EP6 = i6(() => x.array(Np9()))));
+    (EP6 = lazyOnce(() => x.array(Np9()))));
 });
 function z44() {
   return null;
@@ -65230,7 +65230,7 @@ function $44() {
 function O44() {
   return null;
 }
-var Bt = "TodoWrite";
+var TODO_WRITE_TOOL_NAME = "TodoWrite";
 import { AsyncLocalStorage as Vp9 } from "async_hooks";
 function fR() {
   return TG8.getStore();
@@ -65686,8 +65686,8 @@ var U_ = E(() => {
   oz();
   mk();
   ((ug6 = Y6(Eu(), 1)), (uJ1 = new Set()));
-  ((R56 = i6(() => x.enum(["pending", "in_progress", "completed"]))),
-    (Lp9 = i6(() =>
+  ((R56 = lazyOnce(() => x.enum(["pending", "in_progress", "completed"]))),
+    (Lp9 = lazyOnce(() =>
       x.object({
         id: x.string(),
         subject: x.string(),
@@ -65709,17 +65709,17 @@ var yP6 = E(() => {
   fG8();
   B1();
   U_();
-  ((hp9 = i6(() =>
+  ((hp9 = lazyOnce(() =>
     x.strictObject({ todos: EP6().describe("The updated todo list") }),
   )),
-    (Ip9 = i6(() =>
+    (Ip9 = lazyOnce(() =>
       x.object({
         oldTodos: EP6().describe("The todo list before the update"),
         newTodos: EP6().describe("The todo list after the update"),
       }),
     )),
     (aN = {
-      name: Bt,
+      name: TODO_WRITE_TOOL_NAME,
       maxResultSizeChars: 1e5,
       strict: !0,
       input_examples: [
@@ -65862,11 +65862,11 @@ Your strengths:
 - Reading and analyzing file contents
 
 Guidelines:
-- Use ${Sz} for broad file pattern matching
-- Use ${k5} for searching file contents with regex
-- Use ${n4} when you know the specific file path you need to read
-- Use ${l4} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
-- NEVER use ${l4} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
+- Use ${GLOB_TOOL_NAME} for broad file pattern matching
+- Use ${GREP_TOOL_NAME} for searching file contents with regex
+- Use ${READ_TOOL_NAME} when you know the specific file path you need to read
+- Use ${BASH_TOOL_NAME} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
+- NEVER use ${BASH_TOOL_NAME} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
 - Adapt your search approach based on the thoroughness level specified by the caller
 - Return file paths as absolute paths in your final response
 - For clear communication, avoid using emojis
@@ -65880,7 +65880,7 @@ Complete the user's search request efficiently and report your findings clearly.
     (QB = {
       agentType: "Explore",
       whenToUse: bp9,
-      disallowedTools: [tq, pB, Lq, U3, o0],
+      disallowedTools: [tq, pB, EDIT_TOOL_NAME, WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME],
       source: "built-in",
       baseDir: "built-in",
       model: "haiku",
@@ -66018,15 +66018,15 @@ function rp9(A, q) {
     Y = A.has(tq),
     z = q.length > 0 && A.has(_j),
     w = [
-      `To read files use ${n4} instead of cat, head, tail, or sed`,
-      `To edit files use ${Lq} instead of sed or awk`,
-      `To create files use ${U3} instead of cat with heredoc or echo redirection`,
-      `To search for files use ${Sz} instead of find or ls`,
-      `To search the content of files, use ${k5} instead of grep or rg`,
-      `Reserve using the ${l4} exclusively for system commands and terminal operations that require shell execution. If you are unsure and there is a relevant dedicated tool, default to using the dedicated tool and only fallback on using the ${l4} tool for these if it is absolutely necessary.`,
+      `To read files use ${READ_TOOL_NAME} instead of cat, head, tail, or sed`,
+      `To edit files use ${EDIT_TOOL_NAME} instead of sed or awk`,
+      `To create files use ${WRITE_TOOL_NAME} instead of cat with heredoc or echo redirection`,
+      `To search for files use ${GLOB_TOOL_NAME} instead of find or ls`,
+      `To search the content of files, use ${GREP_TOOL_NAME} instead of grep or rg`,
+      `Reserve using the ${BASH_TOOL_NAME} exclusively for system commands and terminal operations that require shell execution. If you are unsure and there is a relevant dedicated tool, default to using the dedicated tool and only fallback on using the ${BASH_TOOL_NAME} tool for these if it is absolutely necessary.`,
     ],
     _ = [
-      `Do NOT use the ${l4} to run commands when a relevant dedicated tool is provided. Using dedicated tools allows the user to better understand and review your work. This is CRITICAL to assisting the user:`,
+      `Do NOT use the ${BASH_TOOL_NAME} to run commands when a relevant dedicated tool is provided. Using dedicated tools allows the user to better understand and review your work. This is CRITICAL to assisting the user:`,
       w,
       K
         ? `Break down and manage your work with the ${aN.name} tool. These tools are helpful for planning your work and helping the user track your progress. Mark each task as completed as soon as you are done with the task. Do not batch up multiple tasks before marking them as completed.`
@@ -66034,8 +66034,8 @@ function rp9(A, q) {
       Y
         ? `Use the ${tq} tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Importantly, avoid duplicating work that subagents are already doing - if you delegate research to a subagent, do not also perform the same searches yourself.`
         : null,
-      `For simple, directed codebase searches (e.g. for a specific file/class/function) use the ${Sz} or ${k5} directly.`,
-      `For broader codebase exploration and deep research, use the ${tq} tool with subagent_type=${QB.agentType}. This is slower than calling ${Sz} or ${k5} directly so use this only when a simple, directed search proves to be insufficient or when your task will clearly require more than ${T44} queries.`,
+      `For simple, directed codebase searches (e.g. for a specific file/class/function) use the ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME} directly.`,
+      `For broader codebase exploration and deep research, use the ${tq} tool with subagent_type=${QB.agentType}. This is slower than calling ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME} directly so use this only when a simple, directed search proves to be insufficient or when your task will clearly require more than ${T44} queries.`,
       z
         ? `/<skill-name> (e.g., /commit) is shorthand for users to invoke a user-invocable skill. When executed, the skill gets expanded to a full prompt. Use the ${_j} tool to execute them. IMPORTANT: Only use ${_j} for skills listed in its user-invocable skills section - do not guess or use built-in CLI commands.`
         : null,
@@ -66630,12 +66630,12 @@ You will be provided with a set of requirements and optionally a perspective on 
 
 2. **Explore Thoroughly**:
    - Read any files provided to you in the initial prompt
-   - Find existing patterns and conventions using ${Sz}, ${k5}, and ${n4}
+   - Find existing patterns and conventions using ${GLOB_TOOL_NAME}, ${GREP_TOOL_NAME}, and ${READ_TOOL_NAME}
    - Understand the current architecture
    - Identify similar features as reference
    - Trace through relevant code paths
-   - Use ${l4} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
-   - NEVER use ${l4} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
+   - Use ${BASH_TOOL_NAME} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
+   - NEVER use ${BASH_TOOL_NAME} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
 
 3. **Design Solution**:
    - Create implementation approach based on your assigned perspective
@@ -66662,7 +66662,7 @@ REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write, edit, or
       agentType: "Plan",
       whenToUse:
         "Software architect agent for designing implementation plans. Use this when you need to plan the implementation strategy for a task. Returns step-by-step plans, identifies critical files, and considers architectural trade-offs.",
-      disallowedTools: [tq, pB, Lq, U3, o0],
+      disallowedTools: [tq, pB, EDIT_TOOL_NAME, WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME],
       source: "built-in",
       tools: QB.tools,
       baseDir: "built-in",
@@ -66731,12 +66731,12 @@ var QG8 = E(() => {
 
 **Approach:**
 1. Determine which domain the user's question falls into
-2. Use ${HX} to fetch the appropriate docs map
+2. Use ${WEB_FETCH_TOOL_NAME} to fetch the appropriate docs map
 3. Identify the most relevant documentation URLs from the map
 4. Fetch the specific documentation pages
 5. Provide clear, actionable guidance based on official documentation
-6. Use ${uy} if docs don't cover the topic
-7. Reference local project files (CLAUDE.md, .claude/ directory) when relevant using ${n4}, ${Sz}, and ${k5}
+6. Use ${WEB_SEARCH_TOOL_NAME} if docs don't cover the topic
+7. Reference local project files (CLAUDE.md, .claude/ directory) when relevant using ${READ_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME}
 
 **Guidelines:**
 - Always prioritize official documentation over assumptions
@@ -66751,7 +66751,7 @@ Complete the user's request by providing accurate, documentation-based guidance.
     agentType: pG8,
     whenToUse:
       'Use this agent when the user asks questions ("Can Claude...", "Does Claude...", "How do I...") about: (1) Claude Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Claude Agent SDK - building custom agents; (3) Claude API (formerly Anthropic API) - API usage, tool use, Anthropic SDK usage. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed claude-code-guide agent that you can resume using the "resume" parameter.',
-    tools: [Sz, k5, n4, HX, uy],
+    tools: [GLOB_TOOL_NAME, GREP_TOOL_NAME, READ_TOOL_NAME, WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME],
     source: "built-in",
     baseDir: "built-in",
     model: "haiku",
@@ -66820,17 +66820,17 @@ When answering questions, consider these configured features and proactively sug
 });
 function b44(A) {
   if (!jA("tengu_coral_whistle", !0)) return;
-  let K = k1().toolUsage?.[A],
+  let K = getSettings().toolUsage?.[A],
     Y = Date.now(),
     z = (K?.usageCount ?? 0) + 1;
   if (!K || K.usageCount !== z || K.lastUsedAt !== Y)
-    J8((w) => ({
+    updateSettings((w) => ({
       ...w,
       toolUsage: { ...w.toolUsage, [A]: { usageCount: z, lastUsedAt: Y } },
     }));
 }
 function u44(A, q) {
-  let K = k1(),
+  let K = getSettings(),
     Y = [A, ...q],
     z = 0,
     w = 0;
@@ -67007,7 +67007,7 @@ var p44 = E(() => {
   dB();
   FZw = [
     XP,
-    `${l4}(sleep:*)`,
+    `${BASH_TOOL_NAME}(sleep:*)`,
     "mcp__slack__send_message",
     "mcp__slack__read_thread",
     "mcp__claude_ai_Slack__slack_send_message",
@@ -67144,12 +67144,12 @@ function MQ9(A) {
   return A.map((q) => `${q.name}: ${q.error}`).join("; ");
 }
 function u56() {
-  let A = pA("policySettings");
+  let A = getConfigValue("policySettings");
   if (!A?.strictKnownMarketplaces) return null;
   return A.strictKnownMarketplaces;
 }
 function PQ9() {
-  let A = pA("policySettings");
+  let A = getConfigValue("policySettings");
   if (!A?.blockedMarketplaces) return null;
   return A.blockedMarketplaces;
 }
@@ -67699,7 +67699,7 @@ async function sG8() {
     O = new Map(),
     H = ["userSettings", "projectSettings", "localSettings"];
   for (let X of H) {
-    let P = pA(X)?.enabledPlugins || {};
+    let P = getConfigValue(X)?.enabledPlugins || {};
     for (let W of Object.keys(P)) {
       if (!W.includes("@")) continue;
       let G = o44(X);
@@ -90437,7 +90437,7 @@ function ww4(A, q, K, Y) {
       w.outputs = [
         {
           output_type: "stream",
-          text: `Outputs are too large to include. Use ${l4} with: cat <notebook_path> | jq '.cells[${q}].outputs'`,
+          text: `Outputs are too large to include. Use ${BASH_TOOL_NAME} with: cat <notebook_path> | jq '.cells[${q}].outputs'`,
         },
       ];
     else w.outputs = _;
@@ -90729,7 +90729,7 @@ function j9() {
   let A = w6(1),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
-    ((q = cF6.createElement(Z8, { height: 1 }, cF6.createElement(jg, null))),
+    ((q = cF6.createElement(ScrollableContent, { height: 1 }, cF6.createElement(jg, null))),
       (A[0] = q));
   else q = A[0];
   return q;
@@ -91831,7 +91831,7 @@ function Jg(A) {
   else X = q[6];
   let M;
   if (q[7] !== D || q[8] !== X)
-    ((M = _96.createElement(Z8, null, _96.createElement(T, { color: D }, X))),
+    ((M = _96.createElement(ScrollableContent, null, _96.createElement(T, { color: D }, X))),
       (q[7] = D),
       (q[8] = X),
       (q[9] = M));
@@ -91887,7 +91887,7 @@ function j5(A) {
     let X =
       D.split(`
 `).length - aT8;
-    ((_ = Z8),
+    ((_ = ScrollableContent),
       (w = m),
       ($ = "column"),
       (O = vP.createElement(
@@ -92966,7 +92966,7 @@ function Qw4(A) {
       let { originalSize: q } = A.file,
         K = v3(q);
       return bq.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         bq.createElement(T, null, "Read image (", K, ")"),
       );
@@ -92980,7 +92980,7 @@ function Qw4(A) {
           "No cells found in notebook",
         );
       return bq.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         bq.createElement(
           T,
@@ -92995,14 +92995,14 @@ function Qw4(A) {
       let { originalSize: q } = A.file,
         K = v3(q);
       return bq.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         bq.createElement(T, null, "Read PDF (", K, ")"),
       );
     }
     case "parts":
       return bq.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         bq.createElement(
           T,
@@ -93019,7 +93019,7 @@ function Qw4(A) {
     case "text": {
       let { numLines: q } = A.file;
       return bq.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         bq.createElement(
           T,
@@ -93040,13 +93040,13 @@ function dw4(A, { verbose: q }) {
   if (!q && typeof A === "string") {
     if (A.includes(RG))
       return bq.createElement(
-        Z8,
+        ScrollableContent,
         null,
         bq.createElement(T, { color: "error" }, "File not found"),
       );
     if (zq(A, "tool_use_error"))
       return bq.createElement(
-        Z8,
+        ScrollableContent,
         null,
         bq.createElement(T, { color: "error" }, "Error reading file"),
       );
@@ -93689,7 +93689,7 @@ async function z_4(A, q, K, Y, z, w, _, $, O, H, j) {
       V = p6(N),
       v = Buffer.byteLength(V);
     if (v > $)
-      throw Error(`Notebook content (${v3(v)}) exceeds maximum allowed size (${v3($)}). Use ${l4} with jq to read specific portions:
+      throw Error(`Notebook content (${v3(v)}) exceeds maximum allowed size (${v3($)}). Use ${BASH_TOOL_NAME} with jq to read specific portions:
   cat "${A}" | jq '.cells[:20]' # First 20 cells
   cat "${A}" | jq '.cells[100:120]' # Cells 100-120
   cat "${A}" | jq '.cells | length' # Count total cells
@@ -93894,7 +93894,7 @@ var he9,
   ge9,
   pe9,
   Qe9,
-  l9,
+  readTool,
   de9 = `
 
 <system-reminder>
@@ -94034,7 +94034,7 @@ var lI = E(() => {
       "swf",
       "fla",
     ])));
-  ((pe9 = i6(() =>
+  ((pe9 = lazyOnce(() =>
     x.strictObject({
       file_path: x.string().describe("The absolute path to the file to read"),
       offset: x
@@ -94057,7 +94057,7 @@ var lI = E(() => {
         ),
     }),
   )),
-    (Qe9 = i6(() => {
+    (Qe9 = lazyOnce(() => {
       let A = x.enum(["image/jpeg", "image/png", "image/gif", "image/webp"]);
       return x.discriminatedUnion("type", [
         x.object({
@@ -94133,8 +94133,8 @@ var lI = E(() => {
         }),
       ]);
     })),
-    (l9 = {
-      name: n4,
+    (readTool = {
+      name: READ_TOOL_NAME,
       maxResultSizeChars: 1e5,
       strict: !0,
       input_examples: [
@@ -94185,7 +94185,7 @@ var lI = E(() => {
       },
       async checkPermissions(A, q) {
         let K = await q.getAppState();
-        return Re(l9, A, K.toolPermissionContext);
+        return Re(readTool, A, K.toolPermissionContext);
       },
       renderToolUseMessage: gw4,
       renderToolUseTag: Fw4,
@@ -97162,7 +97162,7 @@ function u_4(A, q) {
 function m_4(A, q, K, Y) {
   let z = `Error: result (${q.toLocaleString()} characters) exceeds maximum allowed tokens. Output has been saved to ${A}.
 Format: ${K}
-Use offset and limit parameters to read specific portions of the file, the ${k5} tool to search for specific content, and jq to make structured queries.
+Use offset and limit parameters to read specific portions of the file, the ${GREP_TOOL_NAME} tool to search for specific content, and jq to make structured queries.
 REQUIREMENTS FOR SUMMARIZATION/ANALYSIS/REVIEW:
 - You MUST read the content from the file at ${A} in sequential chunks until 100% of the content has been read.
 `,
@@ -97696,7 +97696,7 @@ function t_4(A, q) {
   return o6Y(q).test(A);
 }
 function a6Y() {
-  if (e6Y()) return pA("policySettings") ?? {};
+  if (e6Y()) return getConfigValue("policySettings") ?? {};
   return U7();
 }
 function s6Y() {
@@ -97837,7 +97837,7 @@ async function xe(A, q, K) {
       break;
     }
     case "user": {
-      if (k1().mcpServers?.[A])
+      if (getSettings().mcpServers?.[A])
         throw Error(`MCP server ${A} already exists in user config`);
       break;
     }
@@ -97871,7 +97871,7 @@ async function xe(A, q, K) {
       break;
     }
     case "user": {
-      J8((w) => ({ ...w, mcpServers: { ...w.mcpServers, [A]: z } }));
+      updateSettings((w) => ({ ...w, mcpServers: { ...w.mcpServers, [A]: z } }));
       break;
     }
     case "local": {
@@ -97903,9 +97903,9 @@ async function rN8(A, q) {
       break;
     }
     case "user": {
-      if (!k1().mcpServers?.[A])
+      if (!getSettings().mcpServers?.[A])
         throw Error(`No user-scoped MCP server found with name: ${A}`);
-      J8((Y) => {
+      updateSettings((Y) => {
         let { [A]: z, ...w } = Y.mcpServers ?? {};
         return { ...Y, mcpServers: w };
       });
@@ -97976,7 +97976,7 @@ function ej(A) {
       return { servers: K, errors: Y };
     }
     case "user": {
-      let K = k1().mcpServers;
+      let K = getSettings().mcpServers;
       if (!K) return { servers: {}, errors: [] };
       let { config: Y, errors: z } = Jp6({
         configObject: { mcpServers: K },
@@ -98185,7 +98185,7 @@ function Dp6() {
   return A !== null;
 }
 function e6Y() {
-  return pA("policySettings")?.allowManagedMcpServersOnly === !0;
+  return getConfigValue("policySettings")?.allowManagedMcpServersOnly === !0;
 }
 function A$4(A) {
   return Object.values(A).every(
@@ -98727,14 +98727,14 @@ function M$4(A) {
   let q = A.at(-1);
   if (!q?.data)
     return PK.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       PK.createElement(T, { dimColor: !0 }, "Running…"),
     );
   let { progress: K, total: Y, progressMessage: z } = q.data;
   if (K === void 0)
     return PK.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       PK.createElement(T, { dimColor: !0 }, "Running…"),
     );
@@ -98742,7 +98742,7 @@ function M$4(A) {
     let w = Math.min(1, Math.max(0, K / Y)),
       _ = Math.round(w * 100);
     return PK.createElement(
-      Z8,
+      ScrollableContent,
       null,
       PK.createElement(
         m,
@@ -98758,7 +98758,7 @@ function M$4(A) {
     );
   }
   return PK.createElement(
-    Z8,
+    ScrollableContent,
     { height: 1 },
     PK.createElement(T, { dimColor: !0 }, z ?? `Processing… ${K}`),
   );
@@ -98783,7 +98783,7 @@ function SM1(A, q, { verbose: K }) {
             width: "100%",
           },
           PK.createElement(
-            Z8,
+            ScrollableContent,
             { height: 1 },
             PK.createElement(T, null, "[Image]"),
           ),
@@ -98800,7 +98800,7 @@ function SM1(A, q, { verbose: K }) {
       m,
       { justifyContent: "space-between", overflowX: "hidden", width: "100%" },
       PK.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         PK.createElement(T, { dimColor: !0 }, "(No content)"),
       ),
@@ -98811,7 +98811,7 @@ function SM1(A, q, { verbose: K }) {
       m,
       { flexDirection: "column" },
       PK.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         PK.createElement(T, { color: "warning" }, _),
       ),
@@ -98840,8 +98840,8 @@ var D1Y, X1Y, P$4;
 var W$4 = E(() => {
   K4();
   YV8();
-  ((D1Y = i6(() => x.object({}).passthrough())),
-    (X1Y = i6(() => x.string().describe("MCP tool execution result"))),
+  ((D1Y = lazyOnce(() => x.object({}).passthrough())),
+    (X1Y = lazyOnce(() => x.string().describe("MCP tool execution result"))),
     (P$4 = {
       isMcp: !0,
       isEnabled() {
@@ -98928,7 +98928,7 @@ function V$4() {
 function v$4(A, q, { verbose: K }) {
   if (!A || A.length === 0)
     return oI.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       oI.createElement(T, { dimColor: !0 }, "(No resources found)"),
     );
@@ -98953,7 +98953,7 @@ var hM1 = E(() => {
   yP();
   k$4();
   r1();
-  ((M1Y = i6(() =>
+  ((M1Y = lazyOnce(() =>
     x.object({
       server: x
         .string()
@@ -98961,7 +98961,7 @@ var hM1 = E(() => {
         .describe("Optional server name to filter resources by"),
     }),
   )),
-    (P1Y = i6(() =>
+    (P1Y = lazyOnce(() =>
       x.array(
         x.object({
           uri: x.string().describe("Resource URI"),
@@ -99082,7 +99082,7 @@ function I$4(A, q, { verbose: K }) {
       m,
       { justifyContent: "space-between", overflowX: "hidden", width: "100%" },
       lk.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         lk.createElement(T, { dimColor: !0 }, "(No content)"),
       ),
@@ -99107,13 +99107,13 @@ var IM1 = E(() => {
   yP();
   x$4();
   r1();
-  ((W1Y = i6(() =>
+  ((W1Y = lazyOnce(() =>
     x.object({
       server: x.string().describe("The MCP server name"),
       uri: x.string().describe("The resource URI to read"),
     }),
   )),
-    (G1Y = i6(() =>
+    (G1Y = lazyOnce(() =>
       x.object({
         contents: x.array(
           x.object({
@@ -101743,7 +101743,7 @@ function wAY(A, q, K) {
   }
   if (Y)
     return sI.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       sI.createElement(T, { dimColor: !0 }, Y),
     );
@@ -104243,14 +104243,14 @@ function UO4(A) {
   return I;
 }
 function tM1() {
-  let A = k1(),
+  let A = getSettings(),
     q = sT.terminal || "unknown";
   return A.hasIdeOnboardingBeenShown?.[q] === !0;
 }
 function mAY() {
   if (tM1()) return;
   let A = sT.terminal || "unknown";
-  J8((q) => ({
+  updateSettings((q) => ({
     ...q,
     hasIdeOnboardingBeenShown: { ...q.hasIdeOnboardingBeenShown, [A]: !0 },
   }));
@@ -104515,8 +104515,8 @@ async function QAY() {
 async function UAY(A) {
   try {
     let q = await cAY(A);
-    if ((n("tengu_ext_installed", {}), !k1().diffTool))
-      J8((Y) => ({ ...Y, diffTool: "auto" }));
+    if ((n("tengu_ext_installed", {}), !getSettings().diffTool))
+      updateSettings((Y) => ({ ...Y, diffTool: "auto" }));
     return { installed: !0, error: null, installedVersion: q, ideType: A };
   } catch (q) {
     n("tengu_ext_install_error", {});
@@ -104847,7 +104847,7 @@ async function KH4(A) {
 }
 async function YH4(A, q, K, Y) {
   lO4().then(A);
-  let z = k1().autoInstallIdeExtension ?? !0;
+  let z = getSettings().autoInstallIdeExtension ?? !0;
   if (process.env.CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL !== "true" && z) {
     let w = q ?? oW6();
     if (w) {
@@ -107414,7 +107414,7 @@ var jj4,
   bp6;
 var Dv8 = E(() => {
   K4();
-  ((jj4 = i6(() =>
+  ((jj4 = lazyOnce(() =>
     x.object({
       inputTokens: x.number(),
       outputTokens: x.number(),
@@ -107426,28 +107426,28 @@ var Dv8 = E(() => {
       maxOutputTokens: x.number(),
     }),
   )),
-    (I7Y = i6(() => x.literal("json_schema"))),
-    (MFw = i6(() => x.object({ type: I7Y() }))),
-    (x7Y = i6(() =>
+    (I7Y = lazyOnce(() => x.literal("json_schema"))),
+    (MFw = lazyOnce(() => x.object({ type: I7Y() }))),
+    (x7Y = lazyOnce(() =>
       x.object({
         type: x.literal("json_schema"),
         schema: x.record(x.string(), x.unknown()),
       }),
     )),
-    (PFw = i6(() => x7Y())),
-    (b7Y = i6(() => x.enum(["user", "project", "org", "temporary", "oauth"]))),
-    (WFw = i6(() =>
+    (PFw = lazyOnce(() => x7Y())),
+    (b7Y = lazyOnce(() => x.enum(["user", "project", "org", "temporary", "oauth"]))),
+    (WFw = lazyOnce(() =>
       x
         .enum(["local", "user", "project"])
         .describe("Config scope for settings."),
     )),
-    (GFw = i6(() => x.literal("context-1m-2025-08-07"))),
-    (u7Y = i6(() =>
+    (GFw = lazyOnce(() => x.literal("context-1m-2025-08-07"))),
+    (u7Y = lazyOnce(() =>
       x
         .object({ type: x.literal("adaptive") })
         .describe("Claude decides when and how much to think (Opus 4.6+)."),
     )),
-    (m7Y = i6(() =>
+    (m7Y = lazyOnce(() =>
       x
         .object({
           type: x.literal("enabled"),
@@ -107455,19 +107455,19 @@ var Dv8 = E(() => {
         })
         .describe("Fixed thinking token budget (older models)"),
     )),
-    (B7Y = i6(() =>
+    (B7Y = lazyOnce(() =>
       x
         .object({ type: x.literal("disabled") })
         .describe("No extended thinking"),
     )),
-    (ZFw = i6(() =>
+    (ZFw = lazyOnce(() =>
       x
         .union([u7Y(), m7Y(), B7Y()])
         .describe(
           "Controls Claude's thinking/reasoning behavior. When set, takes precedence over the deprecated maxThinkingTokens.",
         ),
     )),
-    (g7Y = i6(() =>
+    (g7Y = lazyOnce(() =>
       x.object({
         type: x.literal("stdio").optional(),
         command: x.string(),
@@ -107475,31 +107475,31 @@ var Dv8 = E(() => {
         env: x.record(x.string(), x.string()).optional(),
       }),
     )),
-    (F7Y = i6(() =>
+    (F7Y = lazyOnce(() =>
       x.object({
         type: x.literal("sse"),
         url: x.string(),
         headers: x.record(x.string(), x.string()).optional(),
       }),
     )),
-    (p7Y = i6(() =>
+    (p7Y = lazyOnce(() =>
       x.object({
         type: x.literal("http"),
         url: x.string(),
         headers: x.record(x.string(), x.string()).optional(),
       }),
     )),
-    (Q7Y = i6(() => x.object({ type: x.literal("sdk"), name: x.string() }))),
-    (C01 = i6(() => x.union([g7Y(), F7Y(), p7Y(), Q7Y()]))),
-    (U7Y = i6(() =>
+    (Q7Y = lazyOnce(() => x.object({ type: x.literal("sdk"), name: x.string() }))),
+    (C01 = lazyOnce(() => x.union([g7Y(), F7Y(), p7Y(), Q7Y()]))),
+    (U7Y = lazyOnce(() =>
       x.object({
         type: x.literal("claudeai-proxy"),
         url: x.string(),
         id: x.string(),
       }),
     )),
-    (d7Y = i6(() => x.union([C01(), U7Y()]))),
-    (Jj4 = i6(() =>
+    (d7Y = lazyOnce(() => x.union([C01(), U7Y()]))),
+    (Jj4 = lazyOnce(() =>
       x
         .object({
           name: x.string().describe("Server name as configured"),
@@ -107546,7 +107546,7 @@ var Dv8 = E(() => {
         })
         .describe("Status information for an MCP server connection."),
     )),
-    (fFw = i6(() =>
+    (fFw = lazyOnce(() =>
       x
         .object({
           added: x
@@ -107563,7 +107563,7 @@ var Dv8 = E(() => {
         })
         .describe("Result of a setMcpServers operation."),
     )),
-    (MG6 = i6(() =>
+    (MG6 = lazyOnce(() =>
       x.enum([
         "userSettings",
         "projectSettings",
@@ -107572,11 +107572,11 @@ var Dv8 = E(() => {
         "cliArg",
       ]),
     )),
-    (Hv8 = i6(() => x.enum(["allow", "deny", "ask"]))),
-    (jv8 = i6(() =>
+    (Hv8 = lazyOnce(() => x.enum(["allow", "deny", "ask"]))),
+    (jv8 = lazyOnce(() =>
       x.object({ toolName: x.string(), ruleContent: x.string().optional() }),
     )),
-    (xp6 = i6(() =>
+    (xp6 = lazyOnce(() =>
       x.discriminatedUnion("type", [
         x.object({
           type: x.literal("addRules"),
@@ -107613,7 +107613,7 @@ var Dv8 = E(() => {
         }),
       ]),
     )),
-    (TFw = i6(() =>
+    (TFw = lazyOnce(() =>
       x.union([
         x.object({
           behavior: x.literal("allow"),
@@ -107629,7 +107629,7 @@ var Dv8 = E(() => {
         }),
       ]),
     )),
-    (ge = i6(() =>
+    (ge = lazyOnce(() =>
       x
         .enum([
           "default",
@@ -107664,8 +107664,8 @@ var Dv8 = E(() => {
       "WorktreeCreate",
       "WorktreeRemove",
     ]),
-    (Dj4 = i6(() => x.enum(c7Y))),
-    (kD = i6(() =>
+    (Dj4 = lazyOnce(() => x.enum(c7Y))),
+    (kD = lazyOnce(() =>
       x.object({
         session_id: x.string(),
         transcript_path: x.string(),
@@ -107673,7 +107673,7 @@ var Dv8 = E(() => {
         permission_mode: x.string().optional(),
       }),
     )),
-    (l7Y = i6(() =>
+    (l7Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("PreToolUse"),
@@ -107683,7 +107683,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (i7Y = i6(() =>
+    (i7Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("PermissionRequest"),
@@ -107693,7 +107693,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (n7Y = i6(() =>
+    (n7Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("PostToolUse"),
@@ -107704,7 +107704,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (r7Y = i6(() =>
+    (r7Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("PostToolUseFailure"),
@@ -107716,7 +107716,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (o7Y = i6(() =>
+    (o7Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("Notification"),
@@ -107726,7 +107726,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (a7Y = i6(() =>
+    (a7Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("UserPromptSubmit"),
@@ -107734,7 +107734,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (s7Y = i6(() =>
+    (s7Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("SessionStart"),
@@ -107744,7 +107744,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (t7Y = i6(() =>
+    (t7Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("Setup"),
@@ -107752,7 +107752,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (e7Y = i6(() =>
+    (e7Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("Stop"),
@@ -107766,7 +107766,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (A4Y = i6(() =>
+    (A4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("SubagentStart"),
@@ -107775,7 +107775,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (q4Y = i6(() =>
+    (q4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("SubagentStop"),
@@ -107792,7 +107792,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (K4Y = i6(() =>
+    (K4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("PreCompact"),
@@ -107801,7 +107801,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (Y4Y = i6(() =>
+    (Y4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("TeammateIdle"),
@@ -107810,7 +107810,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (z4Y = i6(() =>
+    (z4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("TaskCompleted"),
@@ -107822,7 +107822,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (w4Y = i6(() =>
+    (w4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("Elicitation"),
@@ -107835,7 +107835,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (_4Y = i6(() =>
+    (_4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("ElicitationResult"),
@@ -107854,7 +107854,7 @@ var Dv8 = E(() => {
       "policy_settings",
       "skills",
     ]),
-    (O4Y = i6(() =>
+    (O4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("ConfigChange"),
@@ -107863,7 +107863,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (H4Y = i6(() =>
+    (H4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("WorktreeCreate"),
@@ -107871,7 +107871,7 @@ var Dv8 = E(() => {
         }),
       ),
     )),
-    (j4Y = i6(() =>
+    (j4Y = lazyOnce(() =>
       kD().and(
         x.object({
           hook_event_name: x.literal("WorktreeRemove"),
@@ -107886,13 +107886,13 @@ var Dv8 = E(() => {
       "other",
       "bypass_permissions_disabled",
     ]),
-    (D4Y = i6(() => x.enum(J4Y))),
-    (X4Y = i6(() =>
+    (D4Y = lazyOnce(() => x.enum(J4Y))),
+    (X4Y = lazyOnce(() =>
       kD().and(
         x.object({ hook_event_name: x.literal("SessionEnd"), reason: D4Y() }),
       ),
     )),
-    (Xj4 = i6(() =>
+    (Xj4 = lazyOnce(() =>
       x.union([
         l7Y(),
         n7Y(),
@@ -107916,10 +107916,10 @@ var Dv8 = E(() => {
         j4Y(),
       ]),
     )),
-    (M4Y = i6(() =>
+    (M4Y = lazyOnce(() =>
       x.object({ async: x.literal(!0), asyncTimeout: x.number().optional() }),
     )),
-    (P4Y = i6(() =>
+    (P4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("PreToolUse"),
         permissionDecision: x.enum(["allow", "deny", "ask"]).optional(),
@@ -107928,50 +107928,50 @@ var Dv8 = E(() => {
         additionalContext: x.string().optional(),
       }),
     )),
-    (W4Y = i6(() =>
+    (W4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("UserPromptSubmit"),
         additionalContext: x.string().optional(),
       }),
     )),
-    (G4Y = i6(() =>
+    (G4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("SessionStart"),
         additionalContext: x.string().optional(),
       }),
     )),
-    (Z4Y = i6(() =>
+    (Z4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("Setup"),
         additionalContext: x.string().optional(),
       }),
     )),
-    (f4Y = i6(() =>
+    (f4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("SubagentStart"),
         additionalContext: x.string().optional(),
       }),
     )),
-    (T4Y = i6(() =>
+    (T4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("PostToolUse"),
         additionalContext: x.string().optional(),
         updatedMCPToolOutput: x.unknown().optional(),
       }),
     )),
-    (N4Y = i6(() =>
+    (N4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("PostToolUseFailure"),
         additionalContext: x.string().optional(),
       }),
     )),
-    (V4Y = i6(() =>
+    (V4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("Notification"),
         additionalContext: x.string().optional(),
       }),
     )),
-    (v4Y = i6(() =>
+    (v4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("PermissionRequest"),
         decision: x.union([
@@ -107988,7 +107988,7 @@ var Dv8 = E(() => {
         ]),
       }),
     )),
-    (k4Y = i6(() =>
+    (k4Y = lazyOnce(() =>
       x.object({
         continue: x.boolean().optional(),
         suppressOutput: x.boolean().optional(),
@@ -108013,22 +108013,22 @@ var Dv8 = E(() => {
           .optional(),
       }),
     )),
-    (E4Y = i6(() =>
+    (E4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("Elicitation"),
         action: x.enum(["accept", "decline", "cancel"]).optional(),
         content: x.record(x.string(), x.unknown()).optional(),
       }),
     )),
-    (L4Y = i6(() =>
+    (L4Y = lazyOnce(() =>
       x.object({
         hookEventName: x.literal("ElicitationResult"),
         action: x.enum(["accept", "decline", "cancel"]).optional(),
         content: x.record(x.string(), x.unknown()).optional(),
       }),
     )),
-    (NFw = i6(() => x.union([M4Y(), k4Y()]))),
-    (y4Y = i6(() =>
+    (NFw = lazyOnce(() => x.union([M4Y(), k4Y()]))),
+    (y4Y = lazyOnce(() =>
       x.object({
         key: x
           .string()
@@ -108040,7 +108040,7 @@ var Dv8 = E(() => {
           .describe("Optional description shown below the label"),
       }),
     )),
-    (VFw = i6(() =>
+    (VFw = lazyOnce(() =>
       x.object({
         prompt: x
           .string()
@@ -108055,7 +108055,7 @@ var Dv8 = E(() => {
           .describe("Available options for the user to choose from"),
       }),
     )),
-    (vFw = i6(() =>
+    (vFw = lazyOnce(() =>
       x.object({
         prompt_response: x
           .string()
@@ -108063,7 +108063,7 @@ var Dv8 = E(() => {
         selected: x.string().describe("The key of the selected option"),
       }),
     )),
-    (Mj4 = i6(() =>
+    (Mj4 = lazyOnce(() =>
       x
         .object({
           name: x.string().describe("Skill name (without the leading slash)"),
@@ -108078,7 +108078,7 @@ var Dv8 = E(() => {
           "Information about an available skill (invoked via /command syntax).",
         ),
     )),
-    (Pj4 = i6(() =>
+    (Pj4 = lazyOnce(() =>
       x
         .object({
           name: x.string().describe('Agent type identifier (e.g., "Explore")'),
@@ -108096,7 +108096,7 @@ var Dv8 = E(() => {
           "Information about an available subagent that can be invoked via the Task tool.",
         ),
     )),
-    (Wj4 = i6(() =>
+    (Wj4 = lazyOnce(() =>
       x
         .object({
           value: x.string().describe("Model identifier to use in API calls"),
@@ -108121,7 +108121,7 @@ var Dv8 = E(() => {
         })
         .describe("Information about an available model."),
     )),
-    (Gj4 = i6(() =>
+    (Gj4 = lazyOnce(() =>
       x
         .object({
           email: x.string().optional(),
@@ -108132,8 +108132,8 @@ var Dv8 = E(() => {
         })
         .describe("Information about the logged in user's account."),
     )),
-    (R4Y = i6(() => x.union([x.string(), x.record(x.string(), C01())]))),
-    (Zj4 = i6(() =>
+    (R4Y = lazyOnce(() => x.union([x.string(), x.record(x.string(), C01())]))),
+    (Zj4 = lazyOnce(() =>
       x
         .object({
           description: x
@@ -108180,14 +108180,14 @@ var Dv8 = E(() => {
           "Definition for a custom subagent that can be invoked via the Agent tool.",
         ),
     )),
-    (kFw = i6(() =>
+    (kFw = lazyOnce(() =>
       x
         .enum(["user", "project", "local"])
         .describe(
           "Source for loading filesystem-based settings. 'user' - Global user settings (~/.claude/settings.json). 'project' - Project settings (.claude/settings.json). 'local' - Local settings (.claude/settings.local.json).",
         ),
     )),
-    (EFw = i6(() =>
+    (EFw = lazyOnce(() =>
       x
         .object({
           type: x
@@ -108199,7 +108199,7 @@ var Dv8 = E(() => {
         })
         .describe("Configuration for loading a plugin."),
     )),
-    (LFw = i6(() =>
+    (LFw = lazyOnce(() =>
       x
         .object({
           canRewind: x.boolean(),
@@ -108210,12 +108210,12 @@ var Dv8 = E(() => {
         })
         .describe("Result of a rewindFiles operation."),
     )),
-    (C4Y = i6(() => x.unknown())),
-    (S4Y = i6(() => x.unknown())),
-    (h4Y = i6(() => x.unknown())),
-    (B$ = i6(() => x.string())),
-    (fj4 = i6(() => x.unknown())),
-    (I4Y = i6(() =>
+    (C4Y = lazyOnce(() => x.unknown())),
+    (S4Y = lazyOnce(() => x.unknown())),
+    (h4Y = lazyOnce(() => x.unknown())),
+    (B$ = lazyOnce(() => x.string())),
+    (fj4 = lazyOnce(() => x.unknown())),
+    (I4Y = lazyOnce(() =>
       x.enum([
         "authentication_failed",
         "billing_error",
@@ -108226,8 +108226,8 @@ var Dv8 = E(() => {
         "max_output_tokens",
       ]),
     )),
-    (x4Y = i6(() => x.union([x.literal("compacting"), x.null()]))),
-    (Tj4 = i6(() =>
+    (x4Y = lazyOnce(() => x.union([x.literal("compacting"), x.null()]))),
+    (Tj4 = lazyOnce(() =>
       x.object({
         type: x.literal("user"),
         message: C4Y(),
@@ -108236,17 +108236,17 @@ var Dv8 = E(() => {
         tool_use_result: x.unknown().optional(),
       }),
     )),
-    (Jv8 = i6(() =>
+    (Jv8 = lazyOnce(() =>
       Tj4().extend({ uuid: B$().optional(), session_id: x.string() }),
     )),
-    (b4Y = i6(() =>
+    (b4Y = lazyOnce(() =>
       Tj4().extend({
         uuid: B$(),
         session_id: x.string(),
         isReplay: x.literal(!0),
       }),
     )),
-    (u4Y = i6(() =>
+    (u4Y = lazyOnce(() =>
       x
         .object({
           status: x.enum(["allowed", "allowed_warning", "rejected"]),
@@ -108287,7 +108287,7 @@ var Dv8 = E(() => {
         })
         .describe("Rate limit information for claude.ai subscription users."),
     )),
-    (m4Y = i6(() =>
+    (m4Y = lazyOnce(() =>
       x.object({
         type: x.literal("assistant"),
         message: S4Y(),
@@ -108297,7 +108297,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (B4Y = i6(() =>
+    (B4Y = lazyOnce(() =>
       x
         .object({
           type: x.literal("rate_limit_event"),
@@ -108307,7 +108307,7 @@ var Dv8 = E(() => {
         })
         .describe("Rate limit event emitted when rate limit info changes."),
     )),
-    (Nj4 = i6(() =>
+    (Nj4 = lazyOnce(() =>
       x
         .object({
           type: x.literal("streamlined_text"),
@@ -108321,7 +108321,7 @@ var Dv8 = E(() => {
           "@internal Streamlined text message - replaces SDKAssistantMessage in streamlined output. Text content preserved, thinking and tool_use blocks removed.",
         ),
     )),
-    (Vj4 = i6(() =>
+    (Vj4 = lazyOnce(() =>
       x
         .object({
           type: x.literal("streamlined_tool_use_summary"),
@@ -108337,14 +108337,14 @@ var Dv8 = E(() => {
           "@internal Streamlined tool use summary - replaces tool_use blocks in streamlined output with a cumulative summary string.",
         ),
     )),
-    (vj4 = i6(() =>
+    (vj4 = lazyOnce(() =>
       x.object({
         tool_name: x.string(),
         tool_use_id: x.string(),
         tool_input: x.record(x.string(), x.unknown()),
       }),
     )),
-    (g4Y = i6(() =>
+    (g4Y = lazyOnce(() =>
       x.object({
         type: x.literal("result"),
         subtype: x.literal("success"),
@@ -108364,7 +108364,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (F4Y = i6(() =>
+    (F4Y = lazyOnce(() =>
       x.object({
         type: x.literal("result"),
         subtype: x.enum([
@@ -108388,8 +108388,8 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (p4Y = i6(() => x.union([g4Y(), F4Y()]))),
-    (Q4Y = i6(() =>
+    (p4Y = lazyOnce(() => x.union([g4Y(), F4Y()]))),
+    (Q4Y = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("init"),
@@ -108413,7 +108413,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (U4Y = i6(() =>
+    (U4Y = lazyOnce(() =>
       x.object({
         type: x.literal("stream_event"),
         event: h4Y(),
@@ -108422,7 +108422,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (d4Y = i6(() =>
+    (d4Y = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("compact_boundary"),
@@ -108434,7 +108434,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (c4Y = i6(() =>
+    (c4Y = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("status"),
@@ -108444,7 +108444,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (l4Y = i6(() =>
+    (l4Y = lazyOnce(() =>
       x
         .object({
           type: x.literal("system"),
@@ -108457,7 +108457,7 @@ var Dv8 = E(() => {
           "Output from a local slash command (e.g. /voice, /cost). Displayed as assistant-style text in the transcript.",
         ),
     )),
-    (i4Y = i6(() =>
+    (i4Y = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("hook_started"),
@@ -108468,7 +108468,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (n4Y = i6(() =>
+    (n4Y = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("hook_progress"),
@@ -108482,7 +108482,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (r4Y = i6(() =>
+    (r4Y = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("hook_response"),
@@ -108498,7 +108498,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (o4Y = i6(() =>
+    (o4Y = lazyOnce(() =>
       x.object({
         type: x.literal("tool_progress"),
         tool_use_id: x.string(),
@@ -108510,7 +108510,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (a4Y = i6(() =>
+    (a4Y = lazyOnce(() =>
       x.object({
         type: x.literal("auth_status"),
         isAuthenticating: x.boolean(),
@@ -108520,7 +108520,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (s4Y = i6(() =>
+    (s4Y = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("files_persisted"),
@@ -108531,7 +108531,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (t4Y = i6(() =>
+    (t4Y = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("task_notification"),
@@ -108551,7 +108551,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (e4Y = i6(() =>
+    (e4Y = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("task_started"),
@@ -108563,7 +108563,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (AqY = i6(() =>
+    (AqY = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("task_progress"),
@@ -108580,7 +108580,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (qqY = i6(() =>
+    (qqY = lazyOnce(() =>
       x.object({
         type: x.literal("tool_use_summary"),
         summary: x.string(),
@@ -108589,7 +108589,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (KqY = i6(() =>
+    (KqY = lazyOnce(() =>
       x.object({
         type: x.literal("system"),
         subtype: x.literal("elicitation_complete"),
@@ -108599,7 +108599,7 @@ var Dv8 = E(() => {
         session_id: x.string(),
       }),
     )),
-    (YqY = i6(() =>
+    (YqY = lazyOnce(() =>
       x
         .object({
           type: x.literal("prompt_suggestion"),
@@ -108611,7 +108611,7 @@ var Dv8 = E(() => {
           "Predicted next user prompt, emitted after each turn when promptSuggestions is enabled.",
         ),
     )),
-    (yFw = i6(() =>
+    (yFw = lazyOnce(() =>
       x
         .object({
           sessionId: x.string().describe("Unique session identifier (UUID)."),
@@ -108643,7 +108643,7 @@ var Dv8 = E(() => {
         })
         .describe("Session metadata returned by listSessions."),
     )),
-    (kj4 = i6(() =>
+    (kj4 = lazyOnce(() =>
       x.union([
         m4Y(),
         Jv8(),
@@ -108669,7 +108669,7 @@ var Dv8 = E(() => {
         YqY(),
       ]),
     )),
-    (bp6 = i6(() =>
+    (bp6 = lazyOnce(() =>
       x
         .enum(["off", "cooldown", "on"])
         .describe(
@@ -109203,7 +109203,7 @@ var WH = E(() => {
   r1();
   ((up6 = Y6(Eu(), 1)),
     (S01 = { retries: { retries: 10, minTimeout: 5, maxTimeout: 100 } }));
-  ((Lj4 = i6(() =>
+  ((Lj4 = lazyOnce(() =>
     x.object({
       type: x.literal("plan_approval_request"),
       from: x.string(),
@@ -109213,7 +109213,7 @@ var WH = E(() => {
       requestId: x.string(),
     }),
   )),
-    (yj4 = i6(() =>
+    (yj4 = lazyOnce(() =>
       x.object({
         type: x.literal("plan_approval_response"),
         requestId: x.string(),
@@ -109223,7 +109223,7 @@ var WH = E(() => {
         permissionMode: ge().optional(),
       }),
     )),
-    (Rj4 = i6(() =>
+    (Rj4 = lazyOnce(() =>
       x.object({
         type: x.literal("shutdown_request"),
         requestId: x.string(),
@@ -109232,7 +109232,7 @@ var WH = E(() => {
         timestamp: x.string(),
       }),
     )),
-    (Cj4 = i6(() =>
+    (Cj4 = lazyOnce(() =>
       x.object({
         type: x.literal("shutdown_approved"),
         requestId: x.string(),
@@ -109242,7 +109242,7 @@ var WH = E(() => {
         backendType: x.string().optional(),
       }),
     )),
-    (Sj4 = i6(() =>
+    (Sj4 = lazyOnce(() =>
       x.object({
         type: x.literal("shutdown_rejected"),
         requestId: x.string(),
@@ -109251,7 +109251,7 @@ var WH = E(() => {
         timestamp: x.string(),
       }),
     )));
-  hj4 = i6(() =>
+  hj4 = lazyOnce(() =>
     x.object({
       type: x.literal("mode_set_request"),
       mode: ge(),
@@ -109503,7 +109503,7 @@ var JV = E(() => {
   cq();
   U_();
   t3();
-  Kpw = i6(() =>
+  Kpw = lazyOnce(() =>
     x.strictObject({
       operation: x
         .enum(["spawnTeam", "cleanup"])
@@ -109954,8 +109954,8 @@ async function gqY(A) {
         try {
           if (QR(w) <= z.timestamp) return null;
           let _ = { file_path: w };
-          if (!(await l9.validateInput(_, A)).result) return null;
-          let O = await l9.call(_, A);
+          if (!(await readTool.validateInput(_, A)).result) return null;
+          let O = await readTool.call(_, A);
           if (O.data.type === "text") {
             if (sV8(z.content, O.data.file.content) === "") return null;
             return {
@@ -110022,7 +110022,7 @@ async function pqY(A, q, K) {
 `) +
                   `
 
-> This memory file was truncated to the first ${Q01} lines. Use the ${n4} tool to view the complete file at: ${H}`
+> This memory file was truncated to the first ${Q01} lines. Use the ${READ_TOOL_NAME} tool to view the complete file at: ${H}`
                 : j;
             return (
               K.set(H, {
@@ -110065,7 +110065,7 @@ function QqY(A) {
 function nj4(A, q) {
   let K = new Set(
     q
-      .filter((Y) => B5(Y, n4))
+      .filter((Y) => B5(Y, READ_TOOL_NAME))
       .map((Y) => (QqY(Y.input) ? Y.input.file_path : void 0))
       .filter((Y) => Y !== void 0),
   );
@@ -110185,13 +110185,13 @@ function rqY(A) {
   return q >= GqY.TOKEN_COOLDOWN;
 }
 async function oqY(A) {
-  if (!A.options.tools.some((K) => B5(K, l4))) return [];
+  if (!A.options.tools.some((K) => B5(K, BASH_TOOL_NAME))) return [];
   let q = await Fc.getNewDiagnostics();
   if (q.length === 0) return [];
   return [{ type: "diagnostics", files: q, isNew: !0 }];
 }
 async function aqY(A) {
-  if (!A.options.tools.some((q) => B5(q, l4))) return [];
+  if (!A.options.tools.some((q) => B5(q, BASH_TOOL_NAME))) return [];
   y("LSP Diagnostics: getLSPDiagnosticAttachments called");
   try {
     let q = Yj4();
@@ -110308,7 +110308,7 @@ async function kv8(A, q, K, Y, z, w) {
       if (fG6(A, X.toolPermissionContext)) return null;
       try {
         let M = { file_path: A, offset: _ ?? 1, limit: qb6 },
-          P = await l9.call(M, q);
+          P = await readTool.call(M, q);
         return (
           n(K, {}),
           {
@@ -110323,9 +110323,9 @@ async function kv8(A, q, K, Y, z, w) {
         return (n(Y, {}), null);
       }
     }
-    if (!(await l9.validateInput(j, q)).result) return null;
+    if (!(await readTool.validateInput(j, q)).result) return null;
     try {
-      let X = await l9.call(j, q);
+      let X = await readTool.call(j, q);
       return (
         n(K, {}),
         { type: "file", filename: A, content: X.data, displayPath: ic(y1(), A) }
@@ -110377,7 +110377,7 @@ function tqY(A) {
   return { turnsSinceLastTodoWrite: Y, turnsSinceLastReminder: z };
 }
 async function eqY(A, q) {
-  if (!q.options.tools.some((z) => B5(z, Bt))) return [];
+  if (!q.options.tools.some((z) => B5(z, TODO_WRITE_TOOL_NAME))) return [];
   if (!A || A.length === 0) return [];
   let { turnsSinceLastTodoWrite: K, turnsSinceLastReminder: Y } = tqY(A);
   if (K >= d01.TURNS_SINCE_WRITE && Y >= d01.TURNS_BETWEEN_REMINDERS) {
@@ -110750,11 +110750,11 @@ function Qe() {
 }
 function vKY(A) {
   let q = ["localSettings", "projectSettings", "userSettings"];
-  for (let K of q) if (pA(K)?.extraKnownMarketplaces?.[A]) return K;
+  for (let K of q) if (getConfigValue(K)?.extraKnownMarketplaces?.[A]) return K;
   return null;
 }
 function Cv8(A, q, K = "userSettings") {
-  let z = { ...(pA(K) ?? {}).extraKnownMarketplaces };
+  let z = { ...(getConfigValue(K) ?? {}).extraKnownMarketplaces };
   ((z[A] = q), iA(K, { extraKnownMarketplaces: z }));
 }
 async function k3() {
@@ -111462,7 +111462,7 @@ async function t01(A) {
   await Y.rm(_, { force: !0 });
   let $ = ["userSettings", "projectSettings", "localSettings"];
   for (let H of $) {
-    let j = pA(H);
+    let j = getConfigValue(H);
     if (!j) continue;
     let J = !1,
       D = {};
@@ -111662,7 +111662,7 @@ async function wJ4(A, q) {
   ((K[A] = { ...Y, autoUpdate: q }), await x96(K));
   let z = vKY(A);
   if (z) {
-    let w = pA(z)?.extraKnownMarketplaces?.[A];
+    let w = getConfigValue(z)?.extraKnownMarketplaces?.[A];
     if (w) Cv8(A, { source: w.source, autoUpdate: q }, z);
   }
   y(`Set autoUpdate=${q} for marketplace: ${A}`);
@@ -111826,7 +111826,7 @@ async function ap6({
       if (j) _ = mv8(j.marketplaceInstallLocation, $);
     }
     await sk(A, q, Y, w, _);
-    let H = { ...pA(z)?.enabledPlugins, [A]: !0 };
+    let H = { ...getConfigValue(z)?.enabledPlugins, [A]: !0 };
     return (
       iA(z, { enabledPlugins: H }),
       n("tengu_plugin_installed", { plugin_id: A, marketplace_name: K }),
@@ -113101,7 +113101,7 @@ var $j = E(() => {
   t3();
   o7();
   DW6();
-  sKY = i6(() => DM().pick({ agent: !0 }).strip());
+  sKY = lazyOnce(() => DM().pick({ agent: !0 }).strip());
   jz = T8(async () => {
     let A = await eKY(),
       q = [...A.plugins],
@@ -113175,7 +113175,7 @@ async function fJ4(A, q, K, Y, z) {
     let S = $.isolation === "worktree" ? "worktree" : void 0;
     if (NY() && v && X !== void 0) {
       let I = new Set(X);
-      for (let B of [U3, Lq, n4]) if (!I.has(B)) X = [...X, B];
+      for (let B of [WRITE_TOOL_NAME, EDIT_TOOL_NAME, READ_TOOL_NAME]) if (!I.has(B)) X = [...X, B];
     }
     return {
       agentType: J,
@@ -113340,7 +113340,7 @@ function J3Y(A, q, K = "flagSettings") {
       z = m96(Y.tools);
     if (NY() && Y.memory && z !== void 0) {
       let O = new Set(z);
-      for (let H of [U3, Lq, n4]) if (!O.has(H)) z = [...z, H];
+      for (let H of [WRITE_TOOL_NAME, EDIT_TOOL_NAME, READ_TOOL_NAME]) if (!O.has(H)) z = [...z, H];
     }
     let w = Y.disallowedTools !== void 0 ? m96(Y.disallowedTools) : void 0,
       _ = Y.prompt;
@@ -113473,7 +113473,7 @@ function D3Y(A, q, K, Y, z) {
       h = m96(K.tools);
     if (NY() && P && h !== void 0) {
       let j6 = new Set(h);
-      for (let P6 of [U3, Lq, n4]) if (!j6.has(P6)) h = [...h, P6];
+      for (let P6 of [WRITE_TOOL_NAME, EDIT_TOOL_NAME, READ_TOOL_NAME]) if (!j6.has(P6)) h = [...h, P6];
     }
     let F = K.disallowedTools,
       g = F !== void 0 ? m96(F) : void 0,
@@ -113560,8 +113560,8 @@ var nf = E(() => {
   TJ4();
   YD();
   ow();
-  ((NJ4 = i6(() => x.union([x.string(), x.record(x.string(), Gm())]))),
-    (VJ4 = i6(() =>
+  ((NJ4 = lazyOnce(() => x.union([x.string(), x.record(x.string(), Gm())]))),
+    (VJ4 = lazyOnce(() =>
       x.object({
         description: x.string().min(1, "Description cannot be empty"),
         tools: x.array(x.string()).optional(),
@@ -113579,7 +113579,7 @@ var nf = E(() => {
         isolation: x.enum(["worktree"]).optional(),
       }),
     )),
-    (O3Y = i6(() => x.record(x.string(), VJ4()))));
+    (O3Y = lazyOnce(() => x.record(x.string(), VJ4()))));
   Eg = T8(async (A) => {
     if (X1(process.env.CLAUDE_CODE_SIMPLE)) {
       let q = sJ1();
@@ -113900,7 +113900,7 @@ async function Lg(A, q, K) {
           if (!ig6(S))
             L = `${KD1}Tool result saved to: ${S.filepath}
 
-Use ${n4} to view${KZ8}`;
+Use ${READ_TOOL_NAME} to view${KZ8}`;
           f.push({ ...v, content: L });
         } else f.push(v);
       }
@@ -113927,7 +113927,7 @@ Use ${n4} to view${KZ8}`;
         Array.isArray(N.message.content)
       ) {
         for (let V of N.message.content)
-          if (V.type === "tool_use" && V.name === n4) {
+          if (V.type === "tool_use" && V.name === READ_TOOL_NAME) {
             let v = V.input?.file_path;
             if (typeof v === "string")
               if (H.has(V.id)) Z.set(v, V.id);
@@ -113985,7 +113985,7 @@ var ek = E(() => {
   fc();
   r1();
   f1();
-  ((T3Y = new Set([n4, ...$d, k5, Sz, uy, HX, Lq, U3, ...[]])),
+  ((T3Y = new Set([READ_TOOL_NAME, ...$d, GREP_TOOL_NAME, GLOB_TOOL_NAME, WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME, EDIT_TOOL_NAME, WRITE_TOOL_NAME, ...[]])),
     (B96 = new Set()),
     (ep6 = new Set()),
     (AQ6 = new Map()));
@@ -115042,7 +115042,7 @@ function ZP1(A) {
     else if (K.type === "tool_use") q += p6(K.input).length;
   return q;
 }
-function ak(A) {
+function countMessageTokens(A) {
   let q = A.length - 1;
   while (q >= 0) {
     let K = A[q],
@@ -115455,7 +115455,7 @@ var $k8 = E(() => {
   f1();
   u1();
   Sq();
-  ((l3Y = i6(() =>
+  ((l3Y = lazyOnce(() =>
     x.object({
       query: x
         .string()
@@ -115469,7 +115469,7 @@ var $k8 = E(() => {
         .describe("Maximum number of results to return (default: 5)"),
     }),
   )),
-    (i3Y = i6(() =>
+    (i3Y = lazyOnce(() =>
       x.object({
         matches: x.array(x.string()),
         query: x.string(),
@@ -115995,7 +115995,7 @@ function re(A) {
 async function SG6(A, q, K, Y, z, w = !1) {
   try {
     if (A.length === 0) throw Error(HQ6);
-    let _ = ak(A),
+    let _ = countMessageTokens(A),
       $ = OD4(A),
       O = {};
     try {
@@ -116133,7 +116133,7 @@ async function ZD4(A, q, K, Y, z) {
       _ = A.slice(0, q);
     if (w.length === 0)
       throw Error("Nothing to summarize after the selected message.");
-    let $ = ak(A);
+    let $ = countMessageTokens(A);
     (K.onCompactProgress?.({ type: "hooks_start", hookType: "pre_compact" }),
       K.setSDKStatus?.("compacting"));
     let O = await CP1(
@@ -116341,8 +116341,8 @@ async function TD4({
           Y.options.agentDefinitions.activeAgents,
           "compact",
         ))
-          ? UZ([l9, TP1, ...K.mcp.tools], "name")
-          : [l9],
+          ? UZ([readTool, TP1, ...K.mcp.tools], "name")
+          : [readTool],
         W = hG6({
           messages: PD(w5Y([...DV(A), q])),
           systemPrompt: Qq([
@@ -117417,12 +117417,12 @@ function tc(A, q) {
 function Vg() {
   if (X1(process.env.DISABLE_COMPACT)) return !1;
   if (X1(process.env.DISABLE_AUTO_COMPACT)) return !1;
-  return k1().autoCompactEnabled;
+  return getSettings().autoCompactEnabled;
 }
 async function x5Y(A, q, K) {
   if (K === "session_memory" || K === "compact") return !1;
   if (!Vg()) return !1;
-  let Y = ak(A),
+  let Y = countMessageTokens(A),
     z = PQ6(q),
     w = I96(q);
   y(`autocompact: tokens=${Y} threshold=${z} effectiveWindow=${w}`);
@@ -118592,9 +118592,9 @@ When using the ${tq} tool, you must specify a subagent_type parameter to select 
   return `${w}
 
 When NOT to use the ${tq} tool:
-- If you want to read a specific file path, use the ${n4} or ${Sz} tool instead of the ${tq} tool, to find the match more quickly
-- If you are searching for a specific class definition like "class Foo", use the ${Sz} tool instead, to find the match more quickly
-- If you are searching for code within a specific file or set of 2-3 files, use the ${n4} tool instead of the ${tq} tool, to find the match more quickly
+- If you want to read a specific file path, use the ${READ_TOOL_NAME} or ${GLOB_TOOL_NAME} tool instead of the ${tq} tool, to find the match more quickly
+- If you are searching for a specific class definition like "class Foo", use the ${GLOB_TOOL_NAME} tool instead, to find the match more quickly
+- If you are searching for code within a specific file or set of 2-3 files, use the ${READ_TOOL_NAME} tool instead of the ${tq} tool, to find the match more quickly
 - Other tasks that are not related to the agent descriptions above
 
 
@@ -118637,8 +118637,8 @@ Example usage:
 <example>
 user: "Please write a function that checks if a number is prime"
 assistant: Sure let me write a function that checks if a number is prime
-assistant: First let me use the ${U3} tool to write a function that checks if a number is prime
-assistant: I'm going to use the ${U3} tool to write the following code:
+assistant: First let me use the ${WRITE_TOOL_NAME} tool to write a function that checks if a number is prime
+assistant: I'm going to use the ${WRITE_TOOL_NAME} tool to write the following code:
 <code>
 function isPrime(n) {
   if (n <= 1) return false
@@ -118713,8 +118713,8 @@ var Rg = E(() => {
   K4();
   r1();
   ((iX4 = Y6(w61(), 1)),
-    (t5Y = i6(() => x.object({}).passthrough())),
-    (e5Y = i6(() => x.string().describe("Structured output tool result"))));
+    (t5Y = lazyOnce(() => x.object({}).passthrough())),
+    (e5Y = lazyOnce(() => x.string().describe("Structured output tool result"))));
   pk8 = {
     isMcp: !1,
     isEnabled() {
@@ -118793,16 +118793,16 @@ var NQ6 = E(() => {
   ((dG6 = new Set([SU, VG, pG6, tq, TO, CU])),
     (Qk8 = new Set([...dG6])),
     (zW1 = new Set([
-      n4,
-      uy,
-      Bt,
-      k5,
-      HX,
-      Sz,
+      READ_TOOL_NAME,
+      WEB_SEARCH_TOOL_NAME,
+      TODO_WRITE_TOOL_NAME,
+      GREP_TOOL_NAME,
+      WEB_FETCH_TOOL_NAME,
+      GLOB_TOOL_NAME,
       ...$d,
-      Lq,
-      U3,
-      o0,
+      EDIT_TOOL_NAME,
+      WRITE_TOOL_NAME,
+      NOTEBOOK_EDIT_TOOL_NAME,
       _j,
       yX,
       XP,
@@ -118930,7 +118930,7 @@ var i96 = E(() => {
   kA();
   f1();
   K4();
-  oX4 = i6(() =>
+  oX4 = lazyOnce(() =>
     x.object({
       status: x.literal("sub_agent_entered"),
       description: x.string(),
@@ -138387,7 +138387,7 @@ var gG4 = C((Gtw, BG4) => {
 var pG4 = C((Ztw, FG4) => {
   function EwY(A) {
     let Y =
-        " abasep abs absint absolute_real_time acos acosh acot acoth acsc acsch activate addcol add_edge add_edges addmatrices addrow add_vertex add_vertices adjacency_matrix adjoin adjoint af agd airy airy_ai airy_bi airy_dai airy_dbi algsys alg_type alias allroots alphacharp alphanumericp amortization %and annuity_fv annuity_pv antid antidiff AntiDifference append appendfile apply apply1 apply2 applyb1 apropos args arit_amortization arithmetic arithsum array arrayapply arrayinfo arraymake arraysetapply ascii asec asech asin asinh askinteger asksign assoc assoc_legendre_p assoc_legendre_q assume assume_external_byte_order asympa at atan atan2 atanh atensimp atom atvalue augcoefmatrix augmented_lagrangian_method av average_degree backtrace bars barsplot barsplot_description base64 base64_decode bashindices batch batchload bc2 bdvac belln benefit_cost bern bernpoly bernstein_approx bernstein_expand bernstein_poly bessel bessel_i bessel_j bessel_k bessel_simplify bessel_y beta beta_incomplete beta_incomplete_generalized beta_incomplete_regularized bezout bfallroots bffac bf_find_root bf_fmin_cobyla bfhzeta bfloat bfloatp bfpsi bfpsi0 bfzeta biconnected_components bimetric binomial bipartition block blockmatrixp bode_gain bode_phase bothcoef box boxplot boxplot_description break bug_report build_info|10 buildq build_sample burn cabs canform canten cardinality carg cartan cartesian_product catch cauchy_matrix cbffac cdf_bernoulli cdf_beta cdf_binomial cdf_cauchy cdf_chi2 cdf_continuous_uniform cdf_discrete_uniform cdf_exp cdf_f cdf_gamma cdf_general_finite_discrete cdf_geometric cdf_gumbel cdf_hypergeometric cdf_laplace cdf_logistic cdf_lognormal cdf_negative_binomial cdf_noncentral_chi2 cdf_noncentral_student_t cdf_normal cdf_pareto cdf_poisson cdf_rank_sum cdf_rayleigh cdf_signed_rank cdf_student_t cdf_weibull cdisplay ceiling central_moment cequal cequalignore cf cfdisrep cfexpand cgeodesic cgreaterp cgreaterpignore changename changevar chaosgame charat charfun charfun2 charlist charp charpoly chdir chebyshev_t chebyshev_u checkdiv check_overlaps chinese cholesky christof chromatic_index chromatic_number cint circulant_graph clear_edge_weight clear_rules clear_vertex_label clebsch_gordan clebsch_graph clessp clesspignore close closefile cmetric coeff coefmatrix cograd col collapse collectterms columnop columnspace columnswap columnvector combination combine comp2pui compare compfile compile compile_file complement_graph complete_bipartite_graph complete_graph complex_number_p components compose_functions concan concat conjugate conmetderiv connected_components connect_vertices cons constant constantp constituent constvalue cont2part content continuous_freq contortion contour_plot contract contract_edge contragrad contrib_ode convert coord copy copy_file copy_graph copylist copymatrix cor cos cosh cot coth cov cov1 covdiff covect covers crc24sum create_graph create_list csc csch csetup cspline ctaylor ct_coordsys ctransform ctranspose cube_graph cuboctahedron_graph cunlisp cv cycle_digraph cycle_graph cylindrical days360 dblint deactivate declare declare_constvalue declare_dimensions declare_fundamental_dimensions declare_fundamental_units declare_qty declare_translated declare_unit_conversion declare_units declare_weights decsym defcon define define_alt_display define_variable defint defmatch defrule defstruct deftaylor degree_sequence del delete deleten delta demo demoivre denom depends derivdegree derivlist describe desolve determinant dfloat dgauss_a dgauss_b dgeev dgemm dgeqrf dgesv dgesvd diag diagmatrix diag_matrix diagmatrixp diameter diff digitcharp dimacs_export dimacs_import dimension dimensionless dimensions dimensions_as_list direct directory discrete_freq disjoin disjointp disolate disp dispcon dispform dispfun dispJordan display disprule dispterms distrib divide divisors divsum dkummer_m dkummer_u dlange dodecahedron_graph dotproduct dotsimp dpart draw draw2d draw3d drawdf draw_file draw_graph dscalar echelon edge_coloring edge_connectivity edges eigens_by_jacobi eigenvalues eigenvectors eighth einstein eivals eivects elapsed_real_time elapsed_run_time ele2comp ele2polynome ele2pui elem elementp elevation_grid elim elim_allbut eliminate eliminate_using ellipse elliptic_e elliptic_ec elliptic_eu elliptic_f elliptic_kc elliptic_pi ematrix empty_graph emptyp endcons entermatrix entertensor entier equal equalp equiv_classes erf erfc erf_generalized erfi errcatch error errormsg errors euler ev eval_string evenp every evolution evolution2d evundiff example exp expand expandwrt expandwrt_factored expint expintegral_chi expintegral_ci expintegral_e expintegral_e1 expintegral_ei expintegral_e_simplify expintegral_li expintegral_shi expintegral_si explicit explose exponentialize express expt exsec extdiff extract_linear_equations extremal_subset ezgcd %f f90 facsum factcomb factor factorfacsum factorial factorout factorsum facts fast_central_elements fast_linsolve fasttimes featurep fernfale fft fib fibtophi fifth filename_merge file_search file_type fillarray findde find_root find_root_abs find_root_error find_root_rel first fix flatten flength float floatnump floor flower_snark flush flush1deriv flushd flushnd flush_output fmin_cobyla forget fortran fourcos fourexpand fourier fourier_elim fourint fourintcos fourintsin foursimp foursin fourth fposition frame_bracket freeof freshline fresnel_c fresnel_s from_adjacency_matrix frucht_graph full_listify fullmap fullmapl fullratsimp fullratsubst fullsetify funcsolve fundamental_dimensions fundamental_units fundef funmake funp fv g0 g1 gamma gamma_greek gamma_incomplete gamma_incomplete_generalized gamma_incomplete_regularized gauss gauss_a gauss_b gaussprob gcd gcdex gcdivide gcfac gcfactor gd generalized_lambert_w genfact gen_laguerre genmatrix gensym geo_amortization geo_annuity_fv geo_annuity_pv geomap geometric geometric_mean geosum get getcurrentdirectory get_edge_weight getenv get_lu_factors get_output_stream_string get_pixel get_plot_option get_tex_environment get_tex_environment_default get_vertex_label gfactor gfactorsum ggf girth global_variances gn gnuplot_close gnuplot_replot gnuplot_reset gnuplot_restart gnuplot_start go Gosper GosperSum gr2d gr3d gradef gramschmidt graph6_decode graph6_encode graph6_export graph6_import graph_center graph_charpoly graph_eigenvalues graph_flow graph_order graph_periphery graph_product graph_size graph_union great_rhombicosidodecahedron_graph great_rhombicuboctahedron_graph grid_graph grind grobner_basis grotzch_graph hamilton_cycle hamilton_path hankel hankel_1 hankel_2 harmonic harmonic_mean hav heawood_graph hermite hessian hgfred hilbertmap hilbert_matrix hipow histogram histogram_description hodge horner hypergeometric i0 i1 %ibes ic1 ic2 ic_convert ichr1 ichr2 icosahedron_graph icosidodecahedron_graph icurvature ident identfor identity idiff idim idummy ieqn %if ifactors iframes ifs igcdex igeodesic_coords ilt image imagpart imetric implicit implicit_derivative implicit_plot indexed_tensor indices induced_subgraph inferencep inference_result infix info_display init_atensor init_ctensor in_neighbors innerproduct inpart inprod inrt integerp integer_partitions integrate intersect intersection intervalp intopois intosum invariant1 invariant2 inverse_fft inverse_jacobi_cd inverse_jacobi_cn inverse_jacobi_cs inverse_jacobi_dc inverse_jacobi_dn inverse_jacobi_ds inverse_jacobi_nc inverse_jacobi_nd inverse_jacobi_ns inverse_jacobi_sc inverse_jacobi_sd inverse_jacobi_sn invert invert_by_adjoint invert_by_lu inv_mod irr is is_biconnected is_bipartite is_connected is_digraph is_edge_in_graph is_graph is_graph_or_digraph ishow is_isomorphic isolate isomorphism is_planar isqrt isreal_p is_sconnected is_tree is_vertex_in_graph items_inference %j j0 j1 jacobi jacobian jacobi_cd jacobi_cn jacobi_cs jacobi_dc jacobi_dn jacobi_ds jacobi_nc jacobi_nd jacobi_ns jacobi_p jacobi_sc jacobi_sd jacobi_sn JF jn join jordan julia julia_set julia_sin %k kdels kdelta kill killcontext kostka kron_delta kronecker_product kummer_m kummer_u kurtosis kurtosis_bernoulli kurtosis_beta kurtosis_binomial kurtosis_chi2 kurtosis_continuous_uniform kurtosis_discrete_uniform kurtosis_exp kurtosis_f kurtosis_gamma kurtosis_general_finite_discrete kurtosis_geometric kurtosis_gumbel kurtosis_hypergeometric kurtosis_laplace kurtosis_logistic kurtosis_lognormal kurtosis_negative_binomial kurtosis_noncentral_chi2 kurtosis_noncentral_student_t kurtosis_normal kurtosis_pareto kurtosis_poisson kurtosis_rayleigh kurtosis_student_t kurtosis_weibull label labels lagrange laguerre lambda lambert_w laplace laplacian_matrix last lbfgs lc2kdt lcharp lc_l lcm lc_u ldefint ldisp ldisplay legendre_p legendre_q leinstein length let letrules letsimp levi_civita lfreeof lgtreillis lhs li liediff limit Lindstedt linear linearinterpol linear_program linear_regression line_graph linsolve listarray list_correlations listify list_matrix_entries list_nc_monomials listoftens listofvars listp lmax lmin load loadfile local locate_matrix_entry log logcontract log_gamma lopow lorentz_gauge lowercasep lpart lratsubst lreduce lriemann lsquares_estimates lsquares_estimates_approximate lsquares_estimates_exact lsquares_mse lsquares_residual_mse lsquares_residuals lsum ltreillis lu_backsub lucas lu_factor %m macroexpand macroexpand1 make_array makebox makefact makegamma make_graph make_level_picture makelist makeOrders make_poly_continent make_poly_country make_polygon make_random_state make_rgb_picture makeset make_string_input_stream make_string_output_stream make_transform mandelbrot mandelbrot_set map mapatom maplist matchdeclare matchfix mat_cond mat_fullunblocker mat_function mathml_display mat_norm matrix matrixmap matrixp matrix_size mattrace mat_trace mat_unblocker max max_clique max_degree max_flow maximize_lp max_independent_set max_matching maybe md5sum mean mean_bernoulli mean_beta mean_binomial mean_chi2 mean_continuous_uniform mean_deviation mean_discrete_uniform mean_exp mean_f mean_gamma mean_general_finite_discrete mean_geometric mean_gumbel mean_hypergeometric mean_laplace mean_logistic mean_lognormal mean_negative_binomial mean_noncentral_chi2 mean_noncentral_student_t mean_normal mean_pareto mean_poisson mean_rayleigh mean_student_t mean_weibull median median_deviation member mesh metricexpandall mgf1_sha1 min min_degree min_edge_cut minfactorial minimalPoly minimize_lp minimum_spanning_tree minor minpack_lsquares minpack_solve min_vertex_cover min_vertex_cut mkdir mnewton mod mode_declare mode_identity ModeMatrix moebius mon2schur mono monomial_dimensions multibernstein_poly multi_display_for_texinfo multi_elem multinomial multinomial_coeff multi_orbit multiplot_mode multi_pui multsym multthru mycielski_graph nary natural_unit nc_degree ncexpt ncharpoly negative_picture neighbors new newcontext newdet new_graph newline newton new_variable next_prime nicedummies niceindices ninth nofix nonarray noncentral_moment nonmetricity nonnegintegerp nonscalarp nonzeroandfreeof notequal nounify nptetrad npv nroots nterms ntermst nthroot nullity nullspace num numbered_boundaries numberp number_to_octets num_distinct_partitions numerval numfactor num_partitions nusum nzeta nzetai nzetar octets_to_number octets_to_oid odd_girth oddp ode2 ode_check odelin oid_to_octets op opena opena_binary openr openr_binary openw openw_binary operatorp opsubst optimize %or orbit orbits ordergreat ordergreatp orderless orderlessp orthogonal_complement orthopoly_recur orthopoly_weight outermap out_neighbors outofpois pade parabolic_cylinder_d parametric parametric_surface parg parGosper parse_string parse_timedate part part2cont partfrac partition partition_set partpol path_digraph path_graph pathname_directory pathname_name pathname_type pdf_bernoulli pdf_beta pdf_binomial pdf_cauchy pdf_chi2 pdf_continuous_uniform pdf_discrete_uniform pdf_exp pdf_f pdf_gamma pdf_general_finite_discrete pdf_geometric pdf_gumbel pdf_hypergeometric pdf_laplace pdf_logistic pdf_lognormal pdf_negative_binomial pdf_noncentral_chi2 pdf_noncentral_student_t pdf_normal pdf_pareto pdf_poisson pdf_rank_sum pdf_rayleigh pdf_signed_rank pdf_student_t pdf_weibull pearson_skewness permanent permut permutation permutations petersen_graph petrov pickapart picture_equalp picturep piechart piechart_description planar_embedding playback plog plot2d plot3d plotdf ploteq plsquares pochhammer points poisdiff poisexpt poisint poismap poisplus poissimp poissubst poistimes poistrim polar polarform polartorect polar_to_xy poly_add poly_buchberger poly_buchberger_criterion poly_colon_ideal poly_content polydecomp poly_depends_p poly_elimination_ideal poly_exact_divide poly_expand poly_expt poly_gcd polygon poly_grobner poly_grobner_equal poly_grobner_member poly_grobner_subsetp poly_ideal_intersection poly_ideal_polysaturation poly_ideal_polysaturation1 poly_ideal_saturation poly_ideal_saturation1 poly_lcm poly_minimization polymod poly_multiply polynome2ele polynomialp poly_normal_form poly_normalize poly_normalize_list poly_polysaturation_extension poly_primitive_part poly_pseudo_divide poly_reduced_grobner poly_reduction poly_saturation_extension poly_s_polynomial poly_subtract polytocompanion pop postfix potential power_mod powerseries powerset prefix prev_prime primep primes principal_components print printf printfile print_graph printpois printprops prodrac product properties propvars psi psubst ptriangularize pui pui2comp pui2ele pui2polynome pui_direct puireduc push put pv qput qrange qty quad_control quad_qag quad_qagi quad_qagp quad_qags quad_qawc quad_qawf quad_qawo quad_qaws quadrilateral quantile quantile_bernoulli quantile_beta quantile_binomial quantile_cauchy quantile_chi2 quantile_continuous_uniform quantile_discrete_uniform quantile_exp quantile_f quantile_gamma quantile_general_finite_discrete quantile_geometric quantile_gumbel quantile_hypergeometric quantile_laplace quantile_logistic quantile_lognormal quantile_negative_binomial quantile_noncentral_chi2 quantile_noncentral_student_t quantile_normal quantile_pareto quantile_poisson quantile_rayleigh quantile_student_t quantile_weibull quartile_skewness quit qunit quotient racah_v racah_w radcan radius random random_bernoulli random_beta random_binomial random_bipartite_graph random_cauchy random_chi2 random_continuous_uniform random_digraph random_discrete_uniform random_exp random_f random_gamma random_general_finite_discrete random_geometric random_graph random_graph1 random_gumbel random_hypergeometric random_laplace random_logistic random_lognormal random_negative_binomial random_network random_noncentral_chi2 random_noncentral_student_t random_normal random_pareto random_permutation random_poisson random_rayleigh random_regular_graph random_student_t random_tournament random_tree random_weibull range rank rat ratcoef ratdenom ratdiff ratdisrep ratexpand ratinterpol rational rationalize ratnumer ratnump ratp ratsimp ratsubst ratvars ratweight read read_array read_binary_array read_binary_list read_binary_matrix readbyte readchar read_hashed_array readline read_list read_matrix read_nested_list readonly read_xpm real_imagpart_to_conjugate realpart realroots rearray rectangle rectform rectform_log_if_constant recttopolar rediff reduce_consts reduce_order region region_boundaries region_boundaries_plus rem remainder remarray rembox remcomps remcon remcoord remfun remfunction remlet remove remove_constvalue remove_dimensions remove_edge remove_fundamental_dimensions remove_fundamental_units remove_plot_option remove_vertex rempart remrule remsym remvalue rename rename_file reset reset_displays residue resolvante resolvante_alternee1 resolvante_bipartite resolvante_diedrale resolvante_klein resolvante_klein3 resolvante_produit_sym resolvante_unitaire resolvante_vierer rest resultant return reveal reverse revert revert2 rgb2level rhs ricci riemann rinvariant risch rk rmdir rncombine romberg room rootscontract round row rowop rowswap rreduce run_testsuite %s save saving scalarp scaled_bessel_i scaled_bessel_i0 scaled_bessel_i1 scalefactors scanmap scatterplot scatterplot_description scene schur2comp sconcat scopy scsimp scurvature sdowncase sec sech second sequal sequalignore set_alt_display setdifference set_draw_defaults set_edge_weight setelmx setequalp setify setp set_partitions set_plot_option set_prompt set_random_state set_tex_environment set_tex_environment_default setunits setup_autoload set_up_dot_simplifications set_vertex_label seventh sexplode sf sha1sum sha256sum shortest_path shortest_weighted_path show showcomps showratvars sierpinskiale sierpinskimap sign signum similaritytransform simp_inequality simplify_sum simplode simpmetderiv simtran sin sinh sinsert sinvertcase sixth skewness skewness_bernoulli skewness_beta skewness_binomial skewness_chi2 skewness_continuous_uniform skewness_discrete_uniform skewness_exp skewness_f skewness_gamma skewness_general_finite_discrete skewness_geometric skewness_gumbel skewness_hypergeometric skewness_laplace skewness_logistic skewness_lognormal skewness_negative_binomial skewness_noncentral_chi2 skewness_noncentral_student_t skewness_normal skewness_pareto skewness_poisson skewness_rayleigh skewness_student_t skewness_weibull slength smake small_rhombicosidodecahedron_graph small_rhombicuboctahedron_graph smax smin smismatch snowmap snub_cube_graph snub_dodecahedron_graph solve solve_rec solve_rec_rat some somrac sort sparse6_decode sparse6_encode sparse6_export sparse6_import specint spherical spherical_bessel_j spherical_bessel_y spherical_hankel1 spherical_hankel2 spherical_harmonic spherical_to_xyz splice split sposition sprint sqfr sqrt sqrtdenest sremove sremovefirst sreverse ssearch ssort sstatus ssubst ssubstfirst staircase standardize standardize_inverse_trig starplot starplot_description status std std1 std_bernoulli std_beta std_binomial std_chi2 std_continuous_uniform std_discrete_uniform std_exp std_f std_gamma std_general_finite_discrete std_geometric std_gumbel std_hypergeometric std_laplace std_logistic std_lognormal std_negative_binomial std_noncentral_chi2 std_noncentral_student_t std_normal std_pareto std_poisson std_rayleigh std_student_t std_weibull stemplot stirling stirling1 stirling2 strim striml strimr string stringout stringp strong_components struve_h struve_l sublis sublist sublist_indices submatrix subsample subset subsetp subst substinpart subst_parallel substpart substring subvar subvarp sum sumcontract summand_to_rec supcase supcontext symbolp symmdifference symmetricp system take_channel take_inference tan tanh taylor taylorinfo taylorp taylor_simplifier taytorat tcl_output tcontract tellrat tellsimp tellsimpafter tentex tenth test_mean test_means_difference test_normality test_proportion test_proportions_difference test_rank_sum test_sign test_signed_rank test_variance test_variance_ratio tex tex1 tex_display texput %th third throw time timedate timer timer_info tldefint tlimit todd_coxeter toeplitz tokens to_lisp topological_sort to_poly to_poly_solve totaldisrep totalfourier totient tpartpol trace tracematrix trace_options transform_sample translate translate_file transpose treefale tree_reduce treillis treinat triangle triangularize trigexpand trigrat trigreduce trigsimp trunc truncate truncated_cube_graph truncated_dodecahedron_graph truncated_icosahedron_graph truncated_tetrahedron_graph tr_warnings_get tube tutte_graph ueivects uforget ultraspherical underlying_graph undiff union unique uniteigenvectors unitp units unit_step unitvector unorder unsum untellrat untimer untrace uppercasep uricci uriemann uvect vandermonde_matrix var var1 var_bernoulli var_beta var_binomial var_chi2 var_continuous_uniform var_discrete_uniform var_exp var_f var_gamma var_general_finite_discrete var_geometric var_gumbel var_hypergeometric var_laplace var_logistic var_lognormal var_negative_binomial var_noncentral_chi2 var_noncentral_student_t var_normal var_pareto var_poisson var_rayleigh var_student_t var_weibull vector vectorpotential vectorsimp verbify vers vertex_coloring vertex_connectivity vertex_degree vertex_distance vertex_eccentricity vertex_in_degree vertex_out_degree vertices vertices_to_cycle vertices_to_path %w weyl wheel_graph wiener_index wigner_3j wigner_6j wigner_9j with_stdout write_binary_data writebyte write_data writefile wronskian xreduce xthru %y Zeilberger zeroequiv zerofor zeromatrix zeromatrixp zeta zgeev zheev zlange zn_add_table zn_carmichael_lambda zn_characteristic_factors zn_determinant zn_factor_generators zn_invert_by_lu zn_log zn_mult_table absboxchar activecontexts adapt_depth additive adim aform algebraic algepsilon algexact aliases allbut all_dotsimp_denoms allocation allsym alphabetic animation antisymmetric arrays askexp assume_pos assume_pos_pred assumescalar asymbol atomgrad atrig1 axes axis_3d axis_bottom axis_left axis_right axis_top azimuth background background_color backsubst berlefact bernstein_explicit besselexpand beta_args_sum_to_integer beta_expand bftorat bftrunc bindtest border boundaries_array box boxchar breakup %c capping cauchysum cbrange cbtics center cflength cframe_flag cnonmet_flag color color_bar color_bar_tics colorbox columns commutative complex cone context contexts contour contour_levels cosnpiflag ctaypov ctaypt ctayswitch ctayvar ct_coords ctorsion_flag ctrgsimp cube current_let_rule_package cylinder data_file_name debugmode decreasing default_let_rule_package delay dependencies derivabbrev derivsubst detout diagmetric diff dim dimensions dispflag display2d|10 display_format_internal distribute_over doallmxops domain domxexpt domxmxops domxnctimes dontfactor doscmxops doscmxplus dot0nscsimp dot0simp dot1simp dotassoc dotconstrules dotdistrib dotexptsimp dotident dotscrules draw_graph_program draw_realpart edge_color edge_coloring edge_partition edge_type edge_width %edispflag elevation %emode endphi endtheta engineering_format_floats enhanced3d %enumer epsilon_lp erfflag erf_representation errormsg error_size error_syms error_type %e_to_numlog eval even evenfun evflag evfun ev_point expandwrt_denom expintexpand expintrep expon expop exptdispflag exptisolate exptsubst facexpand facsum_combine factlim factorflag factorial_expand factors_only fb feature features file_name file_output_append file_search_demo file_search_lisp file_search_maxima|10 file_search_tests file_search_usage file_type_lisp file_type_maxima|10 fill_color fill_density filled_func fixed_vertices flipflag float2bf font font_size fortindent fortspaces fpprec fpprintprec functions gamma_expand gammalim gdet genindex gensumnum GGFCFMAX GGFINFINITY globalsolve gnuplot_command gnuplot_curve_styles gnuplot_curve_titles gnuplot_default_term_command gnuplot_dumb_term_command gnuplot_file_args gnuplot_file_name gnuplot_out_file gnuplot_pdf_term_command gnuplot_pm3d gnuplot_png_term_command gnuplot_postamble gnuplot_preamble gnuplot_ps_term_command gnuplot_svg_term_command gnuplot_term gnuplot_view_args Gosper_in_Zeilberger gradefs grid grid2d grind halfangles head_angle head_both head_length head_type height hypergeometric_representation %iargs ibase icc1 icc2 icounter idummyx ieqnprint ifb ifc1 ifc2 ifg ifgi ifr iframe_bracket_form ifri igeowedge_flag ikt1 ikt2 imaginary inchar increasing infeval infinity inflag infolists inm inmc1 inmc2 intanalysis integer integervalued integrate_use_rootsof integration_constant integration_constant_counter interpolate_color intfaclim ip_grid ip_grid_in irrational isolate_wrt_times iterations itr julia_parameter %k1 %k2 keepfloat key key_pos kinvariant kt label label_alignment label_orientation labels lassociative lbfgs_ncorrections lbfgs_nfeval_max leftjust legend letrat let_rule_packages lfg lg lhospitallim limsubst linear linear_solver linechar linel|10 linenum line_type linewidth line_width linsolve_params linsolvewarn lispdisp listarith listconstvars listdummyvars lmxchar load_pathname loadprint logabs logarc logcb logconcoeffp logexpand lognegint logsimp logx logx_secondary logy logy_secondary logz lriem m1pbranch macroexpansion macros mainvar manual_demo maperror mapprint matrix_element_add matrix_element_mult matrix_element_transpose maxapplydepth maxapplyheight maxima_tempdir|10 maxima_userdir|10 maxnegex MAX_ORD maxposex maxpsifracdenom maxpsifracnum maxpsinegint maxpsiposint maxtayorder mesh_lines_color method mod_big_prime mode_check_errorp mode_checkp mode_check_warnp mod_test mod_threshold modular_linear_solver modulus multiplicative multiplicities myoptions nary negdistrib negsumdispflag newline newtonepsilon newtonmaxiter nextlayerfactor niceindicespref nm nmc noeval nolabels nonegative_lp noninteger nonscalar noun noundisp nouns np npi nticks ntrig numer numer_pbranch obase odd oddfun opacity opproperties opsubst optimprefix optionset orientation origin orthopoly_returns_intervals outative outchar packagefile palette partswitch pdf_file pfeformat phiresolution %piargs piece pivot_count_sx pivot_max_sx plot_format plot_options plot_realpart png_file pochhammer_max_index points pointsize point_size points_joined point_type poislim poisson poly_coefficient_ring poly_elimination_order polyfactor poly_grobner_algorithm poly_grobner_debug poly_monomial_order poly_primary_elimination_order poly_return_term_list poly_secondary_elimination_order poly_top_reduction_only posfun position powerdisp pred prederror primep_number_of_tests product_use_gamma program programmode promote_float_to_bigfloat prompt proportional_axes props psexpand ps_file radexpand radius radsubstflag rassociative ratalgdenom ratchristof ratdenomdivide rateinstein ratepsilon ratfac rational ratmx ratprint ratriemann ratsimpexpons ratvarswitch ratweights ratweyl ratwtlvl real realonly redraw refcheck resolution restart resultant ric riem rmxchar %rnum_list rombergabs rombergit rombergmin rombergtol rootsconmode rootsepsilon run_viewer same_xy same_xyz savedef savefactors scalar scalarmatrixp scale scale_lp setcheck setcheckbreak setval show_edge_color show_edges show_edge_type show_edge_width show_id show_label showtime show_vertex_color show_vertex_size show_vertex_type show_vertices show_weight simp simplified_output simplify_products simpproduct simpsum sinnpiflag solvedecomposes solveexplicit solvefactors solvenullwarn solveradcan solvetrigwarn space sparse sphere spring_embedding_depth sqrtdispflag stardisp startphi starttheta stats_numer stringdisp structures style sublis_apply_lambda subnumsimp sumexpand sumsplitfact surface surface_hide svg_file symmetric tab taylordepth taylor_logexpand taylor_order_coefficients taylor_truncate_polynomials tensorkill terminal testsuite_files thetaresolution timer_devalue title tlimswitch tr track transcompile transform transform_xy translate_fast_arrays transparent transrun tr_array_as_ref tr_bound_function_applyp tr_file_tty_messagesp tr_float_can_branch_complex tr_function_call_default trigexpandplus trigexpandtimes triginverses trigsign trivial_solutions tr_numer tr_optimize_max_loop tr_semicompile tr_state_vars tr_warn_bad_function_calls tr_warn_fexpr tr_warn_meval tr_warn_mode tr_warn_undeclared tr_warn_undefined_variable tstep ttyoff tube_extremes ufg ug %unitexpand unit_vectors uric uriem use_fast_arrays user_preamble usersetunits values vect_cross verbose vertex_color vertex_coloring vertex_partition vertex_size vertex_type view warnings weyl width windowname windowtitle wired_surface wireframe xaxis xaxis_color xaxis_secondary xaxis_type xaxis_width xlabel xlabel_secondary xlength xrange xrange_secondary xtics xtics_axis xtics_rotate xtics_rotate_secondary xtics_secondary xtics_secondary_axis xu_grid x_voxel xy_file xyplane xy_scale yaxis yaxis_color yaxis_secondary yaxis_type yaxis_width ylabel ylabel_secondary ylength yrange yrange_secondary ytics ytics_axis ytics_rotate ytics_rotate_secondary ytics_secondary ytics_secondary_axis yv_grid y_voxel yx_ratio zaxis zaxis_color zaxis_type zaxis_width zeroa zerob zerobern zeta%pi zlabel zlabel_rotate zlength zmin zn_primroot_limit zn_primroot_pretest",
+        " abasep abs absint absolute_real_time acos acosh acot acoth acsc acsch activate addcol add_edge add_edges addmatrices addrow add_vertex add_vertices adjacency_matrix adjoin adjoint af agd airy airy_ai airy_bi airy_dai airy_dbi algsys alg_type alias allroots alphacharp alphanumericp amortization %and annuity_fv annuity_pv antid antidiff AntiDifference append appendfile apply apply1 apply2 applyb1 apropos args arit_amortization arithmetic arithsum array arrayapply arrayinfo arraymake arraysetapply ascii asec asech asin asinh askinteger asksign assoc assoc_legendre_p assoc_legendre_q assume assume_external_byte_order asympa at atan atan2 atanh atensimp atom atvalue augcoefmatrix augmented_lagrangian_method av average_degree backtrace bars barsplot barsplot_description base64 base64_decode bashindices batch batchload bc2 bdvac belln benefit_cost bern bernpoly bernstein_approx bernstein_expand bernstein_poly bessel bessel_i bessel_j bessel_k bessel_simplify bessel_y beta beta_incomplete beta_incomplete_generalized beta_incomplete_regularized bezout bfallroots bffac bf_find_root bf_fmin_cobyla bfhzeta bfloat bfloatp bfpsi bfpsi0 bfzeta biconnected_components bimetric binomial bipartition block blockmatrixp bode_gain bode_phase bothcoef box boxplot boxplot_description break bug_report build_info|10 buildq build_sample burn cabs canform canten cardinality carg cartan cartesian_product catch cauchy_matrix cbffac cdf_bernoulli cdf_beta cdf_binomial cdf_cauchy cdf_chi2 cdf_continuous_uniform cdf_discrete_uniform cdf_exp cdf_f cdf_gamma cdf_general_finite_discrete cdf_geometric cdf_gumbel cdf_hypergeometric cdf_laplace cdf_logistic cdf_lognormal cdf_negative_binomial cdf_noncentral_chi2 cdf_noncentral_student_t cdf_normal cdf_pareto cdf_poisson cdf_rank_sum cdf_rayleigh cdf_signed_rank cdf_student_t cdf_weibull cdisplay ceiling central_moment cequal cequalignore cf cfdisrep cfexpand cgeodesic cgreaterp cgreaterpignore changename changevar chaosgame charat charfun charfun2 charlist charp charpoly chdir chebyshev_t chebyshev_u checkdiv check_overlaps chinese cholesky christof chromatic_index chromatic_number cint circulant_graph clear_edge_weight clear_rules clear_vertex_label clebsch_gordan clebsch_graph clessp clesspignore close closefile cmetric coeff coefmatrix cograd col collapse collectterms columnop columnspace columnswap columnvector combination combine comp2pui compare compfile compile compile_file complement_graph complete_bipartite_graph complete_graph complex_number_p components compose_functions concan concat conjugate conmetderiv connected_components connect_vertices cons constant constantp constituent constvalue cont2part content continuous_freq contortion contour_plot contract contract_edge contragrad contrib_ode convert coord copy copy_file copy_graph copylist copymatrix cor cos cosh cot coth cov cov1 covdiff covect covers crc24sum create_graph create_list csc csch csetup cspline ctaylor ct_coordsys ctransform ctranspose cube_graph cuboctahedron_graph cunlisp cv cycle_digraph cycle_graph cylindrical days360 dblint deactivate declare declare_constvalue declare_dimensions declare_fundamental_dimensions declare_fundamental_units declare_qty declare_translated declare_unit_conversion declare_units declare_weights decsym defcon define define_alt_display define_variable defint defmatch defrule defstruct deftaylor degree_sequence del delete deleten delta demo demoivre denom depends derivdegree derivlist describe desolve determinant dfloat dgauss_a dgauss_b dgeev dgemm dgeqrf dgesv dgesvd diag diagmatrix diag_matrix diagmatrixp diameter diff digitcharp dimacs_export dimacs_import dimension dimensionless dimensions dimensions_as_list direct directory discrete_freq disjoin disjointp disolate disp dispcon dispform dispfun dispJordan display disprule dispterms distrib divide divisors divsum dkummer_m dkummer_u dlange dodecahedron_graph dotproduct dotsimp dpart draw draw2d draw3d drawdf draw_file draw_graph dscalar echelon edge_coloring edge_connectivity edges eigens_by_jacobi eigenvalues eigenvectors eighth einstein eivals eivects elapsed_real_time elapsed_run_time ele2comp ele2polynome ele2pui elem elementp elevation_grid elim elim_allbut eliminate eliminate_using ellipse elliptic_e elliptic_ec elliptic_eu elliptic_f elliptic_kc elliptic_pi ematrix empty_graph emptyp endcons entermatrix entertensor entier equal equalp equiv_classes erf erfc erf_generalized erfi errcatch error errormsg errors euler ev eval_string evenp every evolution evolution2d evundiff example exp expand expandwrt expandwrt_factored expint expintegral_chi expintegral_ci expintegral_e expintegral_e1 expintegral_ei expintegral_e_simplify expintegral_li expintegral_shi expintegral_si explicit explose exponentialize express expt exsec extdiff extract_linear_equations extremal_subset ezgcd %f f90 facsum factcomb factor factorfacsum factorial factorout factorsum facts fast_central_elements fast_linsolve fasttimes featurep fernfale fft fib fibtophi fifth filename_merge file_search file_type fillarray findde find_root find_root_abs find_root_error find_root_rel first fix flatten flength float floatnump floor flower_snark flush flush1deriv flushd flushnd flush_output fmin_cobyla forget fortran fourcos fourexpand fourier fourier_elim fourint fourintcos fourintsin foursimp foursin fourth fposition frame_bracket freeof freshline fresnel_c fresnel_s from_adjacency_matrix frucht_graph full_listify fullmap fullmapl fullratsimp fullratsubst fullsetify funcsolve fundamental_dimensions fundamental_units fundef funmake funp fv g0 g1 gamma gamma_greek gamma_incomplete gamma_incomplete_generalized gamma_incomplete_regularized gauss gauss_a gauss_b gaussprob gcd gcdex gcdivide gcfac gcfactor gd generalized_lambert_w genfact gen_laguerre genmatrix gensym geo_amortization geo_annuity_fv geo_annuity_pv geomap geometric geometric_mean geosum get getcurrentdirectory get_edge_weight getenv get_lu_factors get_output_stream_string get_pixel get_plot_option get_tex_environment get_tex_environment_default get_vertex_label gfactor gfactorsum ggf girth global_variances gn gnuplot_close gnuplot_replot gnuplot_reset gnuplot_restart gnuplot_start go Gosper GosperSum gr2d gr3d gradef gramschmidt graph6_decode graph6_encode graph6_export graph6_import graph_center graph_charpoly graph_eigenvalues graph_flow graph_order graph_periphery graph_product graph_size graph_union great_rhombicosidodecahedron_graph great_rhombicuboctahedron_graph grid_graph grind grobner_basis grotzch_graph hamilton_cycle hamilton_path hankel hankel_1 hankel_2 harmonic harmonic_mean hav heawood_graph hermite hessian hgfred hilbertmap hilbert_matrix hipow histogram histogram_description hodge horner hypergeometric i0 i1 %ibes ic1 ic2 ic_convert ichr1 ichr2 icosahedron_graph icosidodecahedron_graph icurvature ident identfor identity idiff idim idummy ieqn %if ifactors iframes ifs igcdex igeodesic_coords ilt image imagpart imetric implicit implicit_derivative implicit_plot indexed_tensor indices induced_subgraph inferencep inference_result infix info_display init_atensor init_ctensor in_neighbors innerproduct inpart inprod inrt integerp integer_partitions integrate intersect intersection intervalp intopois intosum invariant1 invariant2 inverse_fft inverse_jacobi_cd inverse_jacobi_cn inverse_jacobi_cs inverse_jacobi_dc inverse_jacobi_dn inverse_jacobi_ds inverse_jacobi_nc inverse_jacobi_nd inverse_jacobi_ns inverse_jacobi_sc inverse_jacobi_sd inverse_jacobi_sn invert invert_by_adjoint invert_by_lu inv_mod irr is is_biconnected is_bipartite is_connected is_digraph is_edge_in_graph is_graph is_graph_or_digraph ishow is_isomorphic isolate isomorphism is_planar isqrt isreal_p is_sconnected is_tree is_vertex_in_graph items_inference %j j0 j1 jacobi jacobian jacobi_cd jacobi_cn jacobi_cs jacobi_dc jacobi_dn jacobi_ds jacobi_nc jacobi_nd jacobi_ns jacobi_p jacobi_sc jacobi_sd jacobi_sn JF jn join jordan julia julia_set julia_sin %k kdels kdelta kill killcontext kostka kron_delta kronecker_product kummer_m kummer_u kurtosis kurtosis_bernoulli kurtosis_beta kurtosis_binomial kurtosis_chi2 kurtosis_continuous_uniform kurtosis_discrete_uniform kurtosis_exp kurtosis_f kurtosis_gamma kurtosis_general_finite_discrete kurtosis_geometric kurtosis_gumbel kurtosis_hypergeometric kurtosis_laplace kurtosis_logistic kurtosis_lognormal kurtosis_negative_binomial kurtosis_noncentral_chi2 kurtosis_noncentral_student_t kurtosis_normal kurtosis_pareto kurtosis_poisson kurtosis_rayleigh kurtosis_student_t kurtosis_weibull label labels lagrange laguerre lambda lambert_w laplace laplacian_matrix last lbfgs lc2kdt lcharp lc_l lcm lc_u ldefint ldisp ldisplay legendre_p legendre_q leinstein length let letrules letsimp levi_civita lfreeof lgtreillis lhs li liediff limit Lindstedt linear linearinterpol linear_program linear_regression line_graph linsolve listarray list_correlations listify list_matrix_entries list_nc_monomials listoftens listofvars listp lmax lmin load loadfile local locate_matrix_entry log logcontract log_gamma lopow lorentz_gauge lowercasep lpart lratsubst lreduce lriemann lsquares_estimates lsquares_estimates_approximate lsquares_estimates_exact lsquares_mse lsquares_residual_mse lsquares_residuals lsum ltreillis lu_backsub lucas lu_factor %m macroexpand macroexpand1 make_array makebox makefact makegamma make_graph make_level_picture makelist makeOrders make_poly_continent make_poly_country make_polygon make_random_state make_rgb_picture makeset make_string_input_stream make_string_output_stream make_transform mandelbrot mandelbrot_set map mapatom maplist matchdeclare matchfix mat_cond mat_fullunblocker mat_function mathml_display mat_norm matrix matrixmap matrixp matrix_size mattrace mat_trace mat_unblocker max max_clique max_degree max_flow maximize_lp max_independent_set max_matching maybe md5sum mean mean_bernoulli mean_beta mean_binomial mean_chi2 mean_continuous_uniform mean_deviation mean_discrete_uniform mean_exp mean_f mean_gamma mean_general_finite_discrete mean_geometric mean_gumbel mean_hypergeometric mean_laplace mean_logistic mean_lognormal mean_negative_binomial mean_noncentral_chi2 mean_noncentral_student_t mean_normal mean_pareto mean_poisson mean_rayleigh mean_student_t mean_weibull median median_deviation member mesh metricexpandall mgf1_sha1 min min_degree min_edge_cut minfactorial minimalPoly minimize_lp minimum_spanning_tree minor minpack_lsquares minpack_solve min_vertex_cover min_vertex_cut mkdir mnewton mod mode_declare mode_identity ModeMatrix moebius mon2schur mono monomial_dimensions multibernstein_poly multi_display_for_texinfo multi_elem multinomial multinomial_coeff multi_orbit multiplot_mode multi_pui multsym multthru mycielski_graph nary natural_unit nc_degree ncexpt ncharpoly negative_picture neighbors new newcontext newdet new_graph newline newton new_variable next_prime nicedummies niceindices ninth nofix nonarray noncentral_moment nonmetricity nonnegintegerp nonscalarp nonzeroandfreeof notequal nounify nptetrad npv nroots nterms ntermst nthroot nullity nullspace num numbered_boundaries numberp number_to_octets num_distinct_partitions numerval numfactor num_partitions nusum nzeta nzetai nzetar octets_to_number octets_to_oid odd_girth oddp ode2 ode_check odelin oid_to_octets op opena opena_binary openr openr_binary openw openw_binary operatorp opsubst optimize %or orbit orbits ordergreat ordergreatp orderless orderlessp orthogonal_complement orthopoly_recur orthopoly_weight outermap out_neighbors outofpois pade parabolic_cylinder_d parametric parametric_surface parg parGosper parse_string parse_timedate part part2cont partfrac partition partition_set partpol path_digraph path_graph pathname_directory pathname_name pathname_type pdf_bernoulli pdf_beta pdf_binomial pdf_cauchy pdf_chi2 pdf_continuous_uniform pdf_discrete_uniform pdf_exp pdf_f pdf_gamma pdf_general_finite_discrete pdf_geometric pdf_gumbel pdf_hypergeometric pdf_laplace pdf_logistic pdf_lognormal pdf_negative_binomial pdf_noncentral_chi2 pdf_noncentral_student_t pdf_normal pdf_pareto pdf_poisson pdf_rank_sum pdf_rayleigh pdf_signed_rank pdf_student_t pdf_weibull pearson_skewness permanent permut permutation permutations petersen_graph petrov pickapart picture_equalp picturep piechart piechart_description planar_embedding playback plog plot2d plot3d plotdf ploteq plsquares pochhammer points poisdiff poisexpt poisint poismap poisplus poissimp poissubst poistimes poistrim polar polarform polartorect polar_to_xy poly_add poly_buchberger poly_buchberger_criterion poly_colon_ideal poly_content polydecomp poly_depends_p poly_elimination_ideal poly_exact_divide poly_expand poly_expt poly_gcd polygon poly_grobner poly_grobner_equal poly_grobner_member poly_grobner_subsetp poly_ideal_intersection poly_ideal_polysaturation poly_ideal_polysaturation1 poly_ideal_saturation poly_ideal_saturation1 poly_lcm poly_minimization polymod poly_multiply polynome2ele polynomialp poly_normal_form poly_normalize poly_normalize_list poly_polysaturation_extension poly_primitive_part poly_pseudo_divide poly_reduced_grobner poly_reduction poly_saturation_extension poly_s_polynomial poly_subtract polytocompanion pop postfix potential power_mod powerseries powerset prefix prev_prime primep primes principal_components print printf printfile print_graph printpois printprops prodrac product properties propvars psi psubst ptriangularize pui pui2comp pui2ele pui2polynome pui_direct puireduc push put pv qput qrange qty quad_control quad_qag quad_qagi quad_qagp quad_qags quad_qawc quad_qawf quad_qawo quad_qaws quadrilateral quantile quantile_bernoulli quantile_beta quantile_binomial quantile_cauchy quantile_chi2 quantile_continuous_uniform quantile_discrete_uniform quantile_exp quantile_f quantile_gamma quantile_general_finite_discrete quantile_geometric quantile_gumbel quantile_hypergeometric quantile_laplace quantile_logistic quantile_lognormal quantile_negative_binomial quantile_noncentral_chi2 quantile_noncentral_student_t quantile_normal quantile_pareto quantile_poisson quantile_rayleigh quantile_student_t quantile_weibull quartile_skewness quit qunit quotient racah_v racah_w radcan radius random random_bernoulli random_beta random_binomial random_bipartite_graph random_cauchy random_chi2 random_continuous_uniform random_digraph random_discrete_uniform random_exp random_f random_gamma random_general_finite_discrete random_geometric random_graph random_graph1 random_gumbel random_hypergeometric random_laplace random_logistic random_lognormal random_negative_binomial random_network random_noncentral_chi2 random_noncentral_student_t random_normal random_pareto random_permutation random_poisson random_rayleigh random_regular_graph random_student_t random_tournament random_tree random_weibull range rank rat ratcoef ratdenom ratdiff ratdisrep ratexpand ratinterpol rational rationalize ratnumer ratnump ratp ratsimp ratsubst ratvars ratweight read read_array read_binary_array read_binary_list read_binary_matrix readbyte readchar read_hashed_array readline read_list read_matrix read_nested_list readonly read_xpm real_imagpart_to_conjugate realpart realroots rearray rectangle rectform rectform_log_if_constant recttopolar rediff reduce_consts reduce_order region region_boundaries region_boundaries_plus rem remainder remarray rembox remcomps remcon remcoord remfun remfunction remlet remove remove_constvalue remove_dimensions remove_edge remove_fundamental_dimensions remove_fundamental_units remove_plot_option remove_vertex rempart remrule remsym remvalue rename rename_file reset reset_displays residue resolvante resolvante_alternee1 resolvante_bipartite resolvante_diedrale resolvante_klein resolvante_klein3 resolvante_produit_sym resolvante_unitaire resolvante_vierer rest resultant return reveal reverse revert revert2 rgb2level rhs ricci riemann rinvariant risch rk rmdir rncombine romberg room rootscontract round row rowop rowswap rreduce run_testsuite %s save saving scalarp scaled_bessel_i scaled_bessel_i0 scaled_bessel_i1 scalefactors scanmap scatterplot scatterplot_description scene schur2comp sconcat scopy scsimp scurvature sdowncase sec sech second sequal sequalignore set_alt_display setdifference set_draw_defaults set_edge_weight setelmx setequalp setify setp set_partitions set_plot_option set_prompt set_random_state set_tex_environment set_tex_environment_default setunits setup_autoload set_up_dot_simplifications set_vertex_label seventh sexplode sf sha1sum sha256sum shortest_path shortest_weighted_path show showcomps showratvars sierpinskiale sierpinskimap sign signum similaritytransform simp_inequality simplify_sum simplode simpmetderiv simtran sin sinh sinsert sinvertcase sixth skewness skewness_bernoulli skewness_beta skewness_binomial skewness_chi2 skewness_continuous_uniform skewness_discrete_uniform skewness_exp skewness_f skewness_gamma skewness_general_finite_discrete skewness_geometric skewness_gumbel skewness_hypergeometric skewness_laplace skewness_logistic skewness_lognormal skewness_negative_binomial skewness_noncentral_chi2 skewness_noncentral_student_t skewness_normal skewness_pareto skewness_poisson skewness_rayleigh skewness_student_t skewness_weibull slength smake small_rhombicosidodecahedron_graph small_rhombicuboctahedron_graph smax smin smismatch snowmap snub_cube_graph snub_dodecahedron_graph solve solve_rec solve_rec_rat some somrac sort sparse6_decode sparse6_encode sparse6_export sparse6_import specint spherical spherical_bessel_j spherical_bessel_y spherical_hankel1 spherical_hankel2 spherical_harmonic spherical_to_xyz splice split sposition sprint sqfr sqrt sqrtdenest sremove sremovefirst sreverse ssearch ssort sstatus ssubst ssubstfirst staircase standardize standardize_inverse_trig starplot starplot_description status std std1 std_bernoulli std_beta std_binomial std_chi2 std_continuous_uniform std_discrete_uniform std_exp std_f std_gamma std_general_finite_discrete std_geometric std_gumbel std_hypergeometric std_laplace std_logistic std_lognormal std_negative_binomial std_noncentral_chi2 std_noncentral_student_t std_normal std_pareto std_poisson std_rayleigh std_student_t std_weibull stemplot stirling stirling1 stirling2 strim striml strimr string stringout stringp strong_components struve_h struve_l sublis sublist sublist_indices submatrix subsample subset subsetp subst substinpart subst_parallel substpart substring subvar subvarp sum sumcontract summand_to_rec supcase supcontext symbolp symmdifference symmetricp system take_channel take_inference tan tanh taylor taylorinfo taylorp taylor_simplifier taytorat tcl_output tcontract tellrat tellsimp tellsimpafter tentex tenth test_mean test_means_difference test_normality test_proportion test_proportions_difference test_rank_sum test_sign test_signed_rank test_variance test_variance_ratio tex tex1 tex_display texput %th third throw time timedate timer timer_info tldefint tlimit todd_coxeter toeplitz tokens to_lisp topological_sort to_poly to_poly_solve totaldisrep totalfourier totient tpartpol trace tracematrix trace_options transform_sample translate translate_file transpose treefale tree_reduce treillis treinat triangle triangularize trigexpand trigrat trigreduce trigsimp trunc truncate truncated_cube_graph truncated_dodecahedron_graph truncated_icosahedron_graph truncated_tetrahedron_graph tr_warnings_get tube tutte_graph ueivects uforget ultraspherical underlying_graph undiff union unique uniteigenvectors unitp units unit_step unitvector unorder unsum untellrat untimer untrace uppercasep uricci uriemann uvect vandermonde_matrix var var1 var_bernoulli var_beta var_binomial var_chi2 var_continuous_uniform var_discrete_uniform var_exp var_f var_gamma var_general_finite_discrete var_geometric var_gumbel var_hypergeometric var_laplace var_logistic var_lognormal var_negative_binomial var_noncentral_chi2 var_noncentral_student_t var_normal var_pareto var_poisson var_rayleigh var_student_t var_weibull vector vectorpotential vectorsimp verbify vers vertex_coloring vertex_connectivity vertex_degree vertex_distance vertex_eccentricity vertex_in_degree vertex_out_degree vertices vertices_to_cycle vertices_to_path %w weyl wheel_graph wiener_index wigner_3j wigner_6j wigner_9j with_stdout write_binary_data writebyte write_data writefile wronskian xreduce xthru %y Zeilberger zeroequiv zerofor zeromatrix zeromatrixp zeta zgeev zheev zlange zn_add_table zn_carmichael_lambda zn_characteristic_factors zn_determinant zn_factor_generators zn_invert_by_lu zn_log zn_mult_table absboxchar activecontexts adapt_depth additive adim aform algebraic algepsilon algexact aliases allbut all_dotsimp_denoms allocation allsym alphabetic animation antisymmetric arrays askexp assume_pos assume_pos_pred assumescalar asymbol atomgrad atrig1 axes axis_3d axis_bottom axis_left axis_right axis_top azimuth background background_color backsubst berlefact bernstein_explicit besselexpand beta_args_sum_to_integer beta_expand bftorat bftrunc bindtest border boundaries_array box boxchar breakup %c capping cauchysum cbrange cbtics center cflength cframe_flag cnonmet_flag color color_bar color_bar_tics colorbox columns commutative complex cone context contexts contour contour_levels cosnpiflag ctaypov ctaypt ctayswitch ctayvar ct_coords ctorsion_flag ctrgsimp cube current_let_rule_package cylinder data_file_name debugmode decreasing default_let_rule_package delay dependencies derivabbrev derivsubst detout diagmetric diff dim dimensions dispflag display2d|10 display_format_internal distribute_over doallmxops domain domxexpt domxmxops domxnctimes dontfactor doscmxops doscmxplus dot0nscsimp dot0simp dot1simp dotassoc dotconstrules dotdistrib dotexptsimp dotident dotscrules draw_graph_program draw_realpart edge_color edge_coloring edge_partition edge_type edge_width %edispflag elevation %emode endphi endtheta engineering_format_floats enhanced3d %enumer epsilon_lp erfflag erf_representation errormsg error_size error_syms error_type %e_to_numlog eval even evenfun evflag evfun ev_point expandwrt_denom expintexpand expintrep expon expop exptdispflag exptisolate exptsubst facexpand facsum_combine factlim factorflag factorial_expand factors_only fb feature features file_name file_output_append file_search_demo file_search_lisp file_search_maxima|10 file_search_tests file_search_usage file_type_lisp file_type_maxima|10 fill_color fill_density filled_func fixed_vertices flipflag float2bf font font_size fortindent fortspaces fpprec fpprintprec functions gamma_expand gammalim gdet genindex gensumnum GGFCFMAX GGFINFINITY globalsolve gnuplot_command gnuplot_curve_styles gnuplot_curve_titles gnuplot_default_term_command gnuplot_dumb_term_command gnuplot_file_args gnuplot_file_name gnuplot_out_file gnuplot_pdf_term_command gnuplot_pm3d gnuplot_png_term_command gnuplot_postamble gnuplot_preamble gnuplot_ps_term_command gnuplot_svg_term_command gnuplot_term gnuplot_view_args Gosper_in_Zeilberger gradefs grid grid2d grind halfangles head_angle head_both head_length head_type height hypergeometric_representation %iargs ibase icc1 icc2 icounter idummyx ieqnprint ifb ifc1 ifc2 ifg ifgi ifr iframe_bracket_form ifri igeowedge_flag ikt1 ikt2 imaginary inchar increasing infeval infinity inflag infolists inm inmc1 inmc2 intanalysis integer integervalued integrate_use_rootsof integration_constant integration_constant_counter interpolate_color intfaclim ip_grid ip_grid_in irrational isolate_wrt_times iterations itr julia_parameter %getSettings %k2 keepfloat key key_pos kinvariant kt label label_alignment label_orientation labels lassociative lbfgs_ncorrections lbfgs_nfeval_max leftjust legend letrat let_rule_packages lfg lg lhospitallim limsubst linear linear_solver linechar linel|10 linenum line_type linewidth line_width linsolve_params linsolvewarn lispdisp listarith listconstvars listdummyvars lmxchar load_pathname loadprint logabs logarc logcb logconcoeffp logexpand lognegint logsimp logx logx_secondary logy logy_secondary logz lriem m1pbranch macroexpansion macros mainvar manual_demo maperror mapprint matrix_element_add matrix_element_mult matrix_element_transpose maxapplydepth maxapplyheight maxima_tempdir|10 maxima_userdir|10 maxnegex MAX_ORD maxposex maxpsifracdenom maxpsifracnum maxpsinegint maxpsiposint maxtayorder mesh_lines_color method mod_big_prime mode_check_errorp mode_checkp mode_check_warnp mod_test mod_threshold modular_linear_solver modulus multiplicative multiplicities myoptions nary negdistrib negsumdispflag newline newtonepsilon newtonmaxiter nextlayerfactor niceindicespref nm nmc noeval nolabels nonegative_lp noninteger nonscalar noun noundisp nouns np npi nticks ntrig numer numer_pbranch obase odd oddfun opacity opproperties opsubst optimprefix optionset orientation origin orthopoly_returns_intervals outative outchar packagefile palette partswitch pdf_file pfeformat phiresolution %piargs piece pivot_count_sx pivot_max_sx plot_format plot_options plot_realpart png_file pochhammer_max_index points pointsize point_size points_joined point_type poislim poisson poly_coefficient_ring poly_elimination_order polyfactor poly_grobner_algorithm poly_grobner_debug poly_monomial_order poly_primary_elimination_order poly_return_term_list poly_secondary_elimination_order poly_top_reduction_only posfun position powerdisp pred prederror primep_number_of_tests product_use_gamma program programmode promote_float_to_bigfloat prompt proportional_axes props psexpand ps_file radexpand radius radsubstflag rassociative ratalgdenom ratchristof ratdenomdivide rateinstein ratepsilon ratfac rational ratmx ratprint ratriemann ratsimpexpons ratvarswitch ratweights ratweyl ratwtlvl real realonly redraw refcheck resolution restart resultant ric riem rmxchar %rnum_list rombergabs rombergit rombergmin rombergtol rootsconmode rootsepsilon run_viewer same_xy same_xyz savedef savefactors scalar scalarmatrixp scale scale_lp setcheck setcheckbreak setval show_edge_color show_edges show_edge_type show_edge_width show_id show_label showtime show_vertex_color show_vertex_size show_vertex_type show_vertices show_weight simp simplified_output simplify_products simpproduct simpsum sinnpiflag solvedecomposes solveexplicit solvefactors solvenullwarn solveradcan solvetrigwarn space sparse sphere spring_embedding_depth sqrtdispflag stardisp startphi starttheta stats_numer stringdisp structures style sublis_apply_lambda subnumsimp sumexpand sumsplitfact surface surface_hide svg_file symmetric tab taylordepth taylor_logexpand taylor_order_coefficients taylor_truncate_polynomials tensorkill terminal testsuite_files thetaresolution timer_devalue title tlimswitch tr track transcompile transform transform_xy translate_fast_arrays transparent transrun tr_array_as_ref tr_bound_function_applyp tr_file_tty_messagesp tr_float_can_branch_complex tr_function_call_default trigexpandplus trigexpandtimes triginverses trigsign trivial_solutions tr_numer tr_optimize_max_loop tr_semicompile tr_state_vars tr_warn_bad_function_calls tr_warn_fexpr tr_warn_meval tr_warn_mode tr_warn_undeclared tr_warn_undefined_variable tstep ttyoff tube_extremes ufg ug %unitexpand unit_vectors uric uriem use_fast_arrays user_preamble usersetunits values vect_cross verbose vertex_color vertex_coloring vertex_partition vertex_size vertex_type view warnings weyl width windowname windowtitle wired_surface wireframe xaxis xaxis_color xaxis_secondary xaxis_type xaxis_width xlabel xlabel_secondary xlength xrange xrange_secondary xtics xtics_axis xtics_rotate xtics_rotate_secondary xtics_secondary xtics_secondary_axis xu_grid x_voxel xy_file xyplane xy_scale yaxis yaxis_color yaxis_secondary yaxis_type yaxis_width ylabel ylabel_secondary ylength yrange yrange_secondary ytics ytics_axis ytics_rotate ytics_rotate_secondary ytics_secondary ytics_secondary_axis yv_grid y_voxel yx_ratio zaxis zaxis_color zaxis_type zaxis_width zeroa zerob zerobern zeta%pi zlabel zlabel_rotate zlength zmin zn_primroot_limit zn_primroot_pretest",
       z = "_ __ %|0 %%|0";
     return {
       name: "Maxima",
@@ -138516,7 +138516,7 @@ var iG4 = C((Ntw, lG4) => {
         $pattern: "\\.?" + A.IDENT_RE,
         meta: ".2byte .4byte .align .ascii .asciz .balign .byte .code .data .else .end .endif .endm .endr .equ .err .exitm .extern .global .hword .if .ifdef .ifndef .include .irp .long .macro .rept .req .section .set .skip .space .text .word .ltorg ",
         built_in:
-          "$0 $1 $2 $3 $4 $5 $6 $7 $8 $9 $10 $11 $12 $13 $14 $15 $16 $17 $18 $19 $20 $21 $22 $23 $24 $25 $26 $27 $28 $29 $30 $31 zero at v0 v1 a0 a1 a2 a3 a4 a5 a6 a7 t0 t1 t2 t3 t4 t5 t6 t7 t8 t9 s0 s1 s2 s3 s4 s5 s6 s7 s8 k0 k1 gp sp fp ra $f0 $f1 $f2 $f2 $f4 $f5 $f6 $f7 $f8 $f9 $f10 $f11 $f12 $f13 $f14 $f15 $f16 $f17 $f18 $f19 $f20 $f21 $f22 $f23 $f24 $f25 $f26 $f27 $f28 $f29 $f30 $f31 Context Random EntryLo0 EntryLo1 Context PageMask Wired EntryHi HWREna BadVAddr Count Compare SR IntCtl SRSCtl SRSMap Cause EPC PRId EBase Config Config1 Config2 Config3 LLAddr Debug DEPC DESAVE CacheErr ECC ErrorEPC TagLo DataLo TagHi DataHi WatchLo WatchHi PerfCtl PerfCnt ",
+          "$0 $1 $2 $3 $4 $5 $6 $7 $8 $9 $10 $11 $12 $13 $14 $15 $16 $17 $18 $19 $20 $21 $22 $23 $24 $25 $26 $27 $28 $29 $30 $31 zero at v0 v1 a0 a1 a2 a3 a4 a5 a6 a7 t0 t1 t2 t3 t4 t5 t6 t7 t8 t9 s0 s1 s2 s3 s4 s5 s6 s7 s8 k0 getSettings gp sp fp ra $f0 $f1 $f2 $f2 $f4 $f5 $f6 $f7 $f8 $f9 $f10 $f11 $f12 $f13 $f14 $f15 $f16 $f17 $f18 $f19 $f20 $f21 $f22 $f23 $f24 $f25 $f26 $f27 $f28 $f29 $f30 $f31 Context Random EntryLo0 EntryLo1 Context PageMask Wired EntryHi HWREna BadVAddr Count Compare SR IntCtl SRSCtl SRSMap Cause EPC PRId EBase Config Config1 Config2 Config3 LLAddr Debug DEPC DESAVE CacheErr ECC ErrorEPC TagLo DataLo TagHi DataHi WatchLo WatchHi PerfCtl PerfCnt ",
       },
       contains: [
         {
@@ -146097,7 +146097,7 @@ var eT4 = C((dew, tT4) => {
         keyword:
           "lock rep repe repz repne repnz xaquire xrelease bnd nobnd aaa aad aam aas adc add and arpl bb0_reset bb1_reset bound bsf bsr bswap bt btc btr bts call cbw cdq cdqe clc cld cli clts cmc cmp cmpsb cmpsd cmpsq cmpsw cmpxchg cmpxchg486 cmpxchg8b cmpxchg16b cpuid cpu_read cpu_write cqo cwd cwde daa das dec div dmint emms enter equ f2xm1 fabs fadd faddp fbld fbstp fchs fclex fcmovb fcmovbe fcmove fcmovnb fcmovnbe fcmovne fcmovnu fcmovu fcom fcomi fcomip fcomp fcompp fcos fdecstp fdisi fdiv fdivp fdivr fdivrp femms feni ffree ffreep fiadd ficom ficomp fidiv fidivr fild fimul fincstp finit fist fistp fisttp fisub fisubr fld fld1 fldcw fldenv fldl2e fldl2t fldlg2 fldln2 fldpi fldz fmul fmulp fnclex fndisi fneni fninit fnop fnsave fnstcw fnstenv fnstsw fpatan fprem fprem1 fptan frndint frstor fsave fscale fsetpm fsin fsincos fsqrt fst fstcw fstenv fstp fstsw fsub fsubp fsubr fsubrp ftst fucom fucomi fucomip fucomp fucompp fxam fxch fxtract fyl2x fyl2xp1 hlt ibts icebp idiv imul in inc incbin insb insd insw int int01 int1 int03 int3 into invd invpcid invlpg invlpga iret iretd iretq iretw jcxz jecxz jrcxz jmp jmpe lahf lar lds lea leave les lfence lfs lgdt lgs lidt lldt lmsw loadall loadall286 lodsb lodsd lodsq lodsw loop loope loopne loopnz loopz lsl lss ltr mfence monitor mov movd movq movsb movsd movsq movsw movsx movsxd movzx mul mwait neg nop not or out outsb outsd outsw packssdw packsswb packuswb paddb paddd paddsb paddsiw paddsw paddusb paddusw paddw pand pandn pause paveb pavgusb pcmpeqb pcmpeqd pcmpeqw pcmpgtb pcmpgtd pcmpgtw pdistib pf2id pfacc pfadd pfcmpeq pfcmpge pfcmpgt pfmax pfmin pfmul pfrcp pfrcpit1 pfrcpit2 pfrsqit1 pfrsqrt pfsub pfsubr pi2fd pmachriw pmaddwd pmagw pmulhriw pmulhrwa pmulhrwc pmulhw pmullw pmvgezb pmvlzb pmvnzb pmvzb pop popa popad popaw popf popfd popfq popfw por prefetch prefetchw pslld psllq psllw psrad psraw psrld psrlq psrlw psubb psubd psubsb psubsiw psubsw psubusb psubusw psubw punpckhbw punpckhdq punpckhwd punpcklbw punpckldq punpcklwd push pusha pushad pushaw pushf pushfd pushfq pushfw pxor rcl rcr rdshr rdmsr rdpmc rdtsc rdtscp ret retf retn rol ror rdm rsdc rsldt rsm rsts sahf sal salc sar sbb scasb scasd scasq scasw sfence sgdt shl shld shr shrd sidt sldt skinit smi smint smintold smsw stc std sti stosb stosd stosq stosw str sub svdc svldt svts swapgs syscall sysenter sysexit sysret test ud0 ud1 ud2b ud2 ud2a umov verr verw fwait wbinvd wrshr wrmsr xadd xbts xchg xlatb xlat xor cmove cmovz cmovne cmovnz cmova cmovnbe cmovae cmovnb cmovb cmovnae cmovbe cmovna cmovg cmovnle cmovge cmovnl cmovl cmovnge cmovle cmovng cmovc cmovnc cmovo cmovno cmovs cmovns cmovp cmovpe cmovnp cmovpo je jz jne jnz ja jnbe jae jnb jb jnae jbe jna jg jnle jge jnl jl jnge jle jng jc jnc jo jno js jns jpo jnp jpe jp sete setz setne setnz seta setnbe setae setnb setnc setb setnae setcset setbe setna setg setnle setge setnl setl setnge setle setng sets setns seto setno setpe setp setpo setnp addps addss andnps andps cmpeqps cmpeqss cmpleps cmpless cmpltps cmpltss cmpneqps cmpneqss cmpnleps cmpnless cmpnltps cmpnltss cmpordps cmpordss cmpunordps cmpunordss cmpps cmpss comiss cvtpi2ps cvtps2pi cvtsi2ss cvtss2si cvttps2pi cvttss2si divps divss ldmxcsr maxps maxss minps minss movaps movhps movlhps movlps movhlps movmskps movntps movss movups mulps mulss orps rcpps rcpss rsqrtps rsqrtss shufps sqrtps sqrtss stmxcsr subps subss ucomiss unpckhps unpcklps xorps fxrstor fxrstor64 fxsave fxsave64 xgetbv xsetbv xsave xsave64 xsaveopt xsaveopt64 xrstor xrstor64 prefetchnta prefetcht0 prefetcht1 prefetcht2 maskmovq movntq pavgb pavgw pextrw pinsrw pmaxsw pmaxub pminsw pminub pmovmskb pmulhuw psadbw pshufw pf2iw pfnacc pfpnacc pi2fw pswapd maskmovdqu clflush movntdq movnti movntpd movdqa movdqu movdq2q movq2dq paddq pmuludq pshufd pshufhw pshuflw pslldq psrldq psubq punpckhqdq punpcklqdq addpd addsd andnpd andpd cmpeqpd cmpeqsd cmplepd cmplesd cmpltpd cmpltsd cmpneqpd cmpneqsd cmpnlepd cmpnlesd cmpnltpd cmpnltsd cmpordpd cmpordsd cmpunordpd cmpunordsd cmppd comisd cvtdq2pd cvtdq2ps cvtpd2dq cvtpd2pi cvtpd2ps cvtpi2pd cvtps2dq cvtps2pd cvtsd2si cvtsd2ss cvtsi2sd cvtss2sd cvttpd2pi cvttpd2dq cvttps2dq cvttsd2si divpd divsd maxpd maxsd minpd minsd movapd movhpd movlpd movmskpd movupd mulpd mulsd orpd shufpd sqrtpd sqrtsd subpd subsd ucomisd unpckhpd unpcklpd xorpd addsubpd addsubps haddpd haddps hsubpd hsubps lddqu movddup movshdup movsldup clgi stgi vmcall vmclear vmfunc vmlaunch vmload vmmcall vmptrld vmptrst vmread vmresume vmrun vmsave vmwrite vmxoff vmxon invept invvpid pabsb pabsw pabsd palignr phaddw phaddd phaddsw phsubw phsubd phsubsw pmaddubsw pmulhrsw pshufb psignb psignw psignd extrq insertq movntsd movntss lzcnt blendpd blendps blendvpd blendvps dppd dpps extractps insertps movntdqa mpsadbw packusdw pblendvb pblendw pcmpeqq pextrb pextrd pextrq phminposuw pinsrb pinsrd pinsrq pmaxsb pmaxsd pmaxud pmaxuw pminsb pminsd pminud pminuw pmovsxbw pmovsxbd pmovsxbq pmovsxwd pmovsxwq pmovsxdq pmovzxbw pmovzxbd pmovzxbq pmovzxwd pmovzxwq pmovzxdq pmuldq pmulld ptest roundpd roundps roundsd roundss crc32 pcmpestri pcmpestrm pcmpistri pcmpistrm pcmpgtq popcnt getsec pfrcpv pfrsqrtv movbe aesenc aesenclast aesdec aesdeclast aesimc aeskeygenassist vaesenc vaesenclast vaesdec vaesdeclast vaesimc vaeskeygenassist vaddpd vaddps vaddsd vaddss vaddsubpd vaddsubps vandpd vandps vandnpd vandnps vblendpd vblendps vblendvpd vblendvps vbroadcastss vbroadcastsd vbroadcastf128 vcmpeq_ospd vcmpeqpd vcmplt_ospd vcmpltpd vcmple_ospd vcmplepd vcmpunord_qpd vcmpunordpd vcmpneq_uqpd vcmpneqpd vcmpnlt_uspd vcmpnltpd vcmpnle_uspd vcmpnlepd vcmpord_qpd vcmpordpd vcmpeq_uqpd vcmpnge_uspd vcmpngepd vcmpngt_uspd vcmpngtpd vcmpfalse_oqpd vcmpfalsepd vcmpneq_oqpd vcmpge_ospd vcmpgepd vcmpgt_ospd vcmpgtpd vcmptrue_uqpd vcmptruepd vcmplt_oqpd vcmple_oqpd vcmpunord_spd vcmpneq_uspd vcmpnlt_uqpd vcmpnle_uqpd vcmpord_spd vcmpeq_uspd vcmpnge_uqpd vcmpngt_uqpd vcmpfalse_ospd vcmpneq_ospd vcmpge_oqpd vcmpgt_oqpd vcmptrue_uspd vcmppd vcmpeq_osps vcmpeqps vcmplt_osps vcmpltps vcmple_osps vcmpleps vcmpunord_qps vcmpunordps vcmpneq_uqps vcmpneqps vcmpnlt_usps vcmpnltps vcmpnle_usps vcmpnleps vcmpord_qps vcmpordps vcmpeq_uqps vcmpnge_usps vcmpngeps vcmpngt_usps vcmpngtps vcmpfalse_oqps vcmpfalseps vcmpneq_oqps vcmpge_osps vcmpgeps vcmpgt_osps vcmpgtps vcmptrue_uqps vcmptrueps vcmplt_oqps vcmple_oqps vcmpunord_sps vcmpneq_usps vcmpnlt_uqps vcmpnle_uqps vcmpord_sps vcmpeq_usps vcmpnge_uqps vcmpngt_uqps vcmpfalse_osps vcmpneq_osps vcmpge_oqps vcmpgt_oqps vcmptrue_usps vcmpps vcmpeq_ossd vcmpeqsd vcmplt_ossd vcmpltsd vcmple_ossd vcmplesd vcmpunord_qsd vcmpunordsd vcmpneq_uqsd vcmpneqsd vcmpnlt_ussd vcmpnltsd vcmpnle_ussd vcmpnlesd vcmpord_qsd vcmpordsd vcmpeq_uqsd vcmpnge_ussd vcmpngesd vcmpngt_ussd vcmpngtsd vcmpfalse_oqsd vcmpfalsesd vcmpneq_oqsd vcmpge_ossd vcmpgesd vcmpgt_ossd vcmpgtsd vcmptrue_uqsd vcmptruesd vcmplt_oqsd vcmple_oqsd vcmpunord_ssd vcmpneq_ussd vcmpnlt_uqsd vcmpnle_uqsd vcmpord_ssd vcmpeq_ussd vcmpnge_uqsd vcmpngt_uqsd vcmpfalse_ossd vcmpneq_ossd vcmpge_oqsd vcmpgt_oqsd vcmptrue_ussd vcmpsd vcmpeq_osss vcmpeqss vcmplt_osss vcmpltss vcmple_osss vcmpless vcmpunord_qss vcmpunordss vcmpneq_uqss vcmpneqss vcmpnlt_usss vcmpnltss vcmpnle_usss vcmpnless vcmpord_qss vcmpordss vcmpeq_uqss vcmpnge_usss vcmpngess vcmpngt_usss vcmpngtss vcmpfalse_oqss vcmpfalsess vcmpneq_oqss vcmpge_osss vcmpgess vcmpgt_osss vcmpgtss vcmptrue_uqss vcmptruess vcmplt_oqss vcmple_oqss vcmpunord_sss vcmpneq_usss vcmpnlt_uqss vcmpnle_uqss vcmpord_sss vcmpeq_usss vcmpnge_uqss vcmpngt_uqss vcmpfalse_osss vcmpneq_osss vcmpge_oqss vcmpgt_oqss vcmptrue_usss vcmpss vcomisd vcomiss vcvtdq2pd vcvtdq2ps vcvtpd2dq vcvtpd2ps vcvtps2dq vcvtps2pd vcvtsd2si vcvtsd2ss vcvtsi2sd vcvtsi2ss vcvtss2sd vcvtss2si vcvttpd2dq vcvttps2dq vcvttsd2si vcvttss2si vdivpd vdivps vdivsd vdivss vdppd vdpps vextractf128 vextractps vhaddpd vhaddps vhsubpd vhsubps vinsertf128 vinsertps vlddqu vldqqu vldmxcsr vmaskmovdqu vmaskmovps vmaskmovpd vmaxpd vmaxps vmaxsd vmaxss vminpd vminps vminsd vminss vmovapd vmovaps vmovd vmovq vmovddup vmovdqa vmovqqa vmovdqu vmovqqu vmovhlps vmovhpd vmovhps vmovlhps vmovlpd vmovlps vmovmskpd vmovmskps vmovntdq vmovntqq vmovntdqa vmovntpd vmovntps vmovsd vmovshdup vmovsldup vmovss vmovupd vmovups vmpsadbw vmulpd vmulps vmulsd vmulss vorpd vorps vpabsb vpabsw vpabsd vpacksswb vpackssdw vpackuswb vpackusdw vpaddb vpaddw vpaddd vpaddq vpaddsb vpaddsw vpaddusb vpaddusw vpalignr vpand vpandn vpavgb vpavgw vpblendvb vpblendw vpcmpestri vpcmpestrm vpcmpistri vpcmpistrm vpcmpeqb vpcmpeqw vpcmpeqd vpcmpeqq vpcmpgtb vpcmpgtw vpcmpgtd vpcmpgtq vpermilpd vpermilps vperm2f128 vpextrb vpextrw vpextrd vpextrq vphaddw vphaddd vphaddsw vphminposuw vphsubw vphsubd vphsubsw vpinsrb vpinsrw vpinsrd vpinsrq vpmaddwd vpmaddubsw vpmaxsb vpmaxsw vpmaxsd vpmaxub vpmaxuw vpmaxud vpminsb vpminsw vpminsd vpminub vpminuw vpminud vpmovmskb vpmovsxbw vpmovsxbd vpmovsxbq vpmovsxwd vpmovsxwq vpmovsxdq vpmovzxbw vpmovzxbd vpmovzxbq vpmovzxwd vpmovzxwq vpmovzxdq vpmulhuw vpmulhrsw vpmulhw vpmullw vpmulld vpmuludq vpmuldq vpor vpsadbw vpshufb vpshufd vpshufhw vpshuflw vpsignb vpsignw vpsignd vpslldq vpsrldq vpsllw vpslld vpsllq vpsraw vpsrad vpsrlw vpsrld vpsrlq vptest vpsubb vpsubw vpsubd vpsubq vpsubsb vpsubsw vpsubusb vpsubusw vpunpckhbw vpunpckhwd vpunpckhdq vpunpckhqdq vpunpcklbw vpunpcklwd vpunpckldq vpunpcklqdq vpxor vrcpps vrcpss vrsqrtps vrsqrtss vroundpd vroundps vroundsd vroundss vshufpd vshufps vsqrtpd vsqrtps vsqrtsd vsqrtss vstmxcsr vsubpd vsubps vsubsd vsubss vtestps vtestpd vucomisd vucomiss vunpckhpd vunpckhps vunpcklpd vunpcklps vxorpd vxorps vzeroall vzeroupper pclmullqlqdq pclmulhqlqdq pclmullqhqdq pclmulhqhqdq pclmulqdq vpclmullqlqdq vpclmulhqlqdq vpclmullqhqdq vpclmulhqhqdq vpclmulqdq vfmadd132ps vfmadd132pd vfmadd312ps vfmadd312pd vfmadd213ps vfmadd213pd vfmadd123ps vfmadd123pd vfmadd231ps vfmadd231pd vfmadd321ps vfmadd321pd vfmaddsub132ps vfmaddsub132pd vfmaddsub312ps vfmaddsub312pd vfmaddsub213ps vfmaddsub213pd vfmaddsub123ps vfmaddsub123pd vfmaddsub231ps vfmaddsub231pd vfmaddsub321ps vfmaddsub321pd vfmsub132ps vfmsub132pd vfmsub312ps vfmsub312pd vfmsub213ps vfmsub213pd vfmsub123ps vfmsub123pd vfmsub231ps vfmsub231pd vfmsub321ps vfmsub321pd vfmsubadd132ps vfmsubadd132pd vfmsubadd312ps vfmsubadd312pd vfmsubadd213ps vfmsubadd213pd vfmsubadd123ps vfmsubadd123pd vfmsubadd231ps vfmsubadd231pd vfmsubadd321ps vfmsubadd321pd vfnmadd132ps vfnmadd132pd vfnmadd312ps vfnmadd312pd vfnmadd213ps vfnmadd213pd vfnmadd123ps vfnmadd123pd vfnmadd231ps vfnmadd231pd vfnmadd321ps vfnmadd321pd vfnmsub132ps vfnmsub132pd vfnmsub312ps vfnmsub312pd vfnmsub213ps vfnmsub213pd vfnmsub123ps vfnmsub123pd vfnmsub231ps vfnmsub231pd vfnmsub321ps vfnmsub321pd vfmadd132ss vfmadd132sd vfmadd312ss vfmadd312sd vfmadd213ss vfmadd213sd vfmadd123ss vfmadd123sd vfmadd231ss vfmadd231sd vfmadd321ss vfmadd321sd vfmsub132ss vfmsub132sd vfmsub312ss vfmsub312sd vfmsub213ss vfmsub213sd vfmsub123ss vfmsub123sd vfmsub231ss vfmsub231sd vfmsub321ss vfmsub321sd vfnmadd132ss vfnmadd132sd vfnmadd312ss vfnmadd312sd vfnmadd213ss vfnmadd213sd vfnmadd123ss vfnmadd123sd vfnmadd231ss vfnmadd231sd vfnmadd321ss vfnmadd321sd vfnmsub132ss vfnmsub132sd vfnmsub312ss vfnmsub312sd vfnmsub213ss vfnmsub213sd vfnmsub123ss vfnmsub123sd vfnmsub231ss vfnmsub231sd vfnmsub321ss vfnmsub321sd rdfsbase rdgsbase rdrand wrfsbase wrgsbase vcvtph2ps vcvtps2ph adcx adox rdseed clac stac xstore xcryptecb xcryptcbc xcryptctr xcryptcfb xcryptofb montmul xsha1 xsha256 llwpcb slwpcb lwpval lwpins vfmaddpd vfmaddps vfmaddsd vfmaddss vfmaddsubpd vfmaddsubps vfmsubaddpd vfmsubaddps vfmsubpd vfmsubps vfmsubsd vfmsubss vfnmaddpd vfnmaddps vfnmaddsd vfnmaddss vfnmsubpd vfnmsubps vfnmsubsd vfnmsubss vfrczpd vfrczps vfrczsd vfrczss vpcmov vpcomb vpcomd vpcomq vpcomub vpcomud vpcomuq vpcomuw vpcomw vphaddbd vphaddbq vphaddbw vphadddq vphaddubd vphaddubq vphaddubw vphaddudq vphadduwd vphadduwq vphaddwd vphaddwq vphsubbw vphsubdq vphsubwd vpmacsdd vpmacsdqh vpmacsdql vpmacssdd vpmacssdqh vpmacssdql vpmacsswd vpmacssww vpmacswd vpmacsww vpmadcsswd vpmadcswd vpperm vprotb vprotd vprotq vprotw vpshab vpshad vpshaq vpshaw vpshlb vpshld vpshlq vpshlw vbroadcasti128 vpblendd vpbroadcastb vpbroadcastw vpbroadcastd vpbroadcastq vpermd vpermpd vpermps vpermq vperm2i128 vextracti128 vinserti128 vpmaskmovd vpmaskmovq vpsllvd vpsllvq vpsravd vpsrlvd vpsrlvq vgatherdpd vgatherqpd vgatherdps vgatherqps vpgatherdd vpgatherqd vpgatherdq vpgatherqq xabort xbegin xend xtest andn bextr blci blcic blsi blsic blcfill blsfill blcmsk blsmsk blsr blcs bzhi mulx pdep pext rorx sarx shlx shrx tzcnt tzmsk t1mskc valignd valignq vblendmpd vblendmps vbroadcastf32x4 vbroadcastf64x4 vbroadcasti32x4 vbroadcasti64x4 vcompresspd vcompressps vcvtpd2udq vcvtps2udq vcvtsd2usi vcvtss2usi vcvttpd2udq vcvttps2udq vcvttsd2usi vcvttss2usi vcvtudq2pd vcvtudq2ps vcvtusi2sd vcvtusi2ss vexpandpd vexpandps vextractf32x4 vextractf64x4 vextracti32x4 vextracti64x4 vfixupimmpd vfixupimmps vfixupimmsd vfixupimmss vgetexppd vgetexpps vgetexpsd vgetexpss vgetmantpd vgetmantps vgetmantsd vgetmantss vinsertf32x4 vinsertf64x4 vinserti32x4 vinserti64x4 vmovdqa32 vmovdqa64 vmovdqu32 vmovdqu64 vpabsq vpandd vpandnd vpandnq vpandq vpblendmd vpblendmq vpcmpltd vpcmpled vpcmpneqd vpcmpnltd vpcmpnled vpcmpd vpcmpltq vpcmpleq vpcmpneqq vpcmpnltq vpcmpnleq vpcmpq vpcmpequd vpcmpltud vpcmpleud vpcmpnequd vpcmpnltud vpcmpnleud vpcmpud vpcmpequq vpcmpltuq vpcmpleuq vpcmpnequq vpcmpnltuq vpcmpnleuq vpcmpuq vpcompressd vpcompressq vpermi2d vpermi2pd vpermi2ps vpermi2q vpermt2d vpermt2pd vpermt2ps vpermt2q vpexpandd vpexpandq vpmaxsq vpmaxuq vpminsq vpminuq vpmovdb vpmovdw vpmovqb vpmovqd vpmovqw vpmovsdb vpmovsdw vpmovsqb vpmovsqd vpmovsqw vpmovusdb vpmovusdw vpmovusqb vpmovusqd vpmovusqw vpord vporq vprold vprolq vprolvd vprolvq vprord vprorq vprorvd vprorvq vpscatterdd vpscatterdq vpscatterqd vpscatterqq vpsraq vpsravq vpternlogd vpternlogq vptestmd vptestmq vptestnmd vptestnmq vpxord vpxorq vrcp14pd vrcp14ps vrcp14sd vrcp14ss vrndscalepd vrndscaleps vrndscalesd vrndscaless vrsqrt14pd vrsqrt14ps vrsqrt14sd vrsqrt14ss vscalefpd vscalefps vscalefsd vscalefss vscatterdpd vscatterdps vscatterqpd vscatterqps vshuff32x4 vshuff64x2 vshufi32x4 vshufi64x2 kandnw kandw kmovw knotw kortestw korw kshiftlw kshiftrw kunpckbw kxnorw kxorw vpbroadcastmb2q vpbroadcastmw2d vpconflictd vpconflictq vplzcntd vplzcntq vexp2pd vexp2ps vrcp28pd vrcp28ps vrcp28sd vrcp28ss vrsqrt28pd vrsqrt28ps vrsqrt28sd vrsqrt28ss vgatherpf0dpd vgatherpf0dps vgatherpf0qpd vgatherpf0qps vgatherpf1dpd vgatherpf1dps vgatherpf1qpd vgatherpf1qps vscatterpf0dpd vscatterpf0dps vscatterpf0qpd vscatterpf0qps vscatterpf1dpd vscatterpf1dps vscatterpf1qpd vscatterpf1qps prefetchwt1 bndmk bndcl bndcu bndcn bndmov bndldx bndstx sha1rnds4 sha1nexte sha1msg1 sha1msg2 sha256rnds2 sha256msg1 sha256msg2 hint_nop0 hint_nop1 hint_nop2 hint_nop3 hint_nop4 hint_nop5 hint_nop6 hint_nop7 hint_nop8 hint_nop9 hint_nop10 hint_nop11 hint_nop12 hint_nop13 hint_nop14 hint_nop15 hint_nop16 hint_nop17 hint_nop18 hint_nop19 hint_nop20 hint_nop21 hint_nop22 hint_nop23 hint_nop24 hint_nop25 hint_nop26 hint_nop27 hint_nop28 hint_nop29 hint_nop30 hint_nop31 hint_nop32 hint_nop33 hint_nop34 hint_nop35 hint_nop36 hint_nop37 hint_nop38 hint_nop39 hint_nop40 hint_nop41 hint_nop42 hint_nop43 hint_nop44 hint_nop45 hint_nop46 hint_nop47 hint_nop48 hint_nop49 hint_nop50 hint_nop51 hint_nop52 hint_nop53 hint_nop54 hint_nop55 hint_nop56 hint_nop57 hint_nop58 hint_nop59 hint_nop60 hint_nop61 hint_nop62 hint_nop63",
         built_in:
-          "ip eip rip al ah bl bh cl ch dl dh sil dil bpl spl r8b r9b r10b r11b r12b r13b r14b r15b ax bx cx dx si di bp sp r8w r9w r10w r11w r12w r13w r14w r15w eax ebx ecx edx esi edi ebp esp eip r8d r9d r10d r11d r12d r13d r14d r15d rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15 cs ds es fs gs ss st st0 st1 st2 st3 st4 st5 st6 st7 mm0 mm1 mm2 mm3 mm4 mm5 mm6 mm7 xmm0  xmm1  xmm2  xmm3  xmm4  xmm5  xmm6  xmm7  xmm8  xmm9 xmm10  xmm11 xmm12 xmm13 xmm14 xmm15 xmm16 xmm17 xmm18 xmm19 xmm20 xmm21 xmm22 xmm23 xmm24 xmm25 xmm26 xmm27 xmm28 xmm29 xmm30 xmm31 ymm0  ymm1  ymm2  ymm3  ymm4  ymm5  ymm6  ymm7  ymm8  ymm9 ymm10  ymm11 ymm12 ymm13 ymm14 ymm15 ymm16 ymm17 ymm18 ymm19 ymm20 ymm21 ymm22 ymm23 ymm24 ymm25 ymm26 ymm27 ymm28 ymm29 ymm30 ymm31 zmm0  zmm1  zmm2  zmm3  zmm4  zmm5  zmm6  zmm7  zmm8  zmm9 zmm10  zmm11 zmm12 zmm13 zmm14 zmm15 zmm16 zmm17 zmm18 zmm19 zmm20 zmm21 zmm22 zmm23 zmm24 zmm25 zmm26 zmm27 zmm28 zmm29 zmm30 zmm31 k0 k1 k2 k3 k4 k5 k6 k7 bnd0 bnd1 bnd2 bnd3 cr0 cr1 cr2 cr3 cr4 cr8 dr0 dr1 dr2 dr3 dr8 tr3 tr4 tr5 tr6 tr7 r0 r1 r2 r3 r4 r5 r6 r7 r0b r1b r2b r3b r4b r5b r6b r7b r0w r1w r2w r3w r4w r5w r6w r7w r0d r1d r2d r3d r4d r5d r6d r7d r0h r1h r2h r3h r0l r1l r2l r3l r4l r5l r6l r7l r8l r9l r10l r11l r12l r13l r14l r15l db dw dd dq dt ddq do dy dz resb resw resd resq rest resdq reso resy resz incbin equ times byte word dword qword nosplit rel abs seg wrt strict near far a32 ptr",
+          "ip eip rip al ah bl bh cl ch dl dh sil dil bpl spl r8b r9b r10b r11b r12b r13b r14b r15b ax bx cx dx si di bp sp r8w r9w r10w r11w r12w r13w r14w r15w eax ebx ecx edx esi edi ebp esp eip r8d r9d r10d r11d r12d r13d r14d r15d rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15 cs ds es fs gs ss st st0 st1 st2 st3 st4 st5 st6 st7 mm0 mm1 mm2 mm3 mm4 mm5 mm6 mm7 xmm0  xmm1  xmm2  xmm3  xmm4  xmm5  xmm6  xmm7  xmm8  xmm9 xmm10  xmm11 xmm12 xmm13 xmm14 xmm15 xmm16 xmm17 xmm18 xmm19 xmm20 xmm21 xmm22 xmm23 xmm24 xmm25 xmm26 xmm27 xmm28 xmm29 xmm30 xmm31 ymm0  ymm1  ymm2  ymm3  ymm4  ymm5  ymm6  ymm7  ymm8  ymm9 ymm10  ymm11 ymm12 ymm13 ymm14 ymm15 ymm16 ymm17 ymm18 ymm19 ymm20 ymm21 ymm22 ymm23 ymm24 ymm25 ymm26 ymm27 ymm28 ymm29 ymm30 ymm31 zmm0  zmm1  zmm2  zmm3  zmm4  zmm5  zmm6  zmm7  zmm8  zmm9 zmm10  zmm11 zmm12 zmm13 zmm14 zmm15 zmm16 zmm17 zmm18 zmm19 zmm20 zmm21 zmm22 zmm23 zmm24 zmm25 zmm26 zmm27 zmm28 zmm29 zmm30 zmm31 k0 getSettings k2 k3 k4 GREP_TOOL_NAME k6 k7 bnd0 bnd1 bnd2 bnd3 cr0 cr1 cr2 cr3 cr4 cr8 dr0 dr1 dr2 dr3 dr8 tr3 tr4 tr5 tr6 tr7 r0 r1 r2 r3 r4 r5 r6 r7 r0b r1b r2b r3b r4b r5b r6b r7b r0w r1w r2w r3w r4w r5w r6w r7w r0d r1d r2d r3d r4d r5d r6d r7d r0h r1h r2h r3h r0l r1l r2l r3l r4l r5l r6l r7l r8l r9l r10l r11l r12l r13l r14l r15l db dw dd dq dt ddq do dy dz resb resw resd resq rest resdq reso resy resz incbin equ times byte word dword qword nosplit rel abs seg wrt strict near far a32 ptr",
         meta: "%define %xdefine %+ %undef %defstr %deftok %assign %strcat %strlen %substr %rotate %elif %else %endif %if %ifmacro %ifctx %ifidn %ifidni %ifid %ifnum %ifstr %iftoken %ifempty %ifenv %error %warning %fatal %rep %endrep %include %push %pop %repl %pathsearch %depend %use %arg %stacksize %local %line %comment %endcomment .nolist __FILE__ __LINE__ __SECT__  __BITS__ __OUTPUT_FORMAT__ __DATE__ __TIME__ __DATE_NUM__ __TIME_NUM__ __UTC_DATE__ __UTC_TIME__ __UTC_DATE_NUM__ __UTC_TIME_NUM__  __PASS__ struc endstruc istruc at iend align alignb sectalign daz nodaz up down zero default option assume public bits use16 use32 use64 default section segment absolute extern global common cpu float __utf16__ __utf16le__ __utf16be__ __utf32__ __utf32le__ __utf32be__ __float8__ __float16__ __float32__ __float64__ __float80m__ __float80e__ __float128l__ __float128h__ __Infinity__ __QNaN__ __SNaN__ Inf NaN QNaN SNaN float8 float16 float32 float64 float80m float80e float128l float128h __FLOAT_DAZ__ __FLOAT_ROUND__ __FLOAT__",
       },
       contains: [
@@ -155609,7 +155609,7 @@ var aE8 = E(() => {
     "ah",
     "ai",
     "aj",
-    "ak",
+    "countMessageTokens",
     "al",
     "am",
     "an",
@@ -155951,7 +155951,7 @@ function yv4() {
   let A = w6(1),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
-    ((q = QQ6.createElement(Z8, { height: 1 }, QQ6.createElement(jg, null))),
+    ((q = QQ6.createElement(ScrollableContent, { height: 1 }, QQ6.createElement(jg, null))),
       (A[0] = q));
   else q = A[0];
   return q;
@@ -155978,7 +155978,7 @@ function dW1(A) {
   let z;
   if (q[1] !== K)
     ((z = jx.createElement(
-      Z8,
+      ScrollableContent,
       null,
       jx.createElement(
         m,
@@ -156016,7 +156016,7 @@ function Cv4(A) {
     Y;
   if (q[0] !== K)
     ((Y = UQ6.createElement(
-      Z8,
+      ScrollableContent,
       null,
       UQ6.createElement(
         T,
@@ -156050,7 +156050,7 @@ function hv4(A) {
   if (typeof w.content === "string" && w.content.includes(af)) {
     let H;
     if (q[0] === Symbol.for("react.memo_cache_sentinel"))
-      ((H = Jx.createElement(Z8, { height: 1 }, Jx.createElement(jg, null))),
+      ((H = Jx.createElement(ScrollableContent, { height: 1 }, Jx.createElement(jg, null))),
         (q[0] = H));
     else H = q[0];
     return H;
@@ -156243,7 +156243,7 @@ function cW1(A) {
       let Z;
       if (q[10] !== M || q[11] !== P || q[12] !== G)
         ((Z = YJ.createElement(
-          Z8,
+          ScrollableContent,
           null,
           YJ.createElement(m, { flexDirection: "row" }, M, P, G),
         )),
@@ -156275,7 +156275,7 @@ function cW1(A) {
   let X;
   if (q[19] !== j || q[20] !== D)
     ((X = YJ.createElement(
-      Z8,
+      ScrollableContent,
       null,
       YJ.createElement(m, { flexDirection: "row" }, H, j, D),
     )),
@@ -156802,7 +156802,7 @@ function iv4(A) {
           !j6 &&
           (P6
             ? BP.default.createElement(
-                Z8,
+                ScrollableContent,
                 { height: 1 },
                 BP.default.createElement(
                   T,
@@ -156986,7 +156986,7 @@ var nv4 = E(() => {
   BP = Y6(W6(), 1);
 });
 function ov4() {
-  let A = k1().cachedExtraUsageDisabledReason;
+  let A = getSettings().cachedExtraUsageDisabledReason;
   if (A === void 0) return !1;
   if (A === null) return !0;
   switch (A) {
@@ -157840,7 +157840,7 @@ function DXY(A) {
   return !1;
 }
 function XXY(A, q) {
-  if (A !== U3 && A !== Lq) return !1;
+  if (A !== WRITE_TOOL_NAME && A !== EDIT_TOOL_NAME) return !1;
   let K = JXY(q);
   return K !== void 0 && aQ6(K);
 }
@@ -160040,14 +160040,14 @@ function Ck4({
         ? v7.createElement(
             m,
             { width: "100%", flexDirection: "column" },
-            v7.createElement(Z8, null, v7.createElement(_G1, { tasks: h })),
+            v7.createElement(ScrollableContent, null, v7.createElement(_G1, { tasks: h })),
           )
         : c || gA
           ? v7.createElement(
               m,
               { width: "100%" },
               v7.createElement(
-                Z8,
+                ScrollableContent,
                 null,
                 v7.createElement(
                   T,
@@ -167914,7 +167914,7 @@ var aL4 = C((lL8) => {
   });
 });
 async function Bg(A, q) {
-  let Y = k1().preferredNotifChannel;
+  let Y = getSettings().preferredNotifChannel;
   await Mg(A);
   let z = await H0Y(Y, A, q);
   n("tengu_notification_method_used", {
@@ -168060,7 +168060,7 @@ async function vZ6() {
   if (!TU6()) return !1;
   let A = V5()?.accountUuid;
   if (!A) return !1;
-  let K = k1().groveConfigCache?.[A],
+  let K = getSettings().groveConfigCache?.[A],
     Y = Date.now();
   if (!K)
     return (
@@ -168085,7 +168085,7 @@ async function Ay4(A) {
     let q = await W66();
     if (!q.success) return;
     let K = q.data.grove_enabled;
-    J8((Y) => ({
+    updateSettings((Y) => ({
       ...Y,
       groveConfigCache: {
         ...Y.groveConfigCache,
@@ -168141,7 +168141,7 @@ var kZ6 = E(() => {
 var qy4;
 var Ky4 = E(() => {
   K4();
-  qy4 = i6(() =>
+  qy4 = lazyOnce(() =>
     x.object({
       uuid: x.string(),
       checksum: x.string(),
@@ -170236,7 +170236,7 @@ var IZ6 = E(() => {
 var zy8;
 var yy4 = E(() => {
   K4();
-  zy8 = i6(() =>
+  zy8 = lazyOnce(() =>
     x.object({
       restrictions: x.record(x.string(), x.object({ allowed: x.boolean() })),
     }),
@@ -211972,7 +211972,7 @@ async function Qd6({ clearOnboarding: A = !1 }) {
     await th8(),
     kO().delete(),
     await ZT1(),
-    J8((Y) => {
+    updateSettings((Y) => {
       let z = { ...Y };
       if (A) {
         if (
@@ -212089,7 +212089,7 @@ async function dd6(A, q) {
       let z = Error(`Failed to install Claude CLI package: ${Y.stderr}`);
       return ($6(z), Y.code === 190 ? "in_progress" : "install_failed");
     }
-    return (J8((z) => ({ ...z, installMethod: "local" })), "success");
+    return (updateSettings((z) => ({ ...z, installMethod: "local" })), "success");
   } catch (K) {
     return ($6(K instanceof Error ? K : Error(String(K))), "install_failed");
   }
@@ -212455,7 +212455,7 @@ To fix this issue:
       );
       return ($6(w), "install_failed");
     }
-    return (J8((w) => ({ ...w, installMethod: "global" })), "success");
+    return (updateSettings((w) => ({ ...w, installMethod: "global" })), "success");
   } finally {
     bmY();
   }
@@ -212910,7 +212910,7 @@ async function rmY() {
   try {
     (await A.stat(w), q.push({ type: "native", path: w }));
   } catch {}
-  if (k1().installMethod === "native") {
+  if (getSettings().installMethod === "native") {
     let $ = wF(aY6(), ".local", "share", "claude");
     try {
       if ((await A.stat($), !q.some((O) => O.type === "native")))
@@ -212921,7 +212921,7 @@ async function rmY() {
 }
 async function omY(A) {
   let q = [],
-    K = k1();
+    K = getSettings();
   if (A === "development") return q;
   if (A === "native") {
     let _ = (process.env.PATH || "").split(lmY),
@@ -213079,7 +213079,7 @@ async function tY6() {
           fix: M ? `Run: rmdir /s /q "${P.path}"` : `Run: rm -rf ${P.path}`,
         });
   }
-  let $ = k1().installMethod || "not set",
+  let $ = getSettings().installMethod || "not set",
     O = null;
   if (A === "npm-global") {
     if (((O = (await KI8()).hasPermissions), !O && !sY6()))
@@ -213783,7 +213783,7 @@ async function HF(A = !1) {
   if (X1(process.env.DISABLE_INSTALLATION_CHECKS)) return [];
   let q = await _F();
   if (q === "development") return [];
-  let K = k1();
+  let K = getSettings();
   if (!(A || q === "native" || K.installMethod === "native")) return [];
   let z = o66(),
     w = [],
@@ -213875,8 +213875,8 @@ async function ol(A, q = !1) {
       lockHolderPid: Y.lockHolderPid,
     };
   if (K || Y.success) {
-    if (k1().installMethod !== "native")
-      (J8((w) => ({
+    if (getSettings().installMethod !== "native")
+      (updateSettings((w) => ({
         ...w,
         installMethod: "native",
         autoUpdates: !1,
@@ -214448,7 +214448,7 @@ function Fi4() {
       label: "Setting sources",
       value: Za()
         .filter((Y) => {
-          let z = pA(Y);
+          let z = getConfigValue(Y);
           return z !== null && Object.keys(z).length > 0;
         })
         .map((Y) => {
@@ -214604,7 +214604,7 @@ var TI8 = E(() => {
 });
 async function ci4() {
   try {
-    if (k1().claudeCodeFirstTokenDate !== void 0) return;
+    if (getSettings().claudeCodeFirstTokenDate !== void 0) return;
     let q = u_();
     if (q.error) {
       $6(Error(`Failed to get auth headers: ${q.error}`));
@@ -214621,7 +214621,7 @@ async function ci4() {
         return;
       }
     }
-    J8((_) => ({ ..._, claudeCodeFirstTokenDate: w }));
+    updateSettings((_) => ({ ..._, claudeCodeFirstTokenDate: w }));
   } catch (A) {
     $6(A instanceof Error ? A : Error(String(A)));
   }
@@ -214690,7 +214690,7 @@ Set it to the space-separated scopes the refresh token was issued with
       n("tengu_login_from_refresh_token", {});
       let $ = await $u6(K, { scopes: _ });
       (await Yc6($),
-        J8((O) => {
+        updateSettings((O) => {
           if (O.hasCompletedOnboarding) return O;
           return { ...O, hasCompletedOnboarding: !0 };
         }),
@@ -215835,7 +215835,7 @@ function Xn4(A) {
     S;
   if (q[13] !== v || q[14] !== L)
     ((S = Oc6.default.createElement(
-      Z8,
+      ScrollableContent,
       null,
       Oc6.default.createElement(m, { flexDirection: "column" }, v, L),
     )),
@@ -215867,7 +215867,7 @@ function IBY() {
     Y;
   if (A[1] === Symbol.for("react.memo_cache_sentinel"))
     ((Y = Xz.default.createElement(
-      Z8,
+      ScrollableContent,
       null,
       Xz.default.createElement(
         m,
@@ -215915,7 +215915,7 @@ function Pn4(A) {
         H;
       if (q[4] === Symbol.for("react.memo_cache_sentinel"))
         ((H = Xz.default.createElement(
-          Z8,
+          ScrollableContent,
           { height: 1 },
           Xz.default.createElement(
             T,
@@ -215932,7 +215932,7 @@ function Pn4(A) {
       let $;
       if (q[5] === Symbol.for("react.memo_cache_sentinel"))
         (($ = Xz.default.createElement(
-          Z8,
+          ScrollableContent,
           { height: 1 },
           Xz.default.createElement(
             T,
@@ -215955,7 +215955,7 @@ function Pn4(A) {
       let $;
       if (q[7] === Symbol.for("react.memo_cache_sentinel"))
         (($ = Xz.default.createElement(
-          Z8,
+          ScrollableContent,
           { height: 1 },
           Xz.default.createElement(T, { color: "error" }, tj1),
         )),
@@ -215967,7 +215967,7 @@ function Pn4(A) {
       let $;
       if (q[8] === Symbol.for("react.memo_cache_sentinel"))
         (($ = Xz.default.createElement(
-          Z8,
+          ScrollableContent,
           { height: 1 },
           Xz.default.createElement(T, { color: "error" }, ej1),
         )),
@@ -215979,7 +215979,7 @@ function Pn4(A) {
       let $;
       if (q[9] === Symbol.for("react.memo_cache_sentinel"))
         (($ = Xz.default.createElement(
-          Z8,
+          ScrollableContent,
           { height: 1 },
           Xz.default.createElement(
             T,
@@ -216013,7 +216013,7 @@ function Pn4(A) {
       let O;
       if (q[11] === Symbol.for("react.memo_cache_sentinel"))
         ((O = Xz.default.createElement(
-          Z8,
+          ScrollableContent,
           null,
           Xz.default.createElement(
             m,
@@ -216037,7 +216037,7 @@ function Pn4(A) {
       let $;
       if (q[12] === Symbol.for("react.memo_cache_sentinel"))
         (($ = Xz.default.createElement(
-          Z8,
+          ScrollableContent,
           { height: 1 },
           Xz.default.createElement(jg, null),
         )),
@@ -216051,7 +216051,7 @@ function Pn4(A) {
           X;
         if (q[13] !== D)
           ((X = Xz.default.createElement(
-            Z8,
+            ScrollableContent,
             null,
             Xz.default.createElement(T, { color: "error" }, D),
           )),
@@ -216424,7 +216424,7 @@ function Rn4(A) {
   let J;
   if (q[6] === Symbol.for("react.memo_cache_sentinel"))
     ((J = DE.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       DE.createElement(T, { dimColor: !0 }, $),
     )),
@@ -216543,7 +216543,7 @@ function wz6(A) {
         let I;
         if (q[11] === Symbol.for("react.memo_cache_sentinel"))
           ((I = qT.default.createElement(
-            Z8,
+            ScrollableContent,
             { height: 1 },
             qT.default.createElement(
               T,
@@ -216598,7 +216598,7 @@ function wz6(A) {
   if (q[15] !== M)
     ((N = M
       ? qT.default.createElement(
-          Z8,
+          ScrollableContent,
           null,
           qT.default.createElement(T, { dimColor: !0 }, M),
         )
@@ -216618,7 +216618,7 @@ function wz6(A) {
     ((V =
       J === "" && P.trim() === "" && !M
         ? qT.default.createElement(
-            Z8,
+            ScrollableContent,
             { height: 1 },
             qT.default.createElement(
               T,
@@ -216652,7 +216652,7 @@ function wz6(A) {
     ((v =
       z &&
       qT.default.createElement(
-        Z8,
+        ScrollableContent,
         null,
         qT.default.createElement(Jc6, { timeoutMs: z }),
       )),
@@ -216737,7 +216737,7 @@ function bn4(A) {
         let $;
         if (q[3] === Symbol.for("react.memo_cache_sentinel"))
           (($ = cP.createElement(
-            Z8,
+            ScrollableContent,
             null,
             cP.createElement(T, { dimColor: !0 }, JE),
           )),
@@ -217321,7 +217321,7 @@ function Qn4({ addMargin: A, param: { text: q }, isTranscriptMode: K }) {
           { key: w, flexDirection: "column", marginTop: 1 },
           Q5.createElement(T, { color: _ }, `@${$}${a6.pointer}`),
           Q5.createElement(
-            Z8,
+            ScrollableContent,
             null,
             Q5.createElement(T, { color: "success" }, "✓"),
             Q5.createElement(
@@ -217657,7 +217657,7 @@ function $z6(A) {
   if (Y.text === JF || Y.text === af) {
     let O;
     if (q[8] === Symbol.for("react.memo_cache_sentinel"))
-      ((O = p$.createElement(Z8, { height: 1 }, p$.createElement(jg, null))),
+      ((O = p$.createElement(ScrollableContent, { height: 1 }, p$.createElement(jg, null))),
         (q[8] = O));
     else O = q[8];
     return O;
@@ -217789,7 +217789,7 @@ function eT1(A) {
     return O;
   }
   let $;
-  if (q[5] !== _) (($ = xx.createElement(Z8, null, _)), (q[5] = _), (q[6] = $));
+  if (q[5] !== _) (($ = xx.createElement(ScrollableContent, null, _)), (q[5] = _), (q[6] = $));
   else $ = q[6];
   return $;
 }
@@ -217942,7 +217942,7 @@ function on4(A) {
       J;
     if (q[8] !== z || q[9] !== $ || q[10] !== O || q[11] !== H || q[12] !== j)
       ((J = XE.default.createElement(
-        Z8,
+        ScrollableContent,
         null,
         XE.default.createElement(
           T,
@@ -217976,7 +217976,7 @@ function eBY(A, q) {
     XE.default.Fragment,
     { key: q },
     XE.default.createElement(
-      Z8,
+      ScrollableContent,
       null,
       XE.default.createElement(
         T,
@@ -218007,7 +218007,7 @@ function eBY(A, q) {
 }
 function AgY(A, q) {
   return XE.default.createElement(
-    Z8,
+    ScrollableContent,
     { key: q },
     XE.default.createElement(
       T,
@@ -218199,7 +218199,7 @@ function sn4({ attachment: A, addMargin: q, verbose: K, isTranscriptMode: Y }) {
         K &&
           A.memories.map((w) =>
             d7.default.createElement(
-              Z8,
+              ScrollableContent,
               { key: w.path },
               d7.default.createElement(T, { dimColor: !0 }, KgY(w.path)),
             ),
@@ -218502,7 +218502,7 @@ function bD(A) {
     _;
   if (q[0] !== Y || q[1] !== z || q[2] !== w)
     ((_ = d7.default.createElement(
-      Z8,
+      ScrollableContent,
       null,
       d7.default.createElement(T, { color: z, dimColor: w, wrap: "wrap" }, Y),
     )),
@@ -218590,7 +218590,7 @@ function en4(A) {
   let Z;
   if (q[15] !== P || q[16] !== G)
     ((Z = qi.createElement(
-      Z8,
+      ScrollableContent,
       null,
       qi.createElement(m, { flexDirection: "column" }, P, G),
     )),
@@ -218974,7 +218974,7 @@ function JgY(A) {
       (q[1] = _));
   else _ = q[1];
   let [$] = FI8.useState(_);
-  if (!(k1().showTurnDuration ?? !0)) return null;
+  if (!(getSettings().showTurnDuration ?? !0)) return null;
   let H;
   if (q[2] !== K.durationMs)
     ((H = X3(K.durationMs)), (q[2] = K.durationMs), (q[3] = H));
@@ -219546,7 +219546,7 @@ function Hr4(A) {
       ((P =
         !z &&
         oK.createElement(
-          Z8,
+          ScrollableContent,
           null,
           oK.createElement(
             m,
@@ -219586,7 +219586,7 @@ function Hr4(A) {
     else P = q[6];
     let W;
     if (q[7] !== z || q[8] !== _)
-      ((W = z && oK.createElement(Z8, null, oK.createElement(T, null, _))),
+      ((W = z && oK.createElement(ScrollableContent, null, oK.createElement(T, null, _))),
         (q[7] = z),
         (q[8] = _),
         (q[9] = W));
@@ -219654,7 +219654,7 @@ function Hr4(A) {
   else j = q[17];
   let J;
   if (q[18] !== z || q[19] !== _)
-    ((J = z && oK.createElement(Z8, null, oK.createElement(T, null, _))),
+    ((J = z && oK.createElement(ScrollableContent, null, oK.createElement(T, null, _))),
       (q[18] = z),
       (q[19] = _),
       (q[20] = J));
@@ -220173,7 +220173,7 @@ function Jr4(A) {
   else h = q[24];
   let F;
   if (q[25] !== h)
-    ((F = L9.createElement(Z8, null, L9.createElement(T, { dimColor: !0 }, h))),
+    ((F = L9.createElement(ScrollableContent, null, L9.createElement(T, { dimColor: !0 }, h))),
       (q[25] = h),
       (q[26] = F));
   else F = q[26];
@@ -220298,7 +220298,7 @@ function kgY(A) {
     if (q[8] !== _ || q[9] !== $ || q[10] !== Y || q[11] !== z)
       ((J = (D) =>
         I8.createElement(
-          Z8,
+          ScrollableContent,
           { key: D.uuid },
           I8.createElement(HC, {
             message: D.data.message,
@@ -220358,7 +220358,7 @@ function Wr4(
       m,
       { flexDirection: "column" },
       I8.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         I8.createElement(
           T,
@@ -220382,7 +220382,7 @@ function Wr4(
       m,
       { flexDirection: "column" },
       I8.createElement(
-        Z8,
+        ScrollableContent,
         { height: 1 },
         I8.createElement(
           T,
@@ -220412,7 +220412,7 @@ function Wr4(
       w &&
         G &&
         I8.createElement(
-          Z8,
+          ScrollableContent,
           null,
           I8.createElement(Mc6, { prompt: G, theme: z }),
         ),
@@ -220440,7 +220440,7 @@ function Wr4(
     w &&
       X &&
       I8.createElement(
-        Z8,
+        ScrollableContent,
         null,
         I8.createElement(Mc6, { prompt: X, theme: z }),
       ),
@@ -220455,12 +220455,12 @@ function Wr4(
       D &&
       D.length > 0 &&
       I8.createElement(
-        Z8,
+        ScrollableContent,
         null,
         I8.createElement(pI8, { content: D, theme: z }),
       ),
     I8.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       I8.createElement(HC, {
         message: W,
@@ -220523,7 +220523,7 @@ function mf6(
 ) {
   if (!A.length)
     return I8.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       I8.createElement(T, { dimColor: !0 }, RgY),
     );
@@ -220553,7 +220553,7 @@ function mf6(
   if ($) {
     let { toolUseCount: W, tokens: G } = O();
     return I8.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       I8.createElement(
         T,
@@ -220591,7 +220591,7 @@ function mf6(
       A.filter((W) => iP(W.data)).map((W) => W.data),
     );
   return I8.createElement(
-    Z8,
+    ScrollableContent,
     null,
     I8.createElement(
       m,
@@ -221029,17 +221029,17 @@ var lI8 = E(() => {
   f1();
 });
 function _N1(A) {
-  let K = k1().skillUsage?.[A],
+  let K = getSettings().skillUsage?.[A],
     Y = Date.now(),
     z = (K?.usageCount ?? 0) + 1;
   if (!K || K.usageCount !== z || K.lastUsedAt !== Y)
-    J8((w) => ({
+    updateSettings((w) => ({
       ...w,
       skillUsage: { ...w.skillUsage, [A]: { usageCount: z, lastUsedAt: Y } },
     }));
 }
 function $N1(A) {
-  let K = k1().skillUsage?.[A];
+  let K = getSettings().skillUsage?.[A];
   if (!K) return 0;
   let Y = (Date.now() - K.lastUsedAt) / 86400000,
     z = Math.pow(0.5, Y / 7);
@@ -221816,7 +221816,7 @@ async function* jC({
   );
   let q6 = N.length > 0 ? N[N.length - 1].uuid : null;
   try {
-    for await (let A6 of JC({
+    for await (let A6 of agentLoop({
       messages: N,
       systemPrompt: g,
       userContext: v,
@@ -226307,13 +226307,13 @@ function Pz6(A, q, K = wpY) {
   for (let _ of A)
     if (_.type === "assistant" && Array.isArray(_.message.content)) {
       for (let $ of _.message.content)
-        if ($.type === "tool_use" && $.name === n4) {
+        if ($.type === "tool_use" && $.name === READ_TOOL_NAME) {
           let O = $.input;
           if (O?.file_path && O?.offset === void 0 && O?.limit === void 0) {
             let H = Q4(O.file_path, q);
             z.set($.id, H);
           }
-        } else if ($.type === "tool_use" && $.name === U3) {
+        } else if ($.type === "tool_use" && $.name === WRITE_TOOL_NAME) {
           let O = $.input;
           if (O?.file_path && O?.content) {
             let H = Q4(O.file_path, q);
@@ -227784,7 +227784,7 @@ function uN1(A) {
     let I;
     if (q[8] !== z || q[9] !== $)
       ((I = RV.default.createElement(
-        Z8,
+        ScrollableContent,
         null,
         RV.default.createElement(
           K16,
@@ -227863,7 +227863,7 @@ function uN1(A) {
   let L;
   if (q[27] !== Z || q[28] !== v)
     ((L = RV.default.createElement(
-      Z8,
+      ScrollableContent,
       null,
       RV.default.createElement(
         K16,
@@ -228155,7 +228155,7 @@ function ko4({
           H = [],
           j = 0,
           J = 0;
-        for await (let D of JC({ messages: O, ...q })) {
+        for await (let D of agentLoop({ messages: O, ...q })) {
           if ($.aborted) {
             w(O);
             return;
@@ -228561,7 +228561,7 @@ function ho4(
   let w = A.at(-1);
   if (!w || !w.data)
     return Q$.createElement(
-      Z8,
+      ScrollableContent,
       { height: 1 },
       Q$.createElement(T, { dimColor: !0 }, "Running…"),
     );
@@ -228579,7 +228579,7 @@ function ho4(
 }
 function Io4() {
   return Q$.createElement(
-    Z8,
+    ScrollableContent,
     { height: 1 },
     Q$.createElement(T, { dimColor: !0 }, "Waiting…"),
   );
@@ -228651,7 +228651,7 @@ var Ix8 = E(() => {
   N8();
   yz();
   B1();
-  VV_ = i6(() =>
+  VV_ = lazyOnce(() =>
     x.object({
       thinking: x.string(),
       shouldBlock: x.boolean(),
@@ -229025,7 +229025,7 @@ var lf6 = E(() => {
   oz();
   r1();
   ((QpY = Y6(Eu(), 1)),
-    (iV_ = i6(() =>
+    (iV_ = lazyOnce(() =>
       x.object({
         id: x.string(),
         workerId: x.string(),
@@ -229571,7 +229571,7 @@ ${S}`);
       let L = K8({ content: N }),
         S = [L],
         I = Z,
-        B = ak(Z);
+        B = countMessageTokens(Z);
       if (B > PQ6($.options.mainLoopModel)) {
         y(`[inProcessRunner] ${q.agentId} compacting history (${B} tokens)`);
         let A6 = {
@@ -230105,7 +230105,7 @@ function ja4() {
     ((kz6 = Uc6),
       y(`[TeammateModeSnapshot] Captured from CLI override: ${kz6}`));
   else
-    ((kz6 = k1().teammateMode ?? "auto"),
+    ((kz6 = getSettings().teammateMode ?? "auto"),
       y(`[TeammateModeSnapshot] Captured from config: ${kz6}`));
 }
 function dc6() {
@@ -230438,17 +230438,17 @@ function Za4() {
   ];
 }
 function cx8() {
-  if (k1().iterm2It2SetupComplete !== !0)
-    (J8((q) => ({ ...q, iterm2It2SetupComplete: !0 })),
+  if (getSettings().iterm2It2SetupComplete !== !0)
+    (updateSettings((q) => ({ ...q, iterm2It2SetupComplete: !0 })),
       y("[it2Setup] Marked it2 setup as complete"));
 }
 function fa4(A) {
-  if (k1().preferTmuxOverIterm2 !== A)
-    (J8((K) => ({ ...K, preferTmuxOverIterm2: A })),
+  if (getSettings().preferTmuxOverIterm2 !== A)
+    (updateSettings((K) => ({ ...K, preferTmuxOverIterm2: A })),
       y(`[it2Setup] Set preferTmuxOverIterm2 = ${A}`));
 }
 function Ta4() {
-  return k1().preferTmuxOverIterm2 === !0;
+  return getSettings().preferTmuxOverIterm2 === !0;
 }
 var lx8 = E(() => {
   cq();

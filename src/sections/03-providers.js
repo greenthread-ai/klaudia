@@ -8514,7 +8514,7 @@ var a76 = E(() => {
   s5();
   Fv = T8((A) => {
     let q = hL(),
-      K = k1(),
+      K = getSettings(),
       Y,
       z,
       w;
@@ -27504,7 +27504,7 @@ var zUA = C((IJ2, YUA) => {
       case "iso88594":
       case "iso_8859-4":
       case "iso_8859-4:1988":
-      case "l4":
+      case "BASH_TOOL_NAME":
       case "latin4":
         return "ISO-8859-4";
       case "csisolatincyrillic":
@@ -27581,7 +27581,7 @@ var zUA = C((IJ2, YUA) => {
       case "iso8859-15":
       case "iso885915":
       case "iso_8859-15":
-      case "l9":
+      case "readTool":
         return "ISO-8859-15";
       case "iso-8859-16":
         return "ISO-8859-16";
@@ -71594,7 +71594,7 @@ var N$ = E(() => {
     "policySettings",
   ];
 });
-function i6(A) {
+function lazyOnce(A) {
   let q;
   return () => (q ??= A());
 }

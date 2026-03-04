@@ -1394,7 +1394,7 @@ async function nJz(A, q, K, Y, z, w) {
   }
   return null;
 }
-async function rJz(A, q, K, Y, z) {
+async function checkToolPermissions(A, q, K, Y, z) {
   if (K.abortController.signal.aborted) throw new j2();
   let w = await K.getAppState(),
     _ = jGq(w.toolPermissionContext, A);
@@ -1415,7 +1415,7 @@ async function rJz(A, q, K, Y, z) {
   if (O) {
     if (
       !(
-        A.name === l4 &&
+        A.name === BASH_TOOL_NAME &&
         xA.isSandboxingEnabled() &&
         xA.isAutoAllowBashIfSandboxedEnabled() &&
         ri(q)
@@ -1554,7 +1554,7 @@ function JGq(A, q) {
 }
 var jc8,
   GD = async (A, q, K, Y, z) => {
-    let w = await rJz(A, q, K, Y, z);
+    let w = await checkToolPermissions(A, q, K, Y, z);
     if (w.behavior === "allow") {
       let _ = await K.getAppState();
       return w;
@@ -3097,7 +3097,7 @@ function Tj(A) {
 }
 function hJq(A) {
   let q = [];
-  if (pA("policySettings")?.allowManagedHooksOnly !== !0) {
+  if (getConfigValue("policySettings")?.allowManagedHooksOnly !== !0) {
     let _ = ["userSettings", "projectSettings", "localSettings"],
       $ = new Set();
     for (let O of _) {
@@ -3107,7 +3107,7 @@ function hJq(A) {
         if ($.has(J)) continue;
         $.add(J);
       }
-      let j = pA(O);
+      let j = getConfigValue(O);
       if (!j?.hooks) continue;
       for (let [J, D] of Object.entries(j.hooks))
         for (let X of D)
@@ -3129,7 +3129,7 @@ function hJq(A) {
   return q;
 }
 async function jJq(A, q, K = "", Y = "userSettings") {
-  let w = (pA(Y) ?? {}).hooks ?? {},
+  let w = (getConfigValue(Y) ?? {}).hooks ?? {},
     _ = w[A] ?? [],
     $ = _.findIndex((J) => J.matcher === K),
     O;
@@ -3152,7 +3152,7 @@ async function uJq(A) {
     throw Error(
       "Session hooks cannot be removed through settings. They are temporary and will be cleared when the session ends.",
     );
-  let q = pA(A.source) ?? {},
+  let q = getConfigValue(A.source) ?? {},
     K = q.hooks ?? {},
     z = (K[A.event] ?? [])
       .map(($) => {
@@ -3239,7 +3239,7 @@ var Cg = E(() => {
   B1();
 });
 function Zc8() {
-  let A = pA("policySettings");
+  let A = getConfigValue("policySettings");
   if (A?.disableAllHooks === !0) return {};
   if (A?.allowManagedHooksOnly === !0) return A.hooks ?? {};
   let q = SA();
@@ -3247,13 +3247,13 @@ function Zc8() {
   return q.hooks ?? {};
 }
 function zx() {
-  let A = pA("policySettings");
+  let A = getConfigValue("policySettings");
   if (A?.allowManagedHooksOnly === !0) return !0;
   if (SA().disableAllHooks === !0 && A?.disableAllHooks !== !0) return !0;
   return !1;
 }
 function Bn6() {
-  return pA("policySettings")?.disableAllHooks === !0;
+  return getConfigValue("policySettings")?.disableAllHooks === !0;
 }
 function fc8(A) {
   if (!A) return null;
@@ -3336,8 +3336,8 @@ var Q96 = E(() => {
 var oU$, Gy1;
 var VGq = E(() => {
   K4();
-  ((oU$ = i6(() => I4.enum(["allow", "deny", "ask"]))),
-    (Gy1 = i6(() =>
+  ((oU$ = lazyOnce(() => I4.enum(["allow", "deny", "ask"]))),
+    (Gy1 = lazyOnce(() =>
       I4.object({ toolName: I4.string(), ruleContent: I4.string().optional() }),
     )));
 });
@@ -3346,7 +3346,7 @@ var Nc8 = E(() => {
   K4();
   VGq();
   c0();
-  ((ZV6 = i6(() =>
+  ((ZV6 = lazyOnce(() =>
     I4.enum([
       "userSettings",
       "projectSettings",
@@ -3355,7 +3355,7 @@ var Nc8 = E(() => {
       "cliArg",
     ]),
   )),
-    (Zy1 = i6(() =>
+    (Zy1 = lazyOnce(() =>
       I4.discriminatedUnion("type", [
         I4.object({
           type: I4.literal("addRules"),
@@ -3404,7 +3404,7 @@ var Vc8 = E(() => {
   K4();
   iJ6();
   Nc8();
-  ((vGq = i6(() =>
+  ((vGq = lazyOnce(() =>
     x.object({
       prompt: x.string(),
       message: x.string(),
@@ -3417,7 +3417,7 @@ var Vc8 = E(() => {
       ),
     }),
   )),
-    (JDz = i6(() =>
+    (JDz = lazyOnce(() =>
       x.object({
         continue: x
           .boolean()
@@ -3507,7 +3507,7 @@ var Vc8 = E(() => {
           .optional(),
       }),
     )),
-    (fV6 = i6(() => {
+    (fV6 = lazyOnce(() => {
       let A = x.object({
         async: x.literal(!0),
         asyncTimeout: x.number().optional(),
@@ -3573,7 +3573,7 @@ var Ny1 = E(() => {
   Hl();
   kA();
   xF6();
-  gn6 = i6(() =>
+  gn6 = lazyOnce(() =>
     x.object({
       ok: x.boolean().describe("Whether the condition was met"),
       reason: x
@@ -3811,7 +3811,7 @@ When done, return your result using the ${yX} tool with:
       let g = null,
         u = 0,
         U = !1;
-      for await (let c of JC({
+      for await (let c of agentLoop({
         messages: M,
         systemPrompt: S,
         userContext: {},
@@ -6158,7 +6158,7 @@ async function Rc8(A, q, K = 5000) {
     return;
   }
   let Y;
-  if (zx()) Y = pA("policySettings")?.statusLine;
+  if (zx()) Y = getConfigValue("policySettings")?.statusLine;
   else Y = SA()?.statusLine;
   if (!Y || Y.type !== "command") return;
   let z = q || AbortSignal.timeout(K);
@@ -6193,7 +6193,7 @@ async function Sg8(A, q, K = 5000) {
       []
     );
   let Y;
-  if (zx()) Y = pA("policySettings")?.fileSuggestion;
+  if (zx()) Y = getConfigValue("policySettings")?.fileSuggestion;
   else Y = SA()?.fileSuggestion;
   if (!Y || Y.type !== "command") return [];
   let z = q || AbortSignal.timeout(K);
@@ -6857,7 +6857,7 @@ function Lz6(A) {
       return dn6(".claude", "settings.local.json");
   }
 }
-function pA(A) {
+function getConfigValue(A) {
   if (A === "policySettings") {
     let Y = oG1();
     if (Y && Object.keys(Y).length > 0) return Y;
@@ -6903,7 +6903,7 @@ function iA(A, q) {
   try {
     let Y = jZq(K);
     if (!P1().existsSync(Y)) P1().mkdirSync(Y);
-    let z = pA(A);
+    let z = getConfigValue(A);
     if (!z && P1().existsSync(K)) {
       let _ = KH(K),
         $ = s3(_);
@@ -7083,10 +7083,10 @@ function qz6() {
 }
 function dW6() {
   return !!(
-    pA("userSettings")?.skipDangerousModePermissionPrompt ||
-    pA("localSettings")?.skipDangerousModePermissionPrompt ||
-    pA("flagSettings")?.skipDangerousModePermissionPrompt ||
-    pA("policySettings")?.skipDangerousModePermissionPrompt
+    getConfigValue("userSettings")?.skipDangerousModePermissionPrompt ||
+    getConfigValue("localSettings")?.skipDangerousModePermissionPrompt ||
+    getConfigValue("flagSettings")?.skipDangerousModePermissionPrompt ||
+    getConfigValue("policySettings")?.skipDangerousModePermissionPrompt
   );
 }
 function PZq(A) {
@@ -7159,7 +7159,7 @@ function q86() {
   let A = jA("tengu_penguins_off", null);
   if (A !== null) return (y(`Fast mode unavailable: ${A}`), A);
   if (C7() && Ik6()) {
-    if (!pA("flagSettings")?.fastMode)
+    if (!getConfigValue("flagSettings")?.fastMode)
       return (
         y("Fast mode unavailable: Fast mode is not available in the Agent SDK"),
         "Fast mode is not available in the Agent SDK"
@@ -7229,7 +7229,7 @@ function RA4() {
   if (ai.status === "disabled") return;
   ((ai = { status: "disabled", reason: "preference" }),
     iA("userSettings", { fastMode: void 0 }),
-    J8((A) => ({ ...A, penguinModeOrgEnabled: !1 })));
+    updateSettings((A) => ({ ...A, penguinModeOrgEnabled: !1 })));
   for (let A of hy1) A(!1);
 }
 function ZZq(A) {
@@ -7275,7 +7275,7 @@ function CA4(A) {
     !sDz(A))
   )
     (iA("userSettings", { fastMode: void 0 }),
-      J8((K) => ({ ...K, penguinModeOrgEnabled: !1 })));
+      updateSettings((K) => ({ ...K, penguinModeOrgEnabled: !1 })));
   for (let K of pc8) K(q);
 }
 function mB() {
@@ -7348,7 +7348,7 @@ async function AL1() {
       let z =
         ai.status !== "pending"
           ? ai.status === "enabled"
-          : k1().penguinModeOrgEnabled;
+          : getSettings().penguinModeOrgEnabled;
       if (
         ((ai = Y.enabled
           ? { status: "enabled" }
@@ -7356,7 +7356,7 @@ async function AL1() {
         z !== Y.enabled)
       ) {
         if (!Y.enabled) iA("userSettings", { fastMode: void 0 });
-        J8((w) => ({ ...w, penguinModeOrgEnabled: Y.enabled }));
+        updateSettings((w) => ({ ...w, penguinModeOrgEnabled: Y.enabled }));
         for (let w of hy1) w(Y.enabled);
       }
       y(
@@ -9568,7 +9568,7 @@ function jA(A, q) {
   if ((Q26(A, q), U26.has(A))) Ar6(A);
   else IV6.add(A);
   try {
-    let Y = k1().cachedGrowthBookFeatures?.[A];
+    let Y = getSettings().cachedGrowthBookFeatures?.[A];
     return Y !== void 0 ? Y : q;
   } catch {
     return q;
@@ -9586,7 +9586,7 @@ function Jw(A) {
   if (!ti()) return !1;
   if ((Q26(A, !1), U26.has(A))) Ar6(A);
   else IV6.add(A);
-  let K = k1(),
+  let K = getSettings(),
     Y = K.cachedGrowthBookFeatures?.[A];
   if (Y !== void 0) return Boolean(Y);
   return K.cachedStatsigGates?.[A] ?? !1;
@@ -9596,7 +9596,7 @@ async function bPq(A) {
   if (q && A in q) return Boolean(q[A]);
   if (!ti()) return !1;
   if (tn6) await tn6;
-  let K = k1(),
+  let K = getSettings(),
     Y = K.cachedStatsigGates?.[A];
   if (Y !== void 0) return (Q26(A, !1), Boolean(Y));
   let z = K.cachedGrowthBookFeatures?.[A];
@@ -9607,7 +9607,7 @@ async function D9q(A) {
   let q = en6();
   if (q && A in q) return Boolean(q[A]);
   if (!ti()) return !1;
-  let K = k1().cachedGrowthBookFeatures?.[A];
+  let K = getSettings().cachedGrowthBookFeatures?.[A];
   if (K === !0) {
     if (U26.has(A)) Ar6(A);
     else IV6.add(A);
@@ -9615,7 +9615,7 @@ async function D9q(A) {
   }
   let Y = await ql8(A, !1, !0);
   if (Y !== K)
-    J8((z) => ({
+    updateSettings((z) => ({
       ...z,
       cachedGrowthBookFeatures: {
         ...(z.cachedGrowthBookFeatures ?? {}),
@@ -9664,7 +9664,7 @@ async function QXz() {
     if (!A) return;
     if ((await A.refreshFeatures(), A !== F26)) return;
     await dZq(A);
-    let q = k1().cachedGrowthBookFeatures;
+    let q = getSettings().cachedGrowthBookFeatures;
     if (q) {
       let K = { ...q },
         Y = !1;
@@ -9672,7 +9672,7 @@ async function QXz() {
         let w = A.getFeatureValue(z, void 0);
         if (w !== void 0 && !oT(w, q[z])) ((K[z] = w), (Y = !0));
       }
-      if (Y) J8((z) => ({ ...z, cachedGrowthBookFeatures: K }));
+      if (Y) updateSettings((z) => ({ ...z, cachedGrowthBookFeatures: K }));
     }
   } catch (A) {
     $6(
@@ -9790,9 +9790,9 @@ var F7 = E(() => {
   Q26 = T8(async (A, q) => {
     if (!cy1) return;
     let K = await ql8(A, q, !1),
-      Y = k1();
+      Y = getSettings();
     if (oT(Y.cachedGrowthBookFeatures?.[A], K)) return;
-    J8((z) => ({
+    updateSettings((z) => ({
       ...z,
       cachedGrowthBookFeatures: {
         ...(z.cachedGrowthBookFeatures ?? {}),
@@ -10046,9 +10046,9 @@ function tZq(A, q, K) {
   let Y = (() => {
       switch (q) {
         case "edit":
-          return Lq;
+          return EDIT_TOOL_NAME;
         case "read":
-          return n4;
+          return READ_TOOL_NAME;
       }
     })(),
     z = Dc8(A, Y, K),
@@ -10754,7 +10754,7 @@ var $r6 = {};
 s1($r6, {
   shouldSkipPluginAutoupdate: () => fN6,
   setMockBillingAccessOverride: () => e64,
-  saveGlobalConfig: () => J8,
+  saveGlobalConfig: () => updateSettings,
   saveCurrentProjectConfig: () => sw,
   recordFirstStartTime: () => Dl8,
   isProjectConfigKey: () => DMz,
@@ -10770,7 +10770,7 @@ s1($r6, {
   getMemoryPath: () => LI,
   getManagedClaudeRulesDir: () => SJ1,
   getGlobalConfigWriteCount: () => XMz,
-  getGlobalConfig: () => k1,
+  getGlobalConfig: () => getSettings,
   getCustomApiKeyStatus: () => wr6,
   getCurrentProjectConfig: () => aw,
   getAutoUpdaterDisabledReason: () => sY6,
@@ -10820,7 +10820,7 @@ function ty1(A) {
     Y = q.hasCompletedOnboarding === !0 && A.hasCompletedOnboarding !== !0;
   return K || Y;
 }
-function J8(A) {
+function updateSettings(A) {
   try {
     if (
       jfq(tD(), BC, (K) => {
@@ -10898,7 +10898,7 @@ function Yfq(A) {
     } else q[Y] = z;
   return K ? q : A;
 }
-function k1() {
+function getSettings() {
   try {
     let A = performance.now();
     if (tV.config && A - sy1 < WMz) return (bV6++, tV.config);
@@ -10921,12 +10921,12 @@ function k1() {
   }
 }
 function L16() {
-  let A = k1().remoteControlAtStartup;
+  let A = getSettings().remoteControlAtStartup;
   if (A !== void 0) return A;
   return !1;
 }
 function wr6(A) {
-  let q = k1();
+  let q = getSettings();
   if (q.customApiKeyResponses?.approved?.includes(A)) return "approved";
   if (q.customApiKeyResponses?.rejected?.includes(A)) return "rejected";
   return "new";
@@ -11170,7 +11170,7 @@ You can manually restore it by running: cp "${X}" "${A}"
 }
 function aw() {
   let A = ey1(),
-    q = k1();
+    q = getSettings();
   if (!q.projects) return zr6;
   let K = q.projects[A] ?? zr6;
   if (typeof K.allowedTools === "string")
@@ -11213,7 +11213,7 @@ function sY6() {
   if (X1(process.env.DISABLE_AUTOUPDATER)) return "DISABLE_AUTOUPDATER set";
   if (process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC)
     return "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC set";
-  let A = k1();
+  let A = getSettings();
   if (
     A.autoUpdates === !1 &&
     (A.installMethod !== "native" || A.autoUpdatesProtectedForNative !== !0)
@@ -11227,7 +11227,7 @@ function ln6() {
   let q = Ix(),
     K = fk() !== null;
   if (!q.hasToken && !K) return !1;
-  let Y = k1(),
+  let Y = getSettings(),
     z = Y.oauthAccount?.organizationRole,
     w = Y.oauthAccount?.workspaceRole;
   if (!z || !w) return !1;
@@ -11244,25 +11244,25 @@ function TI() {
   if (!Y7()) return !1;
   let A = kK();
   if (A === "max" || A === "pro") return !0;
-  let K = k1().oauthAccount?.organizationRole;
+  let K = getSettings().oauthAccount?.organizationRole;
   return !!K && ["admin", "billing", "owner", "primary_owner"].includes(K);
 }
 function hL() {
-  let A = k1();
+  let A = getSettings();
   if (A.userID) return A.userID;
   let q = HMz(32).toString("hex");
-  return (J8((K) => ({ ...K, userID: q })), q);
+  return (updateSettings((K) => ({ ...K, userID: q })), q);
 }
 function W_1() {
-  let A = k1();
+  let A = getSettings();
   if (A.anonymousId) return A.anonymousId;
   let q = `claudecode.v1.${jMz()}`;
-  return (J8((K) => ({ ...K, anonymousId: q })), q);
+  return (updateSettings((K) => ({ ...K, anonymousId: q })), q);
 }
 function Dl8() {
-  if (!k1().firstStartTime) {
+  if (!getSettings().firstStartTime) {
     let q = new Date().toISOString();
-    J8((K) => ({ ...K, firstStartTime: K.firstStartTime ?? q }));
+    updateSettings((K) => ({ ...K, firstStartTime: K.firstStartTime ?? q }));
   }
 }
 function LI(A) {
@@ -11672,7 +11672,7 @@ function p_(A = {}) {
     if (q) return { key: q, source: "ANTHROPIC_API_KEY" };
     return { key: null, source: "none" };
   }
-  if (q && k1().customApiKeyResponses?.approved?.includes(mV(q)))
+  if (q && getSettings().customApiKeyResponses?.approved?.includes(mV(q)))
     return { key: q, source: "ANTHROPIC_API_KEY" };
   let K = Xl8();
   if (K) return { key: K, source: "ANTHROPIC_API_KEY" };
@@ -11692,8 +11692,8 @@ function Hr6() {
 function Mfq() {
   let A = Hr6();
   if (!A) return !1;
-  let q = pA("projectSettings"),
-    K = pA("localSettings");
+  let q = getConfigValue("projectSettings"),
+    K = getConfigValue("localSettings");
   return q?.apiKeyHelper === A || K?.apiKeyHelper === A;
 }
 function Pl8() {
@@ -11702,8 +11702,8 @@ function Pl8() {
 function Wl8() {
   let A = Pl8();
   if (!A) return !1;
-  let q = pA("projectSettings"),
-    K = pA("localSettings");
+  let q = getConfigValue("projectSettings"),
+    K = getConfigValue("localSettings");
   return q?.awsAuthRefresh === A || K?.awsAuthRefresh === A;
 }
 function Gl8() {
@@ -11712,8 +11712,8 @@ function Gl8() {
 function Zl8() {
   let A = Gl8();
   if (!A) return !1;
-  let q = pA("projectSettings"),
-    K = pA("localSettings");
+  let q = getConfigValue("projectSettings"),
+    K = getConfigValue("localSettings");
   return q?.awsCredentialExport === A || K?.awsCredentialExport === A;
 }
 function Pfq() {
@@ -11890,7 +11890,7 @@ async function U$8(A) {
     }
   else n("tengu_api_key_saved_to_config", {});
   let K = mV(A);
-  (J8((Y) => {
+  (updateSettings((Y) => {
     let z = Y.customApiKeyResponses?.approved ?? [];
     return {
       ...Y,
@@ -11905,13 +11905,13 @@ async function U$8(A) {
     iN6.cache.clear?.());
 }
 function RMz(A) {
-  let q = k1(),
+  let q = getSettings(),
     K = mV(A);
   return q.customApiKeyResponses?.approved?.includes(K) ?? !1;
 }
 async function th8() {
   (await Gfq(),
-    J8((A) => ({ ...A, primaryApiKey: void 0 })),
+    updateSettings((A) => ({ ...A, primaryApiKey: void 0 })),
     iN6.cache.clear?.());
 }
 async function Gfq() {
@@ -12059,7 +12059,7 @@ function rh8() {
   return !0;
 }
 function V5() {
-  return PJ() ? k1().oauthAccount : void 0;
+  return PJ() ? getSettings().oauthAccount : void 0;
 }
 function MP6() {
   let q = V5()?.billingType;
@@ -12138,8 +12138,8 @@ function Zfq() {
 function ffq() {
   let A = Zfq();
   if (!A) return !1;
-  let q = pA("projectSettings"),
-    K = pA("localSettings");
+  let q = getConfigValue("projectSettings"),
+    K = getConfigValue("localSettings");
   return q?.otelHeadersHelper === A || K?.otelHeadersHelper === A;
 }
 function oh8() {
@@ -12288,7 +12288,7 @@ var IA = E(() => {
         $6(K);
       }
     }
-    let A = k1();
+    let A = getSettings();
     if (!A.primaryApiKey) return null;
     return { key: A.primaryApiKey, source: "/login managed key" };
   });
@@ -12412,7 +12412,7 @@ function Efq(A) {
         return `Browser extension is not connected. Please ensure the Claude browser extension is installed and running (${mMz}), and that you are logged into claude.ai with the same account as Claude Code. If this is your first time connecting to Chrome, you may need to restart Chrome for the installation to take effect. If you continue to experience issues, please report a bug: ${BMz}`;
       },
       onExtensionPaired: (Y, z) => {
-        (J8((w) => {
+        (updateSettings((w) => {
           if (
             w.chromeExtension?.pairedDeviceId === Y &&
             w.chromeExtension?.pairedDeviceName === z
@@ -12426,13 +12426,13 @@ function Efq(A) {
           q.info(`Paired with "${z}" (${Y.slice(0, 8)})`));
       },
       getPersistedDeviceId: () => {
-        return k1().chromeExtension?.pairedDeviceId;
+        return getSettings().chromeExtension?.pairedDeviceId;
       },
       ...(K && {
         bridgeConfig: {
           url: K,
           getUserId: async () => {
-            return k1().oauthAccount?.accountUuid;
+            return getSettings().oauthAccount?.accountUuid;
           },
           getOAuthToken: async () => {
             return z4()?.accessToken ?? "";
@@ -14878,10 +14878,10 @@ var gl8 = E(() => {
   ]);
 });
 function wTq() {
-  let A = k1().env || {};
+  let A = getSettings().env || {};
   for (let [Y, z] of Object.entries(A)) process.env[Y] = z;
   for (let Y of B0z) {
-    let w = pA(Y)?.env || {};
+    let w = getConfigValue(Y)?.env || {};
     for (let [_, $] of Object.entries(w)) process.env[_] = $;
   }
   let K = (SA() || {}).env || {};
@@ -14890,7 +14890,7 @@ function wTq() {
 }
 function S86() {
   let A = SA() || {};
-  (Object.assign(process.env, k1().env),
+  (Object.assign(process.env, getSettings().env),
     Object.assign(process.env, A.env),
     XK1());
 }
@@ -18429,17 +18429,17 @@ var XNq = E(() => {
   ue();
 });
 function MNq() {
-  return k1().tipsHistory || {};
+  return getSettings().tipsHistory || {};
 }
 function XWz(A) {
-  J8((q) => {
+  updateSettings((q) => {
     if (q.tipsHistory === A) return q;
     return { ...q, tipsHistory: A };
   });
 }
 function PNq(A) {
   let q = MNq(),
-    K = k1().numStartups;
+    K = getSettings().numStartups;
   ((q[A] = K), XWz(q));
 }
 function MWz(A) {
@@ -18448,7 +18448,7 @@ function MWz(A) {
 function ER1(A) {
   let q = MWz(A);
   if (q === 0) return 1 / 0;
-  return k1().numStartups - q;
+  return getSettings().numStartups - q;
 }
 var Ji8 = E(() => {
   l8();
@@ -18507,7 +18507,7 @@ var Di8 = E(() => {
         "Start with small features or bug fixes, tell Claude to propose a plan, and verify its suggested edits",
       cooldownSessions: 3,
       async isRelevant() {
-        return k1().numStartups < 10;
+        return getSettings().numStartups < 10;
       },
     },
     {
@@ -18516,7 +18516,7 @@ var Di8 = E(() => {
         `Use Plan Mode to prepare for a complex request before making changes. Press ${VP("chat:cycleMode", "Chat", "shift+tab")} twice to enable.`,
       cooldownSessions: 5,
       isRelevant: async () => {
-        let A = k1();
+        let A = getSettings();
         return (
           (A.lastPlanModeUse
             ? (Date.now() - A.lastPlanModeUse) / 86400000
@@ -18531,7 +18531,7 @@ var Di8 = E(() => {
       cooldownSessions: 10,
       isRelevant: async () => {
         try {
-          let A = k1(),
+          let A = getSettings(),
             q = SA(),
             K = Boolean(A.lastPlanModeUse),
             Y = Boolean(q?.permissions?.defaultMode);
@@ -18554,7 +18554,7 @@ var Di8 = E(() => {
       cooldownSessions: 10,
       isRelevant: async () => {
         try {
-          let A = k1();
+          let A = getSettings();
           return (await qD6()) <= 1 && A.numStartups > 50;
         } catch (A) {
           return !1;
@@ -18569,7 +18569,7 @@ var Di8 = E(() => {
           : "Run /terminal-setup to enable convenient terminal integration like Shift + Enter for new line and more",
       cooldownSessions: 10,
       async isRelevant() {
-        let A = k1();
+        let A = getSettings();
         if (s8.terminal === "Apple_Terminal")
           return $26.isEnabled() && !A.optionAsMetaKeyInstalled;
         return $26.isEnabled() && !A.shiftEnterKeyBindingInstalled;
@@ -18583,7 +18583,7 @@ var Di8 = E(() => {
           : "Press Shift+Enter to send a multi-line message",
       cooldownSessions: 10,
       async isRelevant() {
-        let A = k1();
+        let A = getSettings();
         return Boolean(
           (s8.terminal === "Apple_Terminal"
             ? A.optionAsMetaKeyInstalled
@@ -18600,7 +18600,7 @@ var Di8 = E(() => {
       cooldownSessions: 10,
       async isRelevant() {
         if (!tX6()) return !1;
-        let A = k1();
+        let A = getSettings();
         return !(s8.terminal === "Apple_Terminal"
           ? A.optionAsMetaKeyInstalled
           : A.shiftEnterKeyBindingInstalled);
@@ -18611,7 +18611,7 @@ var Di8 = E(() => {
       content: async () => "Use /memory to view and manage Claude memory",
       cooldownSessions: 15,
       async isRelevant() {
-        return k1().memoryUsageCount <= 0;
+        return getSettings().memoryUsageCount <= 0;
       },
     },
     {
@@ -18640,7 +18640,7 @@ var Di8 = E(() => {
         "Hit Enter to queue up additional messages while Claude is working.",
       cooldownSessions: 5,
       async isRelevant() {
-        return k1().promptQueueUseCount <= 3;
+        return getSettings().promptQueueUseCount <= 3;
       },
     },
     {
@@ -18692,13 +18692,13 @@ var Di8 = E(() => {
       content: async () =>
         "Run /install-github-app to tag @claude right from your Github issues and PRs",
       cooldownSessions: 10,
-      isRelevant: async () => !k1().githubActionSetupCount,
+      isRelevant: async () => !getSettings().githubActionSetupCount,
     },
     {
       id: "install-slack-app",
       content: async () => "Run /install-slack-app to use Claude in Slack",
       cooldownSessions: 10,
-      isRelevant: async () => !k1().slackAppInstallCount,
+      isRelevant: async () => !getSettings().slackAppInstallCount,
     },
     {
       id: "permissions",
@@ -18706,7 +18706,7 @@ var Di8 = E(() => {
         "Use /permissions to pre-approve and pre-deny bash, edit, and MCP tools",
       cooldownSessions: 10,
       async isRelevant() {
-        return k1().numStartups > 10;
+        return getSettings().numStartups > 10;
       },
     },
     {
@@ -18749,7 +18749,7 @@ var Di8 = E(() => {
       content: async () =>
         "Name your conversations with /rename to find them easily in /resume later",
       cooldownSessions: 15,
-      isRelevant: async () => xi() && k1().numStartups > 10,
+      isRelevant: async () => xi() && getSettings().numStartups > 10,
     },
     {
       id: "custom-commands",
@@ -18757,7 +18757,7 @@ var Di8 = E(() => {
         "Create skills by adding .md files to .claude/skills/ in your project or ~/.claude/skills/ for skills that work in any project",
       cooldownSessions: 15,
       async isRelevant() {
-        return k1().numStartups > 10;
+        return getSettings().numStartups > 10;
       },
     },
     {
@@ -18780,7 +18780,7 @@ var Di8 = E(() => {
         "Use /agents to optimize specific tasks. Eg. Software Architect, Code Writer, Code Reviewer",
       cooldownSessions: 15,
       async isRelevant() {
-        return k1().numStartups > 5;
+        return getSettings().numStartups > 5;
       },
     },
     {
@@ -18789,7 +18789,7 @@ var Di8 = E(() => {
         "Use --agent <agent_name> to directly start a conversation with a subagent",
       cooldownSessions: 15,
       async isRelevant() {
-        return k1().numStartups > 5;
+        return getSettings().numStartups > 5;
       },
     },
     {
@@ -18818,7 +18818,7 @@ var Di8 = E(() => {
         `Your default model setting is Opus Plan Mode. Press ${VP("chat:cycleMode", "Chat", "shift+tab")} twice to activate Plan Mode and plan with Claude Opus.`,
       cooldownSessions: 2,
       async isRelevant() {
-        let A = k1(),
+        let A = getSettings(),
           K = eR() === "opusplan",
           Y = A.lastPlanModeUse
             ? (Date.now() - A.lastPlanModeUse) / 86400000
@@ -18856,7 +18856,7 @@ ${K("/plugin install frontend-design@claude-code-plugins")}`;
       },
       cooldownSessions: 3,
       isRelevant: async () => {
-        if (k1().hasVisitedPasses) return !1;
+        if (getSettings().hasVisitedPasses) return !1;
         let { eligible: q } = rN6();
         return q;
       },
@@ -18877,7 +18877,7 @@ function TWz(A) {
     let K = A[q];
     if (K?.type !== "assistant") continue;
     let Y = K.message.content.find(
-      (_) => _.type === "tool_use" && _.name === Bt,
+      (_) => _.type === "tool_use" && _.name === TODO_WRITE_TOOL_NAME,
     );
     if (!Y || Y.type !== "tool_use") continue;
     let z = Y.input;
@@ -18978,7 +18978,7 @@ var kr6 = E(() => {
 var vWz;
 var WNq = E(() => {
   kX6();
-  vWz = i6(() =>
+  vWz = lazyOnce(() =>
     jK.object({
       session_id: jK.string(),
       ws_url: jK.string(),
@@ -18991,17 +18991,17 @@ var GNq = E(() => {
   WNq();
 });
 function ZNq() {
-  let A = k1();
+  let A = getSettings();
   if (A.autoUpdates !== !1 || A.autoUpdatesProtectedForNative === !0) return;
   try {
-    let q = pA("userSettings") || {};
+    let q = getConfigValue("userSettings") || {};
     (iA("userSettings", { ...q, env: { ...q.env, DISABLE_AUTOUPDATER: "1" } }),
       n("tengu_migrate_autoupdates_to_settings", {
         was_user_preference: !0,
         already_had_env_var: !!q.env?.DISABLE_AUTOUPDATER,
       }),
       (process.env.DISABLE_AUTOUPDATER = "1"),
-      J8((K) => {
+      updateSettings((K) => {
         let { autoUpdates: Y, autoUpdatesProtectedForNative: z, ...w } = K;
         return w;
       }));
@@ -19017,11 +19017,11 @@ var fNq = E(() => {
   h1();
 });
 function TNq() {
-  if (!k1().bypassPermissionsModeAccepted) return;
+  if (!getSettings().bypassPermissionsModeAccepted) return;
   try {
     if (!dW6()) iA("userSettings", { skipDangerousModePermissionPrompt: !0 });
     (n("tengu_migrate_bypass_permissions_accepted", {}),
-      J8((q) => {
+      updateSettings((q) => {
         if (!("bypassPermissionsModeAccepted" in q)) return q;
         let { bypassPermissionsModeAccepted: K, ...Y } = q;
         return Y;
@@ -19043,7 +19043,7 @@ function VNq() {
     Y = A.disabledMcpjsonServers && A.disabledMcpjsonServers.length > 0;
   if (!q && !K && !Y) return;
   try {
-    let z = pA("localSettings") || {},
+    let z = getConfigValue("localSettings") || {},
       w = {},
       _ = [];
     if (q && z.enableAllProjectMcpServers === void 0)
@@ -19093,7 +19093,7 @@ var kNq = E(() => {
   yA();
 });
 function ENq() {
-  J8((A) => {
+  updateSettings((A) => {
     let q = A.replBridgeEnabled;
     if (q === void 0) return A;
     if (A.remoteControlAtStartup !== void 0) return A;
@@ -19105,11 +19105,11 @@ var LNq = E(() => {
   l8();
 });
 function yNq() {
-  if (k1().sonnet1m45MigrationComplete) return;
+  if (getSettings().sonnet1m45MigrationComplete) return;
   if (SA()?.model === "sonnet[1m]")
     iA("userSettings", { model: "sonnet-4-5-20250929[1m]" });
   if (vS() === "sonnet[1m]") LW("sonnet-4-5-20250929[1m]");
-  J8((z) => ({ ...z, sonnet1m45MigrationComplete: !0 }));
+  updateSettings((z) => ({ ...z, sonnet1m45MigrationComplete: !0 }));
 }
 var RNq = E(() => {
   l8();
@@ -19117,15 +19117,15 @@ var RNq = E(() => {
   B1();
 });
 function CNq() {
-  if (k1().opusProMigrationComplete) return;
+  if (getSettings().opusProMigrationComplete) return;
   if (h7() !== "firstParty" || !Yb6()) {
-    (J8((Y) => ({ ...Y, opusProMigrationComplete: !0 })),
+    (updateSettings((Y) => ({ ...Y, opusProMigrationComplete: !0 })),
       n("tengu_reset_pro_to_opus_default", { skipped: !0 }));
     return;
   }
   if (SA()?.model === void 0) {
     let Y = Date.now();
-    (J8((z) => ({
+    (updateSettings((z) => ({
       ...z,
       opusProMigrationComplete: !0,
       opusProMigrationTimestamp: Y,
@@ -19135,7 +19135,7 @@ function CNq() {
         had_custom_model: !1,
       }));
   } else
-    (J8((Y) => ({ ...Y, opusProMigrationComplete: !0 })),
+    (updateSettings((Y) => ({ ...Y, opusProMigrationComplete: !0 })),
       n("tengu_reset_pro_to_opus_default", {
         skipped: !1,
         had_custom_model: !0,
@@ -19480,19 +19480,19 @@ function h86({ newState: A, oldState: q }) {
   if (A.expandedView !== q.expandedView) {
     let K = A.expandedView === "tasks",
       Y = A.expandedView === "teammates";
-    if (k1().showExpandedTodos !== K || k1().showSpinnerTree !== Y)
-      J8((z) => ({ ...z, showExpandedTodos: K, showSpinnerTree: Y }));
+    if (getSettings().showExpandedTodos !== K || getSettings().showSpinnerTree !== Y)
+      updateSettings((z) => ({ ...z, showExpandedTodos: K, showSpinnerTree: Y }));
   }
-  if (A.verbose !== q.verbose && k1().verbose !== A.verbose) {
+  if (A.verbose !== q.verbose && getSettings().verbose !== A.verbose) {
     let K = A.verbose;
-    J8((Y) => ({ ...Y, verbose: K }));
+    updateSettings((Y) => ({ ...Y, verbose: K }));
   }
   if (
     A.feedbackSurvey.timeLastShown !== q.feedbackSurvey.timeLastShown &&
     A.feedbackSurvey.timeLastShown !== null
   ) {
     let K = A.feedbackSurvey.timeLastShown;
-    J8((Y) => ({ ...Y, feedbackSurveyState: { lastShownTime: K } }));
+    updateSettings((Y) => ({ ...Y, feedbackSurveyState: { lastShownTime: K } }));
   }
   if (A.settings !== q.settings)
     try {
@@ -19531,21 +19531,21 @@ async function bNq() {
       z = Y;
     }
     let w = A.toLowerCase(),
-      $ = k1().githubRepoPaths?.[w] ?? [];
+      $ = getSettings().githubRepoPaths?.[w] ?? [];
     if ($[0] === z) {
       y(`Path ${z} already tracked for repo ${w}`);
       return;
     }
     let O = $.filter((j) => j !== z),
       H = [z, ...O];
-    (J8((j) => ({ ...j, githubRepoPaths: { ...j.githubRepoPaths, [w]: H } })),
+    (updateSettings((j) => ({ ...j, githubRepoPaths: { ...j.githubRepoPaths, [w]: H } })),
       y(`Added ${z} to tracked paths for repo ${w}`));
   } catch (A) {
     y(`Error updating repo path mapping: ${A}`);
   }
 }
 function uNq(A) {
-  let q = k1(),
+  let q = getSettings(),
     K = A.toLowerCase();
   return q.githubRepoPaths?.[K] ?? [];
 }
@@ -19565,7 +19565,7 @@ async function BNq(A, q) {
   }
 }
 function gNq(A, q) {
-  let K = k1(),
+  let K = getSettings(),
     Y = A.toLowerCase(),
     z = K.githubRepoPaths?.[Y] ?? [],
     w = z.filter(($) => $ !== q);
@@ -19573,7 +19573,7 @@ function gNq(A, q) {
   let _ = { ...K.githubRepoPaths };
   if (w.length === 0) delete _[Y];
   else _[Y] = w;
-  (J8(($) => ({ ...$, githubRepoPaths: _ })),
+  (updateSettings(($) => ({ ...$, githubRepoPaths: _ })),
     y(`Removed ${q} from tracked paths for repo ${Y}`));
 }
 var fi8 = E(() => {
@@ -19595,7 +19595,7 @@ function Ti8(A) {
     ((z = function (P) {
       A: switch (P) {
         case "yes": {
-          (J8((W) => ({
+          (updateSettings((W) => ({
             ...W,
             customApiKeyResponses: {
               ...W.customApiKeyResponses,
@@ -19606,7 +19606,7 @@ function Ti8(A) {
           break A;
         }
         case "no":
-          (J8((W) => ({
+          (updateSettings((W) => ({
             ...W,
             customApiKeyResponses: {
               ...W.customApiKeyResponses,
@@ -19882,397 +19882,57 @@ var dNq = E(() => {
 function hR1() {
   let A = w6(35),
     [q] = E7();
-  if (s8.terminal === "Apple_Terminal") {
+  // Klaudia: Replaced pixel art welcome screen with ASCII banner
+  {
     let f;
     if (A[0] !== q)
-      ((f = a8.default.createElement(xWz, {
-        theme: q,
-        welcomeMessage: "Welcome to Klaudia",
-      })),
-        (A[0] = q),
-        (A[1] = f));
-    else f = A[1];
-    return f;
-  }
-  if (["light", "light-daltonized", "light-ansi"].includes(q)) {
-    let f, N, V, v, L, S, I, B, h;
-    if (A[2] === Symbol.for("react.memo_cache_sentinel"))
       ((f = a8.default.createElement(
-        T,
-        null,
-        a8.default.createElement(
-          T,
-          { color: "claude" },
-          "Welcome to Klaudia",
-          " ",
-        ),
-        a8.default.createElement(
-          T,
-          { dimColor: !0 },
-          "v",
-          {
-            ISSUES_EXPLAINER:
-              "report the issue at https://github.com/anthropics/claude-code/issues",
-            PACKAGE_URL: "klaudia",
-            README_URL: "https://code.claude.com/docs/en/overview",
-            VERSION: "2.1.66-klaudia",
-            FEEDBACK_CHANNEL:
-              "https://github.com/anthropics/claude-code/issues",
-            BUILD_TIME: "2026-03-04T00:18:36Z",
-          }.VERSION,
-          " ",
-        ),
-      )),
-        (N = a8.default.createElement(
-          T,
-          null,
-          "…………………………………………………………………………………………………………………………………………………………",
-        )),
-        (V = a8.default.createElement(
-          T,
-          null,
-          "                                                          ",
-        )),
-        (v = a8.default.createElement(
-          T,
-          null,
-          "                                                          ",
-        )),
-        (L = a8.default.createElement(
-          T,
-          null,
-          "                                                          ",
-        )),
-        (S = a8.default.createElement(
-          T,
-          null,
-          "            ░░░░░░                                        ",
-        )),
-        (I = a8.default.createElement(
-          T,
-          null,
-          "    ░░░   ░░░░░░░░░░                                      ",
-        )),
-        (B = a8.default.createElement(
-          T,
-          null,
-          "   ░░░░░░░░░░░░░░░░░░░                                    ",
-        )),
-        (h = a8.default.createElement(
-          T,
-          null,
-          "                                                          ",
-        )),
-        (A[2] = f),
-        (A[3] = N),
-        (A[4] = V),
-        (A[5] = v),
-        (A[6] = L),
-        (A[7] = S),
-        (A[8] = I),
-        (A[9] = B),
-        (A[10] = h));
-    else
-      ((f = A[2]),
-        (N = A[3]),
-        (V = A[4]),
-        (v = A[5]),
-        (L = A[6]),
-        (S = A[7]),
-        (I = A[8]),
-        (B = A[9]),
-        (h = A[10]));
-    let F;
-    if (A[11] === Symbol.for("react.memo_cache_sentinel"))
-      ((F = a8.default.createElement(
-        T,
-        null,
-        a8.default.createElement(
-          T,
-          { dimColor: !0 },
-          "                           ░░░░",
-        ),
-        a8.default.createElement(T, null, "                     ██    "),
-      )),
-        (A[11] = F));
-    else F = A[11];
-    let g, u;
-    if (A[12] === Symbol.for("react.memo_cache_sentinel"))
-      ((g = a8.default.createElement(
-        T,
-        null,
-        a8.default.createElement(
-          T,
-          { dimColor: !0 },
-          "                         ░░░░░░░░░░",
-        ),
-        a8.default.createElement(T, null, "               ██▒▒██  "),
-      )),
-        (u = a8.default.createElement(
-          T,
-          null,
-          "                                            ▒▒      ██   ▒",
-        )),
-        (A[12] = g),
-        (A[13] = u));
-    else ((g = A[12]), (u = A[13]));
-    let U;
-    if (A[14] === Symbol.for("react.memo_cache_sentinel"))
-      ((U = a8.default.createElement(
-        T,
-        null,
-        "      ",
-        a8.default.createElement(T, { color: "clawd_body" }, " █████████ "),
-        "                         ▒▒░░▒▒      ▒ ▒▒",
-      )),
-        (A[14] = U));
-    else U = A[14];
-    let c;
-    if (A[15] === Symbol.for("react.memo_cache_sentinel"))
-      ((c = a8.default.createElement(
-        T,
-        null,
-        "      ",
-        a8.default.createElement(
-          T,
-          { color: "clawd_body", backgroundColor: "clawd_background" },
-          "██▄█████▄██",
-        ),
-        "                           ▒▒         ▒▒ ",
-      )),
-        (A[15] = c));
-    else c = A[15];
-    let d;
-    if (A[16] === Symbol.for("react.memo_cache_sentinel"))
-      ((d = a8.default.createElement(
-        T,
-        null,
-        "      ",
-        a8.default.createElement(T, { color: "clawd_body" }, " █████████ "),
-        "                          ░          ▒   ",
-      )),
-        (A[16] = d));
-    else d = A[16];
-    let a;
-    if (A[17] === Symbol.for("react.memo_cache_sentinel"))
-      ((a = a8.default.createElement(
         m,
         { width: SR1 },
         a8.default.createElement(
           T,
           null,
-          f,
-          N,
-          V,
-          v,
-          L,
-          S,
-          I,
-          B,
-          h,
-          F,
-          g,
-          u,
-          U,
-          c,
-          d,
+          a8.default.createElement(T, { color: "claude" }, "Welcome to Klaudia"),
+          " ",
           a8.default.createElement(
             T,
-            null,
-            "…………………",
-            a8.default.createElement(T, { color: "clawd_body" }, "█ █   █ █"),
-            "……………………………………………………………………░…………………………▒…………",
+            { dimColor: !0 },
+            "v",
+            {
+              ISSUES_EXPLAINER:
+                "report the issue at https://github.com/anthropics/claude-code/issues",
+              PACKAGE_URL: "klaudia",
+              README_URL: "https://code.claude.com/docs/en/overview",
+              VERSION: "2.1.66-klaudia",
+              FEEDBACK_CHANNEL:
+                "https://github.com/anthropics/claude-code/issues",
+              BUILD_TIME: "2026-03-04T00:18:36Z",
+            }.VERSION,
+            " ",
           ),
+          "\n",
+          "…………………………………………………………………………………………………………………………………………………………",
+          "\n",
+          a8.default.createElement(T, { dimColor: !0 }, " ____  __.__                   .___.__        "),
+          "\n",
+          a8.default.createElement(T, { dimColor: !0 }, "|    |/ _|  | _____   __ __  __| _/|__|____   "),
+          "\n",
+          a8.default.createElement(T, { color: "claude" }, "|      < |  | \\__  \\ |  |  \\/ __ | |  \\__  \\  "),
+          "\n",
+          a8.default.createElement(T, { color: "claude" }, "|    |  \\|  |__/ __ \\|  |  / /_/ | |  |/ __ \\_"),
+          "\n",
+          a8.default.createElement(T, { dimColor: !0 }, "|____|__ \\____(____  /____/\\____ | |__(____  /"),
+          "\n",
+          a8.default.createElement(T, { dimColor: !0 }, "        \\/         \\/           \\/         \\/ "),
+          "\n",
+          "…………………………………………………………………………………………………………………………………………………………",
         ),
       )),
-        (A[17] = a));
-    else a = A[17];
-    return a;
+        (A[0] = q),
+        (A[1] = f));
+    else f = A[1];
+    return f;
   }
-  let K, Y, z, w, _, $, O;
-  if (A[18] === Symbol.for("react.memo_cache_sentinel"))
-    ((K = a8.default.createElement(
-      T,
-      null,
-      a8.default.createElement(
-        T,
-        { color: "claude" },
-        "Welcome to Klaudia",
-        " ",
-      ),
-      a8.default.createElement(
-        T,
-        { dimColor: !0 },
-        "v",
-        {
-          ISSUES_EXPLAINER:
-            "report the issue at https://github.com/anthropics/claude-code/issues",
-          PACKAGE_URL: "klaudia",
-          README_URL: "https://code.claude.com/docs/en/overview",
-          VERSION: "2.1.66-klaudia",
-          FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-          BUILD_TIME: "2026-03-04T00:18:36Z",
-        }.VERSION,
-        " ",
-      ),
-    )),
-      (Y = a8.default.createElement(
-        T,
-        null,
-        "…………………………………………………………………………………………………………………………………………………………",
-      )),
-      (z = a8.default.createElement(
-        T,
-        null,
-        "                                                          ",
-      )),
-      (w = a8.default.createElement(
-        T,
-        null,
-        "     *                                       █████▓▓░     ",
-      )),
-      (_ = a8.default.createElement(
-        T,
-        null,
-        "                                 *         ███▓░     ░░   ",
-      )),
-      ($ = a8.default.createElement(
-        T,
-        null,
-        "            ░░░░░░                        ███▓░           ",
-      )),
-      (O = a8.default.createElement(
-        T,
-        null,
-        "    ░░░   ░░░░░░░░░░                      ███▓░           ",
-      )),
-      (A[18] = K),
-      (A[19] = Y),
-      (A[20] = z),
-      (A[21] = w),
-      (A[22] = _),
-      (A[23] = $),
-      (A[24] = O));
-  else
-    ((K = A[18]),
-      (Y = A[19]),
-      (z = A[20]),
-      (w = A[21]),
-      (_ = A[22]),
-      ($ = A[23]),
-      (O = A[24]));
-  let H, j, J, D, X;
-  if (A[25] === Symbol.for("react.memo_cache_sentinel"))
-    ((J = a8.default.createElement(
-      T,
-      null,
-      a8.default.createElement(T, null, "   ░░░░░░░░░░░░░░░░░░░    "),
-      a8.default.createElement(T, { bold: !0 }, "*"),
-      a8.default.createElement(T, null, "                ██▓░░      ▓   "),
-    )),
-      (D = a8.default.createElement(
-        T,
-        null,
-        "                                             ░▓▓███▓▓░    ",
-      )),
-      (X = a8.default.createElement(
-        T,
-        { dimColor: !0 },
-        " *                                 ░░░░                   ",
-      )),
-      (H = a8.default.createElement(
-        T,
-        { dimColor: !0 },
-        "                                 ░░░░░░░░                 ",
-      )),
-      (j = a8.default.createElement(
-        T,
-        { dimColor: !0 },
-        "                               ░░░░░░░░░░░░░░░░           ",
-      )),
-      (A[25] = H),
-      (A[26] = j),
-      (A[27] = J),
-      (A[28] = D),
-      (A[29] = X));
-  else ((H = A[25]), (j = A[26]), (J = A[27]), (D = A[28]), (X = A[29]));
-  let M;
-  if (A[30] === Symbol.for("react.memo_cache_sentinel"))
-    ((M = a8.default.createElement(T, { color: "clawd_body" }, " █████████ ")),
-      (A[30] = M));
-  else M = A[30];
-  let P;
-  if (A[31] === Symbol.for("react.memo_cache_sentinel"))
-    ((P = a8.default.createElement(
-      T,
-      null,
-      "      ",
-      M,
-      "                                       ",
-      a8.default.createElement(T, { dimColor: !0 }, "*"),
-      a8.default.createElement(T, null, " "),
-    )),
-      (A[31] = P));
-  else P = A[31];
-  let W;
-  if (A[32] === Symbol.for("react.memo_cache_sentinel"))
-    ((W = a8.default.createElement(
-      T,
-      null,
-      "      ",
-      a8.default.createElement(T, { color: "clawd_body" }, "██▄█████▄██"),
-      a8.default.createElement(T, null, "                        "),
-      a8.default.createElement(T, { bold: !0 }, "*"),
-      a8.default.createElement(T, null, "                "),
-    )),
-      (A[32] = W));
-  else W = A[32];
-  let G;
-  if (A[33] === Symbol.for("react.memo_cache_sentinel"))
-    ((G = a8.default.createElement(
-      T,
-      null,
-      "      ",
-      a8.default.createElement(T, { color: "clawd_body" }, " █████████ "),
-      "     *                                   ",
-    )),
-      (A[33] = G));
-  else G = A[33];
-  let Z;
-  if (A[34] === Symbol.for("react.memo_cache_sentinel"))
-    ((Z = a8.default.createElement(
-      m,
-      { width: SR1 },
-      a8.default.createElement(
-        T,
-        null,
-        K,
-        Y,
-        z,
-        w,
-        _,
-        $,
-        O,
-        J,
-        D,
-        X,
-        H,
-        j,
-        P,
-        W,
-        G,
-        a8.default.createElement(
-          T,
-          null,
-          "…………………",
-          a8.default.createElement(T, { color: "clawd_body" }, "█ █   █ █"),
-          "………………………………………………………………………………………………………………",
-        ),
-      ),
-    )),
-      (A[34] = Z));
-  else Z = A[34];
-  return Z;
 }
 function xWz(A) {
   let q = w6(44),
@@ -20930,9 +20590,9 @@ function iNq(A) {
 }
 function tNq() {
   let A = [],
-    q = pA("projectSettings");
+    q = getConfigValue("projectSettings");
   if (iNq(q)) A.push(".claude/settings.json");
-  let K = pA("localSettings");
+  let K = getConfigValue("localSettings");
   if (iNq(K)) A.push(".claude/settings.local.json");
   return A;
 }
@@ -20940,8 +20600,8 @@ function nNq(A) {
   return A.some(
     (q) =>
       q.ruleBehavior === "allow" &&
-      (q.ruleValue.toolName === l4 ||
-        q.ruleValue.toolName.startsWith(l4 + "(")),
+      (q.ruleValue.toolName === BASH_TOOL_NAME ||
+        q.ruleValue.toolName.startsWith(BASH_TOOL_NAME + "(")),
   );
 }
 function eNq() {
@@ -20957,9 +20617,9 @@ function rNq(A) {
 }
 function AVq() {
   let A = [],
-    q = pA("projectSettings");
+    q = getConfigValue("projectSettings");
   if (rNq(q)) A.push(".claude/settings.json");
-  let K = pA("localSettings");
+  let K = getConfigValue("localSettings");
   if (rNq(K)) A.push(".claude/settings.local.json");
   return A;
 }
@@ -20968,9 +20628,9 @@ function oNq(A) {
 }
 function qVq() {
   let A = [],
-    q = pA("projectSettings");
+    q = getConfigValue("projectSettings");
   if (oNq(q)) A.push(".claude/settings.json");
-  let K = pA("localSettings");
+  let K = getConfigValue("localSettings");
   if (oNq(K)) A.push(".claude/settings.local.json");
   return A;
 }
@@ -20979,9 +20639,9 @@ function aNq(A) {
 }
 function KVq() {
   let A = [],
-    q = pA("projectSettings");
+    q = getConfigValue("projectSettings");
   if (aNq(q)) A.push(".claude/settings.json");
-  let K = pA("localSettings");
+  let K = getConfigValue("localSettings");
   if (aNq(K)) A.push(".claude/settings.local.json");
   return A;
 }
@@ -20991,9 +20651,9 @@ function sNq(A) {
 }
 function YVq() {
   let A = [],
-    q = pA("projectSettings");
+    q = getConfigValue("projectSettings");
   if (sNq(q)) A.push(".claude/settings.json");
-  let K = pA("localSettings");
+  let K = getConfigValue("localSettings");
   if (sNq(K)) A.push(".claude/settings.local.json");
   return A;
 }
@@ -21266,7 +20926,7 @@ function pWz(A) {
   );
 }
 function QWz(A) {
-  return A === l4 || A.startsWith(l4 + "(");
+  return A === BASH_TOOL_NAME || A.startsWith(BASH_TOOL_NAME + "(");
 }
 function UWz(A) {
   return (
@@ -21277,7 +20937,7 @@ function UWz(A) {
   );
 }
 function dWz(A) {
-  return A === l4 || A.startsWith(l4 + "(");
+  return A === BASH_TOOL_NAME || A.startsWith(BASH_TOOL_NAME + "(");
 }
 var ZT;
 var $Vq = E(() => {
@@ -21403,7 +21063,7 @@ function oWz(A) {
     _;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
     ((w = () => {
-      (n("tengu_claude_in_chrome_onboarding_shown", {}), Fi().then(z), J8(aWz));
+      (n("tengu_claude_in_chrome_onboarding_shown", {}), Fi().then(z), updateSettings(aWz));
     }),
       (_ = []),
       (q[0] = w),
@@ -21563,7 +21223,7 @@ function eWz(A, q) {
   return K;
 }
 function AGz(A) {
-  let q = ak(A);
+  let q = countMessageTokens(A);
   if (!uD4()) {
     if (!BD4(q)) return !1;
     mD4();
@@ -21590,7 +21250,7 @@ async function qGz(A) {
   } catch ($) {
     if ($.code !== "EEXIST") throw $;
   }
-  let z = await l9.call({ file_path: Y }, A),
+  let z = await readTool.call({ file_path: Y }, A),
     w = "",
     _ = z.data;
   if (_.type === "text") w = _.file.content;
@@ -21607,7 +21267,7 @@ function MVq() {
 function zGz(A) {
   return async (q, K) => {
     if (
-      q.name === Lq &&
+      q.name === EDIT_TOOL_NAME &&
       typeof K === "object" &&
       K !== null &&
       "file_path" in K
@@ -21618,10 +21278,10 @@ function zGz(A) {
     }
     return {
       behavior: "deny",
-      message: `only ${Lq} on ${A} is allowed`,
+      message: `only ${EDIT_TOOL_NAME} on ${A} is allowed`,
       decisionReason: {
         type: "other",
-        reason: `only ${Lq} on ${A} is allowed`,
+        reason: `only ${EDIT_TOOL_NAME} on ${A} is allowed`,
       },
     };
   };
@@ -21697,7 +21357,7 @@ var PVq = E(() => {
         config_min_tokens_between_update: j.minimumTokensBetweenUpdate,
         config_tool_calls_between_updates: j.toolCallsBetweenUpdates,
       }),
-        bD4(ak(q)),
+        bD4(countMessageTokens(q)),
         wGz(q),
         SD4());
     })));
@@ -22251,7 +21911,7 @@ var NVq = E(() => {
       "settings:search",
       "settings:retry",
     ]),
-    (DGz = i6(() =>
+    (DGz = lazyOnce(() =>
       x
         .object({
           context: x
@@ -22283,7 +21943,7 @@ var NVq = E(() => {
         })
         .describe("A block of keybindings for a specific context"),
     )),
-    (V7O = i6(() =>
+    (V7O = lazyOnce(() =>
       x
         .object({
           $schema: x
@@ -23329,7 +22989,7 @@ Use the ${tq} tool to launch all three agents concurrently in a single message. 
 
 For each change:
 
-1. **Search for existing utilities and helpers** that could replace newly written code. Use ${k5} to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+1. **Search for existing utilities and helpers** that could replace newly written code. Use ${GREP_TOOL_NAME} to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
 2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
 3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
 
@@ -28696,10 +28356,10 @@ import { homedir as WZz } from "os";
 import { join as GZz } from "path";
 import { stat as ZZz, copyFile as fZz } from "fs/promises";
 function bR1() {
-  J8((A) => ({ ...A, iterm2SetupInProgress: !1 }));
+  updateSettings((A) => ({ ...A, iterm2SetupInProgress: !1 }));
 }
 function TZz() {
-  let A = k1();
+  let A = getSettings();
   return {
     inProgress: A.iterm2SetupInProgress ?? !1,
     backupPath: A.iterm2BackupPath || null,
@@ -28880,7 +28540,7 @@ To attach: ${H1.bold(`tmux attach -t ${v}`)}`),
     jr6(),
     fl8(C7()),
     Bq("setup_after_prefetch"));
-  let { hasReleaseNotes: D } = await p$q(k1().lastReleaseNotesSeen);
+  let { hasReleaseNotes: D } = await p$q(getSettings().lastReleaseNotesSeen);
   if (D) await fOq();
   if (q === "bypassPermissions" || K) {
     if (
@@ -29132,7 +28792,7 @@ function hZz() {
   return {
     agentType: "magic-docs",
     whenToUse: "Update Magic Docs",
-    tools: [Lq],
+    tools: [EDIT_TOOL_NAME],
     model: "sonnet",
     source: "built-in",
     baseDir: "built-in",
@@ -29159,7 +28819,7 @@ async function IZz(A, q) {
     }
     throw W;
   }
-  let j = await l9.call({ file_path: A.path }, O),
+  let j = await readTool.call({ file_path: A.path }, O),
     J = "",
     D = j.data;
   if (D.type === "text") J = D.file.content;
@@ -29171,7 +28831,7 @@ async function IZz(A, q) {
   let M = await evq(J, A.path, X.title, X.instructions),
     P = async (W, G) => {
       if (
-        W.name === Lq &&
+        W.name === EDIT_TOOL_NAME &&
         typeof G === "object" &&
         G !== null &&
         "file_path" in G
@@ -29182,8 +28842,8 @@ async function IZz(A, q) {
       }
       return {
         behavior: "deny",
-        message: `only ${Lq} is allowed for ${A.path}`,
-        decisionReason: { type: "other", reason: `only ${Lq} is allowed` },
+        message: `only ${EDIT_TOOL_NAME} is allowed for ${A.path}`,
+        decisionReason: { type: "other", reason: `only ${EDIT_TOOL_NAME} is allowed` },
       };
     };
   for await (let W of jC({
@@ -29901,10 +29561,10 @@ var xi8 = E(() => {
 var sZz, Pkq, yr6;
 var Wkq = E(() => {
   kX6();
-  ((sZz = i6(() =>
+  ((sZz = lazyOnce(() =>
     jK.object({ entries: jK.record(jK.string(), jK.string()) }),
   )),
-    (Pkq = i6(() =>
+    (Pkq = lazyOnce(() =>
       jK.object({
         userId: jK.string(),
         version: jK.number(),
@@ -30162,7 +29822,7 @@ var ui8 = E(() => {
   Nc8();
   YH();
   f1();
-  ((T5O = i6(() =>
+  ((T5O = lazyOnce(() =>
     I4.object({
       tool_name: I4.string().describe(
         "The name of the tool requesting permission",
@@ -30175,7 +29835,7 @@ var ui8 = E(() => {
         .describe("The unique tool use request ID"),
     }),
   )),
-    (Ofz = i6(() =>
+    (Ofz = lazyOnce(() =>
       I4.object({
         behavior: I4.literal("allow"),
         updatedInput: I4.record(I4.string(), I4.unknown()),
@@ -30183,7 +29843,7 @@ var ui8 = E(() => {
         toolUseID: I4.string().optional(),
       }),
     )),
-    (Hfz = i6(() =>
+    (Hfz = lazyOnce(() =>
       I4.object({
         behavior: I4.literal("deny"),
         message: I4.string(),
@@ -30191,7 +29851,7 @@ var ui8 = E(() => {
         toolUseID: I4.string().optional(),
       }),
     )),
-    (Rr6 = i6(() => I4.union([Ofz(), Hfz()]))));
+    (Rr6 = lazyOnce(() => I4.union([Ofz(), Hfz()]))));
 });
 var jfz,
   Jfz,
@@ -30229,8 +29889,8 @@ var jfz,
 var vkq = E(() => {
   K4();
   Dv8();
-  ((jfz = i6(() => x.unknown())),
-    (Jfz = i6(() =>
+  ((jfz = lazyOnce(() => x.unknown())),
+    (Jfz = lazyOnce(() =>
       x
         .object({
           matcher: x.string().optional(),
@@ -30239,7 +29899,7 @@ var vkq = E(() => {
         })
         .describe("Configuration for matching and routing hook callbacks."),
     )),
-    (Dfz = i6(() =>
+    (Dfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("initialize"),
@@ -30255,7 +29915,7 @@ var vkq = E(() => {
           "Initializes the SDK session with hooks, MCP servers, and agent configuration.",
         ),
     )),
-    (E5O = i6(() =>
+    (E5O = lazyOnce(() =>
       x
         .object({
           commands: x.array(Mj4()),
@@ -30274,12 +29934,12 @@ var vkq = E(() => {
           "Response from session initialization with available commands, models, and account info.",
         ),
     )),
-    (Xfz = i6(() =>
+    (Xfz = lazyOnce(() =>
       x
         .object({ subtype: x.literal("interrupt") })
         .describe("Interrupts the currently running conversation turn."),
     )),
-    (Mfz = i6(() =>
+    (Mfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("can_use_tool"),
@@ -30294,12 +29954,12 @@ var vkq = E(() => {
         })
         .describe("Requests permission to use a tool with the given input."),
     )),
-    (Pfz = i6(() =>
+    (Pfz = lazyOnce(() =>
       x
         .object({ subtype: x.literal("set_permission_mode"), mode: ge() })
         .describe("Sets the permission mode for tool execution handling."),
     )),
-    (Wfz = i6(() =>
+    (Wfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("set_model"),
@@ -30307,7 +29967,7 @@ var vkq = E(() => {
         })
         .describe("Sets the model to use for subsequent conversation turns."),
     )),
-    (Gfz = i6(() =>
+    (Gfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("set_max_thinking_tokens"),
@@ -30317,19 +29977,19 @@ var vkq = E(() => {
           "Sets the maximum number of thinking tokens for extended thinking.",
         ),
     )),
-    (Zfz = i6(() =>
+    (Zfz = lazyOnce(() =>
       x
         .object({ subtype: x.literal("mcp_status") })
         .describe("Requests the current status of all MCP server connections."),
     )),
-    (L5O = i6(() =>
+    (L5O = lazyOnce(() =>
       x
         .object({ mcpServers: x.array(Jj4()) })
         .describe(
           "Response containing the current status of all MCP server connections.",
         ),
     )),
-    (ffz = i6(() =>
+    (ffz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("rewind_files"),
@@ -30338,7 +29998,7 @@ var vkq = E(() => {
         })
         .describe("Rewinds file changes made since a specific user message."),
     )),
-    (y5O = i6(() =>
+    (y5O = lazyOnce(() =>
       x
         .object({
           canRewind: x.boolean(),
@@ -30349,7 +30009,7 @@ var vkq = E(() => {
         })
         .describe("Result of a rewindFiles operation."),
     )),
-    (Tfz = i6(() =>
+    (Tfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("hook_callback"),
@@ -30359,7 +30019,7 @@ var vkq = E(() => {
         })
         .describe("Delivers a hook callback with its input data."),
     )),
-    (Nfz = i6(() =>
+    (Nfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("mcp_message"),
@@ -30368,7 +30028,7 @@ var vkq = E(() => {
         })
         .describe("Sends a JSON-RPC message to a specific MCP server."),
     )),
-    (Vfz = i6(() =>
+    (Vfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("mcp_set_servers"),
@@ -30376,7 +30036,7 @@ var vkq = E(() => {
         })
         .describe("Replaces the set of dynamically managed MCP servers."),
     )),
-    (R5O = i6(() =>
+    (R5O = lazyOnce(() =>
       x
         .object({
           added: x.array(x.string()),
@@ -30387,12 +30047,12 @@ var vkq = E(() => {
           "Result of replacing the set of dynamically managed MCP servers.",
         ),
     )),
-    (vfz = i6(() =>
+    (vfz = lazyOnce(() =>
       x
         .object({ subtype: x.literal("mcp_reconnect"), serverName: x.string() })
         .describe("Reconnects a disconnected or failed MCP server."),
     )),
-    (kfz = i6(() =>
+    (kfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("mcp_toggle"),
@@ -30401,12 +30061,12 @@ var vkq = E(() => {
         })
         .describe("Enables or disables an MCP server."),
     )),
-    (Efz = i6(() =>
+    (Efz = lazyOnce(() =>
       x
         .object({ subtype: x.literal("stop_task"), task_id: x.string() })
         .describe("Stops a running task."),
     )),
-    (Lfz = i6(() =>
+    (Lfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("apply_flag_settings"),
@@ -30416,7 +30076,7 @@ var vkq = E(() => {
           "Merges the provided settings into the flag settings layer, updating the active configuration.",
         ),
     )),
-    (yfz = i6(() =>
+    (yfz = lazyOnce(() =>
       x
         .object({
           subtype: x.literal("elicitation"),
@@ -30431,7 +30091,7 @@ var vkq = E(() => {
           "Requests the SDK consumer to handle an MCP elicitation (user input request).",
         ),
     )),
-    (Tkq = i6(() =>
+    (Tkq = lazyOnce(() =>
       x
         .object({
           action: x.enum(["accept", "decline", "cancel"]),
@@ -30439,7 +30099,7 @@ var vkq = E(() => {
         })
         .describe("Response from the SDK consumer for an elicitation request."),
     )),
-    (Rfz = i6(() =>
+    (Rfz = lazyOnce(() =>
       x.union([
         Xfz(),
         Mfz(),
@@ -30459,21 +30119,21 @@ var vkq = E(() => {
         yfz(),
       ]),
     )),
-    (mi8 = i6(() =>
+    (mi8 = lazyOnce(() =>
       x.object({
         type: x.literal("control_request"),
         request_id: x.string(),
         request: Rfz(),
       }),
     )),
-    (Cfz = i6(() =>
+    (Cfz = lazyOnce(() =>
       x.object({
         subtype: x.literal("success"),
         request_id: x.string(),
         response: x.record(x.string(), x.unknown()).optional(),
       }),
     )),
-    (Sfz = i6(() =>
+    (Sfz = lazyOnce(() =>
       x.object({
         subtype: x.literal("error"),
         request_id: x.string(),
@@ -30481,13 +30141,13 @@ var vkq = E(() => {
         pending_permission_requests: x.array(x.lazy(() => mi8())).optional(),
       }),
     )),
-    (Nkq = i6(() =>
+    (Nkq = lazyOnce(() =>
       x.object({
         type: x.literal("control_response"),
         response: x.union([Cfz(), Sfz()]),
       }),
     )),
-    (hfz = i6(() =>
+    (hfz = lazyOnce(() =>
       x
         .object({
           type: x.literal("control_cancel_request"),
@@ -30495,12 +30155,12 @@ var vkq = E(() => {
         })
         .describe("Cancels a currently open control request."),
     )),
-    (Vkq = i6(() =>
+    (Vkq = lazyOnce(() =>
       x
         .object({ type: x.literal("keep_alive") })
         .describe("Keep-alive message to maintain WebSocket connection."),
     )),
-    (Ifz = i6(() =>
+    (Ifz = lazyOnce(() =>
       x
         .object({
           type: x.literal("update_environment_variables"),
@@ -30508,10 +30168,10 @@ var vkq = E(() => {
         })
         .describe("Updates environment variables at runtime."),
     )),
-    (C5O = i6(() =>
+    (C5O = lazyOnce(() =>
       x.union([kj4(), Nj4(), Vj4(), Nkq(), mi8(), hfz(), Vkq()]),
     )),
-    (S5O = i6(() => x.union([Jv8(), mi8(), Nkq(), Vkq(), Ifz()]))));
+    (S5O = lazyOnce(() => x.union([Jv8(), mi8(), Nkq(), Vkq(), Ifz()]))));
 });
 function pR1(A) {
   if (A === null || typeof A !== "object") return A;
@@ -33645,7 +33305,7 @@ class dkq {
         customSystemPrompt: J,
         appendSystemPrompt: D,
         agentDefinitions: { activeAgents: N, allAgents: [] },
-        theme: k1().theme,
+        theme: getSettings().theme,
         maxBudgetUsd: H,
       },
       getAppState: W,
@@ -33720,7 +33380,7 @@ class dkq {
         isNonInteractiveSession: !0,
         customSystemPrompt: J,
         appendSystemPrompt: D,
-        theme: k1().theme,
+        theme: getSettings().theme,
         agentDefinitions: { activeAgents: N, allAgents: [] },
         maxBudgetUsd: H,
       },
@@ -33859,7 +33519,7 @@ class dkq {
       h6,
       g6 = null,
       y6 = P ? gd8(this.mutableMessages, yX) : 0;
-    for await (let C6 of JC({
+    for await (let C6 of agentLoop({
       messages: D6,
       systemPrompt: d,
       userContext: c,
@@ -35647,7 +35307,7 @@ function ETz(A) {
   return q === "unknown" || q === "git_unavailable" || q === void 0;
 }
 async function oR1() {
-  let A = k1();
+  let A = getSettings();
   if (!ETz(A)) {
     let q = A.officialMarketplaceAutoInstallFailReason ?? "already_attempted";
     return (
@@ -35659,7 +35319,7 @@ async function oR1() {
     if (kTz())
       return (
         y("Official marketplace auto-install disabled via env var, skipping"),
-        J8((z) => ({
+        updateSettings((z) => ({
           ...z,
           officialMarketplaceAutoInstallAttempted: !0,
           officialMarketplaceAutoInstalled: !1,
@@ -35675,7 +35335,7 @@ async function oR1() {
     if ((await k3())[$b])
       return (
         y(`Official marketplace '${$b}' already installed, skipping`),
-        J8((z) => ({
+        updateSettings((z) => ({
           ...z,
           officialMarketplaceAutoInstallAttempted: !0,
           officialMarketplaceAutoInstalled: !0,
@@ -35685,7 +35345,7 @@ async function oR1() {
     if (!m56(uF8))
       return (
         y("Official marketplace blocked by enterprise policy, skipping"),
-        J8((z) => ({
+        updateSettings((z) => ({
           ...z,
           officialMarketplaceAutoInstallAttempted: !0,
           officialMarketplaceAutoInstalled: !1,
@@ -35706,7 +35366,7 @@ async function oR1() {
         $ = w + _,
         O = !1;
       try {
-        J8((H) => ({
+        updateSettings((H) => ({
           ...H,
           officialMarketplaceAutoInstallAttempted: !0,
           officialMarketplaceAutoInstalled: !1,
@@ -35749,7 +35409,7 @@ async function oR1() {
       y("Successfully auto-installed official marketplace"));
     let Y = A.officialMarketplaceAutoInstallRetryCount || 0;
     return (
-      J8((z) => ({
+      updateSettings((z) => ({
         ...z,
         officialMarketplaceAutoInstallAttempted: !0,
         officialMarketplaceAutoInstalled: !0,
@@ -35779,7 +35439,7 @@ async function oR1() {
       _ = z + w,
       $ = !1;
     try {
-      J8((O) => ({
+      updateSettings((O) => ({
         ...O,
         officialMarketplaceAutoInstallAttempted: !0,
         officialMarketplaceAutoInstalled: !1,
@@ -36001,8 +35661,8 @@ var DEq = E(() => {
   HEq();
   Vz();
 });
-var NEq = {};
-s1(NEq, {
+var headlessExports = {};
+s1(headlessExports, {
   runHeadless: () => hTz,
   removeInterruptedMessage: () => GEq,
   reconcileMcpServers: () => TEq,
@@ -38174,7 +37834,7 @@ Shut down your team and prepare your final response for the user.`,
   MEq = 1e4,
   tR1,
   aR1;
-var VEq = E(() => {
+var initHeadless = E(() => {
   fkq();
   IZ6();
   QR1();
@@ -38289,8 +37949,8 @@ var On8 = E(() => {
   e6();
   ((lV6 = Y6(W6(), 1)), (vEq = lV6.createContext(void 0)));
 });
-var LEq = {};
-s1(LEq, { App: () => gTz });
+var appExports = {};
+s1(appExports, { App: () => gTz });
 function gTz(A) {
   let q = w6(9),
     { getFpsMetrics: K, stats: Y, initialState: z, children: w } = A,
@@ -38322,7 +37982,7 @@ function gTz(A) {
   return O;
 }
 var eR1;
-var yEq = E(() => {
+var initApp = E(() => {
   e6();
   On8();
   Hi8();
@@ -38672,7 +38332,7 @@ var cEq = E(() => {
   u1();
   n_();
   ((UEq = Y6(W6(), 1)),
-    (cTz = i6(() =>
+    (cTz = lazyOnce(() =>
       x.object({
         method: x.literal("log_event"),
         params: x.object({
@@ -39014,7 +38674,7 @@ function tTz(A, q) {
       D = [
         {
           type: "addRules",
-          rules: [{ toolName: Lq, ruleContent: J }],
+          rules: [{ toolName: EDIT_TOOL_NAME, ruleContent: J }],
           behavior: "allow",
           destination: "session",
         },
@@ -39178,7 +38838,7 @@ function eEq({
     H = zn.useMemo(() => `✻ [Claude Code] ${qNz(K)} (${O}) ⧉`, [K, O]),
     j =
       Y01(q.options.mcpClients) &&
-      k1().diffTool === "auto" &&
+      getSettings().diffTool === "auto" &&
       !K.endsWith(".ipynb"),
     J = z01(q.options.mcpClients) ?? "IDE";
   async function D() {
@@ -41090,7 +40750,7 @@ function pNz(A, q = 1000) {
 }
 function Gn8() {
   if (!jA("tengu_permission_explainer", !1)) return !1;
-  return k1().permissionExplainerEnabled !== !1;
+  return getSettings().permissionExplainerEnabled !== !1;
 }
 async function DLq({
   toolName: A,
@@ -41233,7 +40893,7 @@ var XLq = E(() => {
         required: ["explanation", "reasoning", "risk", "riskLevel"],
       },
     }),
-    (gNz = i6(() =>
+    (gNz = lazyOnce(() =>
       x.object({
         riskLevel: x.enum(["LOW", "MEDIUM", "HIGH"]),
         explanation: x.string(),
@@ -43305,7 +42965,7 @@ var rLq = E(() => {
 });
 function vVz(A) {
   try {
-    let q = tM.inputSchema.safeParse(A);
+    let q = webFetchTool.inputSchema.safeParse(A);
     if (!q.success) return `input:${A.toString()}`;
     let { url: K } = q.data;
     return `domain:${new URL(K).hostname}`;
@@ -43414,7 +43074,7 @@ function oLq(A) {
   let f = Z,
     N;
   if (q[14] !== $ || q[15] !== K.input || q[16] !== w)
-    ((N = tM.renderToolUseMessage(K.input, { theme: $, verbose: w })),
+    ((N = webFetchTool.renderToolUseMessage(K.input, { theme: $, verbose: w })),
       (q[14] = $),
       (q[15] = K.input),
       (q[16] = w),
@@ -46751,7 +46411,7 @@ function tVz(A) {
       return oVz ?? tV6;
     case aVz:
       return sVz ?? tV6;
-    case tM:
+    case webFetchTool:
       return oLq;
     case Wi:
       return eLq;
@@ -46765,7 +46425,7 @@ function tVz(A) {
       return Gyq;
     case ZF:
     case qb:
-    case l9:
+    case readTool:
       return nLq;
     default:
       return tV6;
@@ -48444,7 +48104,7 @@ function Iyq({
       if (($({ global: j, latest: D }), !X && j && D && !_X(j, D) && !Rf6(D))) {
         let P = Date.now();
         q(!0);
-        let W = k1();
+        let W = getSettings();
         if (W.installMethod !== "native") await td6();
         let G = await _F();
         if (
@@ -48909,7 +48569,7 @@ async function MC1() {
   if (!(await Kl8("auto_migrate_to_native", !1))) return !1;
   if (X1(!1) || !1 || A || X1(process.env.DISABLE_AUTO_MIGRATE_TO_NATIVE))
     return !1;
-  if (k1().installMethod === "native") return !1;
+  if (getSettings().installMethod === "native") return !1;
   return !0;
 }
 async function gyq() {
@@ -52369,7 +52029,7 @@ function qr8(A) {
     { columns: H } = zA(),
     j;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
-    ((j = k1()), (q[0] = j));
+    ((j = getSettings()), (q[0] = j));
   else j = q[0];
   let J = j.hasSeenTasksHint,
     D = T1(Nkz),
@@ -53369,7 +53029,7 @@ function Fkz(A) {
   return (OCq(q), null);
 }
 function XCq() {
-  return jA("tengu_pr_status_cli", !1) && (k1().prStatusFooterEnabled ?? !0);
+  return jA("tengu_pr_status_cli", !1) && (getSettings().prStatusFooterEnabled ?? !0);
 }
 var i7,
   Hv6,
@@ -54096,7 +53756,7 @@ var kCq = E(() => {
   n_();
   h1();
   ((xC1 = Y6(W6(), 1)),
-    (nkz = i6(() =>
+    (nkz = lazyOnce(() =>
       x.object({
         method: x.literal(ikz),
         params: x.object({
@@ -54829,7 +54489,7 @@ function BCq(A) {
   let B;
   if (q[7] !== K || q[8] !== D)
     ((B = () => {
-      (J8(jEz), D(HEz), K());
+      (updateSettings(jEz), D(HEz), K());
     }),
       (q[7] = K),
       (q[8] = D),
@@ -55199,7 +54859,7 @@ function rCq({ input: A, submitCount: q, viewingAgentName: K }) {
       return `Message @${K.length > iCq ? K.slice(0, iCq - 3) + "..." : K}…`;
     if (
       Y.some((_) => _.mode !== "task-notification") &&
-      (k1().queuedCommandUpHintCount || 0) < LEz
+      (getSettings().queuedCommandUpHintCount || 0) < LEz
     )
       return "Press up to edit queued messages";
     if (q < 1 && z && !EEz?.isProactiveActive()) return ONq();
@@ -56351,7 +56011,7 @@ function pEz({
     let c8 = E1 >= 20 && a1 <= 5,
       H7 = m6 >= 20 && a1 <= 5;
     if (c8 && !H7) {
-      if (!k1().hasUsedStash)
+      if (!getSettings().hasUsedStash)
         H8({
           key: "stash-hint",
           jsx: M7.createElement(
@@ -56489,8 +56149,8 @@ function pEz({
       a1 = z2.length > 0;
     if (E1) {
       if (m6 > 0 && !qp(g6, D1)) {
-        if ((W5("tasks"), BA(!1), !k1().hasSeenTasksHint))
-          J8((H7) => {
+        if ((W5("tasks"), BA(!1), !getSettings().hasSeenTasksHint))
+          updateSettings((H7) => {
             if (H7.hasSeenTasksHint === !0) return H7;
             return { ...H7, hasSeenTasksHint: !0 };
           });
@@ -56733,7 +56393,7 @@ function pEz({
           E6(""),
           O6(0),
           v({}),
-          J8((m6) => {
+          updateSettings((m6) => {
             if (m6.hasUsedStash) return m6;
             return { ...m6, hasUsedStash: !0 };
           }));
@@ -56772,7 +56432,7 @@ function pEz({
         E1 = !1,
         { context: a1 } = tRq(K, S6);
       if ((n("tengu_mode_cycle", { to: m6 }), m6 === "plan"))
-        J8((c8) => ({ ...c8, lastPlanModeUse: Date.now() }));
+        updateSettings((c8) => ({ ...c8, lastPlanModeUse: Date.now() }));
       if (
         (h6((c8) => ({ ...c8, toolPermissionContext: { ...a1, mode: m6 } })),
         Y({ ...a1, mode: m6 }),
@@ -60210,7 +59870,7 @@ var Chq = E(() => {
   n_();
   h1();
   ((Oo6 = Y6(W6(), 1)),
-    (GLz = i6(() =>
+    (GLz = lazyOnce(() =>
       x.object({
         method: x.literal("selection_changed"),
         params: x.object({
@@ -60789,7 +60449,7 @@ function mhq(A) {
           if (!J) return;
           if (
             !(
-              (k1().autoConnectIde ||
+              (getSettings().autoConnectIde ||
                 K ||
                 vD() ||
                 Y ||
@@ -60996,7 +60656,7 @@ function dhq({ model: A, onDone: q }) {
     K.current("dismiss");
   }, []);
   (jW.useEffect(() => {
-    J8((D) => {
+    updateSettings((D) => {
       if (D.effortCalloutDismissed) return D;
       return { ...D, effortCalloutDismissed: !0 };
     });
@@ -61062,7 +60722,7 @@ function dhq({ model: A, onDone: q }) {
 }
 function chq(A) {
   if (!O5(A).toLowerCase().includes("opus-4-6")) return !1;
-  if (k1().effortCalloutDismissed) return !1;
+  if (getSettings().effortCalloutDismissed) return !1;
   let Y = Kb6();
   if (Y !== void 0) {
     let z = vK6(Y);
@@ -61281,7 +60941,7 @@ function nhq(A, q, K, Y = "session", z = !1) {
           }),
           h === "dont_ask_again")
         )
-          J8((F) => ({ ...F, transcriptShareDismissed: !0 }));
+          updateSettings((F) => ({ ...F, transcriptShareDismissed: !0 }));
         if (h === "yes") {
           let F = await aC1(X.current);
           return (
@@ -61337,7 +60997,7 @@ function nhq(A, q, K, Y = "session", z = !1) {
         if (K < J.current + O.minUserTurnsBeforeFeedback) return !1;
       }
       if (Math.random() > O.probability) return !1;
-      let B = k1().feedbackSurveyState;
+      let B = getSettings().feedbackSurveyState;
       if (B?.lastShownTime) {
         if (Date.now() - B.lastShownTime < O.minTimeBetweenGlobalFeedbackMs)
           return !1;
@@ -61800,7 +61460,7 @@ function AIq(A, q, K = !1, Y = !1) {
     if (!j()) return;
     (($.current = !0),
       _("transcript_prompt"),
-      J8((W) => ({
+      updateSettings((W) => ({
         ...W,
         feedbackSurveyState: {
           ...W.feedbackSurveyState,
@@ -61818,7 +61478,7 @@ function AIq(A, q, K = !1, Y = !1) {
       }),
       M === "dont_ask_again")
     )
-      J8((P) => ({ ...P, transcriptShareDismissed: !0 }));
+      updateSettings((P) => ({ ...P, transcriptShareDismissed: !0 }));
     switch (M) {
       case "yes":
         (_("submitting"),
@@ -62102,7 +61762,7 @@ var jIq = E(() => {
   rI();
   yP();
   ((Jo6 = Y6(W6(), 1)),
-    (YxO = i6(() =>
+    (YxO = lazyOnce(() =>
       x.object({
         method: x.literal("notifications/message"),
         params: x.object({
@@ -62674,7 +62334,7 @@ async function CIq(A) {
   if (!q) return (y("[lspRecommendation] No file extension found"), []);
   y(`[lspRecommendation] Looking for LSP plugins for ${q}`);
   let K = await Ayz(),
-    z = k1().lspRecommendationNeverPlugins ?? [],
+    z = getSettings().lspRecommendationNeverPlugins ?? [],
     w = [];
   for (let [$, O] of K) {
     if (!O.extensions.has(q)) continue;
@@ -62713,7 +62373,7 @@ async function CIq(A) {
   );
 }
 function SIq(A) {
-  (J8((q) => {
+  (updateSettings((q) => {
     let K = q.lspRecommendationNeverPlugins ?? [];
     if (K.includes(A)) return q;
     return { ...q, lspRecommendationNeverPlugins: [...K, A] };
@@ -62721,14 +62381,14 @@ function SIq(A) {
     y(`[lspRecommendation] Added ${A} to never suggest`));
 }
 function hIq() {
-  (J8((A) => {
+  (updateSettings((A) => {
     let q = (A.lspRecommendationIgnoredCount ?? 0) + 1;
     return { ...A, lspRecommendationIgnoredCount: q };
   }),
     y("[lspRecommendation] Incremented ignored count"));
 }
 function qyz() {
-  let A = k1();
+  let A = getSettings();
   return (
     A.lspRecommendationDisabled === !0 ||
     (A.lspRecommendationIgnoredCount ?? 0) >= sLz
@@ -62826,7 +62486,7 @@ function xIq() {
           break A;
         }
         case "disable":
-          J8(wyz);
+          updateSettings(wyz);
       }
       z(null);
     }),
@@ -62861,7 +62521,7 @@ async function $yz(A, q, K) {
         ? Yyz(Y.marketplaceInstallLocation, Y.entry.source)
         : void 0;
     await sk(A, Y.entry, "user", void 0, z);
-    let w = pA("userSettings");
+    let w = getConfigValue("userSettings");
     (iA("userSettings", { enabledPlugins: { ...w?.enabledPlugins, [A]: !0 } }),
       y(`[useLspPluginRecommendation] Plugin installed: ${A}`),
       K({
@@ -63528,13 +63188,13 @@ function qxq(A) {
         _("ide-status-hint");
         return;
       }
-      if (H.current || (k1().ideHintShownCount ?? 0) >= Wyz) return;
+      if (H.current || (getSettings().ideHintShownCount ?? 0) >= Wyz) return;
       let I = setTimeout(() => {
         eW6(!0).then((B) => {
           let h = B[0]?.name;
           if (h && !H.current)
             ((H.current = !0),
-              J8(Gyz),
+              updateSettings(Gyz),
               w({
                 key: "ide-status-hint",
                 jsx: Op.default.createElement(
@@ -63660,7 +63320,7 @@ function zxq() {
   if (A[0] !== q)
     ((K = () => {
       if (Eq()) return;
-      let w = k1().opusProMigrationTimestamp;
+      let w = getSettings().opusProMigrationTimestamp;
       if (w) {
         if (Date.now() - w < 3000)
           q({
@@ -63695,10 +63355,10 @@ function $xq() {
   if (A[0] !== q)
     ((K = () => {
       if (Eq()) return;
-      if (k1().subscriptionNoticeCount ?? 0 >= Zyz) return;
+      if (getSettings().subscriptionNoticeCount ?? 0 >= Zyz) return;
       Tyz().then((z) => {
         if (z === null) return;
-        (J8(fyz),
+        (updateSettings(fyz),
           n("tengu_switch_to_subscription_notice_shown", {}),
           q({
             key: "switch-to-subscription",
@@ -64033,7 +63693,7 @@ function Syz(A) {
       if (Y.type !== "tool_use" || !("name" in Y)) continue;
       let z = Y.name;
       if (z.startsWith("mcp__")) return !1;
-      if (z === l4) {
+      if (z === BASH_TOOL_NAME) {
         let _ = Y.input?.command || "";
         if (Ryz.some(($) => $.test(_))) return !1;
       }
@@ -65084,7 +64744,7 @@ function Ir8({
     [wv, Fz] = n8.useState(!1),
     [FD, b6] = n8.useState(!1),
     [B6, m6] = n8.useState(Xv6()),
-    [E1, a1] = n8.useState(k1().hasAcknowledgedCostThreshold),
+    [E1, a1] = n8.useState(getSettings().hasAcknowledgedCostThreshold),
     [c8, H7] = n8.useState("INSERT"),
     [s4, $K] = n8.useState(!1),
     [f5, V_] = n8.useState(!1),
@@ -65666,7 +65326,7 @@ function Ir8({
           appendSystemPrompt: X,
         });
         (L3("query_query_start"), Uh1(), dh1(), ch1());
-        for await (let ZY of JC({
+        for await (let ZY of agentLoop({
           messages: V1,
           systemPrompt: v_,
           userContext: A1,
@@ -66073,7 +65733,7 @@ ${m8}`);
     }
     if (wS.current) return;
     ((wS.current = !0),
-      J8((V1) => ({
+      updateSettings((V1) => ({
         ...V1,
         promptQueueUseCount: (V1.promptQueueUseCount ?? 0) + 1,
       })));
@@ -66146,7 +65806,7 @@ ${m8}`);
           !Jq &&
           !O7 &&
           Z_.current === void 0 &&
-          U8 >= k1().messageIdleNotifThresholdMs
+          U8 >= getSettings().messageIdleNotifThresholdMs
         )
           Bg(
             {
@@ -66155,7 +65815,7 @@ ${m8}`);
             },
             s,
           );
-      }, k1().messageIdleNotifThresholdMs);
+      }, getSettings().messageIdleNotifThresholdMs);
       return () => clearTimeout(V1);
     }, [Jq, O7, SK, Z5, s]));
   let xb = n8.useCallback(
@@ -66407,7 +66067,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
               if (U8) {
                 let h4 = {
                   type: "addRules",
-                  rules: [{ toolName: HX, ruleContent: `domain:${x7}` }],
+                  rules: [{ toolName: WEB_FETCH_TOOL_NAME, ruleContent: `domain:${x7}` }],
                   behavior: m8 ? "allow" : "deny",
                   destination: "localSettings",
                 };
@@ -66487,7 +66147,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
               ) {
                 let j7 = {
                   type: "addRules",
-                  rules: [{ toolName: HX, ruleContent: `domain:${x7}` }],
+                  rules: [{ toolName: WEB_FETCH_TOOL_NAME, ruleContent: `domain:${x7}` }],
                   behavior: "allow",
                   destination: "localSettings",
                 };
@@ -66537,7 +66197,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
             onDone: () => {
               (b6(!1),
                 a1(!0),
-                J8((V1) => ({ ...V1, hasAcknowledgedCostThreshold: !0 })),
+                updateSettings((V1) => ({ ...V1, hasAcknowledgedCostThreshold: !0 })),
                 n("tengu_cost_threshold_acknowledged", {}));
             },
           }),
@@ -68688,7 +68348,7 @@ async function NRz(A, q) {
         process.exit(0));
     }
     let z = aw(),
-      w = k1(),
+      w = getSettings(),
       { servers: _ } = ej("project"),
       $ = !!_[A],
       O = [];
@@ -69835,7 +69495,7 @@ async function sRz() {
 `),
         ));
   }
-  let K = k1();
+  let K = getSettings();
   if (!K.installMethod && q.installationType !== "package-manager") {
     (L4(`
 `),
@@ -69855,7 +69515,7 @@ async function sRz() {
       default:
         H = "unknown";
     }
-    (J8((j) => ({ ...j, installMethod: H })),
+    (updateSettings((j) => ({ ...j, installMethod: H })),
       L4(`Installation method set to: ${H}
 `));
   }
@@ -70014,7 +69674,7 @@ async function sRz() {
             `
 `,
         ),
-        J8((X) => ({ ...X, installMethod: D })),
+        updateSettings((X) => ({ ...X, installMethod: D })),
         L4(`Config updated to reflect current installation method: ${D}
 `));
   }
