@@ -35,8 +35,8 @@ async function CJz() {
         (Z86 = new hn6()),
         (MV6 = await $y1.load($)),
         Z86.setLanguage(MV6),
-        y("tree-sitter: loaded from embedded"),
-        n("tengu_tree_sitter_load", { success: !0, from_embedded: !0 }));
+        writeDebugLog("tree-sitter: loaded from embedded"),
+        emitEvent("tengu_tree_sitter_load", { success: !0, from_embedded: !0 }));
       return;
     }
   }
@@ -49,8 +49,8 @@ async function CJz() {
       ? Oy1(K, "tree-sitter-bash", "tree-sitter-bash.wasm")
       : Oy1(K, "tree-sitter-bash.wasm");
   if (!A.existsSync(z) || !A.existsSync(w)) {
-    (y("tree-sitter: WASM files not found"),
-      n("tengu_tree_sitter_load", { success: !1 }));
+    (writeDebugLog("tree-sitter: WASM files not found"),
+      emitEvent("tengu_tree_sitter_load", { success: !1 }));
     return;
   }
   (await hn6.init({
@@ -59,8 +59,8 @@ async function CJz() {
     (Z86 = new hn6()),
     (MV6 = await $y1.load(A.readFileBytesSync(w))),
     Z86.setLanguage(MV6),
-    y("tree-sitter: loaded from disk"),
-    n("tengu_tree_sitter_load", { success: !0, from_embedded: !1 }));
+    writeDebugLog("tree-sitter: loaded from disk"),
+    emitEvent("tengu_tree_sitter_load", { success: !0, from_embedded: !1 }));
 }
 function lWq() {
   (Z86?.delete(), (Z86 = null), (MV6 = null), (In6 = null), (td8 = 0));
@@ -696,7 +696,7 @@ function wGq(A, q, K, Y) {
   if (z.behavior !== "passthrough") return z;
   let w = OGq(A, q, Y);
   if (w.behavior === "deny" || w.behavior === "ask") return w;
-  if (!X1(process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK)) {
+  if (!isTruthy(process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK)) {
     let $ = Bx(A.command);
     if ($.behavior !== "passthrough") {
       let O = {
@@ -872,7 +872,7 @@ async function cd8(A, q, K = Ln6) {
       return ((Y = await q.getAppState()), { ..._, ...{} });
     return _;
   }
-  if (!X1(process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK)) {
+  if (!isTruthy(process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK)) {
     let N = Bx(A.command);
     if (N.behavior === "ask" && N.isBashSecurityCheckForMisparsing) {
       Y = await q.getAppState();
@@ -928,7 +928,7 @@ async function cd8(A, q, K = Ln6) {
   let X = j.find((N) => N.behavior === "ask");
   if (X !== void 0) return { ...X, ...{} };
   if (w.behavior === "allow") return w;
-  let M = X1(process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK)
+  let M = isTruthy(process.env.CLAUDE_CODE_DISABLE_COMMAND_INJECTION_CHECK)
     ? !1
     : $.some((N) => Bx(N).behavior !== "passthrough");
   if (j.every((N) => N.behavior === "allow") && !M)
@@ -1370,7 +1370,7 @@ async function nJz(A, q, K, Y, z, w) {
       }
       if ($.behavior === "deny") {
         if ($.interrupt)
-          (y(`Hook interrupt: tool=${A.name} hookMessage=${$.message}`),
+          (writeDebugLog(`Hook interrupt: tool=${A.name} hookMessage=${$.message}`),
             Y.abortController.abort());
         return {
           behavior: "deny",
@@ -1384,7 +1384,7 @@ async function nJz(A, q, K, Y, z, w) {
       }
     }
   } catch (_) {
-    $6(
+    sendError(
       _ instanceof Error
         ? _
         : Error(
@@ -1433,7 +1433,7 @@ async function checkToolPermissions(A, q, K, Y, z) {
     H = await A.checkPermissions(X, K);
   } catch (X) {
     if (X instanceof j2 || X instanceof Rz) throw X;
-    $6(X);
+    sendError(X);
   }
   if (H?.behavior === "deny") return H;
   if (A.requiresUserInteraction?.() && H?.behavior === "ask") return H;
@@ -1466,7 +1466,7 @@ async function checkToolPermissions(A, q, K, Y, z) {
       ? { ...H, behavior: "ask", message: vj(A.name, H.decisionReason) }
       : H;
   if (D.behavior === "ask" && D.suggestions)
-    y(`Permission suggestions for ${A.name}: ${p6(D.suggestions, null, 2)}`);
+    writeDebugLog(`Permission suggestions for ${A.name}: ${trySafeStringify(D.suggestions, null, 2)}`);
   return D;
 }
 async function mjq({
@@ -1619,7 +1619,7 @@ var tj = E(() => {
 function un6(A, q) {
   M$();
   let K = U7();
-  y(`Settings changed from ${A}, updating app state`);
+  writeDebugLog(`Settings changed from ${A}, updating app state`);
   let Y = fY1();
   (v26(),
     q((z) => {
@@ -1693,7 +1693,7 @@ class Mc8 {
   }
 }
 function PGq(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     { children: K } = A,
     Y;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -1810,7 +1810,7 @@ function WV6() {
   };
 }
 function Xj(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     { children: K, initialState: Y, onChangeAppState: z } = A;
   if (QX.useContext(GGq))
     throw Error(
@@ -1826,7 +1826,7 @@ function Xj(A) {
     ((O = () => {
       let { toolPermissionContext: M } = $.getState();
       if (M.isBypassPermissionsModeAvailable && jV6())
-        (y(
+        (writeDebugLog(
           "Disabling bypass permissions mode on mount (remote settings loaded before mount)",
         ),
           $.setState(oJz));
@@ -1872,8 +1872,8 @@ function Wc8() {
     );
   return A;
 }
-function T1(A) {
-  let q = w6(3),
+function useAppState(A) {
+  let q = reactMemoCache(3),
     K = Wc8(),
     Y;
   if (q[0] !== A || q[1] !== K)
@@ -1900,7 +1900,7 @@ function a_() {
   return Wc8();
 }
 function rv4(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     K = QX.useContext(mn6),
     Y;
   if (q[0] !== A || q[1] !== K)
@@ -1932,7 +1932,7 @@ var RA = E(() => {
     (GGq = QX.default.createContext(!1)));
 });
 function CX(A, q) {
-  let K = w6(5),
+  let K = reactMemoCache(5),
     Y = q === void 0 ? !0 : q,
     w = My1.useContext(mn6)?.setState,
     _,
@@ -1965,13 +1965,13 @@ function CX(A, q) {
   My1.useEffect(_, $);
 }
 function ZGq() {
-  return T1(tJz);
+  return useAppState(tJz);
 }
 function tJz(A) {
   return A.activeOverlays.size > 0;
 }
 function GV6() {
-  return T1(eJz);
+  return useAppState(eJz);
 }
 function eJz(A) {
   for (let q of A.activeOverlays) if (!sJz.has(q)) return !0;
@@ -2127,7 +2127,7 @@ function Py1(A) {
   return "";
 }
 function L8(A) {
-  let q = w6(72),
+  let q = reactMemoCache(72),
     {
       isDisabled: K,
       hideIndexes: Y,
@@ -2622,19 +2622,19 @@ function L8(A) {
                   ? U4.default.createElement(
                       T,
                       { color: "suggestion" },
-                      a6.pointer,
+                      figures.pointer,
                     )
                   : r.shouldShowDownArrow
                     ? U4.default.createElement(
                         T,
                         { dimColor: !0 },
-                        a6.arrowDown,
+                        figures.arrowDown,
                       )
                     : r.shouldShowUpArrow
                       ? U4.default.createElement(
                           T,
                           { dimColor: !0 },
-                          a6.arrowUp,
+                          figures.arrowUp,
                         )
                       : U4.default.createElement(T, null, " "),
                 U4.default.createElement(T, null, " "),
@@ -2663,7 +2663,7 @@ function L8(A) {
                     T,
                     { color: "success" },
                     " ",
-                    a6.tick,
+                    figures.tick,
                   ),
                 o6 > 0 && U4.default.createElement(T, null, " ".repeat(o6)),
               ),
@@ -2933,7 +2933,7 @@ function tQ8(A) {
   }
 }
 function Bjq(A) {
-  let q = w6(24),
+  let q = reactMemoCache(24),
     {
       onAddRules: K,
       onCancel: Y,
@@ -3115,7 +3115,7 @@ function hJq(A) {
             q.push({ event: J, config: M, matcher: X.matcher, source: O });
     }
   }
-  let z = d1(),
+  let z = getSessionId(),
     w = $W1(A, z);
   for (let [_, $] of w.entries())
     for (let O of $)
@@ -3286,8 +3286,8 @@ function v26() {
 function mJq() {
   if (T86 === null) return null;
   let A = fc8(Zc8()),
-    q = p6(T86),
-    K = p6(A);
+    q = trySafeStringify(T86),
+    K = trySafeStringify(A);
   if (q === K) return null;
   let Y = [],
     z = new Set(Object.keys(T86 || {})),
@@ -3298,7 +3298,7 @@ function mJq() {
     if (w.has(_)) {
       let $ = T86?.[_] || [],
         O = A?.[_] || [];
-      if (p6($) !== p6(O)) {
+      if (trySafeStringify($) !== trySafeStringify(O)) {
         let H = [],
           j = new Map($.map((D) => [D.matcher || "", D])),
           J = new Map(O.map((D) => [D.matcher || "", D]));
@@ -3309,7 +3309,7 @@ function mJq() {
         for (let [D, X] of J)
           if (j.has(D)) {
             let M = j.get(D);
-            if (p6(M.hooks) !== p6(X.hooks))
+            if (trySafeStringify(M.hooks) !== trySafeStringify(X.hooks))
               H.push(`  - Modified hooks for matcher: ${D || "(no matcher)"}`);
           }
         if (H.length > 0)
@@ -3588,10 +3588,10 @@ async function EGq(A, q, K, Y, z, w, _, $) {
   let O = $ || `hook-${DDz()}`;
   try {
     let H = fy1(A.prompt, Y);
-    y(`Hooks: Processing prompt hook with prompt: ${H}`);
+    writeDebugLog(`Hooks: Processing prompt hook with prompt: ${H}`);
     let j = K8({ content: H }),
       J = _ && _.length > 0 ? [..._, j] : [j];
-    y(`Hooks: Querying model with ${J.length} messages`);
+    writeDebugLog(`Hooks: Querying model with ${J.length} messages`);
     let D = A.timeout ? A.timeout * 1000 : 30000,
       { signal: X, cleanup: M } = oV(z, AbortSignal.timeout(D));
     try {
@@ -3640,11 +3640,11 @@ Your response must be a JSON object matching one of the following schemas:
         .join("");
       w.setResponseLength((N) => N + W.length);
       let G = W.trim();
-      y(`Hooks: Model response: ${G}`);
+      writeDebugLog(`Hooks: Model response: ${G}`);
       let Z = s3(G);
       if (!Z)
         return (
-          y(`Hooks: error parsing response as JSON: ${G}`),
+          writeDebugLog(`Hooks: error parsing response as JSON: ${G}`),
           {
             hook: A,
             outcome: "non_blocking_error",
@@ -3662,7 +3662,7 @@ Your response must be a JSON object matching one of the following schemas:
       let f = gn6().safeParse(Z);
       if (!f.success)
         return (
-          y(
+          writeDebugLog(
             `Hooks: model response does not conform to expected schema: ${f.error.message}`,
           ),
           {
@@ -3681,7 +3681,7 @@ Your response must be a JSON object matching one of the following schemas:
         );
       if (!f.data.ok)
         return (
-          y(`Hooks: Prompt hook condition was not met: ${f.data.reason}`),
+          writeDebugLog(`Hooks: Prompt hook condition was not met: ${f.data.reason}`),
           {
             hook: A,
             outcome: "blocking",
@@ -3694,7 +3694,7 @@ Your response must be a JSON object matching one of the following schemas:
           }
         );
       return (
-        y("Hooks: Prompt hook condition was met"),
+        writeDebugLog("Hooks: Prompt hook condition was met"),
         {
           hook: A,
           outcome: "success",
@@ -3714,7 +3714,7 @@ Your response must be a JSON object matching one of the following schemas:
   } catch (H) {
     let j = H instanceof Error ? H.message : String(H);
     return (
-      y(`Hooks: Prompt hook error: ${j}`),
+      writeDebugLog(`Hooks: Prompt hook error: ${j}`),
       {
         hook: A,
         outcome: "non_blocking_error",
@@ -3748,9 +3748,9 @@ async function RGq(A, q, K, Y, z, w, _, $, O) {
     J = Date.now();
   try {
     let D = fy1(A.prompt($), Y);
-    y(`Hooks: Processing agent hook with prompt: ${D}`);
+    writeDebugLog(`Hooks: Processing agent hook with prompt: ${D}`);
     let M = [K8({ content: D })];
-    y(`Hooks: Starting agent query with ${M.length} messages`);
+    writeDebugLog(`Hooks: Starting agent query with ${M.length} messages`);
     let P = A.timeout ? A.timeout * 1000 : 60000,
       W = G3(),
       { signal: G, cleanup: Z } = oV(z, AbortSignal.timeout(P)),
@@ -3834,7 +3834,7 @@ When done, return your result using the ${yX} tool with:
         if (c.type === "assistant") {
           if ((u++, u >= 50)) {
             ((U = !0),
-              y(`Hooks: Agent turn ${u} hit max turns, aborting`),
+              writeDebugLog(`Hooks: Agent turn ${u} hit max turns, aborting`),
               W.abort());
             break;
           }
@@ -3846,7 +3846,7 @@ When done, return your result using the ${yX} tool with:
           let d = gn6().safeParse(c.attachment.data);
           if (d.success) {
             ((g = d.data),
-              y(`Hooks: Got structured output: ${p6(g)}`),
+              writeDebugLog(`Hooks: Got structured output: ${trySafeStringify(g)}`),
               W.abort());
             break;
           }
@@ -3855,8 +3855,8 @@ When done, return your result using the ${yX} tool with:
       if ((G.removeEventListener("abort", f), Z(), cG6(w.setAppState, h), !g)) {
         if (U)
           return (
-            y("Hooks: Agent hook did not complete within 50 turns"),
-            n("tengu_agent_stop_hook_max_turns", {
+            writeDebugLog("Hooks: Agent hook did not complete within 50 turns"),
+            emitEvent("tengu_agent_stop_hook_max_turns", {
               durationMs: Date.now() - J,
               turnCount: u,
               agentName: O,
@@ -3864,8 +3864,8 @@ When done, return your result using the ${yX} tool with:
             { hook: A, outcome: "cancelled" }
           );
         return (
-          y("Hooks: Agent hook did not return structured output"),
-          n("tengu_agent_stop_hook_error", {
+          writeDebugLog("Hooks: Agent hook did not return structured output"),
+          emitEvent("tengu_agent_stop_hook_error", {
             durationMs: Date.now() - J,
             turnCount: u,
             errorType: 1,
@@ -3876,7 +3876,7 @@ When done, return your result using the ${yX} tool with:
       }
       if (!g.ok)
         return (
-          y(`Hooks: Agent hook condition was not met: ${g.reason}`),
+          writeDebugLog(`Hooks: Agent hook condition was not met: ${g.reason}`),
           {
             hook: A,
             outcome: "blocking",
@@ -3887,8 +3887,8 @@ When done, return your result using the ${yX} tool with:
           }
         );
       return (
-        y("Hooks: Agent hook condition was met"),
-        n("tengu_agent_stop_hook_success", {
+        writeDebugLog("Hooks: Agent hook condition was met"),
+        emitEvent("tengu_agent_stop_hook_success", {
           durationMs: Date.now() - J,
           turnCount: u,
           agentName: O,
@@ -3913,8 +3913,8 @@ When done, return your result using the ${yX} tool with:
   } catch (D) {
     let X = D instanceof Error ? D.message : String(D);
     return (
-      y(`Hooks: Agent hook error: ${X}`),
-      n("tengu_agent_stop_hook_error", {
+      writeDebugLog(`Hooks: Agent hook error: ${X}`),
+      emitEvent("tengu_agent_stop_hook_error", {
         durationMs: Date.now() - J,
         errorType: 2,
         agentName: O,
@@ -4119,7 +4119,7 @@ function VDz(A, q) {
       let _ = z ?? w;
       if (!q.has(_))
         return (
-          y(
+          writeDebugLog(
             `Hooks: env var $${_} not in allowedEnvVars, skipping interpolation`,
             { level: "warn" },
           ),
@@ -4135,7 +4135,7 @@ async function vc8(A, q, K, Y) {
   if (z.allowedUrls !== void 0) {
     if (!z.allowedUrls.some((H) => TDz(A.url, H))) {
       let H = `HTTP hook blocked: ${A.url} does not match any pattern in allowedHttpHookUrls`;
-      return (y(H, { level: "warn" }), { ok: !1, body: "", error: H });
+      return (writeDebugLog(H, { level: "warn" }), { ok: !1, body: "", error: H });
     }
   }
   let w = A.timeout ? A.timeout * 1000 : GDz,
@@ -4154,9 +4154,9 @@ async function vc8(A, q, K, Y) {
     let H = await ZDz(),
       j = !H && Ph() !== void 0 && !Hq6(A.url);
     if (H)
-      y(`Hooks: HTTP hook POST to ${A.url} (via sandbox proxy :${H.port})`);
-    else if (j) y(`Hooks: HTTP hook POST to ${A.url} (via env-var proxy)`);
-    else y(`Hooks: HTTP hook POST to ${A.url}`);
+      writeDebugLog(`Hooks: HTTP hook POST to ${A.url} (via sandbox proxy :${H.port})`);
+    else if (j) writeDebugLog(`Hooks: HTTP hook POST to ${A.url} (via env-var proxy)`);
+    else writeDebugLog(`Hooks: HTTP hook POST to ${A.url}`);
     let J = await g8.post(A.url, K, {
       headers: O,
       signal: _,
@@ -4169,7 +4169,7 @@ async function vc8(A, q, K, Y) {
     $();
     let D = J.data ?? "";
     return (
-      y(
+      writeDebugLog(
         `Hooks: HTTP hook response status ${J.status}, body length ${D.length}`,
       ),
       { ok: J.status >= 200 && J.status < 300, statusCode: J.status, body: D }
@@ -4178,7 +4178,7 @@ async function vc8(A, q, K, Y) {
     if (($(), _.aborted)) return { ok: !1, body: "", aborted: !0 };
     let H = O instanceof Error ? O.message : String(O);
     return (
-      y(`Hooks: HTTP hook error: ${H}`, { level: "error" }),
+      writeDebugLog(`Hooks: HTTP hook error: ${H}`, { level: "error" }),
       { ok: !1, body: "", error: H }
     );
   }
@@ -4255,7 +4255,7 @@ function Vy1() {
   return !Ew();
 }
 function U$(A, q) {
-  let K = q ?? d1();
+  let K = q ?? getSessionId();
   return {
     session_id: K,
     transcript_path: g$(K),
@@ -4268,7 +4268,7 @@ function FGq(A) {
     K = fV6().safeParse(q);
   if (K.success)
     return (
-      y("Successfully parsed and validated hook JSON output"),
+      writeDebugLog("Successfully parsed and validated hook JSON output"),
       { json: K.data }
     );
   return {
@@ -4276,14 +4276,14 @@ function FGq(A) {
 ${K.error.issues.map((z) => `  - ${z.path.join(".")}: ${z.message}`).join(`
 `)}
 
-The hook's output was: ${p6(q, null, 2)}`,
+The hook's output was: ${trySafeStringify(q, null, 2)}`,
   };
 }
 function pGq(A) {
   let q = A.trim();
   if (!q.startsWith("{"))
     return (
-      y("Hook output does not start with {, treating as plain text"),
+      writeDebugLog("Hook output does not start with {, treating as plain text"),
       { plainText: A }
     );
   try {
@@ -4292,10 +4292,10 @@ function pGq(A) {
     let Y = `${K.validationError}
 
 Expected schema:
-${p6({ continue: "boolean (optional)", suppressOutput: "boolean (optional)", stopReason: "string (optional)", decision: '"approve" | "block" (optional)', reason: "string (optional)", systemMessage: "string (optional)", permissionDecision: '"allow" | "deny" | "ask" (optional)', hookSpecificOutput: { "for PreToolUse": { hookEventName: '"PreToolUse"', permissionDecision: '"allow" | "deny" | "ask" (optional)', permissionDecisionReason: "string (optional)", updatedInput: "object (optional) - Modified tool input to use" }, "for UserPromptSubmit": { hookEventName: '"UserPromptSubmit"', additionalContext: "string (required)" }, "for PostToolUse": { hookEventName: '"PostToolUse"', additionalContext: "string (optional)" } } }, null, 2)}`;
-    return (y(Y), { plainText: A, validationError: Y });
+${trySafeStringify({ continue: "boolean (optional)", suppressOutput: "boolean (optional)", stopReason: "string (optional)", decision: '"approve" | "block" (optional)', reason: "string (optional)", systemMessage: "string (optional)", permissionDecision: '"allow" | "deny" | "ask" (optional)', hookSpecificOutput: { "for PreToolUse": { hookEventName: '"PreToolUse"', permissionDecision: '"allow" | "deny" | "ask" (optional)', permissionDecisionReason: "string (optional)", updatedInput: "object (optional) - Modified tool input to use" }, "for UserPromptSubmit": { hookEventName: '"UserPromptSubmit"', additionalContext: "string (required)" }, "for PostToolUse": { hookEventName: '"PostToolUse"', additionalContext: "string (optional)" } } }, null, 2)}`;
+    return (writeDebugLog(Y), { plainText: A, validationError: Y });
   } catch (K) {
-    return (y(`Failed to parse hook output as JSON: ${K}`), { plainText: A });
+    return (writeDebugLog(`Failed to parse hook output as JSON: ${K}`), { plainText: A });
   }
 }
 function QGq(A) {
@@ -4304,21 +4304,21 @@ function QGq(A) {
     let K = fV6().safeParse({});
     if (K.success)
       return (
-        y("HTTP hook returned empty body, treating as empty JSON object"),
+        writeDebugLog("HTTP hook returned empty body, treating as empty JSON object"),
         { json: K.data }
       );
   }
   if (!q.startsWith("{")) {
     let K = `HTTP hook must return JSON, but got non-JSON response body: ${q.length > 200 ? q.slice(0, 200) + "…" : q}`;
-    return (y(K), { validationError: K });
+    return (writeDebugLog(K), { validationError: K });
   }
   try {
     let K = FGq(q);
     if ("json" in K) return K;
-    return (y(K.validationError), K);
+    return (writeDebugLog(K.validationError), K);
   } catch (K) {
     let Y = `HTTP hook must return valid JSON, but parsing failed: ${K}`;
-    return (y(Y), { validationError: Y });
+    return (writeDebugLog(Y), { validationError: Y });
   }
 }
 function kc8({
@@ -4385,7 +4385,7 @@ function kc8({
   if (A.hookSpecificOutput) {
     if (w && A.hookSpecificOutput.hookEventName !== w)
       throw Error(
-        `Hook returned incorrect event name: expected '${w}' but got '${A.hookSpecificOutput.hookEventName}'. Full stdout: ${p6(A, null, 2)}`,
+        `Hook returned incorrect event name: expected '${w}' but got '${A.hookSpecificOutput.hookEventName}'. Full stdout: ${trySafeStringify(A, null, 2)}`,
       );
     switch (A.hookSpecificOutput.hookEventName) {
       case "PreToolUse":
@@ -4530,7 +4530,7 @@ async function vy1(A, q, K, Y, z, w, _, $, O, H, j) {
     f = y1(),
     N = (await pq(f)) ? f : HA();
   if (N !== f)
-    y(`Hooks: cwd ${f} not found, falling back to original cwd`, {
+    writeDebugLog(`Hooks: cwd ${f} not found, falling back to original cwd`, {
       level: "warn",
     });
   let V = vDz(P, [], { env: G, cwd: N, shell: Z, windowsHide: !0 }),
@@ -4541,7 +4541,7 @@ async function vy1(A, q, K, Y, z, w, _, $, O, H, j) {
   if (A.async && !H) {
     let D6 = `async_hook_${V.pid}`;
     if (
-      (y(`Hooks: Config-based async hook, backgrounding process ${D6}`),
+      (writeDebugLog(`Hooks: Config-based async hook, backgrounding process ${D6}`),
       V.stdin.write(Y, "utf8"),
       V.stdin.end(),
       (I = !0),
@@ -4588,20 +4588,20 @@ async function vy1(A, q, K, Y, z, w, _, $, O, H, j) {
           let z6 = w8(T6),
             H6 = vGq().safeParse(z6);
           if (H6.success) {
-            (c.add(T6), y(`Hooks: Detected prompt request from hook: ${T6}`));
+            (c.add(T6), writeDebugLog(`Hooks: Detected prompt request from hook: ${T6}`));
             let _6 = H6.data,
               K6 = j;
             d = d.then(async () => {
               try {
                 let s = await K6(_6);
                 V.stdin.write(
-                  p6(s) +
+                  trySafeStringify(s) +
                     `
 `,
                   "utf8",
                 );
               } catch (s) {
-                (y(`Hooks: Prompt request handling failed: ${s}`),
+                (writeDebugLog(`Hooks: Prompt request handling failed: ${s}`),
                   V.stdin.destroy());
               }
             });
@@ -4611,13 +4611,13 @@ async function vy1(A, q, K, Y, z, w, _, $, O, H, j) {
       }
     }
     if (!g && B.trim().includes("}")) {
-      ((g = !0), y(`Hooks: Checking initial response for async: ${B.trim()}`));
+      ((g = !0), writeDebugLog(`Hooks: Checking initial response for async: ${B.trim()}`));
       try {
         let G6 = w8(B.trim());
-        if ((y(`Hooks: Parsed initial response: ${p6(G6)}`), uC(G6) && !H)) {
+        if ((writeDebugLog(`Hooks: Parsed initial response: ${trySafeStringify(G6)}`), uC(G6) && !H)) {
           let v6 = `async_hook_${V.pid}`;
           if (
-            (y(`Hooks: Detected async hook, backgrounding process ${v6}`),
+            (writeDebugLog(`Hooks: Detected async hook, backgrounding process ${v6}`),
             BGq({
               processId: v6,
               hookId: w,
@@ -4630,15 +4630,15 @@ async function vy1(A, q, K, Y, z, w, _, $, O, H, j) {
           )
             ((S = !0), u?.({ stdout: B, stderr: h, output: F, status: 0 }));
         } else if (uC(G6) && H)
-          y(
+          writeDebugLog(
             "Hooks: Detected async hook but forceSyncExecution is true, waiting for completion",
           );
         else
-          y(
+          writeDebugLog(
             "Hooks: Initial response is not async, continuing normal processing",
           );
       } catch (G6) {
-        y(`Hooks: Failed to parse initial response as JSON: ${G6}`);
+        writeDebugLog(`Hooks: Failed to parse initial response as JSON: ${G6}`);
       }
     }
   }),
@@ -4664,7 +4664,7 @@ async function vy1(A, q, K, Y, z, w, _, $, O, H, j) {
             (V.stdin.on("error", (v6) => {
               if (!j) G6(v6);
               else
-                y(
+                writeDebugLog(
                   `Hooks: stdin error during prompt flow (likely process exited): ${v6}`,
                 );
             }),
@@ -4712,7 +4712,7 @@ async function vy1(A, q, K, Y, z, w, _, $, O, H, j) {
   } catch (D6) {
     let G6 = D6;
     if (G6.code === "EPIPE") {
-      y(
+      writeDebugLog(
         "EPIPE error while writing to hook stdin (hook command likely closed early)",
       );
       let v6 =
@@ -4750,7 +4750,7 @@ function kDz(A, q) {
     for (let Y of b_7(A)) if (K.test(Y)) return !0;
     return !1;
   } catch {
-    return (y(`Invalid regex pattern in hook matcher: ${q}`), !1);
+    return (writeDebugLog(`Invalid regex pattern in hook matcher: ${q}`), !1);
   }
 }
 function UGq(A) {
@@ -4849,8 +4849,8 @@ function Ec8(A, q, K, Y) {
       default:
         break;
     }
-    (y(`Getting matching hook commands for ${K} with query: ${_}`),
-      y(`Found ${w.length} hook matchers in settings`));
+    (writeDebugLog(`Getting matching hook commands for ${K} with query: ${_}`),
+      writeDebugLog(`Found ${w.length} hook matchers in settings`));
     let O = (_ ? w.filter((G) => !G.matcher || kDz(_, G.matcher)) : w).flatMap(
         (G) => {
           let Z = "pluginRoot" in G ? G.pluginRoot : void 0,
@@ -4901,7 +4901,7 @@ function Ec8(A, q, K, Y) {
           ? P.filter((G) => {
               if (G.hook.type === "http")
                 return (
-                  y(
+                  writeDebugLog(
                     `Skipping HTTP hook ${G.hook.url} — HTTP hooks are not supported for ${K}`,
                   ),
                   !1
@@ -4910,7 +4910,7 @@ function Ec8(A, q, K, Y) {
             })
           : P;
     return (
-      y(
+      writeDebugLog(
         `Matched ${W.length} unique hooks for query "${_ || "no match query"}" (${O.length} before deduplication)`,
       ),
       W
@@ -4951,16 +4951,16 @@ async function* fb({
   toolInputSummary: H,
 }) {
   if (Bn6()) return;
-  if (X1(process.env.CLAUDE_CODE_SIMPLE)) return;
+  if (isTruthy(process.env.CLAUDE_CODE_SIMPLE)) return;
   let j = A.hook_event_name,
     J = K ? `${j}:${K}` : j,
     D = O?.(J, H);
   if (Vy1()) {
-    y(`Skipping ${J} hook execution - workspace trust not accepted`);
+    writeDebugLog(`Skipping ${J} hook execution - workspace trust not accepted`);
     return;
   }
   let X = w ? await w.getAppState() : void 0,
-    M = w?.agentId ?? d1(),
+    M = w?.agentId ?? getSessionId(),
     P = Ec8(X, M, j, A);
   if (P.length === 0) return;
   if (Y?.aborted) return;
@@ -4968,11 +4968,11 @@ async function* fb({
   if (W.length > 0) {
     let S = dGq(W),
       I = cGq(W);
-    n("tengu_run_hook", {
+    emitEvent("tengu_run_hook", {
       hookName: J,
       numCommands: W.length,
-      hookTypeCounts: p6(I),
-      ...(S && { pluginHookCounts: p6(S) }),
+      hookTypeCounts: trySafeStringify(I),
+      ...(S && { pluginHookCounts: trySafeStringify(S) }),
     });
   }
   let G = yD() ? gGq(P) : [];
@@ -4982,10 +4982,10 @@ async function* fb({
       hook_name: J,
       num_hooks: String(P.length),
       managed_only: String(zx()),
-      hook_definitions: p6(G),
+      hook_definitions: trySafeStringify(G),
       hook_source: zx() ? "policySettings" : "merged",
     });
-  let Z = UX4(j, J, P.length, p6(G));
+  let Z = UX4(j, J, P.length, trySafeStringify(G));
   for (let { hook: S } of P)
     yield {
       message: {
@@ -5056,9 +5056,9 @@ async function* fb({
       try {
         let a;
         try {
-          a = p6(A);
+          a = trySafeStringify(A);
         } catch (A6) {
-          ($6(Error(`Failed to stringify hook ${J} input`, { cause: A6 })),
+          (sendError(Error(`Failed to stringify hook ${J} input`, { cause: A6 })),
             yield {
               message: wq({
                 type: "hook_error_during_execution",
@@ -5479,7 +5479,7 @@ async function* fb({
     v;
   for await (let S of YN1(N)) {
     if ((V[S.outcome]++, S.preventContinuation))
-      (y(`Hook ${j} (${Tj(S.hook)}) requested preventContinuation`),
+      (writeDebugLog(`Hook ${j} (${Tj(S.hook)}) requested preventContinuation`),
         yield { preventContinuation: !0, stopReason: S.stopReason });
     if (S.blockingError) yield { blockingError: S.blockingError };
     if (S.message) yield { message: S.message };
@@ -5494,16 +5494,16 @@ async function* fb({
         }),
       };
     if (S.additionalContext)
-      (y(
+      (writeDebugLog(
         `Hook ${j} (${Tj(S.hook)}) provided additionalContext (${S.additionalContext.length} chars)`,
       ),
         yield { additionalContexts: [S.additionalContext] });
     if (S.updatedMCPToolOutput)
-      (y(`Hook ${j} (${Tj(S.hook)}) replaced MCP tool output`),
+      (writeDebugLog(`Hook ${j} (${Tj(S.hook)}) replaced MCP tool output`),
         yield { updatedMCPToolOutput: S.updatedMCPToolOutput });
     if (S.permissionBehavior)
       switch (
-        (y(
+        (writeDebugLog(
           `Hook ${j} (${Tj(S.hook)}) returned permissionDecision: ${S.permissionBehavior}${S.hookPermissionDecisionReason ? ` (reason: ${S.hookPermissionDecisionReason})` : ""}`,
         ),
         S.permissionBehavior)
@@ -5527,7 +5527,7 @@ async function* fb({
           ? S.updatedInput
           : void 0;
       if (I)
-        y(
+        writeDebugLog(
           `Hook ${j} (${Tj(S.hook)}) modified tool input keys: [${Object.keys(I).join(", ")}]`,
         );
       yield {
@@ -5537,7 +5537,7 @@ async function* fb({
       };
     }
     if (S.updatedInput && S.permissionBehavior === void 0)
-      (y(
+      (writeDebugLog(
         `Hook ${j} (${Tj(S.hook)}) modified tool input keys: [${Object.keys(S.updatedInput).join(", ")}]`,
       ),
         yield { updatedInput: S.updatedInput });
@@ -5548,13 +5548,13 @@ async function* fb({
     if (S.elicitationResultResponse)
       yield { elicitationResultResponse: S.elicitationResultResponse };
     if (X && S.hook.type !== "callback") {
-      let I = d1(),
+      let I = getSessionId(),
         h = qM4(X, I, j, K ?? "", S.hook);
       if (h?.onHookSuccess && S.outcome === "success")
         try {
           h.onHookSuccess(S.hook, S);
         } catch (F) {
-          $6(Error("Session hook success callback failed", { cause: F }));
+          sendError(Error("Session hook success callback failed", { cause: F }));
         }
     }
   }
@@ -5562,7 +5562,7 @@ async function* fb({
   if (
     (p_6()?.observe("hook_duration_ms", L),
     Qh1(L),
-    n("tengu_repl_hook_finished", {
+    emitEvent("tengu_repl_hook_finished", {
       hookName: J,
       numCommands: P.length,
       numSuccess: V.success,
@@ -5583,7 +5583,7 @@ async function* fb({
       num_non_blocking_error: String(V.non_blocking_error),
       num_cancelled: String(V.cancelled),
       managed_only: String(zx()),
-      hook_definitions: p6(S),
+      hook_definitions: trySafeStringify(S),
       hook_source: zx() ? "policySettings" : "merged",
     });
   }
@@ -5604,21 +5604,21 @@ async function N86({
   signal: Y,
   timeoutMs: z = kj,
 }) {
-  if (X1(process.env.CLAUDE_CODE_SIMPLE)) return [];
+  if (isTruthy(process.env.CLAUDE_CODE_SIMPLE)) return [];
   let w = q.hook_event_name,
     _ = K ? `${w}:${K}` : w;
   if (Bn6())
     return (
-      y(`Skipping hooks for ${_} due to 'disableAllHooks' managed setting`),
+      writeDebugLog(`Skipping hooks for ${_} due to 'disableAllHooks' managed setting`),
       []
     );
   if (Vy1())
     return (
-      y(`Skipping ${_} hook execution - workspace trust not accepted`),
+      writeDebugLog(`Skipping ${_} hook execution - workspace trust not accepted`),
       []
     );
   let $ = A ? await A() : void 0,
-    O = d1(),
+    O = getSessionId(),
     H = Ec8($, O, w, q);
   if (H.length === 0) return [];
   if (Y?.aborted) return [];
@@ -5626,18 +5626,18 @@ async function N86({
   if (j.length > 0) {
     let X = dGq(j),
       M = cGq(j);
-    n("tengu_run_hook", {
+    emitEvent("tengu_run_hook", {
       hookName: _,
       numCommands: j.length,
-      hookTypeCounts: p6(M),
-      ...(X && { pluginHookCounts: p6(X) }),
+      hookTypeCounts: trySafeStringify(M),
+      ...(X && { pluginHookCounts: trySafeStringify(X) }),
     });
   }
   let J;
   try {
-    J = p6(q);
+    J = trySafeStringify(q);
   } catch (X) {
-    return ($6(X instanceof Error ? X : Error(String(X))), []);
+    return (sendError(X instanceof Error ? X : Error(String(X))), []);
   }
   let D = H.map(async ({ hook: X, pluginRoot: M }, P) => {
     if (X.type === "callback") {
@@ -5648,7 +5648,7 @@ async function N86({
           L = await X.callback(q, v, N, P);
         if ((V?.(), uC(L)))
           return (
-            y(
+            writeDebugLog(
               `${_} [callback] returned async response, returning empty output`,
             ),
             { command: "callback", succeeded: !0, output: "", blocked: !1 }
@@ -5656,14 +5656,14 @@ async function N86({
         let S = L.systemMessage || "",
           I = TV6(L) && L.decision === "block";
         return (
-          y(`${_} [callback] completed successfully`),
+          writeDebugLog(`${_} [callback] completed successfully`),
           { command: "callback", succeeded: !0, output: S, blocked: I }
         );
       } catch (v) {
         V?.();
         let L = v instanceof Error ? v.message : String(v);
         return (
-          y(`${_} [callback] failed to run: ${L}`, { level: "error" }),
+          writeDebugLog(`${_} [callback] failed to run: ${L}`, { level: "error" }),
           { command: "callback", succeeded: !1, output: L, blocked: !1 }
         );
       }
@@ -5684,7 +5684,7 @@ async function N86({
       };
     if (X.type === "function")
       return (
-        $6(
+        sendError(
           Error(
             `Function hook reached executeHooksOutsideREPL for ${w}. Function hooks should only be used in REPL context (Stop hooks).`,
           ),
@@ -5701,7 +5701,7 @@ async function N86({
         let f = await vc8(X, w, J, Y);
         if (f.aborted)
           return (
-            y(`${_} [${X.url}] cancelled`),
+            writeDebugLog(`${_} [${X.url}] cancelled`),
             {
               command: X.url,
               succeeded: !1,
@@ -5712,19 +5712,19 @@ async function N86({
         if (f.error || !f.ok) {
           let L = f.error || `HTTP ${f.statusCode} from ${X.url}`;
           return (
-            y(`${_} [${X.url}] failed: ${L}`, { level: "error" }),
+            writeDebugLog(`${_} [${X.url}] failed: ${L}`, { level: "error" }),
             { command: X.url, succeeded: !1, output: L, blocked: !1 }
           );
         }
         let { json: N, validationError: V } = QGq(f.body);
         if (V) throw Error(V);
-        if (N && !uC(N)) y(`Parsed JSON output from HTTP hook: ${p6(N)}`);
+        if (N && !uC(N)) writeDebugLog(`Parsed JSON output from HTTP hook: ${trySafeStringify(N)}`);
         let v = N && !uC(N) && TV6(N) && N.decision === "block";
         return { command: X.url, succeeded: !0, output: f.body, blocked: !!v };
       } catch (f) {
         let N = f instanceof Error ? f.message : String(f);
         return (
-          y(`${_} [${X.url}] failed to run: ${N}`, { level: "error" }),
+          writeDebugLog(`${_} [${X.url}] failed to run: ${N}`, { level: "error" }),
           { command: X.url, succeeded: !1, output: N, blocked: !1 }
         );
       }
@@ -5734,7 +5734,7 @@ async function N86({
       let f = await vy1(X, w, _, J, G, gE(), P, M);
       if ((Z?.(), f.aborted))
         return (
-          y(`${_} [${X.command}] cancelled`),
+          writeDebugLog(`${_} [${X.command}] cancelled`),
           {
             command: X.command,
             succeeded: !1,
@@ -5742,10 +5742,10 @@ async function N86({
             blocked: !1,
           }
         );
-      y(`${_} [${X.command}] completed with status ${f.status}`);
+      writeDebugLog(`${_} [${X.command}] completed with status ${f.status}`);
       let { json: N, validationError: V } = pGq(f.stdout);
       if (V) throw Error(V);
-      if (N && !uC(N)) y(`Parsed JSON output from hook: ${p6(N)}`);
+      if (N && !uC(N)) writeDebugLog(`Parsed JSON output from hook: ${trySafeStringify(N)}`);
       let v = N && !uC(N) && TV6(N) && N.decision === "block",
         L = f.status === 2 || !!v,
         S = f.status === 0 ? f.stdout || "" : f.stderr || "";
@@ -5759,7 +5759,7 @@ async function N86({
       Z?.();
       let N = f instanceof Error ? f.message : String(f);
       return (
-        y(`${_} [${X.command}] failed to run: ${N}`, { level: "error" }),
+        writeDebugLog(`${_} [${X.command}] failed to run: ${N}`, { level: "error" }),
         { command: X.command, succeeded: !1, output: N, blocked: !1 }
       );
     }
@@ -5767,7 +5767,7 @@ async function N86({
   return await Promise.all(D);
 }
 async function* QB8(A, q, K, Y, z, w, _ = kj, $, O) {
-  y(`executePreToolHooks called for tool: ${A}`);
+  writeDebugLog(`executePreToolHooks called for tool: ${A}`);
   let H = {
     ...U$(z),
     hook_event_name: "PreToolUse",
@@ -6016,12 +6016,12 @@ async function mg8(A, q) {
       process.stderr.write(`SessionEnd hook [${O.command}] failed: ${O.output}
 `);
   if (Y) {
-    let O = d1();
+    let O = getSessionId();
     cG6(Y, O);
   }
 }
 async function* b26(A, q, K, Y, z, w, _, $ = kj, O, H) {
-  y(`executePermissionRequestHooks called for tool: ${A}`);
+  writeDebugLog(`executePermissionRequestHooks called for tool: ${A}`);
   let j = {
     ...U$(z),
     hook_event_name: "PermissionRequest",
@@ -6154,7 +6154,7 @@ async function gN8({
 async function Rc8(A, q, K = 5000) {
   if (Bn6()) return;
   if (Vy1()) {
-    y("Skipping StatusLine command execution - workspace trust not accepted");
+    writeDebugLog("Skipping StatusLine command execution - workspace trust not accepted");
     return;
   }
   let Y;
@@ -6163,7 +6163,7 @@ async function Rc8(A, q, K = 5000) {
   if (!Y || Y.type !== "command") return;
   let z = q || AbortSignal.timeout(K);
   try {
-    let w = p6(A),
+    let w = trySafeStringify(A),
       _ = await vy1(Y, "StatusLine", "statusLine", w, z, gE());
     if (_.aborted) return;
     if (_.status === 0) {
@@ -6179,7 +6179,7 @@ async function Rc8(A, q, K = 5000) {
     }
     return;
   } catch (w) {
-    y(`Status hook failed: ${w}`, { level: "error" });
+    writeDebugLog(`Status hook failed: ${w}`, { level: "error" });
     return;
   }
 }
@@ -6187,7 +6187,7 @@ async function Sg8(A, q, K = 5000) {
   if (Bn6()) return [];
   if (Vy1())
     return (
-      y(
+      writeDebugLog(
         "Skipping FileSuggestion command execution - workspace trust not accepted",
       ),
       []
@@ -6198,7 +6198,7 @@ async function Sg8(A, q, K = 5000) {
   if (!Y || Y.type !== "command") return [];
   let z = q || AbortSignal.timeout(K);
   try {
-    let w = p6(A),
+    let w = trySafeStringify(A),
       _ = { type: "command", command: Y.command },
       $ = await vy1(_, "FileSuggestion", "FileSuggestion", w, z, gE());
     if ($.aborted || $.status !== 0) return [];
@@ -6210,7 +6210,7 @@ async function Sg8(A, q, K = 5000) {
       .map((O) => O.trim())
       .filter(Boolean);
   } catch (w) {
-    return (y(`File suggestion helper failed: ${w}`, { level: "error" }), []);
+    return (writeDebugLog(`File suggestion helper failed: ${w}`, { level: "error" }), []);
   }
 }
 async function LDz({
@@ -6251,7 +6251,7 @@ async function LDz({
     )
       return { outcome: "cancelled", hook: A };
     return (
-      $6(j instanceof Error ? j : Error(String(j))),
+      sendError(j instanceof Error ? j : Error(String(j))),
       {
         message: wq({
           type: "hook_error_during_execution",
@@ -6327,7 +6327,7 @@ async function _V1(A) {
   if (z.length === 0) return !1;
   for (let w of z)
     if (!w.succeeded)
-      y(`WorktreeRemove hook failed [${w.command}]: ${w.output.trim()}`, {
+      writeDebugLog(`WorktreeRemove hook failed [${w.command}]: ${w.output.trim()}`, {
         level: "error",
       });
   return !0;
@@ -6473,10 +6473,10 @@ function hDz() {
     ((bc8 = K), (uc8 = Y), Bq("mdm_load_end"));
     let z = Date.now() - A;
     if (
-      (y(`MDM settings load completed in ${z}ms`),
+      (writeDebugLog(`MDM settings load completed in ${z}ms`),
       Object.keys(K.settings).length > 0)
     ) {
-      y(`MDM settings found: ${Object.keys(K.settings).join(", ")}`);
+      writeDebugLog(`MDM settings found: ${Object.keys(K.settings).join(", ")}`);
       try {
         $8("info", "mdm_settings_loaded", {
           duration_ms: z,
@@ -6585,7 +6585,7 @@ async function BDz() {
   let { dirs: A, settingsFiles: q } = await pDz();
   if (yV6) return;
   if (A.length === 0) return;
-  (y(`Watching for changes in setting files ${[...q].join(", ")}...`),
+  (writeDebugLog(`Watching for changes in setting files ${[...q].join(", ")}...`),
     (u26 = zD6.watch(A, {
       persistent: !0,
       ignoreInitial: !0,
@@ -6667,16 +6667,16 @@ function OZq(A) {
   if (K)
     (clearTimeout(K),
       Tb.delete(A),
-      y(`Cancelled pending deletion of ${A} — file was recreated`));
+      writeDebugLog(`Cancelled pending deletion of ${A} — file was recreated`));
   let Y = Cy1.get(A);
   if (Y && Date.now() - Y < bDz) {
     Cy1.delete(A);
     return;
   }
-  (y(`Detected change to ${A}`),
+  (writeDebugLog(`Detected change to ${A}`),
     vV6($Zq(q), A).then((z) => {
       if (VV6(z)) {
-        y(`ConfigChange hook blocked change to ${A}`);
+        writeDebugLog(`ConfigChange hook blocked change to ${A}`);
         return;
       }
       m26.forEach((w) => w(q));
@@ -6688,18 +6688,18 @@ function QDz(A) {
   if (K)
     (clearTimeout(K),
       Tb.delete(A),
-      y(`Cancelled pending deletion of ${A} — file was re-added`));
+      writeDebugLog(`Cancelled pending deletion of ${A} — file was re-added`));
   OZq(A);
 }
 function UDz(A) {
   let q = Bc8(A);
   if (!q) return;
-  if ((y(`Detected deletion of ${A}`), Tb.has(A))) return;
+  if ((writeDebugLog(`Detected deletion of ${A}`), Tb.has(A))) return;
   let K = setTimeout(() => {
     (Tb.delete(A),
       vV6($Zq(q), A).then((Y) => {
         if (VV6(Y)) {
-          y(`ConfigChange hook blocked deletion of ${A}`);
+          writeDebugLog(`ConfigChange hook blocked deletion of ${A}`);
           return;
         }
         m26.forEach((z) => z(q));
@@ -6714,28 +6714,28 @@ function Bc8(A) {
 function dDz() {
   let A = EV6(),
     q = LV6();
-  ((Fn6 = p6({ mdm: A.settings, hkcu: q.settings })),
+  ((Fn6 = trySafeStringify({ mdm: A.settings, hkcu: q.settings })),
     (V86 = setInterval(() => {
       if (yV6) return;
       (async () => {
         try {
           let { mdm: K, hkcu: Y } = await KZq();
           if (yV6) return;
-          let z = p6({ mdm: K.settings, hkcu: Y.settings });
+          let z = trySafeStringify({ mdm: K.settings, hkcu: Y.settings });
           if (z !== Fn6)
             ((Fn6 = z),
               qZq(K, Y),
-              y("Detected MDM settings change via poll"),
+              writeDebugLog("Detected MDM settings change via poll"),
               m26.forEach((w) => w("policySettings")));
         } catch (K) {
-          y(`MDM poll error: ${K instanceof Error ? K.message : String(K)}`);
+          writeDebugLog(`MDM poll error: ${K instanceof Error ? K.message : String(K)}`);
         }
       })();
     }, pn6?.mdmPollInterval ?? uDz)),
     V86.unref());
 }
 function cDz(A) {
-  (y(`Programmatic settings change notification for ${A}`),
+  (writeDebugLog(`Programmatic settings change notification for ${A}`),
     m26.forEach((q) => q(A)));
 }
 function lDz(A) {
@@ -6793,10 +6793,10 @@ function DZq() {
 }
 function XZq(A, q) {
   if (typeof A === "object" && A && "code" in A && A.code === "ENOENT")
-    y(
+    writeDebugLog(
       `Broken symlink or missing file encountered for settings.json at path: ${q}`,
     );
-  else $6(A instanceof Error ? A : Error(String(A)));
+  else sendError(A instanceof Error ? A : Error(String(A)));
 }
 function nt(A) {
   let q = P1();
@@ -6832,7 +6832,7 @@ function CX6(A) {
   }
 }
 function iDz() {
-  if (bk6() || X1(process.env.CLAUDE_CODE_USE_COWORK_PLUGINS))
+  if (bk6() || isTruthy(process.env.CLAUDE_CODE_USE_COWORK_PLUGINS))
     return "cowork_settings.json";
   return "settings.json";
 }
@@ -6910,7 +6910,7 @@ function iA(A, q) {
       if ($ === null)
         return { error: Error(`Invalid JSON syntax in settings file at ${K}`) };
       if ($ && typeof $ === "object")
-        ((z = $), y(`Using raw settings from ${K} due to validation failure`));
+        ((z = $), writeDebugLog(`Using raw settings from ${K} due to validation failure`));
     }
     let w = l76(z || {}, q, (_, $, O, H) => {
       if ($ === void 0 && H && typeof O === "string") {
@@ -6924,7 +6924,7 @@ function iA(A, q) {
       (qH.markInternalWrite(A),
       RV6(
         K,
-        p6(w, null, 2) +
+        trySafeStringify(w, null, 2) +
           `
 `,
       ),
@@ -6934,7 +6934,7 @@ function iA(A, q) {
       R$7(Lz6("localSettings"), HA());
   } catch (Y) {
     let z = Error(`Failed to read raw settings from ${K}: ${Y}`);
-    return ($6(z), { error: z });
+    return (sendError(z), { error: z });
   }
   return { error: null };
 }
@@ -7132,7 +7132,7 @@ var yA = E(() => {
   SA = U7;
 });
 function xq() {
-  return !X1(process.env.CLAUDE_CODE_DISABLE_FAST_MODE);
+  return !isTruthy(process.env.CLAUDE_CODE_DISABLE_FAST_MODE);
 }
 function ZJ() {
   if (!xq()) return !1;
@@ -7157,17 +7157,17 @@ function q86() {
   if (jA("tengu_marble_sandcastle", !0) && !T9())
     return "Fast mode requires the native binary · Install from: https://claude.com/product/claude-code";
   let A = jA("tengu_penguins_off", null);
-  if (A !== null) return (y(`Fast mode unavailable: ${A}`), A);
+  if (A !== null) return (writeDebugLog(`Fast mode unavailable: ${A}`), A);
   if (C7() && Ik6()) {
     if (!getConfigValue("flagSettings")?.fastMode)
       return (
-        y("Fast mode unavailable: Fast mode is not available in the Agent SDK"),
+        writeDebugLog("Fast mode unavailable: Fast mode is not available in the Agent SDK"),
         "Fast mode is not available in the Agent SDK"
       );
   }
   if (h7() !== "firstParty")
     return (
-      y(
+      writeDebugLog(
         "Fast mode unavailable: Fast mode is not available on Bedrock, Vertex, or Foundry",
       ),
       "Fast mode is not available on Bedrock, Vertex, or Foundry"
@@ -7176,7 +7176,7 @@ function q86() {
     if (ai.reason === "network_error") return null;
     let q = z4() !== null ? "oauth" : "api-key",
       K = oDz(ai.reason, q);
-    return (y(`Fast mode unavailable: ${K}`), K);
+    return (writeDebugLog(`Fast mode unavailable: ${K}`), K);
   }
   return null;
 }
@@ -7204,7 +7204,7 @@ function GZq(A) {
 function lQ8() {
   if (CV6.status === "cooldown" && Date.now() >= CV6.resetAt) {
     if (xq() && !Fc8) {
-      (y("Fast mode cooldown expired, re-enabling fast mode"), (Fc8 = !0));
+      (writeDebugLog("Fast mode cooldown expired, re-enabling fast mode"), (Fc8 = !0));
       for (let A of Sy1) A.onCooldownExpired();
     }
     CV6 = { status: "active" };
@@ -7215,8 +7215,8 @@ function yA4(A, q) {
   if (!xq()) return;
   ((CV6 = { status: "cooldown", resetAt: A, reason: q }), (Fc8 = !1));
   let K = A - Date.now();
-  (y(`Fast mode cooldown triggered (${q}), duration ${Math.round(K / 1000)}s`),
-    n("tengu_fast_mode_fallback_triggered", {
+  (writeDebugLog(`Fast mode cooldown triggered (${q}), duration ${Math.round(K / 1000)}s`),
+    emitEvent("tengu_fast_mode_fallback_triggered", {
       cooldown_duration_ms: K,
       cooldown_reason: q,
     }));
@@ -7268,8 +7268,8 @@ function sDz(A) {
 function CA4(A) {
   let q = aDz(A);
   if (
-    (y(`Fast mode overage rejection: ${A ?? "unknown"} — ${q}`),
-    n("tengu_fast_mode_overage_rejected", {
+    (writeDebugLog(`Fast mode overage rejection: ${A ?? "unknown"} — ${q}`),
+    emitEvent("tengu_fast_mode_overage_rejected", {
       overage_disabled_reason: A ?? "unknown",
     }),
     !sDz(A))
@@ -7307,12 +7307,12 @@ async function AL1() {
   if (!xq()) return;
   if (cn6)
     return (
-      y("Fast mode prefetch in progress, returning in-flight promise"),
+      writeDebugLog("Fast mode prefetch in progress, returning in-flight promise"),
       cn6
     );
   let A = Date.now();
   if (A - WZq < eDz) {
-    y("Skipping fast mode prefetch, fetched recently");
+    writeDebugLog("Skipping fast mode prefetch, fetched recently");
     return;
   }
   WZq = A;
@@ -7359,16 +7359,16 @@ async function AL1() {
         updateSettings((w) => ({ ...w, penguinModeOrgEnabled: Y.enabled }));
         for (let w of hy1) w(Y.enabled);
       }
-      y(
+      writeDebugLog(
         `Org fast mode: ${Y.enabled ? "enabled" : `disabled (${Y.disabled_reason ?? "preference"})`}`,
       );
     } catch (Y) {
       ((ai = { status: "disabled", reason: "network_error" }),
-        y(
+        writeDebugLog(
           `Failed to fetch org fast mode status, defaulting to disabled: ${Y}`,
           { level: "error" },
         ),
-        n("tengu_org_penguin_mode_fetch_failed", {}));
+        emitEvent("tengu_org_penguin_mode_fetch_failed", {}));
     } finally {
       cn6 = null;
     }
@@ -7460,7 +7460,7 @@ function dc8(A) {
         },
       ]),
     ),
-    lastSessionId: d1(),
+    lastSessionId: getSessionId(),
   }));
 }
 function _i6(A, q = 4) {
@@ -7634,7 +7634,7 @@ function _Xz(A, q) {
   return Y;
 }
 function kZq(A, q) {
-  (n("tengu_unknown_model_cost", { model: A, shortName: q }), Ys6());
+  (emitEvent("tengu_unknown_model_cost", { model: A, shortName: q }), Ys6());
 }
 function WJ1(A, q) {
   let K = _Xz(A, q);
@@ -7940,10 +7940,10 @@ function gK(A) {
   return A;
 }
 function rKq() {
-  return X1(process.env.OTEL_LOG_TOOL_DETAILS);
+  return isTruthy(process.env.OTEL_LOG_TOOL_DETAILS);
 }
 function kF() {
-  return X1(process.env.ANALYTICS_LOG_TOOL_DETAILS);
+  return isTruthy(process.env.ANALYTICS_LOG_TOOL_DETAILS);
 }
 function wb(A) {
   if (!A.startsWith("mcp__")) return;
@@ -8064,7 +8064,7 @@ async function LM6(A = {}) {
     w = GXz();
   return {
     model: q,
-    sessionId: d1(),
+    sessionId: getSessionId(),
     userType: "external",
     ...(K.length > 0 ? { betas: K.join(",") } : {}),
     envContext: Y,
@@ -8161,7 +8161,7 @@ function RZq(A, q, K = {}) {
   }
   return {
     env: $,
-    ...(z && { process: p6(z) }),
+    ...(z && { process: trySafeStringify(z) }),
     core: O,
     additional: { ...(w && { rh: w }), ...K },
   };
@@ -8235,9 +8235,9 @@ var Kj = E(() => {
         packageManagers: A.join(","),
         runtimes: q.join(","),
         isRunningWithBun: s8.isRunningWithBun(),
-        isCi: X1(!1),
-        isClaubbit: X1(process.env.CLAUBBIT),
-        isClaudeCodeRemote: X1(process.env.CLAUDE_CODE_REMOTE),
+        isCi: isTruthy(!1),
+        isClaubbit: isTruthy(process.env.CLAUBBIT),
+        isClaudeCodeRemote: isTruthy(process.env.CLAUDE_CODE_REMOTE),
         isLocalAgentMode: process.env.CLAUDE_CODE_ENTRYPOINT === "local-agent",
         isConductor: s8.isConductor(),
         ...(process.env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE && {
@@ -8254,8 +8254,8 @@ var Kj = E(() => {
         ...(process.env.CLAUDE_CODE_TAGS && {
           tags: process.env.CLAUDE_CODE_TAGS,
         }),
-        isGithubAction: X1(process.env.GITHUB_ACTIONS),
-        isClaudeCodeAction: X1(process.env.CLAUDE_CODE_ACTION),
+        isGithubAction: isTruthy(process.env.GITHUB_ACTIONS),
+        isClaudeCodeAction: isTruthy(process.env.CLAUDE_CODE_ACTION),
         isClaudeAiAuth: Y7(),
         version: {
           ISSUES_EXPLAINER:
@@ -8277,7 +8277,7 @@ var Kj = E(() => {
           BUILD_TIME: "2026-03-04T00:18:36Z",
         }.BUILD_TIME,
         deploymentEnvironment: s8.detectDeploymentEnvironment(),
-        ...(X1(process.env.GITHUB_ACTIONS) && {
+        ...(isTruthy(process.env.GITHUB_ACTIONS) && {
           githubEventName: process.env.GITHUB_EVENT_NAME,
           githubActionsRunnerEnvironment: process.env.RUNNER_ENVIRONMENT,
           githubActionsRunnerOs: process.env.RUNNER_OS,
@@ -8979,7 +8979,7 @@ class oc8 {
     return (await this.loadEventsFromCurrentBatch()).length;
   }
   getCurrentBatchFilePath() {
-    return gy1.join(nn6(), `${mZq}${d1()}.${uZq}.json`);
+    return gy1.join(nn6(), `${mZq}${getSessionId()}.${uZq}.json`);
   }
   async loadEventsFromFile(A) {
     try {
@@ -9000,14 +9000,14 @@ class oc8 {
       else {
         await bZq(nn6(), { recursive: !0 });
         let K =
-          q.map((Y) => p6(Y)).join(`
+          q.map((Y) => trySafeStringify(Y)).join(`
 `) +
           `
 `;
         await CXz(A, K, "utf8");
       }
     } catch (K) {
-      $6(K);
+      sendError(K);
     }
   }
   async appendEventsToFile(A, q) {
@@ -9015,13 +9015,13 @@ class oc8 {
     try {
       await bZq(nn6(), { recursive: !0 });
       let K =
-        q.map((Y) => p6(Y)).join(`
+        q.map((Y) => trySafeStringify(Y)).join(`
 `) +
         `
 `;
       await SXz(A, K, "utf8");
     } catch (K) {
-      $6(K);
+      sendError(K);
     }
   }
   async deleteFile(A) {
@@ -9031,7 +9031,7 @@ class oc8 {
   }
   async retryPreviousBatches() {
     try {
-      let A = `${mZq}${d1()}.`,
+      let A = `${mZq}${getSessionId()}.`,
         q;
       try {
         q = (await hXz(nn6()))
@@ -9047,7 +9047,7 @@ class oc8 {
         this.retryFileInBackground(Y);
       }
     } catch (A) {
-      $6(A);
+      sendError(A);
     }
   }
   async retryFileInBackground(A) {
@@ -9122,7 +9122,7 @@ class oc8 {
         this.retryFailedEvents();
       q({ code: v86.ExportResultCode.SUCCESS });
     } catch (K) {
-      ($6(K),
+      (sendError(K),
         q({
           code: v86.ExportResultCode.FAILED,
           error: K instanceof Error ? K : Error("Unknown export error"),
@@ -9155,7 +9155,7 @@ class oc8 {
         ? ` (${this.lastExportErrorContext})`
         : "",
       Y = `1P event logging: ${A.length} events failed to export${K}`;
-    $6(Error(Y));
+    sendError(Error(Y));
   }
   scheduleBackoffRetry() {
     if (this.backoffRetryTimer || this.isRetrying || this.isShutdown) return;
@@ -9263,8 +9263,8 @@ class oc8 {
             event_id: Y.event_id,
             event_name: z,
             client_timestamp: this.hrTimeToDate(K.hrTime),
-            session_id: d1(),
-            additional_metadata: p6({
+            session_id: getSessionId(),
+            additional_metadata: trySafeStringify({
               transform_error: "core_metadata attribute is missing",
             }),
           }),
@@ -9284,7 +9284,7 @@ class oc8 {
           ...O.core,
           env: O.env,
           process: O.process,
-          additional_metadata: Object.keys(H).length > 0 ? p6(H) : void 0,
+          additional_metadata: Object.keys(H).length > 0 ? trySafeStringify(H) : void 0,
         }),
       });
     }
@@ -9394,10 +9394,10 @@ function ac8(A) {
       ...(q && { device_id: q }),
       ...(A.userAttributes && {
         session_id: A.userAttributes.sessionId,
-        user_attributes: p6(A.userAttributes),
+        user_attributes: trySafeStringify(A.userAttributes),
       }),
       ...(A.experimentMetadata && {
-        experiment_metadata: p6(A.experimentMetadata),
+        experiment_metadata: trySafeStringify(A.experimentMetadata),
       }),
       environment: uXz(),
     };
@@ -9632,7 +9632,7 @@ function Lf6() {
         tn6 = null;
       })));
   } catch (A) {
-    $6(
+    sendError(
       A instanceof Error
         ? A
         : Error(`GrowthBook: Auth change refresh failed: ${A}`),
@@ -9675,7 +9675,7 @@ async function QXz() {
       if (Y) updateSettings((z) => ({ ...z, cachedGrowthBookFeatures: K }));
     }
   } catch (A) {
-    $6(
+    sendError(
       A instanceof Error ? A : Error(`GrowthBook: Light refresh failed: ${A}`),
     );
   }
@@ -9822,7 +9822,7 @@ function nXz() {
   return ZN.map((A) => Ww(A)).filter((A) => A !== void 0);
 }
 function Wu8(A) {
-  let q = Q4(A),
+  let q = resolveFilePath(A),
     K = aV(q);
   if (
     K.endsWith(`${sV}.claude${sV}settings.json`) ||
@@ -9844,7 +9844,7 @@ function rZq(A) {
   return K.startsWith(q) && K.endsWith(".md");
 }
 function iy1() {
-  return Nb(aj(y1()), d1(), "session-memory") + sV;
+  return Nb(aj(y1()), getSessionId(), "session-memory") + sV;
 }
 function bG6() {
   return Nb(iy1(), "summary.md");
@@ -9878,7 +9878,7 @@ function y51() {
   return Nb(Bm(), pZ(HA())) + sV;
 }
 function cJ1() {
-  return Nb(y51(), d1(), "scratchpad");
+  return Nb(y51(), getSessionId(), "scratchpad");
 }
 async function oZq() {
   if (!RP6()) throw Error("Scratchpad directory feature is not enabled");
@@ -9893,7 +9893,7 @@ function aZq(A) {
   return K === q || K.startsWith(q + sV);
 }
 function sXz(A) {
-  let K = Q4(A).split(sV),
+  let K = resolveFilePath(A).split(sV),
     Y = K[K.length - 1];
   if (A.startsWith("\\\\") || A.startsWith("//")) return !0;
   for (let z = 0; z < K.length; z++) {
@@ -9959,8 +9959,8 @@ function dI(A, q) {
   return UA6(A).every((Y) => Array.from(EM6(q)).some((z) => Is(Y, z)));
 }
 function Is(A, q) {
-  let K = Q4(A),
-    Y = Q4(q),
+  let K = resolveFilePath(A),
+    Y = resolveFilePath(q),
     z = K.replace(/^\/private\/var\//, "/var/").replace(
       /^\/private\/tmp(\/|$)/,
       "/tmp$1",
@@ -9981,7 +9981,7 @@ function tXz(A) {
     case "cliArg":
     case "command":
     case "session":
-      return Q4(HA());
+      return resolveFilePath(HA());
     case "userSettings":
     case "policySettings":
     case "projectSettings":
@@ -10062,7 +10062,7 @@ function tZq(A, q, K) {
   return w;
 }
 function IM(A, q, K, Y) {
-  let z = Q4(A);
+  let z = resolveFilePath(A);
   if (i8() === "windows" && z.includes("\\")) z = oS(z);
   let w = tZq(q, K, Y);
   for (let [_, $] of w.entries()) {
@@ -10140,7 +10140,7 @@ function Re(A, q, K) {
       updatedInput: q,
       decisionReason: { type: "mode", mode: "default" },
     };
-  let $ = Q4(Y),
+  let $ = resolveFilePath(Y),
     O = _x8($, q);
   if (O.behavior !== "passthrough") return O;
   let H = IM(Y, K, "read", "allow");
@@ -10177,7 +10177,7 @@ function bz6(A, q, K) {
         decisionReason: { type: "rule", rule: D },
       };
   }
-  let w = Q4(Y),
+  let w = resolveFilePath(Y),
     _ = wx8(w, q);
   if (_.behavior !== "passthrough") return _;
   let $ = IM(Y, K, "edit", "allow");
@@ -10479,8 +10479,8 @@ async function p6q(A, q, { limit: K, offset: Y }, z, w) {
     if (W) ((_ = W), ($ = G));
   }
   let O = PT6(WT6(w), _),
-    H = X1(process.env.CLAUDE_CODE_GLOB_NO_IGNORE || "true"),
-    j = X1(process.env.CLAUDE_CODE_GLOB_HIDDEN || "true"),
+    H = isTruthy(process.env.CLAUDE_CODE_GLOB_NO_IGNORE || "true"),
+    j = isTruthy(process.env.CLAUDE_CODE_GLOB_HIDDEN || "true"),
     J = [
       "--files",
       "--glob",
@@ -10498,7 +10498,7 @@ function zYq(A) {
   try {
     return P1().readFileSync(A, { encoding: "utf8" });
   } catch (q) {
-    return ($6(q), null);
+    return (sendError(q), null);
   }
 }
 function QR(A) {
@@ -10527,10 +10527,10 @@ function I0(A) {
   } catch (K) {
     let Y = K.code;
     if (Y === "ENOENT" || Y === "EACCES" || Y === "EPERM")
-      y(`detectFileEncoding failed for expected reason: ${Y}`, {
+      writeDebugLog(`detectFileEncoding failed for expected reason: ${Y}`, {
         level: "debug",
       });
-    else $6(K);
+    else sendError(K);
     return "utf8";
   }
 }
@@ -10542,7 +10542,7 @@ function Pi(A, q = "utf8") {
       _ = z.toString(q, 0, w);
     return $Mz(_);
   } catch (K) {
-    return ($6(K), "LF");
+    return (sendError(K), "LF");
   }
 }
 function $Mz(A) {
@@ -10562,7 +10562,7 @@ function zG6(A) {
   return A.replace(/^\t+/gm, (q) => "  ".repeat(q.length));
 }
 function OMz(A) {
-  let q = A ? Q4(A) : void 0,
+  let q = A ? resolveFilePath(A) : void 0,
     K = q ? Afq(y1(), q) : void 0;
   return { absolutePath: q, relativePath: K };
 }
@@ -10585,7 +10585,7 @@ function rX1(A) {
     if (_) return _.name;
     return;
   } catch (K) {
-    $6(K);
+    sendError(K);
     return;
   }
 }
@@ -10629,7 +10629,7 @@ function oN7(A) {
 function KH(A) {
   let q = P1(),
     { resolvedPath: K, isSymlink: Y } = P$(q, A);
-  if (Y) y(`Reading through symlink: ${A} -> ${K}`);
+  if (Y) writeDebugLog(`Reading through symlink: ${A} -> ${K}`);
   let z = I0(K);
   return q.readFileSync(K, { encoding: z }).replaceAll(
     `\r
@@ -10649,47 +10649,47 @@ function RV6(A, q, K = { encoding: "utf-8" }) {
     try {
       let _ = Y.readlinkSync(A);
       ((z = zl8(_) ? _ : qMz(Yr6(A), _)),
-        y(`Writing through symlink: ${A} -> ${z}`));
+        writeDebugLog(`Writing through symlink: ${A} -> ${z}`));
     } catch (_) {
       z = A;
     }
   let w = `${z}.tmp.${process.pid}.${Date.now()}`;
   try {
-    y(`Writing to temp file: ${w}`);
+    writeDebugLog(`Writing to temp file: ${w}`);
     let _,
       $ = Y.existsSync(z);
     if ($)
       ((_ = Y.statSync(z).mode),
-        y(`Preserving file permissions: ${_.toString(8)}`));
+        writeDebugLog(`Preserving file permissions: ${_.toString(8)}`));
     else if (K.mode !== void 0)
-      ((_ = K.mode), y(`Setting permissions for new file: ${_.toString(8)}`));
+      ((_ = K.mode), writeDebugLog(`Setting permissions for new file: ${_.toString(8)}`));
     let O = { encoding: K.encoding, flush: !0 };
     if (!$ && K.mode !== void 0) O.mode = K.mode;
     if (
       (eZq(w, q, O),
-      y(`Temp file written successfully, size: ${q.length} bytes`),
+      writeDebugLog(`Temp file written successfully, size: ${q.length} bytes`),
       $ && _ !== void 0)
     )
-      (zMz(w, _), y("Applied original permissions to temp file"));
-    (y(`Renaming ${w} to ${z}`),
+      (zMz(w, _), writeDebugLog("Applied original permissions to temp file"));
+    (writeDebugLog(`Renaming ${w} to ${z}`),
       Y.renameSync(w, z),
-      y(`File ${z} written atomically`));
+      writeDebugLog(`File ${z} written atomically`));
   } catch (_) {
-    (y(`Failed to write file atomically: ${_}`, { level: "error" }),
-      n("tengu_atomic_write_error", {}));
+    (writeDebugLog(`Failed to write file atomically: ${_}`, { level: "error" }),
+      emitEvent("tengu_atomic_write_error", {}));
     try {
-      if (Y.existsSync(w)) (y(`Cleaning up temp file: ${w}`), Y.unlinkSync(w));
+      if (Y.existsSync(w)) (writeDebugLog(`Cleaning up temp file: ${w}`), Y.unlinkSync(w));
     } catch ($) {
-      y(`Failed to clean up temp file: ${$}`);
+      writeDebugLog(`Failed to clean up temp file: ${$}`);
     }
-    y(`Falling back to non-atomic write for ${z}`);
+    writeDebugLog(`Falling back to non-atomic write for ${z}`);
     try {
       let $ = { encoding: K.encoding, flush: !0 };
       if (!Y.existsSync(z) && K.mode !== void 0) $.mode = K.mode;
       (eZq(z, q, $),
-        y(`File ${z} written successfully with non-atomic fallback`));
+        writeDebugLog(`File ${z} written successfully with non-atomic fallback`));
     } catch ($) {
-      throw (y(`Non-atomic write also failed: ${$}`), $);
+      throw (writeDebugLog(`Non-atomic write also failed: ${$}`), $);
     }
   }
 }
@@ -10831,14 +10831,14 @@ function updateSettings(A) {
     )
       ((tV.config = null), (tV.mtime = 0), (sy1 = 0));
   } catch (q) {
-    y(`Failed to save config with lock: ${q}`, { level: "error" });
+    writeDebugLog(`Failed to save config with lock: ${q}`, { level: "error" });
     let K = E86(tD(), BC);
     if (ty1(K)) {
-      (y(
+      (writeDebugLog(
         "saveGlobalConfig fallback: re-read config is missing auth that cache has; refusing to write. See GH #3117.",
         { level: "error" },
       ),
-        n("tengu_config_auth_loss_prevented", {}));
+        emitEvent("tengu_config_auth_loss_prevented", {}));
       return;
     }
     let Y = A(K);
@@ -10855,7 +10855,7 @@ function XMz() {
 function PMz() {
   let A = bV6 + oy1;
   if (A > 0)
-    n("tengu_config_cache_stats", {
+    emitEvent("tengu_config_cache_stats", {
       cache_hits: bV6,
       cache_misses: oy1,
       hit_rate: bV6 / A,
@@ -10935,9 +10935,9 @@ function Hfq(A, q, K) {
   let Y = ay1(A);
   P1().mkdirSync(Y);
   let w = Object.fromEntries(
-    Object.entries(q).filter(([_, $]) => p6($) !== p6(K[_])),
+    Object.entries(q).filter(([_, $]) => trySafeStringify($) !== trySafeStringify(K[_])),
   );
-  if ((RV6(A, p6(w, null, 2), { encoding: "utf-8", mode: 384 }), A === tD()))
+  if ((RV6(A, trySafeStringify(w, null, 2), { encoding: "utf-8", mode: 384 }), A === tD()))
     jl8++;
 }
 function jfq(A, q, K) {
@@ -10951,20 +10951,20 @@ function jfq(A, q, K) {
     w = _fq.lockSync(A, {
       lockfilePath: _,
       onCompromised: (D) => {
-        y(`Config lock compromised: ${D}`, { level: "error" });
+        writeDebugLog(`Config lock compromised: ${D}`, { level: "error" });
       },
     });
     let O = Date.now() - $;
     if (O > 100)
-      (y(
+      (writeDebugLog(
         "Lock acquisition took longer than expected - another Claude instance may be running",
       ),
-        n("tengu_config_lock_contention", { lock_time_ms: O }));
+        emitEvent("tengu_config_lock_contention", { lock_time_ms: O }));
     if (c26 && A === tD())
       try {
         let D = z.statSync(A);
         if (D.mtimeMs !== c26.mtime || D.size !== c26.size)
-          n("tengu_config_stale_write", {
+          emitEvent("tengu_config_stale_write", {
             read_mtime: c26.mtime,
             write_mtime: D.mtimeMs,
             read_size: c26.size,
@@ -10976,17 +10976,17 @@ function jfq(A, q, K) {
     let H = E86(A, q);
     if (A === tD() && ty1(H))
       return (
-        y(
+        writeDebugLog(
           "saveConfigWithLock: re-read config is missing auth that cache has; refusing to write to avoid wiping ~/.claude.json. See GH #3117.",
           { level: "error" },
         ),
-        n("tengu_config_auth_loss_prevented", {}),
+        emitEvent("tengu_config_auth_loss_prevented", {}),
         !1
       );
     let j = K(H);
     if (j === H) return !1;
     let J = Object.fromEntries(
-      Object.entries(j).filter(([D, X]) => p6(X) !== p6(q[D])),
+      Object.entries(j).filter(([D, X]) => trySafeStringify(X) !== trySafeStringify(q[D])),
     );
     try {
       let D = Hl8(A),
@@ -11036,9 +11036,9 @@ function jfq(A, q, K) {
       } catch {}
     } catch (D) {
       if (D.code !== "ENOENT")
-        y(`Failed to backup config: ${D}`, { level: "error" });
+        writeDebugLog(`Failed to backup config: ${D}`, { level: "error" });
     }
-    if ((RV6(A, p6(J, null, 2), { encoding: "utf-8", mode: 384 }), A === tD()))
+    if ((RV6(A, trySafeStringify(J, null, 2), { encoding: "utf-8", mode: 384 }), A === tD()))
       jl8++;
     return !0;
   } finally {
@@ -11109,15 +11109,15 @@ You can manually restore it by running: cp "${_}" "${A}"
     }
     if (z instanceof QZ && K) throw z;
     if (z instanceof QZ) {
-      (y(`Config file corrupted, resetting to defaults: ${z.message}`, {
+      (writeDebugLog(`Config file corrupted, resetting to defaults: ${z.message}`, {
         level: "error",
       }),
-        $6(z));
+        sendError(z));
       let _ = !1;
       try {
         (Y.statSync(`${A}.backup`), (_ = !0));
       } catch {}
-      (n("tengu_config_parse_error", { has_backup: _ }),
+      (emitEvent("tengu_config_parse_error", { has_backup: _ }),
         process.stderr.write(`
 Claude configuration file at ${A} is corrupted: ${z.message}
 `));
@@ -11146,7 +11146,7 @@ Claude configuration file at ${A} is corrupted: ${z.message}
         j = WT(O, `${$}.corrupted.${Date.now()}`);
         try {
           (Y.copyFileSync(A, j),
-            y(`Corrupted config backed up to: ${j}`, { level: "error" }));
+            writeDebugLog(`Corrupted config backed up to: ${j}`, { level: "error" }));
         } catch {}
       }
       let X = zfq(A);
@@ -11187,14 +11187,14 @@ function sw(A) {
       return { ...K, projects: { ...K.projects, [q]: z } };
     });
   } catch (K) {
-    y(`Failed to save config with lock: ${K}`, { level: "error" });
+    writeDebugLog(`Failed to save config with lock: ${K}`, { level: "error" });
     let Y = E86(tD(), BC);
     if (ty1(Y)) {
-      (y(
+      (writeDebugLog(
         "saveCurrentProjectConfig fallback: re-read config is missing auth that cache has; refusing to write. See GH #3117.",
         { level: "error" },
       ),
-        n("tengu_config_auth_loss_prevented", {}));
+        emitEvent("tengu_config_auth_loss_prevented", {}));
       return;
     }
     let z = Y.projects?.[q] ?? zr6,
@@ -11207,10 +11207,10 @@ function nF() {
   return sY6() !== null;
 }
 function fN6() {
-  return nF() && !X1(process.env.FORCE_AUTOUPDATE_PLUGINS);
+  return nF() && !isTruthy(process.env.FORCE_AUTOUPDATE_PLUGINS);
 }
 function sY6() {
-  if (X1(process.env.DISABLE_AUTOUPDATER)) return "DISABLE_AUTOUPDATER set";
+  if (isTruthy(process.env.DISABLE_AUTOUPDATER)) return "DISABLE_AUTOUPDATER set";
   if (process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC)
     return "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC set";
   let A = getSettings();
@@ -11222,7 +11222,7 @@ function sY6() {
   return null;
 }
 function ln6() {
-  if (X1(process.env.DISABLE_COST_WARNINGS)) return !1;
+  if (isTruthy(process.env.DISABLE_COST_WARNINGS)) return !1;
   if (Y7()) return !1;
   let q = Ix(),
     K = fk() !== null;
@@ -11442,7 +11442,7 @@ function AR1() {
   let K = parseInt(q, 10);
   if (Number.isNaN(K))
     return (
-      y(
+      writeDebugLog(
         `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR must be a valid file descriptor number, got: ${q}`,
         { level: "error" },
       ),
@@ -11458,18 +11458,18 @@ function AR1() {
       w = Y.readFileSync(z, { encoding: "utf8" }).trim();
     if (!w)
       return (
-        y("File descriptor contained empty OAuth token", { level: "error" }),
+        writeDebugLog("File descriptor contained empty OAuth token", { level: "error" }),
         IA6(null),
         null
       );
     return (
-      y(`Successfully read OAuth token from file descriptor ${K}`),
+      writeDebugLog(`Successfully read OAuth token from file descriptor ${K}`),
       IA6(w),
       w
     );
   } catch (Y) {
     return (
-      y(
+      writeDebugLog(
         `Failed to read OAuth token from file descriptor ${K}: ${Y instanceof Error ? Y.message : String(Y)}`,
         { level: "error" },
       ),
@@ -11486,7 +11486,7 @@ function Xl8() {
   let K = parseInt(q, 10);
   if (Number.isNaN(K))
     return (
-      y(
+      writeDebugLog(
         `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR must be a valid file descriptor number, got: ${q}`,
         { level: "error" },
       ),
@@ -11502,18 +11502,18 @@ function Xl8() {
       w = Y.readFileSync(z, { encoding: "utf8" }).trim();
     if (!w)
       return (
-        y("File descriptor contained empty API key", { level: "error" }),
+        writeDebugLog("File descriptor contained empty API key", { level: "error" }),
         xA6(null),
         null
       );
     return (
-      y(`Successfully read API key from file descriptor ${K}`),
+      writeDebugLog(`Successfully read API key from file descriptor ${K}`),
       xA6(w),
       w
     );
   } catch (Y) {
     return (
-      y(
+      writeDebugLog(
         `Failed to read API key from file descriptor ${K}: ${Y instanceof Error ? Y.message : String(Y)}`,
         { level: "error" },
       ),
@@ -11618,9 +11618,9 @@ import { mkdir as TMz } from "fs/promises";
 import { exec as NMz } from "child_process";
 function PJ() {
   let A =
-      X1(process.env.CLAUDE_CODE_USE_BEDROCK) ||
-      X1(process.env.CLAUDE_CODE_USE_VERTEX) ||
-      X1(process.env.CLAUDE_CODE_USE_FOUNDRY),
+      isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
+      isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
+      isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY),
     K = (SA() || {}).apiKeyHelper,
     Y =
       process.env.ANTHROPIC_AUTH_TOKEN ||
@@ -11631,7 +11631,7 @@ function PJ() {
     A ||
     Y ||
     ((z === "ANTHROPIC_API_KEY" || z === "apiKeyHelper") &&
-      !X1(process.env.CLAUDE_CODE_REMOTE))
+      !isTruthy(process.env.CLAUDE_CODE_REMOTE))
   );
 }
 function Ix() {
@@ -11658,7 +11658,7 @@ function vF8() {
 function p_(A = {}) {
   let q = SZ() ? void 0 : process.env.ANTHROPIC_API_KEY;
   if (Ik6() && q) return { key: q, source: "ANTHROPIC_API_KEY" };
-  if (X1(!1)) {
+  if (isTruthy(!1)) {
     let z = Xl8();
     if (z) return { key: z, source: "ANTHROPIC_API_KEY" };
     if (
@@ -11721,7 +11721,7 @@ function Pfq() {
   if (A) {
     let q = parseInt(A, 10);
     if (!Number.isNaN(q) && q >= 0) return q;
-    y(
+    writeDebugLog(
       `Found CLAUDE_CODE_API_KEY_HELPER_TTL_MS env var, but it was not a valid number. Got ${A}`,
       { level: "error" },
     );
@@ -11749,16 +11749,16 @@ async function kMz() {
       );
       return (
         GL("awsAuthRefresh invoked before trust check", K),
-        n("tengu_awsAuthRefresh_missing_trust", {}),
+        emitEvent("tengu_awsAuthRefresh_missing_trust", {}),
         !1
       );
     }
   }
   try {
     return (
-      y("Fetching AWS caller identity for AWS auth refresh command"),
+      writeDebugLog("Fetching AWS caller identity for AWS auth refresh command"),
       await FW8(),
-      y("Fetched AWS caller identity, skipping AWS auth refresh command"),
+      writeDebugLog("Fetched AWS caller identity, skipping AWS auth refresh command"),
       !1
     );
   } catch {
@@ -11766,7 +11766,7 @@ async function kMz() {
   }
 }
 function Wfq(A) {
-  y("Running AWS auth refresh command");
+  writeDebugLog("Running AWS auth refresh command");
   let q = OZ.getInstance();
   return (
     q.startAuthentication(),
@@ -11774,15 +11774,15 @@ function Wfq(A) {
       let Y = NMz(A, { timeout: EMz });
       (Y.stdout.on("data", (z) => {
         let w = z.toString().trim();
-        if (w) (q.addOutput(w), y(w, { level: "debug" }));
+        if (w) (q.addOutput(w), writeDebugLog(w, { level: "debug" }));
       }),
         Y.stderr.on("data", (z) => {
           let w = z.toString().trim();
-          if (w) (q.setError(w), y(w, { level: "error" }));
+          if (w) (q.setError(w), writeDebugLog(w, { level: "error" }));
         }),
         Y.on("close", (z, w) => {
           if (z === 0)
-            (y("AWS auth refresh completed successfully"),
+            (writeDebugLog("AWS auth refresh completed successfully"),
               q.endAuthentication(!0),
               K(!0));
           else {
@@ -11810,21 +11810,21 @@ async function LMz() {
       );
       return (
         GL("awsCredentialExport invoked before trust check", K),
-        n("tengu_awsCredentialExport_missing_trust", {}),
+        emitEvent("tengu_awsCredentialExport_missing_trust", {}),
         null
       );
     }
   }
   try {
     return (
-      y("Fetching AWS caller identity for credential export command"),
+      writeDebugLog("Fetching AWS caller identity for credential export command"),
       await FW8(),
-      y("Fetched AWS caller identity, skipping AWS credential export command"),
+      writeDebugLog("Fetched AWS caller identity, skipping AWS credential export command"),
       null
     );
   } catch {
     try {
-      y("Running AWS credential export command");
+      writeDebugLog("Running AWS credential export command");
       let q = await $Y(A, { shell: !0, reject: !1 });
       if (q.exitCode !== 0 || !q.stdout)
         throw Error("awsCredentialExport did not return a valid value");
@@ -11834,7 +11834,7 @@ async function LMz() {
           "awsCredentialExport did not return valid AWS STS output structure",
         );
       return (
-        y("AWS credentials retrieved from awsCredentialExport"),
+        writeDebugLog("AWS credentials retrieved from awsCredentialExport"),
         {
           accessKeyId: K.Credentials.AccessKeyId,
           secretAccessKey: K.Credentials.SecretAccessKey,
@@ -11881,14 +11881,14 @@ async function U$8(A) {
         _ = `add-generic-password -U -a "${z}" -s "${Y}" -X "${w}"
 `;
       (await $Y("security", ["-i"], { input: _, reject: !1 }),
-        n("tengu_api_key_saved_to_keychain", {}),
+        emitEvent("tengu_api_key_saved_to_keychain", {}),
         (q = !0));
     } catch (Y) {
-      ($6(Y),
-        n("tengu_api_key_keychain_error", { error: Y.message }),
-        n("tengu_api_key_saved_to_config", {}));
+      (sendError(Y),
+        emitEvent("tengu_api_key_keychain_error", { error: Y.message }),
+        emitEvent("tengu_api_key_saved_to_config", {}));
     }
-  else n("tengu_api_key_saved_to_config", {});
+  else emitEvent("tengu_api_key_saved_to_config", {});
   let K = mV(A);
   (updateSettings((Y) => {
     let z = Y.customApiKeyResponses?.approved ?? [];
@@ -11918,14 +11918,14 @@ async function Gfq() {
   try {
     await j9q();
   } catch (A) {
-    $6(A);
+    sendError(A);
   }
 }
 function If6(A) {
   if (!qB(A.scopes))
-    return (n("tengu_oauth_tokens_not_claude_ai", {}), { success: !0 });
+    return (emitEvent("tengu_oauth_tokens_not_claude_ai", {}), { success: !0 });
   if (!A.refreshToken || !A.expiresAt)
-    return (n("tengu_oauth_tokens_inference_only", {}), { success: !0 });
+    return (emitEvent("tengu_oauth_tokens_inference_only", {}), { success: !0 });
   let q = kO(),
     K = q.name;
   try {
@@ -11939,13 +11939,13 @@ function If6(A) {
       rateLimitTier: A.rateLimitTier,
     };
     let z = q.update(Y);
-    if (z.success) n("tengu_oauth_tokens_saved", { storageBackend: K });
-    else n("tengu_oauth_tokens_save_failed", { storageBackend: K });
+    if (z.success) emitEvent("tengu_oauth_tokens_saved", { storageBackend: K });
+    else emitEvent("tengu_oauth_tokens_save_failed", { storageBackend: K });
     return (z4.cache?.clear?.(), CA1(), z);
   } catch (Y) {
     return (
-      $6(Y),
-      n("tengu_oauth_tokens_save_exception", {
+      sendError(Y),
+      emitEvent("tengu_oauth_tokens_save_exception", {
         storageBackend: K,
         error: Y.message,
       }),
@@ -11961,7 +11961,7 @@ async function xk(A) {
   let q = z4();
   if (!q?.refreshToken) return !1;
   if (q.accessToken !== A)
-    return (n("tengu_oauth_401_recovered_from_keychain", {}), !0);
+    return (emitEvent("tengu_oauth_401_recovered_from_keychain", {}), !0);
   return HO(0, !0);
 }
 async function KR1() {
@@ -11971,7 +11971,7 @@ async function KR1() {
     if (!K?.accessToken) return null;
     return K;
   } catch (A) {
-    return ($6(A), null);
+    return (sendError(A), null);
   }
 }
 function HO(A = 0, q = !1) {
@@ -12000,27 +12000,27 @@ async function Ml8(A, q) {
   await TMz(w, { recursive: !0 });
   let _;
   try {
-    (n("tengu_oauth_token_refresh_lock_acquiring", {}),
+    (emitEvent("tengu_oauth_token_refresh_lock_acquiring", {}),
       (_ = await Xfq.lock(w)),
-      n("tengu_oauth_token_refresh_lock_acquired", {}));
+      emitEvent("tengu_oauth_token_refresh_lock_acquired", {}));
   } catch ($) {
     if ($.code === "ELOCKED") {
       if (A < 5)
         return (
-          n("tengu_oauth_token_refresh_lock_retry", { retryCount: A + 1 }),
+          emitEvent("tengu_oauth_token_refresh_lock_retry", { retryCount: A + 1 }),
           await new Promise((O) => setTimeout(O, 1000 + Math.random() * 1000)),
           Ml8(A + 1, q)
         );
       return (
-        n("tengu_oauth_token_refresh_lock_retry_limit_reached", {
+        emitEvent("tengu_oauth_token_refresh_lock_retry_limit_reached", {
           maxRetries: 5,
         }),
         !1
       );
     }
     return (
-      $6($),
-      n("tengu_oauth_token_refresh_lock_error", { error: $.message }),
+      sendError($),
+      emitEvent("tengu_oauth_token_refresh_lock_error", { error: $.message }),
       !1
     );
   }
@@ -12028,20 +12028,20 @@ async function Ml8(A, q) {
     (z4.cache?.clear?.(), OV());
     let $ = await KR1();
     if (!$?.refreshToken || !KB($.expiresAt))
-      return (n("tengu_oauth_token_refresh_race_resolved", {}), !1);
-    n("tengu_oauth_token_refresh_starting", {});
+      return (emitEvent("tengu_oauth_token_refresh_race_resolved", {}), !1);
+    emitEvent("tengu_oauth_token_refresh_starting", {});
     let O = await $u6($.refreshToken, { scopes: $.scopes });
     return (If6(O), z4.cache?.clear?.(), OV(), !0);
   } catch ($) {
-    ($6($ instanceof Error ? $ : Error(String($))), z4.cache?.clear?.(), OV());
+    (sendError($ instanceof Error ? $ : Error(String($))), z4.cache?.clear?.(), OV());
     let O = await KR1();
     if (O && !KB(O.expiresAt))
-      return (n("tengu_oauth_token_refresh_race_recovered", {}), !0);
+      return (emitEvent("tengu_oauth_token_refresh_race_recovered", {}), !0);
     return !1;
   } finally {
-    (n("tengu_oauth_token_refresh_lock_releasing", {}),
+    (emitEvent("tengu_oauth_token_refresh_lock_releasing", {}),
       await _(),
-      n("tengu_oauth_token_refresh_lock_released", {}));
+      emitEvent("tengu_oauth_token_refresh_lock_released", {}));
   }
 }
 function Y7() {
@@ -12050,9 +12050,9 @@ function Y7() {
 }
 function rh8() {
   if (
-    X1(process.env.CLAUDE_CODE_USE_BEDROCK) ||
-    X1(process.env.CLAUDE_CODE_USE_VERTEX) ||
-    X1(process.env.CLAUDE_CODE_USE_FOUNDRY)
+    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
+    isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
+    isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
   )
     return !1;
   if (Y7()) return !1;
@@ -12127,9 +12127,9 @@ function hE1() {
 }
 function gk() {
   return !!(
-    X1(process.env.CLAUDE_CODE_USE_BEDROCK) ||
-    X1(process.env.CLAUDE_CODE_USE_VERTEX) ||
-    X1(process.env.CLAUDE_CODE_USE_FOUNDRY)
+    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
+    isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
+    isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
   );
 }
 function Zfq() {
@@ -12168,7 +12168,7 @@ function oh8() {
     return ((qR1 = Y), (Dfq = Date.now()), qR1);
   } catch (K) {
     throw (
-      $6(
+      sendError(
         Error(
           `Error getting OpenTelemetry headers from otelHeadersHelper (in settings): ${K instanceof Error ? K.message : String(K)}`,
         ),
@@ -12252,7 +12252,7 @@ var IA = E(() => {
         );
         return (
           GL("apiKeyHelper invoked before trust check", Y),
-          n("tengu_apiKeyHelper_missing_trust11", {}),
+          emitEvent("tengu_apiKeyHelper_missing_trust11", {}),
           null
         );
       }
@@ -12285,7 +12285,7 @@ var IA = E(() => {
         let K = rT(`security find-generic-password -a $USER -w -s "${q}"`);
         if (K) return { key: K, source: "/login managed key" };
       } catch (K) {
-        $6(K);
+        sendError(K);
       }
     }
     let A = getSettings();
@@ -12317,7 +12317,7 @@ var IA = E(() => {
       if (!Y?.accessToken) return null;
       return Y;
     } catch (q) {
-      return ($6(q), null);
+      return (sendError(q), null);
     }
   });
 });
@@ -12383,14 +12383,14 @@ s1(yV8, {
 import { format as Dr6 } from "util";
 function FMz() {
   if (!jA("tengu_copper_bridge", !1)) return;
-  if (X1(process.env.USE_LOCAL_OAUTH) || X1(process.env.LOCAL_BRIDGE))
+  if (isTruthy(process.env.USE_LOCAL_OAUTH) || isTruthy(process.env.LOCAL_BRIDGE))
     return "ws://localhost:8765";
-  if (X1(process.env.USE_STAGING_OAUTH))
+  if (isTruthy(process.env.USE_STAGING_OAUTH))
     return "wss://bridge-staging.claudeusercontent.com";
   return "wss://bridge.claudeusercontent.com";
 }
 function pMz() {
-  return X1(process.env.USE_LOCAL_OAUTH) || X1(process.env.LOCAL_BRIDGE);
+  return isTruthy(process.env.USE_LOCAL_OAUTH) || isTruthy(process.env.LOCAL_BRIDGE);
 }
 function Efq(A) {
   let q = new Lfq(),
@@ -12454,7 +12454,7 @@ function Efq(A) {
             if (typeof $ === "boolean" || typeof $ === "number") w[O] = $;
             else if (typeof $ === "string" && gMz.has(O)) w[O] = $;
           }
-        n(Y, w);
+        emitEvent(Y, w);
       },
     }
   );
@@ -12471,25 +12471,25 @@ async function QMz() {
     };
   (process.stdin.on("end", () => void z()),
     process.stdin.on("error", () => void z()),
-    y("[Claude in Chrome] Starting MCP server"),
+    writeDebugLog("[Claude in Chrome] Starting MCP server"),
     await q.connect(K),
-    y("[Claude in Chrome] MCP server started"));
+    writeDebugLog("[Claude in Chrome] MCP server started"));
 }
 class Lfq {
   silly(A, ...q) {
-    y(Dr6(A, ...q), { level: "debug" });
+    writeDebugLog(Dr6(A, ...q), { level: "debug" });
   }
   debug(A, ...q) {
-    y(Dr6(A, ...q), { level: "debug" });
+    writeDebugLog(Dr6(A, ...q), { level: "debug" });
   }
   info(A, ...q) {
-    y(Dr6(A, ...q), { level: "info" });
+    writeDebugLog(Dr6(A, ...q), { level: "info" });
   }
   warn(A, ...q) {
-    y(Dr6(A, ...q), { level: "warn" });
+    writeDebugLog(Dr6(A, ...q), { level: "warn" });
   }
   error(A, ...q) {
-    y(Dr6(A, ...q), { level: "error" });
+    writeDebugLog(Dr6(A, ...q), { level: "error" });
   }
 }
 var mMz = "https://claude.ai/chrome",
@@ -12528,7 +12528,7 @@ import {
 function RH(A, ...q) {
   if (Cfq) {
     let K = new Date().toISOString(),
-      Y = q.length > 0 ? " " + p6(q) : "",
+      Y = q.length > 0 ? " " + trySafeStringify(q) : "",
       z = `[${K}] [Claude Chrome Native Host] ${A}${Y}
 `;
     cMz(Cfq, z).catch(() => {});
@@ -12636,16 +12636,16 @@ class Sfq {
     switch ((RH(`Handling Chrome message type: ${q.type}`), q.type)) {
       case "ping":
         (RH("Responding to ping"),
-          l26(p6({ type: "pong", timestamp: Date.now() })));
+          l26(trySafeStringify({ type: "pong", timestamp: Date.now() })));
         break;
       case "get_status":
-        l26(p6({ type: "status_response", native_host_version: rMz }));
+        l26(trySafeStringify({ type: "status_response", native_host_version: rMz }));
         break;
       case "tool_response": {
         if (this.mcpClients.size > 0) {
           RH(`Forwarding tool response to ${this.mcpClients.size} MCP clients`);
           let { type: K, ...Y } = q,
-            z = Buffer.from(p6(Y), "utf-8"),
+            z = Buffer.from(trySafeStringify(Y), "utf-8"),
             w = Buffer.alloc(4);
           w.writeUInt32LE(z.length, 0);
           let _ = Buffer.concat([w, z]);
@@ -12662,7 +12662,7 @@ class Sfq {
         if (this.mcpClients.size > 0) {
           RH(`Forwarding notification to ${this.mcpClients.size} MCP clients`);
           let { type: K, ...Y } = q,
-            z = Buffer.from(p6(Y), "utf-8"),
+            z = Buffer.from(trySafeStringify(Y), "utf-8"),
             w = Buffer.alloc(4);
           w.writeUInt32LE(z.length, 0);
           let _ = Buffer.concat([w, z]);
@@ -12677,7 +12677,7 @@ class Sfq {
       }
       default:
         (RH(`Unknown message type: ${q.type}`),
-          l26(p6({ type: "error", error: `Unknown message type: ${q.type}` })));
+          l26(trySafeStringify({ type: "error", error: `Unknown message type: ${q.type}` })));
     }
   }
   handleMcpClient(A) {
@@ -12685,7 +12685,7 @@ class Sfq {
       K = { id: q, socket: A, buffer: Buffer.alloc(0) };
     (this.mcpClients.set(q, K),
       RH(`MCP client ${q} connected. Total clients: ${this.mcpClients.size}`),
-      l26(p6({ type: "mcp_connected" })),
+      l26(trySafeStringify({ type: "mcp_connected" })),
       A.on("data", (Y) => {
         K.buffer = Buffer.concat([K.buffer, Y]);
         while (K.buffer.length >= 4) {
@@ -12702,7 +12702,7 @@ class Sfq {
             let _ = w8(w.toString("utf-8"));
             (RH(`Forwarding tool request from MCP client ${q}: ${_.method}`),
               l26(
-                p6({
+                trySafeStringify({
                   type: "tool_request",
                   method: _.method,
                   params: _.params,
@@ -12721,7 +12721,7 @@ class Sfq {
           `MCP client ${q} disconnected. Remaining clients: ${this.mcpClients.size - 1}`,
         ),
           this.mcpClients.delete(q),
-          l26(p6({ type: "mcp_disconnected" })));
+          l26(trySafeStringify({ type: "mcp_disconnected" })));
       }));
   }
 }
@@ -12797,7 +12797,7 @@ function Rl8(A) {
   return q.slice(0, YR1) + `... (${q.length} chars)`;
 }
 function uV6(A) {
-  let q = typeof A === "string" ? A : p6(A),
+  let q = typeof A === "string" ? A : trySafeStringify(A),
     K = eMz(q);
   if (K.length <= YR1) return K;
   return K.slice(0, YR1) + `... (${K.length} chars)`;
@@ -13420,7 +13420,7 @@ function Ffq(A) {
           updateAccessToken(W) {
             ((P.accessToken = W),
               P.writeStdin(
-                p6({
+                trySafeStringify({
                   type: "update_environment_variables",
                   variables: { CLAUDE_CODE_SESSION_ACCESS_TOKEN: W },
                 }) +
@@ -13557,7 +13557,7 @@ function dfq(A) {
         ((D = F), B());
       })
       .catch((F) => {
-        y(`QR code generation failed: ${F}`, { level: "error" });
+        writeDebugLog(`QR code generation failed: ${F}`, { level: "error" });
       });
   }
   function L() {
@@ -13817,7 +13817,7 @@ function rfq({ getAccessToken: A, onRefresh: q, label: K }) {
   function $(J, D) {
     let X = P0z(D);
     if (!X) {
-      y(
+      writeDebugLog(
         `[${K}:token] Could not decode JWT expiry for sessionId=${J}, token prefix=${D.slice(0, 15)}…, keeping existing timer`,
       );
       return;
@@ -13828,13 +13828,13 @@ function rfq({ getAccessToken: A, onRefresh: q, label: K }) {
       W = new Date(X * 1000).toISOString(),
       G = X * 1000 - Date.now() - lfq;
     if (G <= 0) {
-      (y(
+      (writeDebugLog(
         `[${K}:token] Token for sessionId=${J} expires=${W} (past or within buffer), refreshing immediately`,
       ),
         O(J, P));
       return;
     }
-    y(
+    writeDebugLog(
       `[${K}:token] Scheduled token refresh for sessionId=${J} in ${X3(G)} (expires=${W}, buffer=${lfq / 1000}s)`,
     );
     let Z = setTimeout(() => {
@@ -13847,13 +13847,13 @@ function rfq({ getAccessToken: A, onRefresh: q, label: K }) {
     try {
       X = await A();
     } catch (P) {
-      y(
+      writeDebugLog(
         `[${K}:token] getAccessToken threw for sessionId=${J}: ${P instanceof Error ? P.message : String(P)}`,
         { level: "error" },
       );
     }
     if (w.get(J) !== D) {
-      y(
+      writeDebugLog(
         `[${K}:token] doRefresh for sessionId=${J} stale (gen ${D} vs ${w.get(J)}), skipping`,
       );
       return;
@@ -13862,7 +13862,7 @@ function rfq({ getAccessToken: A, onRefresh: q, label: K }) {
       let P = (z.get(J) ?? 0) + 1;
       if (
         (z.set(J, P),
-        y(
+        writeDebugLog(
           `[${K}:token] No OAuth token available for refresh, sessionId=${J} (failure ${P}/${nfq})`,
           { level: "error" },
         ),
@@ -13877,16 +13877,16 @@ function rfq({ getAccessToken: A, onRefresh: q, label: K }) {
       return;
     }
     (z.delete(J),
-      y(
+      writeDebugLog(
         `[${K}:token] Refreshing token for sessionId=${J}: new token prefix=${X.slice(0, 15)}…`,
       ),
-      n("tengu_bridge_token_refreshed", {}),
+      emitEvent("tengu_bridge_token_refreshed", {}),
       q(J, X));
     let M = setTimeout(() => {
       O(J, D);
     }, ifq);
     (Y.set(J, M),
-      y(
+      writeDebugLog(
         `[${K}:token] Scheduled follow-up refresh for sessionId=${J} in ${X3(ifq)}`,
       ));
   }
@@ -13934,7 +13934,7 @@ function Z0z(A) {
   return {
     write(K) {
       q.write(
-        p6(K) +
+        trySafeStringify(K) +
           `
 `,
       );
@@ -13998,27 +13998,27 @@ function v0z(A) {
     if (z) Y.push(`body=${z}`);
     K = `[${Y.join(",")}] `;
   }
-  (y(`${A.name}: ${K}${q}`, { level: "error" }),
+  (writeDebugLog(`${A.name}: ${K}${q}`, { level: "error" }),
     N0z(hl8(), { error: `${K}${q}` }));
 }
 function k0z(A, q) {
-  y(`MCP server "${A}" ${q}`, { level: "error" });
+  writeDebugLog(`MCP server "${A}" ${q}`, { level: "error" });
   let K = XR1(A),
     z = {
       error: q instanceof Error ? q.stack || q.message : String(q),
       timestamp: new Date().toISOString(),
-      sessionId: d1(),
+      sessionId: getSessionId(),
       cwd: P1().cwd(),
     };
   Il8(K).write(z);
 }
 function E0z(A, q) {
-  y(`MCP server "${A}": ${q}`);
+  writeDebugLog(`MCP server "${A}": ${q}`);
   let K = XR1(A),
     Y = {
       debug: q,
       timestamp: new Date().toISOString(),
-      sessionId: d1(),
+      sessionId: getSessionId(),
       cwd: P1().cwd(),
     };
   Il8(K).write(Y);
@@ -14031,7 +14031,7 @@ function xl8() {
     getErrorsPath: hl8,
     getMCPLogsPath: XR1,
   }),
-    y("Error log sink initialized"));
+    writeDebugLog("Error log sink initialized"));
 }
 var sfq, Mr6;
 var bl8 = E(() => {
@@ -14091,7 +14091,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
     I = null,
     B = null;
   if (
-    (y(
+    (writeDebugLog(
       `[bridge:work] Starting poll loop maxSessions=${A.maxSessions} environmentId=${q}`,
     ),
     $8("info", "bridge_loop_started", { max_sessions: A.maxSessions }),
@@ -14130,10 +14130,10 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
       if (f6) (clearTimeout(f6), W.delete(d));
       Z?.cancel(d);
       let q6 = Date.now() - a;
-      (y(
+      (writeDebugLog(
         `[bridge:session] sessionId=${d} workId=${P6 ?? "unknown"} exited status=${j6} duration=${X3(q6)}`,
       ),
-        n("tengu_bridge_session_done", { status: j6, duration_ms: q6 }),
+        emitEvent("tengu_bridge_session_done", { status: j6, duration_ms: q6 }),
         $8("info", "bridge_session_done", { status: j6, duration_ms: q6 }),
         w.clearStatus(),
         g());
@@ -14152,7 +14152,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
           ((D6 = A6 ?? "Process exited with error"),
             w.logSessionFailed(d, D6),
             w.logStatus(`To reconnect: claude --resume ${d}`),
-            $6(Error(`Bridge session failed: ${D6}`)));
+            sendError(Error(`Bridge session failed: ${D6}`)));
           break;
         case "interrupted":
           w.logVerbose(`Session ${d} interrupted`);
@@ -14160,14 +14160,14 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
       }
       if (j6 !== "interrupted" && P6) ((N = x0z(Y, q, P6, w)), G.add(P6));
       if (j6 !== "interrupted" && !D.aborted) {
-        (y(
+        (writeDebugLog(
           `[bridge:session] Session ${j6}, aborting poll loop to tear down environment`,
         ),
           J.abort());
         return;
       }
       if (X.size === 0 && !D.aborted)
-        (y("[bridge:work] All sessions finished, transitioning to idle"), F());
+        (writeDebugLog("[bridge:work] All sessions finished, transitioning to idle"), F());
     };
   }
   if (!H) F();
@@ -14182,8 +14182,8 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
       if (L !== null || S !== null) {
         let P6 = Date.now() - (L ?? S ?? Date.now());
         (w.logReconnected(P6),
-          y(`[bridge:poll] Reconnected after ${X3(P6)}`),
-          n("tengu_bridge_reconnected", { disconnected_ms: P6 }));
+          writeDebugLog(`[bridge:poll] Reconnected after ${X3(P6)}`),
+          emitEvent("tengu_bridge_reconnected", { disconnected_ms: P6 }));
       }
       if (((V = 0), (v = 0), (L = null), (S = null), (I = null), !a)) {
         let P6 = Math.max(
@@ -14194,14 +14194,14 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
         continue;
       }
       if (X.size >= A.maxSessions) {
-        (y(
+        (writeDebugLog(
           `[bridge:work] At capacity (${X.size}/${A.maxSessions}), skipping workId=${a.id}`,
         ),
           await i26(d, D));
         continue;
       }
       if (G.has(a.id)) {
-        (y(`[bridge:work] Skipping already-completed workId=${a.id}`),
+        (writeDebugLog(`[bridge:work] Skipping already-completed workId=${a.id}`),
           await i26(1000, D));
         continue;
       }
@@ -14211,12 +14211,12 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
       } catch (P6) {
         let f6 = P6 instanceof Error ? P6.message : String(P6);
         (w.logError(`Failed to decode work secret for workId=${a.id}: ${f6}`),
-          n("tengu_bridge_work_secret_failed", {}));
+          emitEvent("tengu_bridge_work_secret_failed", {}));
         continue;
       }
       switch (a.data.type) {
         case "healthcheck":
-          (y("[bridge:work] Healthcheck received"),
+          (writeDebugLog("[bridge:work] Healthcheck received"),
             w.logVerbose("Healthcheck received"));
           break;
         case "session": {
@@ -14231,21 +14231,21 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
           if (f6) {
             (f6.updateAccessToken(j6.session_ingress_token),
               Z?.schedule(P6, j6.session_ingress_token),
-              y(
+              writeDebugLog(
                 `[bridge:work] Updated access token for existing sessionId=${P6}`,
               ));
             break;
           }
           if (X.size > 0) {
             let z6 = [...X.keys()].join(", ");
-            y(
+            writeDebugLog(
               `[bridge:work] Rejecting foreign sessionId=${P6} while active sessions=[${z6}]`,
             );
             break;
           }
           let q6 = DR1(A.sessionIngressUrl, P6);
-          (y(`[bridge:session] Spawning sessionId=${P6} sdkUrl=${q6}`),
-            n("tengu_bridge_session_started", { active_sessions: X.size }),
+          (writeDebugLog(`[bridge:session] Spawning sessionId=${P6} sdkUrl=${q6}`),
+            emitEvent("tengu_bridge_session_started", { active_sessions: X.size }),
             $8("info", "bridge_session_started"));
           let A6 = z.spawn(
             {
@@ -14272,8 +14272,8 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
           let T6 = A.sessionTimeoutMs ?? zd8;
           if (T6 > 0) {
             let z6 = setTimeout(() => {
-              (y(`[bridge:session] sessionId=${P6} timed out after ${X3(T6)}`),
-                n("tengu_bridge_session_timeout", { timeout_ms: T6 }),
+              (writeDebugLog(`[bridge:session] sessionId=${P6} timed out after ${X3(T6)}`),
+                emitEvent("tengu_bridge_session_timeout", { timeout_ms: T6 }),
                 w.logSessionFailed(P6, `Session timed out after ${X3(T6)}`),
                 A6.kill());
             }, T6);
@@ -14284,15 +14284,15 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
           break;
         }
         default:
-          y(`[bridge:work] Unknown work type: ${a.data.type}, skipping`);
+          writeDebugLog(`[bridge:work] Unknown work type: ${a.data.type}, skipping`);
           break;
       }
     } catch (a) {
       if (D.aborted) break;
       if (a instanceof gC) {
         if (mV6(a.errorType)) w.logStatus(a.message);
-        else (w.logError(a.message), $6(a));
-        (n("tengu_bridge_fatal_error", {
+        else (w.logError(a.message), sendError(a));
+        (emitEvent("tengu_bridge_fatal_error", {
           status: a.status,
           error_type: a.errorType,
         }),
@@ -14306,7 +14306,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
       if (KTq(a) || YTq(a)) {
         let j6 = Date.now();
         if (I !== null && j6 - I > ATq($))
-          (y(
+          (writeDebugLog(
             `[bridge:work] Detected system sleep (${Math.round((j6 - I) / 1000)}s gap), resetting error budget`,
           ),
             $8("info", "bridge_poll_sleep_detected", { gapMs: j6 - I }),
@@ -14320,7 +14320,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
           (w.logError(
             `Server unreachable for ${Math.round(P6 / 60000)} minutes, giving up.`,
           ),
-            n("tengu_bridge_poll_give_up", {
+            emitEvent("tengu_bridge_poll_give_up", {
               error_type: "connection",
               elapsed_ms: P6,
             }),
@@ -14342,7 +14342,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
       } else {
         let j6 = Date.now();
         if (I !== null && j6 - I > ATq($))
-          (y(
+          (writeDebugLog(
             `[bridge:work] Detected system sleep (${Math.round((j6 - I) / 1000)}s gap), resetting error budget`,
           ),
             $8("info", "bridge_poll_sleep_detected", { gapMs: j6 - I }),
@@ -14356,7 +14356,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
           (w.logError(
             `Persistent errors for ${Math.round(P6 / 60000)} minutes, giving up.`,
           ),
-            n("tengu_bridge_poll_give_up", {
+            emitEvent("tengu_bridge_poll_give_up", {
               error_type: "general",
               elapsed_ms: P6,
             }),
@@ -14380,7 +14380,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
   }
   (g(), w.clearStatus());
   let U = Date.now() - f;
-  (n("tengu_bridge_shutdown", { active_sessions: X.size, loop_duration_ms: U }),
+  (emitEvent("tengu_bridge_shutdown", { active_sessions: X.size, loop_duration_ms: U }),
     $8("info", "bridge_shutdown", {
       active_sessions: X.size,
       loop_duration_ms: U,
@@ -14388,11 +14388,11 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
   let c = new Set(X.keys());
   if (H) c.add(H);
   if (X.size > 0) {
-    (y(`[bridge:shutdown] Shutting down ${X.size} active session(s)`),
+    (writeDebugLog(`[bridge:shutdown] Shutting down ${X.size} active session(s)`),
       w.logStatus(`Shutting down ${X.size} active session(s)…`));
     let d = new Map(P);
     for (let [e, j6] of X.entries())
-      (y(`[bridge:shutdown] Sending SIGTERM to sessionId=${e}`), j6.kill());
+      (writeDebugLog(`[bridge:shutdown] Sending SIGTERM to sessionId=${e}`), j6.kill());
     let a = new AbortController();
     (await Promise.race([
       Promise.allSettled([...X.values()].map((e) => e.done)),
@@ -14400,7 +14400,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
     ]),
       a.abort());
     for (let [e, j6] of X.entries())
-      (y(`[bridge:shutdown] Force-killing stuck sessionId=${e}`),
+      (writeDebugLog(`[bridge:shutdown] Force-killing stuck sessionId=${e}`),
         j6.forceKill());
     for (let e of W.values()) clearTimeout(e);
     (W.clear(),
@@ -14416,7 +14416,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
       ));
   }
   if (c.size > 0)
-    (y(`[bridge:shutdown] Archiving ${c.size} session(s)`),
+    (writeDebugLog(`[bridge:shutdown] Archiving ${c.size} session(s)`),
       await Promise.allSettled(
         [...c].map((d) =>
           Y.archiveSession(d).catch((a) =>
@@ -14429,7 +14429,7 @@ async function qTq(A, q, K, Y, z, w, _, $ = S0z, O = C26, H, j) {
   if (N) await N.catch(() => {});
   try {
     (await Y.deregisterEnvironment(q),
-      y("[bridge:shutdown] Environment deregistered, bridge offline"),
+      writeDebugLog("[bridge:shutdown] Environment deregistered, bridge offline"),
       w.logVerbose("Environment deregistered."));
   } catch (d) {
     w.logVerbose(
@@ -14468,7 +14468,7 @@ async function x0z(A, q, K, Y) {
   for (let _ = 1; _ <= 3; _++)
     try {
       (await A.stopWork(q, K, !1),
-        y(
+        writeDebugLog(
           `[bridge:work] stopWork succeeded for workId=${K} on attempt ${_}/3`,
         ));
       return;
@@ -14691,11 +14691,11 @@ You can disconnect remote access anytime by running /remote-control again.
       debugFile: Y,
       sessionTimeoutMs: z,
     };
-  (y(
+  (writeDebugLog(
     `[bridge:init] bridgeId=${g} environmentId=${u.environmentId} dir=${$} branch=${B} gitRepoUrl=${h} machine=${F}`,
   ),
-    y(`[bridge:init] apiBaseUrl=${v} sessionIngressUrl=${L}`),
-    y(`[bridge:init] sandbox=${K}${Y ? ` debugFile=${Y}` : ""}`));
+    writeDebugLog(`[bridge:init] apiBaseUrl=${v} sessionIngressUrl=${L}`),
+    writeDebugLog(`[bridge:init] sandbox=${K}${Y ? ` debugFile=${Y}` : ""}`));
   let U = wR1({
       baseUrl: v,
       getAccessToken: Z,
@@ -14708,7 +14708,7 @@ You can disconnect remote access anytime by running /remote-control again.
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
         BUILD_TIME: "2026-03-04T00:18:36Z",
       }.VERSION,
-      onDebug: y,
+      onDebug: writeDebugLog,
     }),
     c,
     d;
@@ -14716,7 +14716,7 @@ You can disconnect remote access anytime by running /remote-control again.
     let _6 = await U.registerBridgeEnvironment(u);
     ((c = _6.environment_id), (d = _6.environment_secret));
   } catch (_6) {
-    (n("tengu_bridge_registration_failed", {
+    (emitEvent("tengu_bridge_registration_failed", {
       status: _6 instanceof gC ? _6.status : void 0,
     }),
       console.error(
@@ -14726,8 +14726,8 @@ You can disconnect remote access anytime by running /remote-control again.
       ),
       process.exit(1));
   }
-  (y(`[bridge:init] Registered, server environmentId=${c}`),
-    n("tengu_bridge_started", {
+  (writeDebugLog(`[bridge:init] Registered, server environmentId=${c}`),
+    emitEvent("tengu_bridge_started", {
       max_sessions: u.maxSessions,
       has_debug_file: !!u.debugFile,
       sandbox: u.sandbox,
@@ -14744,12 +14744,12 @@ You can disconnect remote access anytime by running /remote-control again.
       sandbox: K,
       debugFile: Y,
       permissionMode: w,
-      onDebug: y,
+      onDebug: writeDebugLog,
       onActivity: (_6, K6) => {
-        y(`[bridge:activity] sessionId=${_6} ${K6.type} ${K6.summary}`);
+        writeDebugLog(`[bridge:activity] sessionId=${_6} ${K6.type} ${K6.summary}`);
       },
       onPermissionRequest: (_6, K6, s) => {
-        y(
+        writeDebugLog(
           `[bridge:perm] sessionId=${_6} tool=${K6.request.tool_name} request_id=${K6.request_id} (not auto-approving)`,
         );
       },
@@ -14774,10 +14774,10 @@ You can disconnect remote access anytime by running /remote-control again.
       process.stdin.on("data", q6));
   let A6 = new AbortController(),
     D6 = () => {
-      (y("[bridge:shutdown] SIGINT received, shutting down"), A6.abort());
+      (writeDebugLog("[bridge:shutdown] SIGINT received, shutting down"), A6.abort());
     },
     G6 = () => {
-      (y("[bridge:shutdown] SIGTERM received, shutting down"), A6.abort());
+      (writeDebugLog("[bridge:shutdown] SIGTERM received, shutting down"), A6.abort());
     };
   (process.on("SIGINT", D6), process.on("SIGTERM", G6));
   let { createBridgeSession: v6 } = await Promise.resolve().then(
@@ -14799,9 +14799,9 @@ You can disconnect remote access anytime by running /remote-control again.
       })),
       T6)
     )
-      y(`[bridge:init] Created initial session ${T6}`);
+      writeDebugLog(`[bridge:init] Created initial session ${T6}`);
   } catch (_6) {
-    y(
+    writeDebugLog(
       `[bridge:init] Session creation failed (non-fatal): ${_6 instanceof Error ? _6.message : String(_6)}`,
     );
   }
@@ -14905,7 +14905,7 @@ var Wr6 = E(() => {
 var _Tq = {};
 s1(_Tq, { showInvalidConfigDialog: () => p0z });
 function g0z(A) {
-  let q = w6(19),
+  let q = reactMemoCache(19),
     { filePath: K, errorDescription: Y, onExit: z, onReset: w } = A,
     _;
   if (q[0] !== z || q[1] !== w)
@@ -15003,7 +15003,7 @@ async function p0z({ error: A }) {
               (Y(), K(), process.exit(1));
             },
             onReset: () => {
-              (Nz(A.filePath, p6(A.defaultConfig, null, 2), {
+              (Nz(A.filePath, trySafeStringify(A.defaultConfig, null, 2), {
                 flush: !1,
                 encoding: "utf8",
               }),
@@ -15037,31 +15037,31 @@ function pl8() {
   if (qy8()) {
     if (C7() && yD())
       Fl8().catch((A) => {
-        y(
+        writeDebugLog(
           `[3P telemetry] Eager telemetry init failed (beta tracing): ${A instanceof Error ? A.message : String(A)}`,
           { level: "error" },
         );
       });
-    (y(
+    (writeDebugLog(
       "[3P telemetry] Waiting for remote managed settings before telemetry init",
     ),
       aG1()
         .then(async () => {
-          (y(
+          (writeDebugLog(
             "[3P telemetry] Remote managed settings loaded, initializing telemetry",
           ),
             S86(),
             await Fl8());
         })
         .catch((A) => {
-          y(
+          writeDebugLog(
             `[3P telemetry] Telemetry init failed (remote settings path): ${A instanceof Error ? A.message : String(A)}`,
             { level: "error" },
           );
         }));
   } else
     Fl8().catch((A) => {
-      y(
+      writeDebugLog(
         `[3P telemetry] Telemetry init failed: ${A instanceof Error ? A.message : String(A)}`,
         { level: "error" },
       );
@@ -15151,16 +15151,16 @@ var jTq = E(() => {
       if (Zx()) $y8();
       (Bq("init_after_remote_settings_check"), Dl8());
       let Y = Date.now();
-      (y("[init] configureGlobalMTLS starting"),
+      (writeDebugLog("[init] configureGlobalMTLS starting"),
         tdA(),
         $8("info", "init_mtls_configured", { duration_ms: Date.now() - Y }),
-        y("[init] configureGlobalMTLS complete"));
+        writeDebugLog("[init] configureGlobalMTLS complete"));
       let z = Date.now();
       if (
-        (y("[init] configureGlobalAgents starting"),
+        (writeDebugLog("[init] configureGlobalAgents starting"),
         XK1(),
         $8("info", "init_proxy_configured", { duration_ms: Date.now() - z }),
-        y("[init] configureGlobalAgents complete"),
+        writeDebugLog("[init] configureGlobalAgents complete"),
         Bq("init_network_configured"),
         I0A(),
         Xq(pe4),
@@ -15200,7 +15200,7 @@ async function l0z() {
       }));
   let A = await n0z();
   if (A.length === 0) return;
-  (y(`Watching for changes in skill/command directories: ${A.join(", ")}...`),
+  (writeDebugLog(`Watching for changes in skill/command directories: ${A.join(", ")}...`),
     (rF = zD6.watch(A, {
       persistent: !0,
       ignoreInitial: !0,
@@ -15269,8 +15269,8 @@ async function n0z() {
   return q;
 }
 function Ql8(A) {
-  (y(`Detected skill change: ${A}`),
-    n("tengu_skill_file_changed", { source: "chokidar" }),
+  (writeDebugLog(`Detected skill change: ${A}`),
+    emitEvent("tengu_skill_file_changed", { source: "chokidar" }),
     r0z(A));
 }
 function r0z(A) {
@@ -15282,7 +15282,7 @@ function r0z(A) {
     for (let K of q) {
       let Y = await vV6("skills", K);
       if (VV6(Y)) {
-        y(`ConfigChange hook blocked skill change: ${K}`);
+        writeDebugLog(`ConfigChange hook blocked skill change: ${K}`);
         return;
       }
     }
@@ -15351,15 +15351,15 @@ function PTq() {
       if (WR1.has(Y) || WR1.size < a0z) WR1.set(Y, z + 1);
       let w = e0z(K);
       if (
-        (n("tengu_node_warning", {
+        (emitEvent("tengu_node_warning", {
           is_internal: w ? 1 : 0,
           occurrence_count: z + 1,
           classname: K.name,
           ...!1,
         }),
-        X1(process.env.CLAUDE_DEBUG))
+        isTruthy(process.env.CLAUDE_DEBUG))
       )
-        y(`${w ? "[Internal Warning]" : "[Warning]"} ${K.toString()}`, {
+        writeDebugLog(`${w ? "[Internal Warning]" : "[Warning]"} ${K.toString()}`, {
           level: "warn",
         });
     } catch {}
@@ -17071,10 +17071,10 @@ function cPz() {
   );
 }
 function tl8(A) {
-  y(`[files-api] ${A}`, { level: "error" });
+  writeDebugLog(`[files-api] ${A}`, { level: "error" });
 }
 function r26(A) {
-  y(`[files-api] ${A}`);
+  writeDebugLog(`[files-api] ${A}`);
 }
 function BTq(A) {
   return A instanceof Error ? A.message : String(A);
@@ -17165,7 +17165,7 @@ async function oPz(A, q) {
     );
   } catch (w) {
     if ((tl8(`Failed to download file ${K}: ${BTq(w)}`), w instanceof Error))
-      $6(w);
+      sendError(w);
     return { fileId: K, path: z, success: !1, error: BTq(w) };
   }
 }
@@ -17247,7 +17247,7 @@ function UTq() {
   return null;
 }
 function qWz() {
-  let A = d1(),
+  let A = getSessionId(),
     q = An(_A(), "projects"),
     K = An(q, pZ(HA()));
   try {
@@ -17265,15 +17265,15 @@ async function Nr6() {
   if (!A || GT.timestamp === 0) return;
   let q = An(_A(), "projects"),
     K = An(q, pZ(HA())),
-    Y = An(K, `${d1()}-${GT.timestamp}.cast`);
+    Y = An(K, `${getSessionId()}-${GT.timestamp}.cast`);
   if (A === Y) return;
   await Tr6?.flush();
   try {
     (await ePz(A, Y),
       (GT.filePath = Y),
-      y(`[asciicast] Renamed recording: ${TR1(A)} → ${TR1(Y)}`));
+      writeDebugLog(`[asciicast] Renamed recording: ${TR1(A)} → ${TR1(Y)}`));
   } catch {
-    y(`[asciicast] Failed to rename recording from ${TR1(A)} to ${TR1(Y)}`);
+    writeDebugLog(`[asciicast] Failed to rename recording from ${TR1(A)} to ${TR1(Y)}`);
   }
 }
 function QTq() {
@@ -17289,7 +17289,7 @@ function YWz() {
   if (!A) return;
   let { cols: q, rows: K } = QTq(),
     Y = performance.now(),
-    z = p6({
+    z = trySafeStringify({
       version: 2,
       width: q,
       height: K,
@@ -17323,7 +17323,7 @@ function YWz() {
       X = typeof H === "string" ? H : Buffer.from(H).toString("utf-8");
     if (
       (_.write(
-        p6([D, "o", X]) +
+        trySafeStringify([D, "o", X]) +
           `
 `,
       ),
@@ -17336,7 +17336,7 @@ function YWz() {
     let H = (performance.now() - Y) / 1000,
       { cols: j, rows: J } = QTq();
     _.write(
-      p6([H, "r", `${j}x${J}`]) +
+      trySafeStringify([H, "r", `${j}x${J}`]) +
         `
 `,
     );
@@ -17356,7 +17356,7 @@ function YWz() {
     Xq(async () => {
       (await Tr6?.dispose(), (Tr6 = null));
     }),
-    y(`[asciicast] Recording to ${A}`));
+    writeDebugLog(`[asciicast] Recording to ${A}`));
 }
 var GT,
   Tr6 = null;
@@ -17374,7 +17374,7 @@ import { join as cTq } from "path";
 function lTq() {
   let A = hg6();
   if (!A?.teamName || !A?.agentName) {
-    y(
+    writeDebugLog(
       "[Reconnection] computeInitialTeamContext: No teammate context set (not a teammate)",
     );
     return;
@@ -17382,7 +17382,7 @@ function lTq() {
   let { teamName: q, agentId: K, agentName: Y } = A,
     z = ED(q);
   if (!z) {
-    $6(Error(`[computeInitialTeamContext] Could not read team file for ${q}`));
+    sendError(Error(`[computeInitialTeamContext] Could not read team file for ${q}`));
     return;
   }
   let w = cTq(
@@ -17392,7 +17392,7 @@ function lTq() {
     ),
     _ = !K;
   return (
-    y(
+    writeDebugLog(
       `[Reconnection] Computed initial team context for ${_ ? "leader" : `teammate ${Y}`} in team ${q}`,
     ),
     {
@@ -17409,7 +17409,7 @@ function lTq() {
 function iTq(A, q, K) {
   let Y = ED(q);
   if (!Y) {
-    $6(
+    sendError(
       Error(
         `[initializeTeammateContextFromSession] Could not read team file for ${q} (agent: ${K})`,
       ),
@@ -17418,7 +17418,7 @@ function iTq(A, q, K) {
   }
   let z = Y.members.find(($) => $.name === K);
   if (!z)
-    y(
+    writeDebugLog(
       `[Reconnection] Member ${K} not found in team ${q} - may have been removed`,
     );
   let w = z?.agentId,
@@ -17435,7 +17435,7 @@ function iTq(A, q, K) {
       teammates: {},
     },
   })),
-    y(
+    writeDebugLog(
       `[Reconnection] Initialized agent context from session for ${K} in team ${q}`,
     ));
 }
@@ -17496,9 +17496,9 @@ var qi8 = E(() => {
   };
 });
 function FV6(A, q) {
-  ($6(A instanceof Error ? A : Error(String(A))),
+  (sendError(A instanceof Error ? A : Error(String(A))),
     console.error(
-      `${a6.cross} Failed to ${q}: ${A instanceof Error ? A.message : String(A)}`,
+      `${figures.cross} Failed to ${q}: ${A instanceof Error ? A.message : String(A)}`,
     ),
     process.exit(1));
 }
@@ -17507,8 +17507,8 @@ async function nTq(A, q = "user") {
     console.log(`Installing plugin "${A}"...`);
     let K = await p2q(A, q);
     if (!K.success) throw Error(K.message);
-    (console.log(`${a6.tick} ${K.message}`),
-      n("tengu_plugin_installed_cli", {
+    (console.log(`${figures.tick} ${K.message}`),
+      emitEvent("tengu_plugin_installed_cli", {
         plugin_id: K.pluginId || A,
         marketplace_name: K.pluginId?.split("@")[1] || "unknown",
         scope: K.scope || q,
@@ -17522,8 +17522,8 @@ async function rTq(A, q = "user") {
   try {
     let K = await RN6(A, q);
     if (!K.success) throw Error(K.message);
-    (console.log(`${a6.tick} ${K.message}`),
-      n("tengu_plugin_uninstalled_cli", {
+    (console.log(`${figures.tick} ${K.message}`),
+      emitEvent("tengu_plugin_uninstalled_cli", {
         plugin_id: K.pluginId || A,
         scope: K.scope || q,
       }),
@@ -17536,8 +17536,8 @@ async function oTq(A, q) {
   try {
     let K = await d16(A, q);
     if (!K.success) throw Error(K.message);
-    (console.log(`${a6.tick} ${K.message}`),
-      n("tengu_plugin_enabled_cli", {
+    (console.log(`${figures.tick} ${K.message}`),
+      emitEvent("tengu_plugin_enabled_cli", {
         plugin_id: K.pluginId || A,
         scope: K.scope,
       }),
@@ -17550,8 +17550,8 @@ async function aTq(A, q) {
   try {
     let K = await CN6(A, q);
     if (!K.success) throw Error(K.message);
-    (console.log(`${a6.tick} ${K.message}`),
-      n("tengu_plugin_disabled_cli", {
+    (console.log(`${figures.tick} ${K.message}`),
+      emitEvent("tengu_plugin_disabled_cli", {
         plugin_id: K.pluginId || A,
         scope: K.scope,
       }),
@@ -17564,8 +17564,8 @@ async function sTq() {
   try {
     let A = await Q2q();
     if (!A.success) throw Error(A.message);
-    (console.log(`${a6.tick} ${A.message}`),
-      n("tengu_plugin_disabled_all_cli", {}),
+    (console.log(`${figures.tick} ${A.message}`),
+      emitEvent("tengu_plugin_disabled_all_cli", {}),
       process.exit(0));
   } catch (A) {
     FV6(A, "disable all plugins");
@@ -17578,11 +17578,11 @@ async function tTq(A, q) {
     let K = await SN6(A, q);
     if (!K.success) throw Error(K.message);
     if (
-      (L4(`${a6.tick} ${K.message}
+      (L4(`${figures.tick} ${K.message}
 `),
       !K.alreadyUpToDate)
     )
-      n("tengu_plugin_updated_cli", {
+      emitEvent("tengu_plugin_updated_cli", {
         plugin_id: A,
         old_version: K.oldVersion || "unknown",
         new_version: K.newVersion || "unknown",
@@ -17629,12 +17629,12 @@ async function eTq(A) {
       if (!isNaN(D)) ((z += D), w++);
     }
     return (
-      n("tengu_repo_text_file_size", { total_bytes: z, total_files: w }),
+      emitEvent("tengu_repo_text_file_size", { total_bytes: z, total_files: w }),
       z
     );
   } catch (q) {
     return (
-      y(`[repoTextSize] Failed to calculate repo text size: ${q}`, {
+      writeDebugLog(`[repoTextSize] Failed to calculate repo text size: ${q}`, {
         level: "error",
       }),
       null
@@ -17685,7 +17685,7 @@ var ANq = E(() => {
   ]);
 });
 function VR1() {
-  let A = w6(1),
+  let A = reactMemoCache(1),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = Yi8.default.createElement(
@@ -17712,7 +17712,7 @@ var zi8 = E(() => {
   Yi8 = Y6(W6(), 1);
 });
 function qNq(A) {
-  let q = w6(20),
+  let q = reactMemoCache(20),
     { serverNames: K, onDone: Y } = A,
     z;
   if (q[0] !== Y || q[1] !== K)
@@ -17722,7 +17722,7 @@ function qNq(A) {
         f = G.disabledMcpjsonServers || [],
         [N, V] = XGA(K, (v) => W.includes(v));
       if (
-        (n("tengu_mcp_multidialog_choice", {
+        (emitEvent("tengu_mcp_multidialog_choice", {
           approved: N.length,
           rejected: V.length,
         }),
@@ -17847,12 +17847,12 @@ var KNq = E(() => {
   pC = Y6(W6(), 1);
 });
 function YNq(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     { serverName: K, onDone: Y } = A,
     z;
   if (q[0] !== Y || q[1] !== K)
     ((z = function (X) {
-      n("tengu_mcp_dialog_choice", { choice: X });
+      emitEvent("tengu_mcp_dialog_choice", { choice: X });
       A: switch (X) {
         case "yes":
         case "yes_all": {
@@ -18069,7 +18069,7 @@ Files modified by other users:
     if (w.length < 5) return [];
     return w;
   } catch (A) {
-    return ($6(A), []);
+    return (sendError(A), []);
   }
 }
 var JWz = 604800000,
@@ -18200,7 +18200,7 @@ function Oi8() {
   };
 }
 function JNq(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { store: K, children: Y } = A,
     z;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -18252,7 +18252,7 @@ async function kR1(A, q) {
     Y = ET8(q);
   for (let z of K) {
     if (z.type !== "prompt") continue;
-    n("tengu_skill_loaded", {
+    emitEvent("tengu_skill_loaded", {
       skill_name: z.name,
       skill_source: z.source,
       skill_loaded_from: z.loadedFrom,
@@ -18334,7 +18334,7 @@ Examples:
             w.endsWith("/sse") ||
             w.endsWith("/mcp");
         if (
-          (n("tengu_mcp_add", {
+          (emitEvent("tengu_mcp_add", {
             type: O,
             scope: $,
             source: "command",
@@ -18365,7 +18365,7 @@ Examples:
 `),
             J)
           )
-            process.stdout.write(`Headers: ${p6(J, null, 2)}
+            process.stdout.write(`Headers: ${trySafeStringify(J, null, 2)}
 `);
         } else if (O === "http") {
           if (!w)
@@ -18389,7 +18389,7 @@ Examples:
 `),
             J)
           )
-            process.stdout.write(`Headers: ${p6(J, null, 2)}
+            process.stdout.write(`Headers: ${trySafeStringify(J, null, 2)}
 `);
         } else {
           if (z.clientId || z.clientSecret || z.callbackPort)
@@ -18538,7 +18538,7 @@ var Di8 = E(() => {
           return K && !Y;
         } catch (A) {
           return (
-            y(
+            writeDebugLog(
               `Failed to check default-permission-mode-config tip relevance: ${A}`,
               { level: "warn" },
             ),
@@ -18895,7 +18895,7 @@ function vr6(A, q) {
   if (!jH() && A.messages && A.messages.length > 0) {
     let K = TWz(A.messages);
     if (K.length > 0) {
-      let Y = d1();
+      let Y = getSessionId();
       q((z) => ({ ...z, todos: { ...z.todos, [Y]: K } }));
     }
   }
@@ -18914,7 +18914,7 @@ function s26(A, q, K) {
   let Y = K.activeAgents.find((z) => z.agentType === A);
   if (!Y)
     return (
-      y(
+      writeDebugLog(
         `Resumed session had agent "${A}" but it is no longer available. Using default behavior.`,
       ),
       tp(void 0),
@@ -18996,7 +18996,7 @@ function ZNq() {
   try {
     let q = getConfigValue("userSettings") || {};
     (iA("userSettings", { ...q, env: { ...q.env, DISABLE_AUTOUPDATER: "1" } }),
-      n("tengu_migrate_autoupdates_to_settings", {
+      emitEvent("tengu_migrate_autoupdates_to_settings", {
         was_user_preference: !0,
         already_had_env_var: !!q.env?.DISABLE_AUTOUPDATER,
       }),
@@ -19006,8 +19006,8 @@ function ZNq() {
         return w;
       }));
   } catch (q) {
-    ($6(Error(`Failed to migrate auto-updates: ${q}`)),
-      n("tengu_migrate_autoupdates_error", { has_error: !0 }));
+    (sendError(Error(`Failed to migrate auto-updates: ${q}`)),
+      emitEvent("tengu_migrate_autoupdates_error", { has_error: !0 }));
   }
 }
 var fNq = E(() => {
@@ -19020,14 +19020,14 @@ function TNq() {
   if (!getSettings().bypassPermissionsModeAccepted) return;
   try {
     if (!dW6()) iA("userSettings", { skipDangerousModePermissionPrompt: !0 });
-    (n("tengu_migrate_bypass_permissions_accepted", {}),
+    (emitEvent("tengu_migrate_bypass_permissions_accepted", {}),
       updateSettings((q) => {
         if (!("bypassPermissionsModeAccepted" in q)) return q;
         let { bypassPermissionsModeAccepted: K, ...Y } = q;
         return Y;
       }));
   } catch (q) {
-    $6(Error(`Failed to migrate bypass permissions accepted: ${q}`));
+    sendError(Error(`Failed to migrate bypass permissions accepted: ${q}`));
   }
 }
 var NNq = E(() => {
@@ -19079,9 +19079,9 @@ function VNq() {
         } = $;
         return J;
       });
-    n("tengu_migrate_mcp_approval_fields_success", { migratedCount: _.length });
+    emitEvent("tengu_migrate_mcp_approval_fields_success", { migratedCount: _.length });
   } catch {
-    n("tengu_migrate_mcp_approval_fields_error", {});
+    emitEvent("tengu_migrate_mcp_approval_fields_error", {});
   }
 }
 var vNq = E(() => {
@@ -19120,7 +19120,7 @@ function CNq() {
   if (getSettings().opusProMigrationComplete) return;
   if (h7() !== "firstParty" || !Yb6()) {
     (updateSettings((Y) => ({ ...Y, opusProMigrationComplete: !0 })),
-      n("tengu_reset_pro_to_opus_default", { skipped: !0 }));
+      emitEvent("tengu_reset_pro_to_opus_default", { skipped: !0 }));
     return;
   }
   if (SA()?.model === void 0) {
@@ -19130,13 +19130,13 @@ function CNq() {
       opusProMigrationComplete: !0,
       opusProMigrationTimestamp: Y,
     })),
-      n("tengu_reset_pro_to_opus_default", {
+      emitEvent("tengu_reset_pro_to_opus_default", {
         skipped: !1,
         had_custom_model: !1,
       }));
   } else
     (updateSettings((Y) => ({ ...Y, opusProMigrationComplete: !0 })),
-      n("tengu_reset_pro_to_opus_default", {
+      emitEvent("tengu_reset_pro_to_opus_default", {
         skipped: !1,
         had_custom_model: !0,
       }));
@@ -19171,12 +19171,12 @@ class Wi8 {
   }
   async connect() {
     if (this.state === "connecting") {
-      y("[SessionsWebSocket] Already connecting");
+      writeDebugLog("[SessionsWebSocket] Already connecting");
       return;
     }
     this.state = "connecting";
     let q = `${r7().BASE_API_URL.replace("https://", "wss://")}/v1/sessions/ws/${this.sessionId}/subscribe?organization_uuid=${this.orgUuid}`;
-    y(`[SessionsWebSocket] Connecting to ${q}`);
+    writeDebugLog(`[SessionsWebSocket] Connecting to ${q}`);
     let K = {
       Authorization: `Bearer ${this.accessToken}`,
       "anthropic-version": "2023-06-01",
@@ -19185,7 +19185,7 @@ class Wi8 {
       let Y = new globalThis.WebSocket(q, { headers: K, proxy: kU(q) });
       ((this.ws = Y),
         Y.addEventListener("open", () => {
-          (y(
+          (writeDebugLog(
             "[SessionsWebSocket] Connection opened, authenticated via headers",
           ),
             (this.state = "connected"),
@@ -19199,21 +19199,21 @@ class Wi8 {
         }),
         Y.addEventListener("error", () => {
           let z = Error("[SessionsWebSocket] WebSocket error");
-          ($6(z), this.callbacks.onError?.(z));
+          (sendError(z), this.callbacks.onError?.(z));
         }),
         Y.addEventListener("close", (z) => {
-          (y(`[SessionsWebSocket] Closed: code=${z.code} reason=${z.reason}`),
+          (writeDebugLog(`[SessionsWebSocket] Closed: code=${z.code} reason=${z.reason}`),
             this.handleClose(z.code));
         }),
         Y.addEventListener("pong", () => {
-          y("[SessionsWebSocket] Pong received");
+          writeDebugLog("[SessionsWebSocket] Pong received");
         }));
     } else {
       let { default: Y } = await Promise.resolve().then(() => (L$6(), _e6)),
         z = new Y(q, { headers: K, agent: vU(q) });
       ((this.ws = z),
         z.on("open", () => {
-          (y(
+          (writeDebugLog(
             "[SessionsWebSocket] Connection opened, authenticated via headers",
           ),
             (this.state = "connected"),
@@ -19225,15 +19225,15 @@ class Wi8 {
           this.handleMessage(w.toString());
         }),
         z.on("error", (w) => {
-          ($6(Error(`[SessionsWebSocket] Error: ${w.message}`)),
+          (sendError(Error(`[SessionsWebSocket] Error: ${w.message}`)),
             this.callbacks.onError?.(w));
         }),
         z.on("close", (w, _) => {
-          (y(`[SessionsWebSocket] Closed: code=${w} reason=${_.toString()}`),
+          (writeDebugLog(`[SessionsWebSocket] Closed: code=${w} reason=${_.toString()}`),
             this.handleClose(w));
         }),
         z.on("pong", () => {
-          y("[SessionsWebSocket] Pong received");
+          writeDebugLog("[SessionsWebSocket] Pong received");
         }));
     }
   }
@@ -19242,11 +19242,11 @@ class Wi8 {
       let q = w8(A);
       if (RWz(q)) this.callbacks.onMessage(q);
       else
-        y(
+        writeDebugLog(
           `[SessionsWebSocket] Ignoring message type: ${typeof q === "object" && q !== null && "type" in q ? String(q.type) : "unknown"}`,
         );
     } catch (q) {
-      $6(
+      sendError(
         Error(
           `[SessionsWebSocket] Failed to parse message: ${q instanceof Error ? q.message : String(q)}`,
         ),
@@ -19258,20 +19258,20 @@ class Wi8 {
     this.ws = null;
     let q = this.state;
     if (((this.state = "closed"), yWz.has(A))) {
-      (y(`[SessionsWebSocket] Permanent close code ${A}, not reconnecting`),
+      (writeDebugLog(`[SessionsWebSocket] Permanent close code ${A}, not reconnecting`),
         this.callbacks.onClose?.());
       return;
     }
     if (q === "connected" && this.reconnectAttempts < hNq)
       (this.reconnectAttempts++,
-        y(
+        writeDebugLog(
           `[SessionsWebSocket] Scheduling reconnect (attempt ${this.reconnectAttempts}/${hNq})`,
         ),
         (this.reconnectTimer = setTimeout(() => {
           ((this.reconnectTimer = null), this.connect());
         }, EWz)));
     else
-      (y("[SessionsWebSocket] Not reconnecting"), this.callbacks.onClose?.());
+      (writeDebugLog("[SessionsWebSocket] Not reconnecting"), this.callbacks.onClose?.());
   }
   startPingInterval() {
     (this.stopPingInterval(),
@@ -19288,26 +19288,26 @@ class Wi8 {
   }
   sendControlResponse(A) {
     if (!this.ws || this.state !== "connected") {
-      $6(Error("[SessionsWebSocket] Cannot send: not connected"));
+      sendError(Error("[SessionsWebSocket] Cannot send: not connected"));
       return;
     }
-    (y("[SessionsWebSocket] Sending control response"), this.ws.send(p6(A)));
+    (writeDebugLog("[SessionsWebSocket] Sending control response"), this.ws.send(trySafeStringify(A)));
   }
   sendControlRequest(A) {
     if (!this.ws || this.state !== "connected") {
-      $6(Error("[SessionsWebSocket] Cannot send: not connected"));
+      sendError(Error("[SessionsWebSocket] Cannot send: not connected"));
       return;
     }
     let q = { type: "control_request", request_id: kWz(), request: A };
-    (y(`[SessionsWebSocket] Sending control request: ${A.subtype}`),
-      this.ws.send(p6(q)));
+    (writeDebugLog(`[SessionsWebSocket] Sending control request: ${A.subtype}`),
+      this.ws.send(trySafeStringify(q)));
   }
   isConnected() {
     return this.state === "connected";
   }
   close() {
     if (
-      (y("[SessionsWebSocket] Closing connection"),
+      (writeDebugLog("[SessionsWebSocket] Closing connection"),
       (this.state = "closed"),
       this.stopPingInterval(),
       this.reconnectTimer)
@@ -19316,7 +19316,7 @@ class Wi8 {
     if (this.ws) (this.ws.close(), (this.ws = null));
   }
   reconnect() {
-    (y("[SessionsWebSocket] Force reconnecting"),
+    (writeDebugLog("[SessionsWebSocket] Force reconnecting"),
       (this.reconnectAttempts = 0),
       this.close(),
       (this.reconnectTimer = setTimeout(() => {
@@ -19349,18 +19349,18 @@ class Gi8 {
     this.callbacks = q;
   }
   connect() {
-    y(`[RemoteSessionManager] Connecting to session ${this.config.sessionId}`);
+    writeDebugLog(`[RemoteSessionManager] Connecting to session ${this.config.sessionId}`);
     let A = {
       onMessage: (q) => this.handleMessage(q),
       onConnected: () => {
-        (y("[RemoteSessionManager] Connected"), this.callbacks.onConnected?.());
+        (writeDebugLog("[RemoteSessionManager] Connected"), this.callbacks.onConnected?.());
       },
       onClose: () => {
-        (y("[RemoteSessionManager] Disconnected"),
+        (writeDebugLog("[RemoteSessionManager] Disconnected"),
           this.callbacks.onDisconnected?.());
       },
       onError: (q) => {
-        ($6(q), this.callbacks.onError?.(q));
+        (sendError(q), this.callbacks.onError?.(q));
       },
     };
     ((this.websocket = new Wi8(
@@ -19377,7 +19377,7 @@ class Gi8 {
       return;
     }
     if (A.type === "control_response") {
-      y("[RemoteSessionManager] Received control response");
+      writeDebugLog("[RemoteSessionManager] Received control response");
       return;
     }
     if (CWz(A)) this.callbacks.onMessage(A);
@@ -19385,11 +19385,11 @@ class Gi8 {
   handleControlRequest(A) {
     let { request_id: q, request: K } = A;
     if (K.subtype === "can_use_tool")
-      (y(`[RemoteSessionManager] Permission request for tool: ${K.tool_name}`),
+      (writeDebugLog(`[RemoteSessionManager] Permission request for tool: ${K.tool_name}`),
         this.pendingPermissionRequests.set(q, K),
         this.callbacks.onPermissionRequest(K, q));
     else {
-      y(
+      writeDebugLog(
         `[RemoteSessionManager] Unsupported control request subtype: ${K.subtype}`,
       );
       let Y = {
@@ -19404,12 +19404,12 @@ class Gi8 {
     }
   }
   async sendMessage(A) {
-    y(
+    writeDebugLog(
       `[RemoteSessionManager] Sending message to session ${this.config.sessionId}`,
     );
     let q = await l$8(this.config.sessionId, A);
     if (!q)
-      $6(
+      sendError(
         Error(
           `[RemoteSessionManager] Failed to send message to session ${this.config.sessionId}`,
         ),
@@ -19418,7 +19418,7 @@ class Gi8 {
   }
   respondToPermissionRequest(A, q) {
     if (!this.pendingPermissionRequests.get(A)) {
-      $6(
+      sendError(
         Error(
           `[RemoteSessionManager] No pending permission request with ID: ${A}`,
         ),
@@ -19439,27 +19439,27 @@ class Gi8 {
         },
       },
     };
-    (y(`[RemoteSessionManager] Sending permission response: ${q.behavior}`),
+    (writeDebugLog(`[RemoteSessionManager] Sending permission response: ${q.behavior}`),
       this.websocket?.sendControlResponse(Y));
   }
   isConnected() {
     return this.websocket?.isConnected() ?? !1;
   }
   cancelSession() {
-    (y("[RemoteSessionManager] Sending interrupt signal"),
+    (writeDebugLog("[RemoteSessionManager] Sending interrupt signal"),
       this.websocket?.sendControlRequest({ subtype: "interrupt" }));
   }
   getSessionId() {
     return this.config.sessionId;
   }
   disconnect() {
-    (y("[RemoteSessionManager] Disconnecting"),
+    (writeDebugLog("[RemoteSessionManager] Disconnecting"),
       this.websocket?.close(),
       (this.websocket = null),
       this.pendingPermissionRequests.clear());
   }
   reconnect() {
-    (y("[RemoteSessionManager] Reconnecting WebSocket"),
+    (writeDebugLog("[RemoteSessionManager] Reconnecting WebSocket"),
       this.websocket?.reconnect());
   }
 }
@@ -19498,7 +19498,7 @@ function h86({ newState: A, oldState: q }) {
     try {
       if ((Pg6(), Wg6(), A.settings.env !== q.settings.env)) S86();
     } catch (K) {
-      $6(
+      sendError(
         K instanceof Error
           ? K
           : Error(`Failed to apply settings changes: ${K}`),
@@ -19519,7 +19519,7 @@ async function bNq() {
   try {
     let A = await IU();
     if (!A) {
-      y("Not in a GitHub repository, skipping path mapping update");
+      writeDebugLog("Not in a GitHub repository, skipping path mapping update");
       return;
     }
     let q = HA(),
@@ -19533,15 +19533,15 @@ async function bNq() {
     let w = A.toLowerCase(),
       $ = getSettings().githubRepoPaths?.[w] ?? [];
     if ($[0] === z) {
-      y(`Path ${z} already tracked for repo ${w}`);
+      writeDebugLog(`Path ${z} already tracked for repo ${w}`);
       return;
     }
     let O = $.filter((j) => j !== z),
       H = [z, ...O];
     (updateSettings((j) => ({ ...j, githubRepoPaths: { ...j.githubRepoPaths, [w]: H } })),
-      y(`Added ${z} to tracked paths for repo ${w}`));
+      writeDebugLog(`Added ${z} to tracked paths for repo ${w}`));
   } catch (A) {
-    y(`Error updating repo path mapping: ${A}`);
+    writeDebugLog(`Error updating repo path mapping: ${A}`);
   }
 }
 function uNq(A) {
@@ -19574,7 +19574,7 @@ function gNq(A, q) {
   if (w.length === 0) delete _[Y];
   else _[Y] = w;
   (updateSettings(($) => ({ ...$, githubRepoPaths: _ })),
-    y(`Removed ${q} from tracked paths for repo ${Y}`));
+    writeDebugLog(`Removed ${q} from tracked paths for repo ${Y}`));
 }
 var fi8 = E(() => {
   o7();
@@ -19588,7 +19588,7 @@ var fi8 = E(() => {
 var FNq = {};
 s1(FNq, { ApproveApiKey: () => Ti8 });
 function Ti8(A) {
-  let q = w6(17),
+  let q = reactMemoCache(17),
     { customApiKeyTruncated: K, onDone: Y } = A,
     z;
   if (q[0] !== K || q[1] !== Y)
@@ -19751,15 +19751,15 @@ async function hWz() {
       },
       w = (await Promise.all(K.map(Y))).find((_) => !_.success);
     if (w)
-      n("tengu_preflight_check_failed", {
+      emitEvent("tengu_preflight_check_failed", {
         isConnectivityError: !1,
         hasErrorMessage: !!w.error,
       });
     return w || { success: !0 };
   } catch (A) {
     return (
-      $6(A),
-      n("tengu_preflight_check_failed", { isConnectivityError: !0 }),
+      sendError(A),
+      emitEvent("tengu_preflight_check_failed", { isConnectivityError: !0 }),
       {
         success: !1,
         error: `Connectivity check error: ${A instanceof Error ? A.code || A.message : String(A)}`,
@@ -19768,7 +19768,7 @@ async function hWz() {
   }
 }
 function UNq(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     { onSuccess: K } = A,
     [Y, z] = pV6.useState(null),
     [w, _] = pV6.useState(!0),
@@ -19880,8 +19880,8 @@ var dNq = E(() => {
   ((QC = Y6(W6(), 1)), (pV6 = Y6(W6(), 1)));
 });
 function hR1() {
-  let A = w6(35),
-    [q] = E7();
+  let A = reactMemoCache(35),
+    [q] = useTheme();
   // Klaudia: Replaced pixel art welcome screen with ASCII banner
   {
     let f;
@@ -19935,7 +19935,7 @@ function hR1() {
   }
 }
 function xWz(A) {
-  let q = w6(44),
+  let q = reactMemoCache(44),
     { theme: K, welcomeMessage: Y } = A;
   if (["light", "light-daltonized", "light-ansi"].includes(K)) {
     let S;
@@ -20369,14 +20369,14 @@ s1(cNq, { Onboarding: () => bWz });
 function bWz({ onDone: A }) {
   let [q, K] = QV6.useState(0),
     Y = PJ(),
-    [z, w] = E7();
+    [z, w] = useTheme();
   QV6.useEffect(() => {
-    n("tengu_began_setup", { oauthEnabled: Y });
+    emitEvent("tengu_began_setup", { oauthEnabled: Y });
   }, [Y]);
   function _() {
     if (q < X.length - 1) {
       let G = q + 1;
-      (K(G), n("tengu_onboarding_step", { oauthEnabled: Y, stepId: X[G]?.id }));
+      (K(G), emitEvent("tengu_onboarding_step", { oauthEnabled: Y, stepId: X[G]?.id }));
     } else A();
   }
   function $(G) {
@@ -20666,7 +20666,7 @@ var _Vq = {};
 s1(_Vq, { TrustDialog: () => uWz });
 import { homedir as wVq } from "os";
 function uWz(A) {
-  let q = w6(33),
+  let q = reactMemoCache(33),
     { onDone: K, commands: Y } = A,
     z;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -20747,7 +20747,7 @@ function uWz(A) {
   if (q[12] !== I)
     ((g = () => {
       let v6 = wVq() === y1();
-      n("tengu_trust_dialog_shown", {
+      emitEvent("tengu_trust_dialog_shown", {
         isHomeDir: v6,
         hasMcpServers: $,
         hasHooks: j,
@@ -20773,7 +20773,7 @@ function uWz(A) {
       }
       let z6 = wVq() === y1();
       if (
-        (n("tengu_trust_dialog_accept", {
+        (emitEvent("tengu_trust_dialog_accept", {
           isHomeDir: z6,
           hasMcpServers: $,
           hasHooks: j,
@@ -20962,7 +20962,7 @@ var $Vq = E(() => {
 var OVq = {};
 s1(OVq, { BypassPermissionsModeDialog: () => cWz });
 function cWz(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { onAccept: K } = A,
     Y;
   if (q[0] === Symbol.for("react.memo_cache_sentinel")) ((Y = []), (q[0] = Y));
@@ -20973,7 +20973,7 @@ function cWz(A) {
     ((z = function (J) {
       A: switch (J) {
         case "accept": {
-          (n("tengu_bypass_permissions_mode_dialog_accept", {}),
+          (emitEvent("tengu_bypass_permissions_mode_dialog_accept", {}),
             iA("userSettings", { skipDangerousModePermissionPrompt: !0 }),
             K());
           break A;
@@ -21039,7 +21039,7 @@ function lWz() {
   _3(0);
 }
 function iWz() {
-  n("tengu_bypass_permissions_mode_dialog_shown", {});
+  emitEvent("tengu_bypass_permissions_mode_dialog_shown", {});
 }
 var Kn;
 var HVq = E(() => {
@@ -21056,14 +21056,14 @@ var HVq = E(() => {
 var jVq = {};
 s1(jVq, { ClaudeInChromeOnboarding: () => oWz });
 function oWz(A) {
-  let q = w6(20),
+  let q = reactMemoCache(20),
     { onDone: K } = A,
     [Y, z] = O0.default.useState(!1),
     w,
     _;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
     ((w = () => {
-      (n("tengu_claude_in_chrome_onboarding_shown", {}), Fi().then(z), updateSettings(aWz));
+      (emitEvent("tengu_claude_in_chrome_onboarding_shown", {}), Fi().then(z), updateSettings(aWz));
     }),
       (_ = []),
       (q[0] = w),
@@ -21255,7 +21255,7 @@ async function qGz(A) {
     _ = z.data;
   if (_.type === "text") w = _.file.content;
   return (
-    n("tengu_session_memory_file_read", { content_length: w.length }),
+    emitEvent("tengu_session_memory_file_read", { content_length: w.length }),
     { memoryPath: Y, currentMemory: w }
   );
 }
@@ -21348,7 +21348,7 @@ var PVq = E(() => {
       let O = q[q.length - 1],
         H = O ? Al(O) : void 0,
         j = xD4();
-      (n("tengu_session_memory_extraction", {
+      (emitEvent("tengu_session_memory_extraction", {
         input_tokens: H?.input_tokens,
         output_tokens: H?.output_tokens,
         cache_read_input_tokens: H?.cache_read_input_tokens ?? void 0,
@@ -21398,7 +21398,7 @@ var GVq = E(() => {
 });
 function OGz() {
   let A = zQ(DM(), { io: "input" });
-  return p6(A, null, 2);
+  return trySafeStringify(A, null, 2);
 }
 function ZVq() {
   return;
@@ -22119,7 +22119,7 @@ var vVq = E(() => {
       "## File Format",
       "",
       "```json",
-      p6(GGz, null, 2),
+      trySafeStringify(GGz, null, 2),
       "```",
       "",
       "Always include the `$schema` and `$docs` fields.",
@@ -22147,7 +22147,7 @@ var vVq = E(() => {
       "Set a key to `null` to remove its default binding:",
       "",
       "```json",
-      p6(ZGz, null, 2),
+      trySafeStringify(ZGz, null, 2),
       "```",
     ].join(`
 `)),
@@ -22165,12 +22165,12 @@ var vVq = E(() => {
       "### Rebind a key",
       "To change the external editor shortcut from `ctrl+g` to `ctrl+e`:",
       "```json",
-      p6(fGz, null, 2),
+      trySafeStringify(fGz, null, 2),
       "```",
       "",
       "### Add a chord binding",
       "```json",
-      p6(TGz, null, 2),
+      trySafeStringify(TGz, null, 2),
       "```",
     ].join(`
 `)),
@@ -28381,7 +28381,7 @@ async function rvq() {
     return (await fZz(q, NZz()), bR1(), { status: "restored" });
   } catch (K) {
     return (
-      $6(Error(`Failed to restore iTerm2 settings with: ${K}`)),
+      sendError(Error(`Failed to restore iTerm2 settings with: ${K}`)),
       bR1(),
       { status: "failed", backupPath: q }
     );
@@ -28438,7 +28438,7 @@ async function VZz(A, q, K, Y, z, w, _, $, O) {
         ),
       );
   } catch (M) {
-    $6(M instanceof Error ? M : Error(String(M)));
+    sendError(M instanceof Error ? M : Error(String(M)));
   }
   MH(A);
   let j = Date.now();
@@ -28489,9 +28489,9 @@ async function VZz(A, q, K, Y, z, w, _, $, O) {
       N = $ ? `pr-${$}` : (z ?? Sc()),
       V = `worktree-${N}`,
       v = w ? Xb8(f, V) : void 0,
-      L = await ic6(d1(), N, v, $ ? { prNumber: $ } : void 0);
+      L = await ic6(getSessionId(), N, v, $ ? { prNumber: $ } : void 0);
     if (
-      (n("tengu_worktree_created", {
+      (emitEvent("tengu_worktree_created", {
         changed_files: G.length,
         untracked_files: Z.length,
         tmux_enabled: w,
@@ -28517,7 +28517,7 @@ To attach: ${H1.bold(`tmux attach -t ${v}`)}`),
   }
   if (
     ($8("info", "setup_background_jobs_starting"),
-    !X1(process.env.CLAUDE_CODE_SIMPLE))
+    !isTruthy(process.env.CLAUDE_CODE_SIMPLE))
   ) {
     if (process.env.CLAUDE_CODE_ENTRYPOINT !== "local-agent") ivq();
     MVq();
@@ -28526,7 +28526,7 @@ To attach: ${H1.bold(`tmux attach -t ${v}`)}`),
     $8("info", "setup_background_jobs_launched"),
     Bq("setup_before_prefetch"),
     $8("info", "setup_prefetch_starting"));
-  let J = C7() && X1(process.env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL);
+  let J = C7() && isTruthy(process.env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL);
   if (!J) rG(pw());
   (Promise.resolve()
     .then(() => (A96(), ZT8))
@@ -28557,7 +28557,7 @@ To attach: ${H1.bold(`tmux attach -t ${v}`)}`),
   }
   let X = aw();
   if (X.lastCost !== void 0 && X.lastDuration !== void 0)
-    n("tengu_exit", {
+    emitEvent("tengu_exit", {
       last_session_cost: X.lastCost,
       last_session_api_duration: X.lastAPIDuration,
       last_session_tool_duration: X.lastToolDuration,
@@ -28611,7 +28611,7 @@ var mR1 = E(() => {
 var svq = {};
 s1(svq, { InvalidSettingsDialog: () => vZz });
 function vZz(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     { settingsErrors: K, onContinue: Y, onExit: z } = A,
     w;
   if (q[0] !== Y || q[1] !== z)
@@ -28937,7 +28937,7 @@ function Li8(A) {
         A.logResult({ type: "error", queryName: A.name, error: J, uuid: Y }, q);
       }
     } catch (K) {
-      $6(K instanceof Error ? K : Error(`API query hook ${A.name} failed`));
+      sendError(K instanceof Error ? K : Error(`API query hook ${A.name} failed`));
     }
   };
 }
@@ -29019,7 +29019,7 @@ Based on your analysis, output:
       if (A.type === "success") {
         let K = A.result;
         if (K.isFrustrated || K.hasPRRequest)
-          n("tengu_session_quality_classification", {
+          emitEvent("tengu_session_quality_classification", {
             uuid: A.uuid,
             isFrustrated: K.isFrustrated ? 1 : 0,
             hasPRRequest: K.hasPRRequest ? 1 : 0,
@@ -29040,7 +29040,7 @@ async function $kq(A, q) {
   try {
     w = await Y.readFile(z, "utf-8");
   } catch {
-    $6(Error(`Failed to read skill file for improvement: ${z}`));
+    sendError(Error(`Failed to read skill file for improvement: ${z}`));
     return;
   }
   let _ = q.map((j) => `- ${j.section}: ${j.change}`).join(`
@@ -29092,13 +29092,13 @@ Rules:
       .trim(),
     H = zq(O, "updated_file");
   if (!H) {
-    $6(Error("Skill improvement apply: no updated_file tag in response"));
+    sendError(Error("Skill improvement apply: no updated_file tag in response"));
     return;
   }
   try {
     await Y.writeFile(z, H, "utf-8");
   } catch (j) {
-    $6(j instanceof Error ? j : Error(`Failed to write skill file: ${z}`));
+    sendError(j instanceof Error ? j : Error(`Failed to write skill file: ${z}`));
   }
 }
 var Ri8 = E(() => {
@@ -29140,10 +29140,10 @@ async function Okq(A, q, K) {
           if ((await P1().unlink(fT(A, w.name)), K)) Y.messages++;
           else Y.errors++;
       } catch (_) {
-        $6(_);
+        sendError(_);
       }
   } catch (z) {
-    if (z instanceof Error && "code" in z && z.code !== "ENOENT") $6(z);
+    if (z instanceof Error && "code" in z && z.code !== "ENOENT") sendError(z);
   }
   return Y;
 }
@@ -29170,7 +29170,7 @@ async function QZz() {
       } catch {}
     }
   } catch (w) {
-    if (w instanceof Error && "code" in w && w.code !== "ENOENT") $6(w);
+    if (w instanceof Error && "code" in w && w.code !== "ENOENT") sendError(w);
   }
   return z;
 }
@@ -29322,7 +29322,7 @@ async function lZz() {
       await K.rmdir(z);
     } catch {}
   } catch (Y) {
-    $6(Y);
+    sendError(Y);
   }
   return q;
 }
@@ -29351,7 +29351,7 @@ async function iZz() {
       await K.rmdir(z);
     } catch {}
   } catch (Y) {
-    $6(Y);
+    sendError(Y);
   }
   return q;
 }
@@ -29378,14 +29378,14 @@ async function nZz() {
         q.errors++;
       }
   } catch (Y) {
-    $6(Y);
+    sendError(Y);
   }
   return q;
 }
 async function jkq() {
   let { errors: A } = al();
   if (A.length > 0 && PZq("cleanupPeriodDays")) {
-    y(
+    writeDebugLog(
       "Skipping cleanup: settings have validation errors but cleanupPeriodDays was explicitly set. Fix settings errors to enable cleanup.",
     );
     return;
@@ -29440,15 +29440,15 @@ async function oZz(A, q) {
       let z = await SN6(A, Y);
       if (z.success && !z.alreadyUpToDate)
         ((K = !0),
-          y(
+          writeDebugLog(
             `Plugin autoupdate: updated ${A} from ${z.oldVersion} to ${z.newVersion}`,
           ));
       else if (!z.alreadyUpToDate)
-        y(`Plugin autoupdate: failed to update ${A}: ${z.message}`, {
+        writeDebugLog(`Plugin autoupdate: failed to update ${A}: ${z.message}`, {
           level: "warn",
         });
     } catch (z) {
-      y(
+      writeDebugLog(
         `Plugin autoupdate: error updating ${A}: ${z instanceof Error ? z.message : String(z)}`,
         { level: "warn" },
       );
@@ -29482,7 +29482,7 @@ async function aZz(A) {
 function Xkq() {
   (async () => {
     if (fN6()) {
-      y("Plugin autoupdate: skipped (auto-updater disabled)");
+      writeDebugLog("Plugin autoupdate: skipped (auto-updater disabled)");
       return;
     }
     try {
@@ -29494,7 +29494,7 @@ function Xkq() {
             try {
               await Ue(z, void 0, { disableCredentialHelper: !0 });
             } catch (w) {
-              y(
+              writeDebugLog(
                 `Plugin autoupdate: failed to refresh marketplace ${z}: ${w instanceof Error ? w.message : String(w)}`,
                 { level: "warn" },
               );
@@ -29503,16 +29503,16 @@ function Xkq() {
         )
       ).filter((z) => z.status === "rejected");
       if (K.length > 0)
-        y(`Plugin autoupdate: ${K.length} marketplace refresh(es) failed`, {
+        writeDebugLog(`Plugin autoupdate: ${K.length} marketplace refresh(es) failed`, {
           level: "warn",
         });
-      y("Plugin autoupdate: checking installed plugins");
+      writeDebugLog("Plugin autoupdate: checking installed plugins");
       let Y = await aZz(A);
       if (Y.length > 0)
         if (gR1) gR1(Y);
         else Lr6 = Y;
     } catch (A) {
-      $6(A instanceof Error ? A : Error(String(A)));
+      sendError(A instanceof Error ? A : Error(String(A)));
     }
   })();
 }
@@ -29587,7 +29587,7 @@ async function Zkq() {
     if (!Kfz())
       return (
         $8("info", "settings_sync_download_skipped"),
-        n("tengu_settings_sync_download_skipped", {}),
+        emitEvent("tengu_settings_sync_download_skipped", {}),
         !1
       );
     $8("info", "settings_sync_download_starting");
@@ -29595,13 +29595,13 @@ async function Zkq() {
     if (!A.success)
       return (
         $8("warn", "settings_sync_download_fetch_failed"),
-        n("tengu_settings_sync_download_fetch_failed", {}),
+        emitEvent("tengu_settings_sync_download_fetch_failed", {}),
         !1
       );
     if (A.isEmpty)
       return (
         $8("info", "settings_sync_download_empty"),
-        n("tengu_settings_sync_download_empty", {}),
+        emitEvent("tengu_settings_sync_download_empty", {}),
         !1
       );
     let q = A.data.content.entries,
@@ -29611,7 +29611,7 @@ async function Zkq() {
         entryCount: Object.keys(q).length,
       }),
       await $fz(q, K),
-      n("tengu_settings_sync_download_success", {
+      emitEvent("tengu_settings_sync_download_success", {
         entryCount: Object.keys(q).length,
       }),
       !0
@@ -29619,7 +29619,7 @@ async function Zkq() {
   } catch {
     return (
       $8("error", "settings_sync_download_error"),
-      n("tengu_settings_sync_download_error", {}),
+      emitEvent("tengu_settings_sync_download_error", {}),
       !1
     );
   }
@@ -29810,7 +29810,7 @@ function UV6(A, q, K, Y) {
         bh(w));
     return { ...A, decisionReason: z };
   } else if (A.behavior === "deny" && A.interrupt)
-    (y(
+    (writeDebugLog(
       `SDK permission prompt deny+interrupt: tool=${q.name} message=${A.message}`,
     ),
       Y.abortController.abort());
@@ -30310,7 +30310,7 @@ class Cr6 {
             q.response.subtype === "success" ? q.response.response : void 0
           )?.toolUseID;
           if (typeof w === "string" && this.resolvedToolUseIds.has(w)) {
-            y(
+            writeDebugLog(
               `Ignoring duplicate control_response for already-resolved toolUseID=${w} request_id=${q.response.request_id}`,
             );
             return;
@@ -30347,7 +30347,7 @@ class Cr6 {
         q.type !== "assistant" &&
         q.type !== "system"
       ) {
-        y(`Ignoring unknown message type: ${q.type}`, { level: "warn" });
+        writeDebugLog(`Ignoring unknown message type: ${q.type}`, { level: "warn" });
         return;
       }
       if (q.type === "control_request") {
@@ -30365,7 +30365,7 @@ class Cr6 {
   }
   async write(A) {
     L4(
-      p6(A) +
+      trySafeStringify(A) +
         `
 `,
     );
@@ -30614,7 +30614,7 @@ class Sr6 {
   }
   async connect() {
     if (this.state !== "idle" && this.state !== "reconnecting") {
-      (y(`WebSocketTransport: Cannot connect, current state is ${this.state}`, {
+      (writeDebugLog(`WebSocketTransport: Cannot connect, current state is ${this.state}`, {
         level: "error",
       }),
         $8("error", "cli_websocket_connect_failed"));
@@ -30622,12 +30622,12 @@ class Sr6 {
     }
     ((this.state = "reconnecting"),
       (this.connectStartTime = Date.now()),
-      y(`WebSocketTransport: Opening ${this.url.href}`),
+      writeDebugLog(`WebSocketTransport: Opening ${this.url.href}`),
       $8("info", "cli_websocket_connect_opening"));
     let A = { ...this.headers };
     if (this.lastSentId)
       ((A["X-Last-Request-Id"] = this.lastSentId),
-        y(
+        writeDebugLog(
           `WebSocketTransport: Adding X-Last-Request-Id header: ${this.lastSentId}`,
         ));
     if (typeof Bun < "u") {
@@ -30667,12 +30667,12 @@ class Sr6 {
       this.onData(q);
   };
   onBunError = () => {
-    (y("WebSocketTransport: Error", { level: "error" }),
+    (writeDebugLog("WebSocketTransport: Error", { level: "error" }),
       $8("error", "cli_websocket_connect_error"));
   };
   onBunClose = (A) => {
     let q = A.code === 1000 || A.code === 1001;
-    (y(
+    (writeDebugLog(
       `WebSocketTransport: Closed: ${A.code}`,
       q ? void 0 : { level: "error" },
     ),
@@ -30697,12 +30697,12 @@ class Sr6 {
       this.onData(q);
   };
   onNodeError = (A) => {
-    (y(`WebSocketTransport: Error: ${A.message}`, { level: "error" }),
+    (writeDebugLog(`WebSocketTransport: Error: ${A.message}`, { level: "error" }),
       $8("error", "cli_websocket_connect_error"));
   };
   onNodeClose = (A, q) => {
     let K = A === 1000 || A === 1001;
-    (y(`WebSocketTransport: Closed: ${A}`, K ? void 0 : { level: "error" }),
+    (writeDebugLog(`WebSocketTransport: Closed: ${A}`, K ? void 0 : { level: "error" }),
       $8("error", "cli_websocket_connect_closed"),
       this.handleConnectionError(A));
   };
@@ -30711,7 +30711,7 @@ class Sr6 {
   };
   handleOpenEvent() {
     let A = Date.now() - this.connectStartTime;
-    (y("WebSocketTransport: Connected"),
+    (writeDebugLog("WebSocketTransport: Connected"),
       $8("info", "cli_websocket_connect_connected", { duration_ms: A }),
       (this.reconnectAttempts = 0),
       (this.reconnectStartTime = null),
@@ -30727,7 +30727,7 @@ class Sr6 {
   sendLine(A) {
     if (!this.ws || this.state !== "connected")
       return (
-        y("WebSocketTransport: Not connected"),
+        writeDebugLog("WebSocketTransport: Not connected"),
         $8("info", "cli_websocket_send_not_connected"),
         !1
       );
@@ -30735,7 +30735,7 @@ class Sr6 {
       return (this.ws.send(A), !0);
     } catch (q) {
       return (
-        y(`WebSocketTransport: Failed to send: ${q}`, { level: "error" }),
+        writeDebugLog(`WebSocketTransport: Failed to send: ${q}`, { level: "error" }),
         $8("error", "cli_websocket_send_error"),
         this.handleConnectionError(),
         !1
@@ -30765,7 +30765,7 @@ class Sr6 {
   }
   handleConnectionError(A) {
     if (
-      (y(
+      (writeDebugLog(
         `WebSocketTransport: Disconnected from ${this.url.href}` +
           (A != null ? ` (code ${A})` : ""),
       ),
@@ -30780,13 +30780,13 @@ class Sr6 {
       if (z.Authorization !== this.headers.Authorization)
         (Object.assign(this.headers, z),
           (q = !0),
-          y(
+          writeDebugLog(
             "WebSocketTransport: 4003 received but headers refreshed, scheduling reconnect",
           ),
           $8("info", "cli_websocket_4003_token_refreshed"));
     }
     if (A != null && cfz.has(A) && !q) {
-      (y(`WebSocketTransport: Permanent close code ${A}, not reconnecting`, {
+      (writeDebugLog(`WebSocketTransport: Permanent close code ${A}, not reconnecting`, {
         level: "error",
       }),
         $8("error", "cli_websocket_permanent_close", { closeCode: A }),
@@ -30804,7 +30804,7 @@ class Sr6 {
       this.lastReconnectAttemptTime !== null &&
       K - this.lastReconnectAttemptTime > dfz
     )
-      (y(
+      (writeDebugLog(
         `WebSocketTransport: Detected system sleep (${Math.round((K - this.lastReconnectAttemptTime) / 1000)}s gap), resetting reconnection budget`,
       ),
         $8("info", "cli_websocket_sleep_detected", {
@@ -30820,12 +30820,12 @@ class Sr6 {
       if (!q && this.refreshHeaders) {
         let _ = this.refreshHeaders();
         (Object.assign(this.headers, _),
-          y("WebSocketTransport: Refreshed headers for reconnect"));
+          writeDebugLog("WebSocketTransport: Refreshed headers for reconnect"));
       }
       ((this.state = "reconnecting"), this.reconnectAttempts++);
       let z = Math.min(Ffz * Math.pow(2, this.reconnectAttempts - 1), Lkq),
         w = Math.max(0, z + z * 0.25 * (2 * Math.random() - 1));
-      (y(
+      (writeDebugLog(
         `WebSocketTransport: Reconnecting in ${Math.round(w)}ms (attempt ${this.reconnectAttempts}, ${Math.round(Y / 1000)}s elapsed)`,
       ),
         $8("error", "cli_websocket_reconnect_attempt", {
@@ -30835,7 +30835,7 @@ class Sr6 {
           ((this.reconnectTimer = null), this.connect());
         }, w)));
     } else if (
-      (y(
+      (writeDebugLog(
         `WebSocketTransport: Reconnection time budget exhausted after ${Math.round(Y / 1000)}s for ${this.url.href}`,
         { level: "error" },
       ),
@@ -30872,7 +30872,7 @@ class Sr6 {
           w.length === 0)
         )
           this.lastSentId = null;
-        (y(
+        (writeDebugLog(
           `WebSocketTransport: Evicted ${K} confirmed messages, ${w.length} remaining`,
         ),
           $8("info", "cli_websocket_evicted_confirmed_messages", {
@@ -30883,15 +30883,15 @@ class Sr6 {
     }
     let Y = q.slice(K);
     if (Y.length === 0) {
-      (y("WebSocketTransport: No new messages to replay"),
+      (writeDebugLog("WebSocketTransport: No new messages to replay"),
         $8("info", "cli_websocket_no_messages_to_replay"));
       return;
     }
-    (y(`WebSocketTransport: Replaying ${Y.length} buffered messages`),
+    (writeDebugLog(`WebSocketTransport: Replaying ${Y.length} buffered messages`),
       $8("info", "cli_websocket_messages_to_replay", { count: Y.length }));
     for (let z of Y) {
       let w =
-        p6(z) +
+        trySafeStringify(z) +
         `
 `;
       if (!this.sendLine(w)) {
@@ -30922,13 +30922,13 @@ class Sr6 {
     if ("uuid" in A && typeof A.uuid === "string")
       (this.messageBuffer.add(A), (this.lastSentId = A.uuid));
     let q =
-      p6(A) +
+      trySafeStringify(A) +
       `
 `;
     if (this.state !== "connected") return;
     let K = this.sessionId ? ` session=${this.sessionId}` : "",
       Y = this.getControlMessageDetailLabel(A);
-    (y(`WebSocketTransport: Sending message type=${A.type}${K}${Y}`),
+    (writeDebugLog(`WebSocketTransport: Sending message type=${A.type}${K}${Y}`),
       this.sendLine(q));
   }
   getControlMessageDetailLabel(A) {
@@ -30949,7 +30949,7 @@ class Sr6 {
       (this.pingInterval = setInterval(() => {
         if (this.state === "connected" && this.ws) {
           if (!this.pongReceived) {
-            (y(
+            (writeDebugLog(
               "WebSocketTransport: No pong received, connection appears dead",
               { level: "error" },
             ),
@@ -30961,7 +30961,7 @@ class Sr6 {
           try {
             this.ws.ping?.();
           } catch (A) {
-            (y(`WebSocketTransport: Ping failed: ${A}`, { level: "error" }),
+            (writeDebugLog(`WebSocketTransport: Ping failed: ${A}`, { level: "error" }),
               $8("error", "cli_websocket_ping_failed"));
           }
         }
@@ -30972,19 +30972,19 @@ class Sr6 {
       (clearInterval(this.pingInterval), (this.pingInterval = null));
   }
   startKeepaliveInterval() {
-    if ((this.stopKeepaliveInterval(), X1(process.env.CLAUDE_CODE_REMOTE)))
+    if ((this.stopKeepaliveInterval(), isTruthy(process.env.CLAUDE_CODE_REMOTE)))
       return;
     this.keepAliveInterval = setInterval(() => {
       if (this.state === "connected" && this.ws)
         try {
           (this.ws.send(
-            p6({ type: "keep_alive" }) +
+            trySafeStringify({ type: "keep_alive" }) +
               `
 `,
           ),
-            y("WebSocketTransport: Sent periodic keep_alive data frame"));
+            writeDebugLog("WebSocketTransport: Sent periodic keep_alive data frame"));
         } catch (A) {
-          (y(`WebSocketTransport: Periodic keep_alive failed: ${A}`, {
+          (writeDebugLog(`WebSocketTransport: Periodic keep_alive failed: ${A}`, {
             level: "error",
           }),
             $8("error", "cli_websocket_keepalive_failed"));
@@ -31136,7 +31136,7 @@ var pi8 = E(() => {
           jitterMs: 1000,
           send: (w) => this.postOnce(w),
         })),
-        y(`HybridTransport: POST URL = ${this.postUrl}`),
+        writeDebugLog(`HybridTransport: POST URL = ${this.postUrl}`),
         $8("info", "cli_hybrid_transport_initialized"));
     }
     async write(A) {
@@ -31194,7 +31194,7 @@ var pi8 = E(() => {
     async postOnce(A) {
       let q = _G();
       if (!q) {
-        (y("HybridTransport: No session token available for POST"),
+        (writeDebugLog("HybridTransport: No session token available for POST"),
           $8("warn", "cli_hybrid_post_no_token"));
         return;
       }
@@ -31211,22 +31211,22 @@ var pi8 = E(() => {
         );
       } catch (z) {
         throw (
-          y(`HybridTransport: POST error: ${z.message}`),
+          writeDebugLog(`HybridTransport: POST error: ${z.message}`),
           $8("warn", "cli_hybrid_post_network_error"),
           z
         );
       }
       if (Y.status >= 200 && Y.status < 300) {
-        y(`HybridTransport: POST success count=${A.length}`);
+        writeDebugLog(`HybridTransport: POST success count=${A.length}`);
         return;
       }
       if (Y.status >= 400 && Y.status < 500 && Y.status !== 429) {
-        (y(`HybridTransport: POST returned ${Y.status} (permanent), dropping`),
+        (writeDebugLog(`HybridTransport: POST returned ${Y.status} (permanent), dropping`),
           $8("warn", "cli_hybrid_post_client_error", { status: Y.status }));
         return;
       }
       throw (
-        y(`HybridTransport: POST returned ${Y.status} (retryable)`),
+        writeDebugLog(`HybridTransport: POST returned ${Y.status} (retryable)`),
         $8("warn", "cli_hybrid_post_retryable_error", { status: Y.status }),
         Error(`POST failed with ${Y.status}`)
       );
@@ -31297,13 +31297,13 @@ class xr6 {
       (this.sessionId = K),
       (this.refreshHeaders = Y),
       (this.postUrl = YTz(A)),
-      y(`SSETransport: SSE URL = ${A.href}`),
-      y(`SSETransport: POST URL = ${this.postUrl}`),
+      writeDebugLog(`SSETransport: SSE URL = ${A.href}`),
+      writeDebugLog(`SSETransport: POST URL = ${this.postUrl}`),
       $8("info", "cli_sse_transport_initialized"));
   }
   async connect() {
     if (this.state !== "idle" && this.state !== "reconnecting") {
-      (y(`SSETransport: Cannot connect, current state is ${this.state}`, {
+      (writeDebugLog(`SSETransport: Cannot connect, current state is ${this.state}`, {
         level: "error",
       }),
         $8("error", "cli_sse_connect_failed"));
@@ -31324,7 +31324,7 @@ class xr6 {
     if (K.Cookie) delete Y.Authorization;
     if (this.lastSequenceNum > 0)
       Y["Last-Event-ID"] = String(this.lastSequenceNum);
-    (y(`SSETransport: Opening ${q.href}`),
+    (writeDebugLog(`SSETransport: Opening ${q.href}`),
       $8("info", "cli_sse_connect_opening"),
       (this.abortController = new AbortController()));
     try {
@@ -31335,7 +31335,7 @@ class xr6 {
       if (!z.ok) {
         let _ = efz.has(z.status);
         if (
-          (y(`SSETransport: HTTP ${z.status}${_ ? " (permanent)" : ""}`, {
+          (writeDebugLog(`SSETransport: HTTP ${z.status}${_ ? " (permanent)" : ""}`, {
             level: "error",
           }),
           $8("error", "cli_sse_connect_http_error", { status: z.status }),
@@ -31348,23 +31348,23 @@ class xr6 {
         return;
       }
       if (!z.body) {
-        (y("SSETransport: No response body"), this.handleConnectionError());
+        (writeDebugLog("SSETransport: No response body"), this.handleConnectionError());
         return;
       }
       let w = Date.now() - A;
-      (y("SSETransport: Connected"),
+      (writeDebugLog("SSETransport: Connected"),
         $8("info", "cli_sse_connect_connected", { duration_ms: w }),
         (this.state = "connected"),
         (this.reconnectAttempts = 0),
         (this.reconnectStartTime = null),
         this.resetLivenessTimer(),
         VP1(() => {
-          y("SSETransport: Session activity signal (no-op for SSE reads)");
+          writeDebugLog("SSETransport: Session activity signal (no-op for SSE reads)");
         }),
         await this.readStream(z.body));
     } catch (z) {
       if (this.abortController?.signal.aborted) return;
-      (y(
+      (writeDebugLog(
         `SSETransport: Connection error: ${z instanceof Error ? z.message : String(z)}`,
         { level: "error" },
       ),
@@ -31388,7 +31388,7 @@ class xr6 {
             let H = parseInt(O.id, 10);
             if (!isNaN(H)) {
               if (this.seenSequenceNums.has(H))
-                (y(
+                (writeDebugLog(
                   `SSETransport: DUPLICATE frame seq=${H} (lastSequenceNum=${this.lastSequenceNum}, seenCount=${this.seenSequenceNums.size})`,
                   { level: "warn" },
                 ),
@@ -31409,7 +31409,7 @@ class xr6 {
       }
     } catch (z) {
       if (this.abortController?.signal.aborted) return;
-      (y(
+      (writeDebugLog(
         `SSETransport: Stream read error: ${z instanceof Error ? z.message : String(z)}`,
         { level: "error" },
       ),
@@ -31418,7 +31418,7 @@ class xr6 {
       q.releaseLock();
     }
     if (this.state !== "closing" && this.state !== "closed")
-      (y("SSETransport: Stream ended, reconnecting"),
+      (writeDebugLog("SSETransport: Stream ended, reconnecting"),
         this.handleConnectionError());
   }
   handleSSEData(A) {
@@ -31426,7 +31426,7 @@ class xr6 {
     try {
       q = w8(A);
     } catch (K) {
-      y(
+      writeDebugLog(
         `SSETransport: Failed to parse SSE data: ${K instanceof Error ? K.message : String(K)}`,
         { level: "error" },
       );
@@ -31437,17 +31437,17 @@ class xr6 {
       if (K && typeof K === "object" && "type" in K) {
         let Y = this.sessionId ? ` session=${this.sessionId}` : "",
           z = String(K.type);
-        (y(
+        (writeDebugLog(
           `SSETransport: Event seq=${q.client_event.sequence_num} event_id=${q.client_event.event_id} event_type=${q.client_event.event_type} payload_type=${z}${Y}`,
         ),
           $8("info", "cli_sse_message_received"),
           this.onData?.(
-            p6(K) +
+            trySafeStringify(K) +
               `
 `,
           ));
       } else
-        y(
+        writeDebugLog(
           `SSETransport: Ignoring client_event with no type in payload: event_id=${q.client_event.event_id}`,
         );
     }
@@ -31470,12 +31470,12 @@ class xr6 {
       if (this.refreshHeaders) {
         let z = this.refreshHeaders();
         (Object.assign(this.headers, z),
-          y("SSETransport: Refreshed headers for reconnect"));
+          writeDebugLog("SSETransport: Refreshed headers for reconnect"));
       }
       ((this.state = "reconnecting"), this.reconnectAttempts++);
       let K = Math.min(ofz * Math.pow(2, this.reconnectAttempts - 1), afz),
         Y = Math.max(0, K + K * 0.25 * (2 * Math.random() - 1));
-      (y(
+      (writeDebugLog(
         `SSETransport: Reconnecting in ${Math.round(Y)}ms (attempt ${this.reconnectAttempts}, ${Math.round(q / 1000)}s elapsed)`,
       ),
         $8("error", "cli_sse_reconnect_attempt", {
@@ -31485,7 +31485,7 @@ class xr6 {
           ((this.reconnectTimer = null), this.connect());
         }, Y)));
     } else
-      (y(
+      (writeDebugLog(
         `SSETransport: Reconnection time budget exhausted after ${Math.round(q / 1000)}s`,
         { level: "error" },
       ),
@@ -31500,7 +31500,7 @@ class xr6 {
     (this.clearLivenessTimer(),
       (this.livenessTimer = setTimeout(() => {
         ((this.livenessTimer = null),
-          y("SSETransport: Liveness timeout, reconnecting", { level: "error" }),
+          writeDebugLog("SSETransport: Liveness timeout, reconnecting", { level: "error" }),
           $8("error", "cli_sse_liveness_timeout"),
           this.abortController?.abort(),
           this.handleConnectionError());
@@ -31513,7 +31513,7 @@ class xr6 {
   async write(A) {
     let q = gM6();
     if (Object.keys(q).length === 0) {
-      (y("SSETransport: No session token available for POST"),
+      (writeDebugLog("SSETransport: No session token available for POST"),
         $8("warn", "cli_sse_post_no_token"));
       return;
     }
@@ -31522,7 +31522,7 @@ class xr6 {
       "Content-Type": "application/json",
       "anthropic-version": "2023-06-01",
     };
-    y(`SSETransport: POST body keys=${Object.keys(A).join(",")}`);
+    writeDebugLog(`SSETransport: POST body keys=${Object.keys(A).join(",")}`);
     for (let Y = 1; Y <= Ir6; Y++) {
       try {
         let w = await g8.post(this.postUrl, A, {
@@ -31530,32 +31530,32 @@ class xr6 {
           validateStatus: () => !0,
         });
         if (w.status === 200 || w.status === 201) {
-          y(`SSETransport: POST success type=${A.type}`);
+          writeDebugLog(`SSETransport: POST success type=${A.type}`);
           return;
         }
         if (
-          (y(
+          (writeDebugLog(
             `SSETransport: POST ${w.status} body=${JSON.stringify(w.data).slice(0, 200)}`,
           ),
           w.status >= 400 && w.status < 500 && w.status !== 429)
         ) {
-          (y(
+          (writeDebugLog(
             `SSETransport: POST returned ${w.status} (client error), not retrying`,
           ),
             $8("warn", "cli_sse_post_client_error", { status: w.status }));
           return;
         }
-        (y(`SSETransport: POST returned ${w.status}, attempt ${Y}/${Ir6}`),
+        (writeDebugLog(`SSETransport: POST returned ${w.status}, attempt ${Y}/${Ir6}`),
           $8("warn", "cli_sse_post_retryable_error", {
             status: w.status,
             attempt: Y,
           }));
       } catch (w) {
-        (y(`SSETransport: POST error: ${w.message}, attempt ${Y}/${Ir6}`),
+        (writeDebugLog(`SSETransport: POST error: ${w.message}, attempt ${Y}/${Ir6}`),
           $8("warn", "cli_sse_post_network_error", { attempt: Y }));
       }
       if (Y === Ir6) {
-        (y(`SSETransport: POST failed after ${Ir6} attempts, continuing`),
+        (writeDebugLog(`SSETransport: POST failed after ${Ir6} attempts, continuing`),
           $8("warn", "cli_sse_post_retries_exhausted"));
         return;
       }
@@ -31612,7 +31612,7 @@ var Qi8 = E(() => {
 });
 import { URL as zTz } from "url";
 function ykq(A, q = {}, K, Y) {
-  if (X1(process.env.CLAUDE_CODE_USE_CCR_V2)) {
+  if (isTruthy(process.env.CLAUDE_CODE_USE_CCR_V2)) {
     let z = new zTz(A.href);
     if (z.protocol === "wss:") z.protocol = "https:";
     else if (z.protocol === "ws:") z.protocol = "http:";
@@ -31622,7 +31622,7 @@ function ykq(A, q = {}, K, Y) {
     );
   }
   if (A.protocol === "ws:" || A.protocol === "wss:") {
-    if (X1(process.env.CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2))
+    if (isTruthy(process.env.CLAUDE_CODE_POST_FOR_SESSION_INGRESS_V2))
       return new hr6(A, q, K, Y);
     return new Sr6(A, q, K, Y);
   } else throw Error(`Unsupported protocol: ${A.protocol}`);
@@ -31660,7 +31660,7 @@ class Ui8 {
       await this.reportState("connected"),
       this.startHeartbeat(),
       this.wireUpSSEEventHandler(),
-      y(`CCRClient: initialized, epoch=${this.workerEpoch}`),
+      writeDebugLog(`CCRClient: initialized, epoch=${this.workerEpoch}`),
       $8("info", "cli_worker_lifecycle_initialized"));
   }
   wireUpSSEEventHandler() {
@@ -31670,7 +31670,7 @@ class Ui8 {
         this.reportDelivery(A.client_event.event_id, "received");
       else if (A.catch_up_truncated) {
         let { from_sequence_num: q, at_sequence_num: K } = A.catch_up_truncated;
-        $6(
+        sendError(
           Error(
             `SSE catch-up truncated: missed events from seq ${q} to ${K}. Some client events may have been lost.`,
           ),
@@ -31704,12 +31704,12 @@ class Ui8 {
       });
       if (_.status >= 200 && _.status < 300) return !0;
       if (_.status === 409) this.handleEpochMismatch();
-      return (y(`CCRClient: ${Y} returned ${_.status}`, { level: "warn" }), !1);
+      return (writeDebugLog(`CCRClient: ${Y} returned ${_.status}`, { level: "warn" }), !1);
     } catch (_) {
       if (_ instanceof Error && _.message === "CCRClient: Epoch mismatch (409)")
         throw _;
       return (
-        y(
+        writeDebugLog(
           `CCRClient: ${Y} failed: ${_ instanceof Error ? _.message : String(_)}`,
           { level: "warn" },
         ),
@@ -31731,11 +31731,11 @@ class Ui8 {
         "PUT worker",
       )
     )
-      ((this.currentState = A), y(`CCRClient: State reported: ${A}`));
+      ((this.currentState = A), writeDebugLog(`CCRClient: State reported: ${A}`));
   }
   handleEpochMismatch() {
     throw (
-      y("CCRClient: Epoch mismatch (409), shutting down", { level: "error" }),
+      writeDebugLog("CCRClient: Epoch mismatch (409), shutting down", { level: "error" }),
       $8("error", "cli_worker_epoch_mismatch"),
       this.close(),
       this.transport.close(),
@@ -31763,13 +31763,13 @@ class Ui8 {
         { timeout: 5000 },
       )
     )
-      y("CCRClient: Heartbeat sent");
+      writeDebugLog("CCRClient: Heartbeat sent");
   }
   async writeEvent(A) {
     let q = A,
       K = this.createEvent(A.type, q);
     (await this.transport.write(K),
-      y(`CCRClient: Client event written type=${A.type}`));
+      writeDebugLog(`CCRClient: Client event written type=${A.type}`));
   }
   async writeInternalEvent(
     A,
@@ -31785,7 +31785,7 @@ class Ui8 {
         `POST internal-events type=${A}`,
       )
     )
-      y(`CCRClient: Internal event written type=${A}`);
+      writeDebugLog(`CCRClient: Internal event written type=${A}`);
   }
   async readInternalEvents() {
     let A = gM6();
@@ -31804,7 +31804,7 @@ class Ui8 {
         if (z.status < 200 || z.status >= 300) {
           if (z.status === 409) this.handleEpochMismatch();
           return (
-            y(`CCRClient: GET internal-events returned ${z.status}`, {
+            writeDebugLog(`CCRClient: GET internal-events returned ${z.status}`, {
               level: "warn",
             }),
             null
@@ -31813,12 +31813,12 @@ class Ui8 {
         let w = z.data;
         (q.push(...(w.data ?? [])), (K = w.has_more ? w.next_cursor : void 0));
       } while (K);
-      return (y(`CCRClient: Read ${q.length} internal events`), q);
+      return (writeDebugLog(`CCRClient: Read ${q.length} internal events`), q);
     } catch (q) {
       if (q instanceof Error && q.message === "CCRClient: Epoch mismatch (409)")
         throw q;
       return (
-        y(
+        writeDebugLog(
           `CCRClient: GET internal-events failed: ${q instanceof Error ? q.message : String(q)}`,
           { level: "warn" },
         ),
@@ -31835,7 +31835,7 @@ class Ui8 {
         `Delivery ${A}`,
       )
     )
-      y(`CCRClient: Delivery reported: ${A} → ${q}`);
+      writeDebugLog(`CCRClient: Delivery reported: ${A} → ${q}`);
   }
   getWorkerEpoch() {
     return this.workerEpoch;
@@ -31885,7 +31885,7 @@ var Skq = E(() => {
         w = _G();
       if (w) z.Authorization = `Bearer ${w}`;
       else
-        y("[remote-io] No session ingress token available", { level: "error" });
+        writeDebugLog("[remote-io] No session ingress token available", { level: "error" });
       let _ = process.env.CLAUDE_CODE_ENVIRONMENT_RUNNER_VERSION;
       if (_) z["x-environment-runner-version"] = _;
       let $ = () => {
@@ -31897,7 +31897,7 @@ var Skq = E(() => {
         return O;
       };
       if (
-        ((this.transport = ykq(this.url, z, d1(), $)),
+        ((this.transport = ykq(this.url, z, getSessionId(), $)),
         (this.isBridge = process.env.CLAUDE_CODE_ENVIRONMENT_KIND === "bridge"),
         (this.isDebug = en()),
         this.transport.setOnData((O) => {
@@ -31915,11 +31915,11 @@ var Skq = E(() => {
           this.inputStream.end();
         }),
         this.transport.connect(),
-        X1(process.env.CLAUDE_CODE_USE_CCR_V2))
+        isTruthy(process.env.CLAUDE_CODE_USE_CCR_V2))
       )
         ((this.ccrClient = new Ui8(this.transport, this.url)),
           this.ccrClient.initialize().catch((O) => {
-            ($6(
+            (sendError(
               Error(
                 `CCRClient initialization failed: ${O instanceof Error ? O.message : String(O)}`,
               ),
@@ -31950,7 +31950,7 @@ var Skq = E(() => {
       if (this.isBridge) {
         if (A.type === "control_request" || this.isDebug)
           L4(
-            p6(A) +
+            trySafeStringify(A) +
               `
 `,
           );
@@ -31971,7 +31971,7 @@ var hkq = E(() => {
   wYO = [...$d, "Tmux", CU];
 });
 function di8(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { input: K, progress: Y, verbose: z } = A,
     w = `<bash-input>${K}</bash-input>`,
     _;
@@ -32026,7 +32026,7 @@ var Ikq = E(() => {
   dR1 = Y6(W6(), 1);
 });
 async function xkq(A, q, K, Y, z) {
-  n("tengu_input_bash", {});
+  emitEvent("tengu_input_bash", {});
   let w = K8({
       content: ME({
         inputString: `<bash-input>${A}</bash-input>`,
@@ -32163,7 +32163,7 @@ function mkq(A, q, K, Y, z, w, _) {
         "prompt.id": $,
       }));
   }
-  if ((n("tengu_input_prompt", H), q.length > 0)) {
+  if ((emitEvent("tengu_input_prompt", H), q.length > 0)) {
     let J =
       typeof A === "string" ? (A.trim() ? [{ type: "text", text: A }] : []) : A;
     return {
@@ -32337,7 +32337,7 @@ async function JTz(A, q, K, Y, z, w, _, $, O, H, j, J, D, X, M) {
           },
         };
         return (
-          n("tengu_pasted_image_resize_attempt", {
+          emitEvent("tengu_pasted_image_resize_attempt", {
             original_size_bytes: S.content.length,
           }),
           {
@@ -32376,7 +32376,7 @@ async function JTz(A, q, K, Y, z, w, _, $, O, H, j, J, D, X, M) {
       let B = `@agent-${I.attachment.agentType}`,
         h = S === B,
         F = S.startsWith(B) && !h;
-      n("tengu_subagent_at_mention", { is_subagent_only: h, is_prefix: F });
+      emitEvent("tengu_subagent_at_mention", { is_subagent_only: h, is_prefix: F });
     }
   }
   return li8(mkq(A, V, f, L, $, J, X), G);
@@ -32416,7 +32416,7 @@ function Qkq({
   onSummarize: z,
   onClose: w,
 }) {
-  let _ = T1((G6) => G6.fileHistory),
+  let _ = useAppState((G6) => G6.fileHistory),
     [$, O] = CH.useState(void 0),
     H = V2(),
     j = CH.useMemo(DTz, []),
@@ -32458,14 +32458,14 @@ function Qkq({
     );
   }
   CH.useEffect(() => {
-    n("tengu_message_selector_opened", {});
+    emitEvent("tengu_message_selector_opened", {});
   }, []);
   async function g(G6) {
     (q(), V(!0));
     try {
       (await K(G6), V(!1), w());
     } catch (v6) {
-      ($6(v6),
+      (sendError(v6),
         V(!1),
         O(`Failed to restore the conversation:
 ${v6}`));
@@ -32475,7 +32475,7 @@ ${v6}`));
     let v6 = A.indexOf(G6),
       T6 = A.length - 1 - v6;
     if (
-      (n("tengu_message_selector_selected", {
+      (emitEvent("tengu_message_selector_selected", {
         index_from_end: T6,
         message_type: G6.type,
         is_current_prompt: !1,
@@ -32497,7 +32497,7 @@ ${v6}`));
   }
   async function U(G6) {
     if (
-      (n("tengu_message_selector_restore_option_selected", { option: G6 }), !W)
+      (emitEvent("tengu_message_selector_restore_option_selected", { option: G6 }), !W)
     ) {
       O("Message not found.");
       return;
@@ -32512,7 +32512,7 @@ ${v6}`));
         let z6 = B.trim() || void 0;
         (await z(W, z6), V(!1), L(null), G(void 0), w());
       } catch (z6) {
-        ($6(z6),
+        (sendError(z6),
           V(!1),
           L(null),
           G(void 0),
@@ -32528,13 +32528,13 @@ ${z6}`));
       try {
         await Y(W);
       } catch (z6) {
-        ((v6 = z6), $6(v6));
+        ((v6 = z6), sendError(v6));
       }
     if (G6 === "conversation" || G6 === "both")
       try {
         await K(W);
       } catch (z6) {
-        ((T6 = z6), $6(T6));
+        ((T6 = z6), sendError(T6));
       }
     if ((V(!1), G(void 0), T6 && v6))
       O(`Failed to restore the conversation and code:
@@ -32554,7 +32554,7 @@ ${v6}`);
         G(void 0);
         return;
       }
-      (n("tengu_message_selector_cancelled", {}), w());
+      (emitEvent("tengu_message_selector_cancelled", {}), w());
     }, [w, W]),
     a = CH.useCallback(() => X((G6) => Math.max(0, G6 - 1)), []),
     e = CH.useCallback(
@@ -32709,7 +32709,7 @@ ${v6}`);
               x8.createElement(
                 T,
                 { dimColor: !0 },
-                a6.warning,
+                figures.warning,
                 " Rewinding does not affect files edited manually or via bash.",
               ),
             ),
@@ -32757,7 +32757,7 @@ ${v6}`);
                     ? x8.createElement(
                         T,
                         { color: "permission", bold: !0 },
-                        a6.pointer,
+                        figures.pointer,
                         " ",
                       )
                     : x8.createElement(T, null, "  "),
@@ -32806,7 +32806,7 @@ ${v6}`);
                         : x8.createElement(
                             T,
                             { dimColor: !0, color: "warning" },
-                            a6.warning,
+                            figures.warning,
                             " No code restore",
                           ),
                     ),
@@ -32838,7 +32838,7 @@ ${v6}`);
   );
 }
 function XTz(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     { diffStatsForRestore: K } = A;
   if (K === void 0) return;
   if (!K.filesChanged || !K.filesChanged[0]) {
@@ -32914,7 +32914,7 @@ function XTz(A) {
   return _;
 }
 function Ukq(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { diffStats: K } = A;
   if (!K || !K.filesChanged) return;
   let Y;
@@ -32945,7 +32945,7 @@ function Ukq(A) {
   return w;
 }
 function Fkq(A) {
-  let q = w6(31),
+  let q = reactMemoCache(31),
     {
       userMessage: K,
       color: Y,
@@ -33285,7 +33285,7 @@ class dkq {
       c = { ...u, ...GTz(w) },
       d = Qq([...(typeof J === "string" ? [J] : g), ...(D ? [D] : [])]),
       a = z.some((C6) => B5(C6, yX));
-    if (P && a) Ty1(G, d1());
+    if (P && a) Ty1(G, getSessionId());
     let e = {
       messages: this.mutableMessages,
       setMessages: () => {},
@@ -33401,7 +33401,7 @@ class dkq {
       type: "system",
       subtype: "init",
       cwd: K,
-      session_id: d1(),
+      session_id: getSessionId(),
       tools: z.map((C6) => C6.name),
       mcp_servers: w.map((C6) => ({ name: C6.name, status: C6.type })),
       model: T6,
@@ -33441,7 +33441,7 @@ class dkq {
           yield {
             type: "user",
             message: { ...C6.message, content: pY(C6.message.content) },
-            session_id: d1(),
+            session_id: getSessionId(),
             parent_tool_use_id: null,
             uuid: C6.uuid,
             isReplay: !C6.isCompactSummary,
@@ -33465,14 +33465,14 @@ class dkq {
                 "$1",
               )
               .trim(),
-            session_id: d1(),
+            session_id: getSessionId(),
             uuid: C6.uuid,
           };
         if (C6.type === "system" && C6.subtype === "compact_boundary")
           yield {
             type: "system",
             subtype: "compact_boundary",
-            session_id: d1(),
+            session_id: getSessionId(),
             uuid: C6.uuid,
             compact_metadata: {
               trigger: C6.compactMetadata.trigger,
@@ -33483,8 +33483,8 @@ class dkq {
       if (L) {
         if (
           (await gx(D6),
-          X1(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
-            X1(process.env.CLAUDE_CODE_IS_COWORK))
+          isTruthy(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
+            isTruthy(process.env.CLAUDE_CODE_IS_COWORK))
         )
           await ki();
       }
@@ -33497,7 +33497,7 @@ class dkq {
         num_turns: D6.length - 1,
         result: A6 ?? "",
         stop_reason: null,
-        session_id: d1(),
+        session_id: getSessionId(),
         total_cost_usd: sX(),
         usage: qZ,
         modelUsage: VS(),
@@ -33543,7 +33543,7 @@ class dkq {
               yield {
                 type: "user",
                 message: d6.message,
-                session_id: d1(),
+                session_id: getSessionId(),
                 parent_tool_use_id: null,
                 uuid: d6.uuid,
                 isReplay: !0,
@@ -33573,7 +33573,7 @@ class dkq {
             yield {
               type: "stream_event",
               event: C6.event,
-              session_id: d1(),
+              session_id: getSessionId(),
               parent_tool_use_id: null,
               uuid: I86(),
             };
@@ -33587,8 +33587,8 @@ class dkq {
           else if (C6.attachment.type === "max_turns_reached") {
             if (L) {
               if (
-                X1(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
-                X1(process.env.CLAUDE_CODE_IS_COWORK)
+                isTruthy(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
+                isTruthy(process.env.CLAUDE_CODE_IS_COWORK)
               )
                 await ki();
             }
@@ -33600,7 +33600,7 @@ class dkq {
               is_error: !1,
               num_turns: C6.attachment.turnCount,
               stop_reason: g6,
-              session_id: d1(),
+              session_id: getSessionId(),
               total_cost_usd: sX(),
               usage: this.totalUsage,
               modelUsage: VS(),
@@ -33614,7 +33614,7 @@ class dkq {
             yield {
               type: "user",
               message: { role: "user", content: C6.attachment.prompt },
-              session_id: d1(),
+              session_id: getSessionId(),
               parent_tool_use_id: null,
               uuid: C6.attachment.source_uuid || C6.uuid,
               isReplay: !0,
@@ -33634,7 +33634,7 @@ class dkq {
             yield {
               type: "system",
               subtype: "compact_boundary",
-              session_id: d1(),
+              session_id: getSessionId(),
               uuid: C6.uuid,
               compact_metadata: {
                 trigger: C6.compactMetadata.trigger,
@@ -33648,7 +33648,7 @@ class dkq {
             type: "tool_use_summary",
             summary: C6.summary,
             preceding_tool_use_ids: C6.precedingToolUseIds,
-            session_id: d1(),
+            session_id: getSessionId(),
             uuid: C6.uuid,
           };
           break;
@@ -33656,8 +33656,8 @@ class dkq {
       if (H !== void 0 && sX() >= H) {
         if (L) {
           if (
-            X1(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
-            X1(process.env.CLAUDE_CODE_IS_COWORK)
+            isTruthy(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
+            isTruthy(process.env.CLAUDE_CODE_IS_COWORK)
           )
             await ki();
         }
@@ -33669,7 +33669,7 @@ class dkq {
           is_error: !1,
           num_turns: E6,
           stop_reason: g6,
-          session_id: d1(),
+          session_id: getSessionId(),
           total_cost_usd: sX(),
           usage: this.totalUsage,
           modelUsage: VS(),
@@ -33686,8 +33686,8 @@ class dkq {
         if (o6 >= K1) {
           if (L) {
             if (
-              X1(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
-              X1(process.env.CLAUDE_CODE_IS_COWORK)
+              isTruthy(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
+              isTruthy(process.env.CLAUDE_CODE_IS_COWORK)
             )
               await ki();
           }
@@ -33699,7 +33699,7 @@ class dkq {
             is_error: !0,
             num_turns: E6,
             stop_reason: g6,
-            session_id: d1(),
+            session_id: getSessionId(),
             total_cost_usd: sX(),
             usage: this.totalUsage,
             modelUsage: VS(),
@@ -33717,8 +33717,8 @@ class dkq {
     let r = IW(D6);
     if (L) {
       if (
-        X1(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
-        X1(process.env.CLAUDE_CODE_IS_COWORK)
+        isTruthy(process.env.CLAUDE_CODE_EAGER_FLUSH) ||
+        isTruthy(process.env.CLAUDE_CODE_IS_COWORK)
       )
         await ki();
     }
@@ -33731,7 +33731,7 @@ class dkq {
         is_error: !1,
         num_turns: E6,
         stop_reason: g6,
-        session_id: d1(),
+        session_id: getSessionId(),
         total_cost_usd: sX(),
         usage: this.totalUsage,
         modelUsage: VS(),
@@ -33758,7 +33758,7 @@ class dkq {
       num_turns: E6,
       result: Z6,
       stop_reason: g6,
-      session_id: d1(),
+      session_id: getSessionId(),
       total_cost_usd: sX(),
       usage: this.totalUsage,
       modelUsage: VS(),
@@ -33775,7 +33775,7 @@ class dkq {
     return this.mutableMessages;
   }
   getSessionId() {
-    return d1();
+    return getSessionId();
   }
   setModel(A) {
     this.config.userSpecifiedModel = A;
@@ -33896,7 +33896,7 @@ function nkq(A) {
         ((w = Date.now()),
           (z = setTimeout(() => {
             let _ = Date.now() - w;
-            if (A() && _ >= K) (y(`Exiting after ${K}ms of idle time`), _3());
+            if (A() && _ >= K) (writeDebugLog(`Exiting after ${K}ms of idle time`), _3());
           }, K)));
     },
     stop() {
@@ -33966,41 +33966,41 @@ async function TTz(A) {
     } = A ?? {},
     H = ++fTz;
   if (
-    (y(
+    (writeDebugLog(
       `[bridge:repl] initReplBridge #${H} starting (initialMessages=${$?.length ?? 0})`,
     ),
     !(await tl6()))
   )
     return (
-      y("[bridge:repl] Skipping: bridge not enabled"),
-      n("tengu_bridge_repl_skipped", { reason: "not_enabled" }),
+      writeDebugLog("[bridge:repl] Skipping: bridge not enabled"),
+      emitEvent("tengu_bridge_repl_skipped", { reason: "not_enabled" }),
       null
     );
   let j = el6();
   if (j)
     return (
-      y(`[bridge:repl] Skipping: ${j}`),
-      n("tengu_bridge_repl_skipped", { reason: "version_too_old" }),
+      writeDebugLog(`[bridge:repl] Skipping: ${j}`),
+      emitEvent("tengu_bridge_repl_skipped", { reason: "version_too_old" }),
       _?.("failed", j),
       null
     );
   if ((await vU6(), !ZH("allow_remote_sessions")))
     return (
-      y("[bridge:repl] Skipping: allow_remote_sessions policy not allowed"),
-      n("tengu_bridge_repl_skipped", { reason: "policy_denied" }),
+      writeDebugLog("[bridge:repl] Skipping: allow_remote_sessions policy not allowed"),
+      emitEvent("tengu_bridge_repl_skipped", { reason: "policy_denied" }),
       null
     );
   let J = () => z4()?.accessToken;
   if (!J())
     return (
-      y("[bridge:repl] Skipping: no OAuth tokens"),
-      n("tengu_bridge_repl_skipped", { reason: "no_oauth" }),
+      writeDebugLog("[bridge:repl] Skipping: no OAuth tokens"),
+      emitEvent("tengu_bridge_repl_skipped", { reason: "no_oauth" }),
       null
     );
   if (!(await ny()))
     return (
-      y("[bridge:repl] Skipping: no org UUID"),
-      n("tengu_bridge_repl_skipped", { reason: "no_org_uuid" }),
+      writeDebugLog("[bridge:repl] Skipping: no org UUID"),
+      emitEvent("tengu_bridge_repl_skipped", { reason: "no_org_uuid" }),
       null
     );
   let X = await Qj(),
@@ -34020,7 +34020,7 @@ async function TTz(A) {
         FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
         BUILD_TIME: "2026-03-04T00:18:36Z",
       }.VERSION,
-      onDebug: y,
+      onDebug: writeDebugLog,
     }),
     N = {
       dir: Z,
@@ -34042,18 +34042,18 @@ async function TTz(A) {
     ((V = t.environment_id), (v = t.environment_secret));
   } catch (t) {
     return (
-      y(
+      writeDebugLog(
         `[bridge:repl] Environment registration failed: ${t instanceof Error ? t.message : String(t)}`,
       ),
-      n("tengu_bridge_repl_skipped", { reason: "registration_failed" }),
+      emitEvent("tengu_bridge_repl_skipped", { reason: "registration_failed" }),
       null
     );
   }
-  (y(`[bridge:repl] Environment registered: ${V}`),
+  (writeDebugLog(`[bridge:repl] Environment registered: ${V}`),
     $8("info", "bridge_repl_env_registered"),
-    n("tengu_bridge_repl_env_registered", {}));
+    emitEvent("tengu_bridge_repl_env_registered", {}));
   let L = "Interactive session",
-    S = d1(),
+    S = getSessionId(),
     I = S ? NC(S) : void 0;
   if (I) L = I;
   else if ($ && $.length > 0) {
@@ -34083,15 +34083,15 @@ async function TTz(A) {
     });
   if (!F)
     return (
-      y("[bridge:repl] Session creation failed, deregistering environment"),
-      n("tengu_bridge_repl_session_failed", {}),
+      writeDebugLog("[bridge:repl] Session creation failed, deregistering environment"),
+      emitEvent("tengu_bridge_repl_session_failed", {}),
       await f.deregisterEnvironment(V).catch(() => {}),
       null
     );
   let g = F;
-  (y(`[bridge:repl] Session created: ${g}`),
+  (writeDebugLog(`[bridge:repl] Session created: ${g}`),
     $8("info", "bridge_repl_session_created"),
-    n("tengu_bridge_repl_started", {
+    emitEvent("tengu_bridge_repl_started", {
       has_initial_messages: !!($ && $.length > 0),
     }));
   let u = new Set();
@@ -34117,11 +34117,11 @@ async function TTz(A) {
   async function A6() {
     if (
       (P6++,
-      y(`[bridge:repl] Reconnecting env+session (attempt ${P6}/${j6})`),
+      writeDebugLog(`[bridge:repl] Reconnecting env+session (attempt ${P6}/${j6})`),
       P6 > j6)
     )
       return (
-        y(
+        writeDebugLog(
           `[bridge:repl] Environment re-creation limit reached (${j6}), giving up`,
         ),
         !1
@@ -34137,7 +34137,7 @@ async function TTz(A) {
       c.signal.aborted)
     )
       return (
-        y(
+        writeDebugLog(
           "[bridge:repl] Reconnect aborted by teardown after deregistering old env",
         ),
         !1
@@ -34147,21 +34147,21 @@ async function TTz(A) {
       ((V = E6.environment_id), (v = E6.environment_secret));
     } catch (E6) {
       return (
-        y(
+        writeDebugLog(
           `[bridge:repl] Environment re-registration failed: ${E6 instanceof Error ? E6.message : String(E6)}`,
         ),
         !1
       );
     }
-    if ((y(`[bridge:repl] Re-registered environment: ${V}`), c.signal.aborted))
+    if ((writeDebugLog(`[bridge:repl] Re-registered environment: ${V}`), c.signal.aborted))
       return (
-        y(
+        writeDebugLog(
           "[bridge:repl] Reconnect aborted after env registration, cleaning up",
         ),
         await f.deregisterEnvironment(V).catch(() => {}),
         !1
       );
-    let O6 = NC(d1()) ?? L,
+    let O6 = NC(getSessionId()) ?? L,
       X6 = await B({
         environmentId: V,
         title: O6,
@@ -34173,12 +34173,12 @@ async function TTz(A) {
       });
     if (!X6)
       return (
-        y("[bridge:repl] Session creation failed during reconnection"),
+        writeDebugLog("[bridge:repl] Session creation failed during reconnection"),
         !1
       );
     if (c.signal.aborted)
       return (
-        y(
+        writeDebugLog(
           "[bridge:repl] Reconnect aborted after session creation, cleaning up",
         ),
         await t(X6, h).catch(() => {}),
@@ -34186,7 +34186,7 @@ async function TTz(A) {
       );
     return (
       (g = X6),
-      y(`[bridge:repl] Re-created session: ${g}`),
+      writeDebugLog(`[bridge:repl] Re-created session: ${g}`),
       O?.clear(),
       (P6 = 0),
       !0
@@ -34199,14 +34199,14 @@ async function TTz(A) {
     let t = e.end();
     if (t.length === 0) return;
     if (!d) {
-      y(
+      writeDebugLog(
         `[bridge:repl] Cannot drain ${t.length} pending message(s): no transport`,
       );
       return;
     }
     for (let E6 of t) U.add(E6.uuid);
     let X6 = oN6(t).map((E6) => ({ ...E6, session_id: g }));
-    (y(`[bridge:repl] Drained ${t.length} pending message(s) after flush`),
+    (writeDebugLog(`[bridge:repl] Drained ${t.length} pending message(s) after flush`),
       d.writeBatch(X6));
   }
   let v6 = null;
@@ -34226,34 +34226,34 @@ async function TTz(A) {
     },
     onWorkReceived: (t, O6, X6) => {
       if (d?.isConnectedStatus())
-        y(
+        writeDebugLog(
           `[bridge:repl] Work received while transport connected, replacing with fresh token (workId=${X6})`,
         );
       if (
-        (y(
+        (writeDebugLog(
           `[bridge:repl] Work received: workId=${X6} workSessionId=${t} currentSessionId=${g} match=${t === g}`,
         ),
         t !== g)
       ) {
-        y(`[bridge:repl] Rejecting foreign session: expected=${g} got=${t}`);
+        writeDebugLog(`[bridge:repl] Rejecting foreign session: expected=${g} got=${t}`);
         return;
       }
       a = X6;
       let E6 = D6();
       if (!E6) {
-        y(
+        writeDebugLog(
           "[bridge:repl] No OAuth token available for session ingress, skipping work",
         );
         return;
       }
-      if ((B$8(E6), n("tengu_bridge_repl_work_received", {}), d)) {
+      if ((B$8(E6), emitEvent("tengu_bridge_repl_work_received", {}), d)) {
         let r = d;
         ((d = null), r.close());
       }
       e.deactivate();
       function L6(r) {
         if (!d) {
-          y(
+          writeDebugLog(
             "[bridge:repl] Cannot respond to control_request: transport not configured",
           );
           return;
@@ -34310,13 +34310,13 @@ async function TTz(A) {
         }
         let S6 = { ...Z6, session_id: g };
         (d.write(S6),
-          y(
+          writeDebugLog(
             `[bridge:repl] Sent control_response for ${r.request.subtype} request_id=${r.request_id} result=${Z6.response.subtype}`,
           ));
       }
       let h6 = DR1(G, t);
-      (y(`[bridge:repl] Ingress URL: ${h6}`),
-        y(`[bridge:repl] Creating HybridTransport: session=${t}`));
+      (writeDebugLog(`[bridge:repl] Ingress URL: ${h6}`),
+        writeDebugLog(`[bridge:repl] Creating HybridTransport: session=${t}`));
       let g6 = !1,
         y6 = new hr6(
           new URL(h6),
@@ -34331,8 +34331,8 @@ async function TTz(A) {
         ((d = y6),
         y6.setOnConnect(() => {
           if (d !== y6) return;
-          (y("[bridge:repl] Ingress transport connected"),
-            n("tengu_bridge_repl_ws_connected", {}));
+          (writeDebugLog("[bridge:repl] Ingress transport connected"),
+            emitEvent("tengu_bridge_repl_ws_connected", {}));
           let r = D6();
           if (r) B$8(r);
           if (((K6 = !1), !g6 && $ && $.length > 0)) {
@@ -34347,16 +34347,16 @@ async function TTz(A) {
               ),
               C6 = Z6 > 0 && S6.length > Z6 ? S6.slice(-Z6) : S6;
             if (C6.length < S6.length)
-              (y(
+              (writeDebugLog(
                 `[bridge:repl] Capped initial flush: ${S6.length} -> ${C6.length} (cap=${Z6})`,
               ),
-                n("tengu_bridge_repl_history_capped", {
+                emitEvent("tengu_bridge_repl_history_capped", {
                   eligible_count: S6.length,
                   capped_count: C6.length,
                 }));
             let d6 = oN6(C6);
             if (d6.length > 0) {
-              y(
+              writeDebugLog(
                 `[bridge:repl] Flushing ${d6.length} initial message(s) via transport`,
               );
               let o6 = d6.map((K1) => ({ ...K1, session_id: g }));
@@ -34378,12 +34378,12 @@ async function TTz(A) {
         }),
         y6.setOnClose((r) => {
           if (d !== y6) return;
-          (y(`[bridge:repl] Transport permanently closed: code=${r}`),
-            n("tengu_bridge_repl_ws_closed", { code: r }),
+          (writeDebugLog(`[bridge:repl] Transport permanently closed: code=${r}`),
+            emitEvent("tengu_bridge_repl_ws_closed", { code: r }),
             (d = null));
           let Z6 = e.drop();
           if (Z6 > 0)
-            y(
+            writeDebugLog(
               `[bridge:repl] Dropping ${Z6} pending message(s) on transport close (code=${r})`,
               { level: "warn" },
             );
@@ -34391,13 +34391,13 @@ async function TTz(A) {
             (_?.("failed", "Remote Control session ended"), c.abort(), T6());
           else if (
             (_?.("reconnecting", `Remote Control connection lost (code ${r})`),
-            y(
+            writeDebugLog(
               `[bridge:repl] Reconnect exhausted (code=${r}), falling back to poll loop (workId=${a})`,
             ),
             a)
           )
             f.stopWork(V, a, !1).catch((S6) => {
-              y(
+              writeDebugLog(
                 `[bridge:repl] stopWork(force=false) failed: ${S6 instanceof Error ? S6.message : String(S6)}`,
               );
             });
@@ -34411,14 +34411,14 @@ async function TTz(A) {
   qEq(z6);
   let H6 = !1;
   if (H6)
-    y(
+    writeDebugLog(
       "[bridge:repl] Session capped to 24h in this namespace (privileged namespace policy)",
     );
   let _6 = H6
       ? setTimeout(() => {
-          (y("[bridge:repl] Maximum runtime reached, shutting down…"),
+          (writeDebugLog("[bridge:repl] Maximum runtime reached, shutting down…"),
             $8("info", "bridge_repl_lifetime_expired"),
-            n("tengu_bridge_repl_lifetime_expired", {}),
+            emitEvent("tengu_bridge_repl_lifetime_expired", {}),
             _?.("failed", "Maximum runtime reached"),
             T6());
         }, C26)
@@ -34426,7 +34426,7 @@ async function TTz(A) {
     K6 = !1;
   v6 = async () => {
     if (K6) {
-      y(
+      writeDebugLog(
         `[bridge:repl] Teardown already in progress, skipping duplicate call env=${V} session=${g}`,
       );
       return;
@@ -34434,15 +34434,15 @@ async function TTz(A) {
     K6 = !0;
     let t = Date.now();
     if (
-      (y(
+      (writeDebugLog(
         `[bridge:repl] Teardown starting: env=${V} session=${g} workId=${a ?? "none"} transportState=${d?.getStateLabel() ?? "null"}`,
       ),
       _6 !== null)
     )
       clearTimeout(_6);
-    if ((c.abort(), y("[bridge:repl] Teardown: poll loop aborted"), d))
+    if ((c.abort(), writeDebugLog("[bridge:repl] Teardown: poll loop aborted"), d))
       (d.write(skq(g)), d.close(), (d = null));
-    (e.drop(), y("[bridge:repl] Teardown: transport closed"));
+    (e.drop(), writeDebugLog("[bridge:repl] Teardown: transport closed"));
     let { archiveBridgeSession: O6 } = await Promise.resolve().then(
       () => (cN6(), dN6),
     );
@@ -34451,36 +34451,36 @@ async function TTz(A) {
         ? f
             .stopWork(V, a, !0)
             .then(() => {
-              y("[bridge:repl] Teardown: stopWork completed");
+              writeDebugLog("[bridge:repl] Teardown: stopWork completed");
             })
             .catch((X6) => {
-              y(
+              writeDebugLog(
                 `[bridge:repl] Teardown stopWork failed: ${X6 instanceof Error ? X6.message : String(X6)}`,
               );
             })
         : Promise.resolve(),
       O6(g, h)
         .then(() => {
-          y("[bridge:repl] Teardown: session archived");
+          writeDebugLog("[bridge:repl] Teardown: session archived");
         })
         .catch((X6) => {
-          y(
+          writeDebugLog(
             `[bridge:repl] Teardown archive failed: ${X6 instanceof Error ? X6.message : String(X6)}`,
           );
         }),
     ]),
       await f.deregisterEnvironment(V).catch((X6) => {
-        y(
+        writeDebugLog(
           `[bridge:repl] Teardown deregister failed: ${X6 instanceof Error ? X6.message : String(X6)}`,
         );
       }),
-      y(
+      writeDebugLog(
         `[bridge:repl] Teardown complete: env=${V} duration=${Date.now() - t}ms`,
       ));
   };
   let s = Xq(() => v6?.());
   return (
-    y(`[bridge:repl] Ready: env=${V} session=${g}`),
+    writeDebugLog(`[bridge:repl] Ready: env=${V} session=${g}`),
     _?.("ready"),
     {
       get bridgeSessionId() {
@@ -34501,46 +34501,46 @@ async function TTz(A) {
         );
         if (O6.length === 0) return;
         if (e.enqueue(...O6)) {
-          y(
+          writeDebugLog(
             `[bridge:repl] Queued ${O6.length} message(s) during initial flush`,
           );
           return;
         }
         if (!d) {
           let L6 = O6.map((h6) => h6.type).join(",");
-          y(
+          writeDebugLog(
             `[bridge:repl] Transport not configured, dropping ${O6.length} message(s) [${L6}] for session=${g}`,
             { level: "warn" },
           );
           return;
         }
         for (let L6 of O6) U.add(L6.uuid);
-        y(`[bridge:repl] Sending ${O6.length} message(s) via transport`);
+        writeDebugLog(`[bridge:repl] Sending ${O6.length} message(s) via transport`);
         let E6 = oN6(O6).map((L6) => ({ ...L6, session_id: g }));
         d.writeBatch(E6);
       },
       sendControlRequest(t) {
         if (!d) {
-          y("[bridge:repl] Transport not configured, skipping control_request");
+          writeDebugLog("[bridge:repl] Transport not configured, skipping control_request");
           return;
         }
         let O6 = { ...t, session_id: g };
         (d.write(O6),
-          y(`[bridge:repl] Sent control_request request_id=${t.request_id}`));
+          writeDebugLog(`[bridge:repl] Sent control_request request_id=${t.request_id}`));
       },
       sendControlResponse(t) {
         if (!d) {
-          y(
+          writeDebugLog(
             "[bridge:repl] Transport not configured, skipping control_response",
           );
           return;
         }
         let O6 = { ...t, session_id: g };
-        (d.write(O6), y("[bridge:repl] Sent control_response"));
+        (d.write(O6), writeDebugLog("[bridge:repl] Sent control_response"));
       },
       sendControlCancelRequest(t) {
         if (!d) {
-          y(
+          writeDebugLog(
             "[bridge:repl] Transport not configured, skipping control_cancel_request",
           );
           return;
@@ -34551,22 +34551,22 @@ async function TTz(A) {
           session_id: g,
         };
         (d.write(O6),
-          y(`[bridge:repl] Sent control_cancel_request request_id=${t}`));
+          writeDebugLog(`[bridge:repl] Sent control_cancel_request request_id=${t}`));
       },
       sendResult() {
         if (!d) {
-          y(
+          writeDebugLog(
             `[bridge:repl] sendResult: skipping, transport not configured session=${g}`,
           );
           return;
         }
-        (d.write(skq(g)), y(`[bridge:repl] Sent result for session=${g}`));
+        (d.write(skq(g)), writeDebugLog(`[bridge:repl] Sent result for session=${g}`));
       },
       async teardown() {
         (s(),
           await v6?.(),
-          y("[bridge:repl] Torn down"),
-          n("tengu_bridge_repl_teardown", {}));
+          writeDebugLog("[bridge:repl] Torn down"),
+          emitEvent("tengu_bridge_repl_teardown", {}));
       },
     }
   );
@@ -34602,30 +34602,30 @@ function AEq(A, q, K, Y, z) {
   try {
     let w = pR1(w8(A));
     if (VTz(w)) {
-      (y("[bridge:repl] Ingress message type=control_response"), Y?.(w));
+      (writeDebugLog("[bridge:repl] Ingress message type=control_response"), Y?.(w));
       return;
     }
     if (vTz(w)) {
-      (y(`[bridge:repl] Inbound control_request subtype=${w.request.subtype}`),
+      (writeDebugLog(`[bridge:repl] Inbound control_request subtype=${w.request.subtype}`),
         z?.(w));
       return;
     }
     if (!NTz(w)) return;
     let _ = "uuid" in w && typeof w.uuid === "string" ? w.uuid : void 0;
     if (_ && q.has(_)) {
-      y(`[bridge:repl] Ignoring echo: type=${w.type} uuid=${_}`);
+      writeDebugLog(`[bridge:repl] Ignoring echo: type=${w.type} uuid=${_}`);
       return;
     }
     if (
-      (y(
+      (writeDebugLog(
         `[bridge:repl] Ingress message type=${w.type}${_ ? ` uuid=${_}` : ""}`,
       ),
       w.type === "user")
     )
-      (n("tengu_bridge_message_received", { is_repl: !0 }), K?.(w));
-    else y(`[bridge:repl] Ignoring non-user inbound message: type=${w.type}`);
+      (emitEvent("tengu_bridge_message_received", { is_repl: !0 }), K?.(w));
+    else writeDebugLog(`[bridge:repl] Ignoring non-user inbound message: type=${w.type}`);
   } catch (w) {
-    y(
+    writeDebugLog(
       `[bridge:repl] Failed to parse ingress message: ${w instanceof Error ? w.message : String(w)}`,
     );
   }
@@ -34640,7 +34640,7 @@ async function qEq({
   getWsState: _,
   onFatalError: $,
 }) {
-  y(`[bridge:repl] Starting work poll loop for env=${q().environmentId}`);
+  writeDebugLog(`[bridge:repl] Starting work poll loop for env=${q().environmentId}`);
   let H = 0,
     j = null,
     J = null,
@@ -34650,7 +34650,7 @@ async function qEq({
     try {
       let P = await A.pollForWork(X, M, K);
       if (H > 0)
-        (y(`[bridge:repl] Poll recovered after ${H} consecutive error(s)`),
+        (writeDebugLog(`[bridge:repl] Poll recovered after ${H} consecutive error(s)`),
           (H = 0),
           (j = null),
           (J = null),
@@ -34664,7 +34664,7 @@ async function qEq({
         continue;
       }
       if (P.data.type === "healthcheck") {
-        y("[bridge:repl] Healthcheck received");
+        writeDebugLog("[bridge:repl] Healthcheck received");
         continue;
       }
       if (P.data.type === "session") {
@@ -34672,28 +34672,28 @@ async function qEq({
         try {
           FE(W, "session_id");
         } catch {
-          y(`[bridge:repl] Invalid session_id in work: ${W}`);
+          writeDebugLog(`[bridge:repl] Invalid session_id in work: ${W}`);
           continue;
         }
         try {
           let G = JR1(P.secret);
           (z(W, G.session_ingress_token, P.id),
-            y("[bridge:repl] Work accepted, continuing poll loop"));
+            writeDebugLog("[bridge:repl] Work accepted, continuing poll loop"));
         } catch (G) {
-          (y(
+          (writeDebugLog(
             `[bridge:repl] Failed to decode work secret: ${G instanceof Error ? G.message : String(G)}`,
           ),
-            n("tengu_bridge_repl_work_secret_failed", {}));
+            emitEvent("tengu_bridge_repl_work_secret_failed", {}));
         }
       }
     } catch (P) {
       if (K.aborted) break;
       if (P instanceof gC) {
         let v = mV6(P.errorType);
-        (y(
+        (writeDebugLog(
           `[bridge:repl] Fatal poll error: ${P.message} (status=${P.status}, type=${P.errorType ?? "unknown"})`,
         ),
-          n("tengu_bridge_repl_fatal_error", {
+          emitEvent("tengu_bridge_repl_fatal_error", {
             status: P.status,
             error_type: P.errorType,
           }),
@@ -34713,7 +34713,7 @@ async function qEq({
       if (bfq(P) === "poll_work_environment_not_found" && w) {
         let v = q().environmentId;
         if (X !== v) {
-          (y(
+          (writeDebugLog(
             `[bridge:repl] Stale poll error for old env=${X}, current env=${v} — skipping onEnvironmentLost`,
           ),
             (H = 0),
@@ -34722,13 +34722,13 @@ async function qEq({
         }
         if (
           (D++,
-          y(
+          writeDebugLog(
             `[bridge:repl] Environment deleted, attempting re-registration (attempt ${D}/3)`,
           ),
-          n("tengu_bridge_repl_env_lost", { attempt: D }),
+          emitEvent("tengu_bridge_repl_env_lost", { attempt: D }),
           D > 3)
         ) {
-          (y(
+          (writeDebugLog(
             "[bridge:repl] Environment re-registration limit reached (3), giving up",
           ),
             Y?.(
@@ -34742,7 +34742,7 @@ async function qEq({
           ((H = 0),
             (j = null),
             Y?.("ready"),
-            y(`[bridge:repl] Re-registered environment: ${L.environmentId}`));
+            writeDebugLog(`[bridge:repl] Re-registered environment: ${L.environmentId}`));
           continue;
         }
         Y?.("failed", "Environment deleted and re-registration failed");
@@ -34750,7 +34750,7 @@ async function qEq({
       }
       let W = Date.now();
       if (J !== null && W - J > ai8 * 2)
-        (y(
+        (writeDebugLog(
           `[bridge:repl] Detected system sleep (${Math.round((W - J) / 1000)}s gap), resetting poll error budget`,
         ),
           $8("info", "bridge_repl_poll_sleep_detected", { gapMs: W - J }),
@@ -34762,10 +34762,10 @@ async function qEq({
         f = zR1(P),
         N = _?.() ?? "unknown";
       if (
-        (y(
+        (writeDebugLog(
           `[bridge:repl] Poll error (attempt ${H}, elapsed ${Math.round(G / 1000)}s, ws=${N}): ${f}`,
         ),
-        n("tengu_bridge_repl_poll_error", {
+        emitEvent("tengu_bridge_repl_poll_error", {
           status: Z,
           consecutiveErrors: H,
           elapsedMs: G,
@@ -34774,11 +34774,11 @@ async function qEq({
       )
         Y?.("reconnecting", f);
       if (G >= si8) {
-        (y(
+        (writeDebugLog(
           `[bridge:repl] Poll failures exceeded ${si8 / 1000}s (${H} errors), giving up`,
         ),
           $8("info", "bridge_repl_poll_give_up"),
-          n("tengu_bridge_repl_poll_give_up", {
+          emitEvent("tengu_bridge_repl_poll_give_up", {
             consecutiveErrors: H,
             elapsedMs: G,
             lastStatus: Z,
@@ -34790,7 +34790,7 @@ async function qEq({
       await tkq(V, K);
     }
   }
-  y(
+  writeDebugLog(
     `[bridge:repl] Work poll loop ended (aborted=${K.aborted}) env=${q().environmentId}`,
   );
 }
@@ -34890,8 +34890,8 @@ function KEq(A, q, K) {
     _ = vb.useRef(new Set()),
     $ = vb.useRef(void 0),
     O = tA(),
-    H = T1((D) => D.replBridgeEnabled),
-    j = T1((D) => D.replBridgeConnected);
+    H = useAppState((D) => D.replBridgeEnabled),
+    j = useAppState((D) => D.replBridgeConnected);
   return (
     vb.useEffect(() => {
       {
@@ -34909,7 +34909,7 @@ function KEq(A, q, K) {
                       typeof I === "string"
                         ? I.slice(0, 80)
                         : `[${I.length} content blocks]`;
-                  (y(
+                  (writeDebugLog(
                     `[bridge:repl] Injecting inbound user message: ${h}${B ? ` uuid=${B}` : ""}`,
                   ),
                     IG({
@@ -35007,7 +35007,7 @@ function KEq(A, q, K) {
                   if (!S) return;
                   let I = G.get(S);
                   if (!I) {
-                    y(
+                    writeDebugLog(
                       `[bridge:repl] No handler for control_response request_id=${S}`,
                     );
                     return;
@@ -35018,12 +35018,12 @@ function KEq(A, q, K) {
                     I(B.response);
                 };
               if (z.current)
-                (y(
+                (writeDebugLog(
                   "[bridge:repl] Hook: waiting for previous teardown to complete before re-init",
                 ),
                   await z.current,
                   (z.current = void 0),
-                  y(
+                  writeDebugLog(
                     "[bridge:repl] Hook: previous teardown complete, proceeding with re-init",
                   ));
               if (D) return;
@@ -35058,7 +35058,7 @@ function KEq(A, q, K) {
                 });
               if (D) {
                 if (
-                  (y(
+                  (writeDebugLog(
                     `[bridge:repl] Hook: init cancelled during flight, tearing down${f ? ` env=${f.environmentId}` : ""}`,
                   ),
                   f)
@@ -35067,7 +35067,7 @@ function KEq(A, q, K) {
                 return;
               }
               if (!f) {
-                (y(
+                (writeDebugLog(
                   "[bridge:repl] Init returned null (precondition or session creation failed)",
                 ),
                   clearTimeout($.current),
@@ -35148,12 +35148,12 @@ function KEq(A, q, K) {
                 };
               }),
                 q((L) => [...L, oPq(V)]),
-                y(
+                writeDebugLog(
                   `[bridge:repl] Hook initialized, session=${f.bridgeSessionId}`,
                 ));
             } catch (M) {
               let P = M instanceof Error ? M.message : String(M);
-              (y(`[bridge:repl] Init failed: ${P}`),
+              (writeDebugLog(`[bridge:repl] Init failed: ${P}`),
                 clearTimeout($.current),
                 O((W) => ({ ...W, replBridgeError: P })),
                 ($.current = setTimeout(() => {
@@ -35181,7 +35181,7 @@ function KEq(A, q, K) {
               ($.current = void 0),
               Y.current)
             )
-              (y(
+              (writeDebugLog(
                 `[bridge:repl] Hook cleanup: starting teardown for env=${Y.current.environmentId} session=${Y.current.bridgeSessionId}`,
               ),
                 (z.current = Y.current.teardown()),
@@ -35217,7 +35217,7 @@ function KEq(A, q, K) {
         let D = Y.current;
         if (!D) return;
         if (w.current > A.length)
-          y(
+          writeDebugLog(
             `[bridge:repl] Compaction detected: lastWrittenIndex=${w.current} > messages.length=${A.length}, clamping`,
           );
         let X = Math.min(w.current, A.length),
@@ -35288,7 +35288,7 @@ var wEq = E(() => {
   ah();
 });
 function kTz() {
-  return X1(process.env.CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL);
+  return isTruthy(process.env.CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL);
 }
 function _Eq(A) {
   let q = rR1.INITIAL_DELAY_MS * Math.pow(rR1.BACKOFF_MULTIPLIER, A);
@@ -35311,21 +35311,21 @@ async function oR1() {
   if (!ETz(A)) {
     let q = A.officialMarketplaceAutoInstallFailReason ?? "already_attempted";
     return (
-      y(`Official marketplace auto-install skipped: ${q}`),
+      writeDebugLog(`Official marketplace auto-install skipped: ${q}`),
       { installed: !1, skipped: !0, reason: q }
     );
   }
   try {
     if (kTz())
       return (
-        y("Official marketplace auto-install disabled via env var, skipping"),
+        writeDebugLog("Official marketplace auto-install disabled via env var, skipping"),
         updateSettings((z) => ({
           ...z,
           officialMarketplaceAutoInstallAttempted: !0,
           officialMarketplaceAutoInstalled: !1,
           officialMarketplaceAutoInstallFailReason: "policy_blocked",
         })),
-        n("tengu_official_marketplace_auto_install", {
+        emitEvent("tengu_official_marketplace_auto_install", {
           installed: !1,
           skipped: !0,
           policy_blocked: !0,
@@ -35334,7 +35334,7 @@ async function oR1() {
       );
     if ((await k3())[$b])
       return (
-        y(`Official marketplace '${$b}' already installed, skipping`),
+        writeDebugLog(`Official marketplace '${$b}' already installed, skipping`),
         updateSettings((z) => ({
           ...z,
           officialMarketplaceAutoInstallAttempted: !0,
@@ -35344,14 +35344,14 @@ async function oR1() {
       );
     if (!m56(uF8))
       return (
-        y("Official marketplace blocked by enterprise policy, skipping"),
+        writeDebugLog("Official marketplace blocked by enterprise policy, skipping"),
         updateSettings((z) => ({
           ...z,
           officialMarketplaceAutoInstallAttempted: !0,
           officialMarketplaceAutoInstalled: !1,
           officialMarketplaceAutoInstallFailReason: "policy_blocked",
         })),
-        n("tengu_official_marketplace_auto_install", {
+        emitEvent("tengu_official_marketplace_auto_install", {
           installed: !1,
           skipped: !0,
           policy_blocked: !0,
@@ -35359,7 +35359,7 @@ async function oR1() {
         { installed: !1, skipped: !0, reason: "policy_blocked" }
       );
     if (!(await tJ1())) {
-      y("Git not available, skipping official marketplace auto-install");
+      writeDebugLog("Git not available, skipping official marketplace auto-install");
       let z = (A.officialMarketplaceAutoInstallRetryCount || 0) + 1,
         w = Date.now(),
         _ = _Eq(z),
@@ -35383,14 +35383,14 @@ async function oR1() {
             : Error(
                 `Failed to save marketplace auto-install git_unavailable state: ${H}`,
               );
-        ($6(j),
-          y(
+        (sendError(j),
+          writeDebugLog(
             `Failed to save marketplace auto-install git_unavailable state: ${H}`,
             { level: "error" },
           ));
       }
       return (
-        n("tengu_official_marketplace_auto_install", {
+        emitEvent("tengu_official_marketplace_auto_install", {
           installed: !1,
           skipped: !0,
           git_unavailable: !0,
@@ -35404,9 +35404,9 @@ async function oR1() {
         }
       );
     }
-    (y("Attempting to auto-install official marketplace"),
+    (writeDebugLog("Attempting to auto-install official marketplace"),
       await cR(uF8),
-      y("Successfully auto-installed official marketplace"));
+      writeDebugLog("Successfully auto-installed official marketplace"));
     let Y = A.officialMarketplaceAutoInstallRetryCount || 0;
     return (
       updateSettings((z) => ({
@@ -35418,7 +35418,7 @@ async function oR1() {
         officialMarketplaceAutoInstallLastAttemptTime: void 0,
         officialMarketplaceAutoInstallNextRetryTime: void 0,
       })),
-      n("tengu_official_marketplace_auto_install", {
+      emitEvent("tengu_official_marketplace_auto_install", {
         installed: !0,
         skipped: !1,
         retry_count: Y,
@@ -35427,8 +35427,8 @@ async function oR1() {
     );
   } catch (q) {
     let K = q instanceof Error ? q.message : String(q);
-    (y(`Failed to auto-install official marketplace: ${K}`, { level: "error" }),
-      $6(
+    (writeDebugLog(`Failed to auto-install official marketplace: ${K}`, { level: "error" }),
+      sendError(
         q instanceof Error
           ? q
           : Error(`Official marketplace auto-install failed: ${K}`),
@@ -35456,13 +35456,13 @@ async function oR1() {
           : Error(
               `Failed to save marketplace auto-install failure state: ${O}`,
             );
-      ($6(H),
-        y(`Failed to save marketplace auto-install failure state: ${O}`, {
+      (sendError(H),
+        writeDebugLog(`Failed to save marketplace auto-install failure state: ${O}`, {
           level: "error",
         }));
     }
     return (
-      n("tengu_official_marketplace_auto_install", {
+      emitEvent("tengu_official_marketplace_auto_install", {
         installed: !1,
         skipped: !0,
         failed: !0,
@@ -35498,7 +35498,7 @@ async function LTz() {
       q = aJ6().safeParse(w8(A));
     if (!q.success)
       return (
-        y(`Invalid known_marketplaces.json in zip cache: ${q.error.message}`, {
+        writeDebugLog(`Invalid known_marketplaces.json in zip cache: ${q.error.message}`, {
           level: "error",
         }),
         {}
@@ -35509,7 +35509,7 @@ async function LTz() {
   }
 }
 async function yTz(A) {
-  await TX1(vT8(), p6(A, null, 2));
+  await TX1(vT8(), trySafeStringify(A, null, 2));
 }
 async function RTz(A, q) {
   let K = BF6();
@@ -35539,7 +35539,7 @@ async function OEq() {
     try {
       await RTz(Y, z.installLocation);
     } catch (w) {
-      y(`Failed to save marketplace JSON for ${Y}: ${w}`);
+      writeDebugLog(`Failed to save marketplace JSON for ${Y}: ${w}`);
     }
   }
   let K = { ...(await LTz()), ...A };
@@ -35555,7 +35555,7 @@ var HEq = E(() => {
 import { mkdir as jEq } from "fs/promises";
 async function JEq() {
   let A = QI();
-  y(`installPluginsForHeadless: starting${A ? " (zip cache mode)" : ""}`);
+  writeDebugLog(`installPluginsForHeadless: starting${A ? " (zip cache mode)" : ""}`);
   let q = await s01();
   if (q) (oc(), LG());
   if (A)
@@ -35573,7 +35573,7 @@ async function JEq() {
     $ = q;
   try {
     if (K === 0 && w.length === 0)
-      y(
+      writeDebugLog(
         "installPluginsForHeadless: no missing plugins or marketplaces configured",
       );
     if (K > 0 || w.length > 0) {
@@ -35586,11 +35586,11 @@ async function JEq() {
               skip: A ? (M, P) => !L24(P) : void 0,
               onProgress: (M) => {
                 if (M.type === "installed")
-                  y(
+                  writeDebugLog(
                     `installPluginsForHeadless: installed extra marketplace ${M.name}`,
                   );
                 else if (M.type === "failed")
-                  y(
+                  writeDebugLog(
                     `installPluginsForHeadless: failed to install extra marketplace ${M.name}: ${M.error}`,
                   );
               },
@@ -35613,7 +35613,7 @@ async function JEq() {
         else X.push(M);
       }
       if (((_.skipped_count = X.length), X.length > 0))
-        y(
+        writeDebugLog(
           `installPluginsForHeadless: skipping ${X.length} plugins from unknown marketplaces: ${X.join(", ")}`,
         );
       if (D.length > 0) {
@@ -35628,7 +35628,7 @@ async function JEq() {
         ((_.installed_count = M.installed.length),
           (_.failed_count = M.failed.length),
           ($ = $ || M.installed.length > 0),
-          y(
+          writeDebugLog(
             `installPluginsForHeadless: ${M.installed.length} installed, ${M.failed.length} failed`,
           ));
       }
@@ -35640,9 +35640,9 @@ async function JEq() {
     if (A) Xq(V24);
     return $;
   } catch (O) {
-    return ($6(O instanceof Error ? O : Error(String(O))), !1);
+    return (sendError(O instanceof Error ? O : Error(String(O))), !1);
   } finally {
-    n("tengu_headless_plugin_install", _);
+    emitEvent("tengu_headless_plugin_install", _);
   }
 }
 var DEq = E(() => {
@@ -35736,7 +35736,7 @@ async function hTz(A, q, K, Y, z, w, _, $) {
               hook_name: L.hookName,
               hook_event: L.hookEvent,
               uuid: H0(),
-              session_id: d1(),
+              session_id: getSessionId(),
             };
           case "progress":
             return {
@@ -35749,7 +35749,7 @@ async function hTz(A, q, K, Y, z, w, _, $) {
               stderr: L.stderr,
               output: L.output,
               uuid: H0(),
-              session_id: d1(),
+              session_id: getSessionId(),
             };
           case "response":
             return {
@@ -35764,7 +35764,7 @@ async function hTz(A, q, K, Y, z, w, _, $) {
               exit_code: L.exitCode,
               outcome: L.outcome,
               uuid: H0(),
-              session_id: d1(),
+              session_id: getSessionId(),
             };
         }
       })();
@@ -35796,7 +35796,7 @@ async function hTz(A, q, K, Y, z, w, _, $) {
         let S = L.getSystemPrompt();
         if (S) $.systemPrompt = S;
       }
-      Pn6(d1(), L.agentType);
+      Pn6(getSessionId(), L.agentType);
     }
   }
   if (j.length === 0 && process.exitCode !== void 0) return;
@@ -35886,14 +35886,14 @@ async function hTz(A, q, K, Y, z, w, _, $) {
       if (!v || v.type !== "result") throw Error("No messages returned");
       if ($.verbose) {
         L4(
-          p6(N) +
+          trySafeStringify(N) +
             `
 `,
         );
         break;
       }
       L4(
-        p6(v) +
+        trySafeStringify(v) +
           `
 `,
       );
@@ -35964,7 +35964,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
             status: null,
             permissionMode: C6,
             uuid: H0(),
-            session_id: d1(),
+            session_id: getSessionId(),
           });
         return Z6;
       });
@@ -35977,7 +35977,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
         output: r.output,
         error: r.error,
         uuid: H0(),
-        session_id: d1(),
+        session_id: getSessionId(),
       });
     });
   let N = (y6) => {
@@ -35987,14 +35987,14 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
         type: "rate_limit_event",
         rate_limit_info: r,
         uuid: H0(),
-        session_id: d1(),
+        session_id: getSessionId(),
       });
   };
   X56.add(N);
   let V = z,
     v = process.env.CLAUDE_CODE_RESUME_INTERRUPTED_TURN;
   if (J && J.kind !== "none" && v)
-    (y(`[print.ts] Auto-resuming interrupted turn (kind: ${J.kind})`),
+    (writeDebugLog(`[print.ts] Auto-resuming interrupted turn (kind: ${J.kind})`),
       GEq(V, J.message),
       IG({ mode: "prompt", value: J.message.message.content, uuid: H0() }));
   let L = oN6(V),
@@ -36023,14 +36023,14 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
       let Z6 = r.name;
       try {
         (r.client.setRequestHandler(OQ, async (S6, C6) => {
-          _8(Z6, `Elicitation request received in print mode: ${p6(S6)}`);
+          _8(Z6, `Elicitation request received in print mode: ${trySafeStringify(S6)}`);
           let d6 = S6.params.mode === "url" ? "url" : "form";
-          n("tengu_mcp_elicitation_shown", { mode: d6 });
+          emitEvent("tengu_mcp_elicitation_shown", { mode: d6 });
           let o6 = await zp6(Z6, S6.params, C6.signal);
           if (o6)
             return (
-              _8(Z6, `Elicitation resolved by hook: ${p6(o6)}`),
-              n("tengu_mcp_elicitation_response", {
+              _8(Z6, `Elicitation resolved by hook: ${trySafeStringify(o6)}`),
+              emitEvent("tengu_mcp_elicitation_response", {
                 mode: d6,
                 action: o6.action,
               }),
@@ -36054,7 +36054,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
             ),
             j1 = await wp6(Z6, D1, C6.signal, d6, t6);
           return (
-            n("tengu_mcp_elicitation_response", {
+            emitEvent("tengu_mcp_elicitation_response", {
               mode: d6,
               action: j1.action,
             }),
@@ -36074,7 +36074,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
                 mcp_server_name: Z6,
                 elicitation_id: C6,
                 uuid: H0(),
-                session_id: d1(),
+                session_id: getSessionId(),
               }));
           }),
           g.add(Z6));
@@ -36182,7 +36182,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
     try {
       if (
         (await Promise.all([
-          X1(process.env.CLAUDE_CODE_REMOTE) || Eq()
+          isTruthy(process.env.CLAUDE_CODE_REMOTE) || Eq()
             ? Lq6("headless_user_settings_download", () => Zkq())
             : Promise.resolve(),
           Lq6("headless_managed_settings_wait", () => aG1()),
@@ -36204,16 +36204,16 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
         }
         let { response: S6, sdkServersChanged: C6 } = await A6(Z6);
         if (C6) U();
-        y(
+        writeDebugLog(
           `Headless MCP refresh: added=${S6.added.length}, removed=${S6.removed.length}`,
         );
       }
     } catch (y6) {
-      $6(y6 instanceof Error ? y6 : Error(String(y6)));
+      sendError(y6 instanceof Error ? y6 : Error(String(y6)));
     }
   }
   let G6 = null;
-  if (X1(process.env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL)) G6 = D6();
+  if (isTruthy(process.env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL)) G6 = D6();
   else D6();
   let v6 = nkq(() => !D),
     T6 = K,
@@ -36252,12 +36252,12 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
         if (C6 > 0) {
           let o6 = new Promise((x6) => setTimeout(() => x6("timeout"), C6));
           if ((await Promise.race([G6, o6])) === "timeout")
-            ($6(
+            (sendError(
               Error(
                 `CLAUDE_CODE_SYNC_PLUGIN_INSTALL: plugin installation timed out after ${C6}ms`,
               ),
             ),
-              n("tengu_sync_plugin_install_timeout", { timeout_ms: C6 }));
+              emitEvent("tengu_sync_plugin_install_timeout", { timeout_ms: C6 }));
         } else await G6;
         ((G6 = null), await H6());
         let { setupPluginHookHotReload: d6 } = await Promise.resolve().then(
@@ -36325,13 +36325,13 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
                           duration_ms: A8 ? parseInt(A8[1], 10) : 0,
                         }
                       : void 0,
-                  session_id: d1(),
+                  session_id: getSessionId(),
                   uuid: H0(),
                 });
               }
               let K1 = C6.value;
               if (A instanceof UR1 && C6.mode === "prompt")
-                n("tengu_bridge_message_received", { is_repl: !1 });
+                emitEvent("tengu_bridge_message_received", { is_repl: !1 });
               if (
                 (Z.abortController?.abort(),
                 (Z.abortController = null),
@@ -36399,7 +36399,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
                     type: "system",
                     subtype: "status",
                     status: j1,
-                    session_id: d1(),
+                    session_id: getSessionId(),
                     uuid: H0(),
                   });
                 },
@@ -36441,7 +36441,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
                           type: "prompt_suggestion",
                           suggestion: M6.suggestion,
                           uuid: H0(),
-                          session_id: d1(),
+                          session_id: getSessionId(),
                         },
                         s6 = {
                           text: M6.suggestion,
@@ -36466,7 +36466,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
                         nP("aborted", void 0, void 0, "sdk");
                         return;
                       }
-                      $6(
+                      sendError(
                         M6 instanceof Error
                           ? M6
                           : Error("SDK prompt suggestion generation failed"),
@@ -36516,7 +36516,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
             is_error: !0,
             num_turns: 0,
             stop_reason: null,
-            session_id: d1(),
+            session_id: getSessionId(),
             total_cost_usd: 0,
             usage: qZ,
             modelUsage: {},
@@ -36549,19 +36549,19 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
                   Object.keys(x6.teamContext.teammates).length > 0)
               )
             ) {
-              y("[print.ts] No more active teammates, stopping poll");
+              writeDebugLog("[print.ts] No more active teammates, stopping poll");
               break;
             }
             let D1 = await R96("team-lead", x6.teamContext?.teamName);
             if (D1.length > 0) {
-              (y(`[print.ts] Team-lead found ${D1.length} unread messages`),
+              (writeDebugLog(`[print.ts] Team-lead found ${D1.length} unread messages`),
                 await Bp6("team-lead", x6.teamContext?.teamName));
               let j1 = x6.teamContext?.teamName;
               for (let M1 of D1) {
                 let M6 = cf(M1.text);
                 if (M6 && j1) {
                   let V6 = M6.from;
-                  y(`[print.ts] Processing shutdown_approved from ${V6}`);
+                  writeDebugLog(`[print.ts] Processing shutdown_approved from ${V6}`);
                   let s6 = x6.teamContext?.teammates
                     ? Object.entries(x6.teamContext.teammates).find(
                         ([, O1]) => O1.name === V6,
@@ -36569,7 +36569,7 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
                     : void 0;
                   if (s6)
                     (ZG6(j1, { agentId: s6, name: V6 }),
-                      y(`[print.ts] Removed ${V6} from team file`),
+                      writeDebugLog(`[print.ts] Removed ${V6} from team file`),
                       await pt(j1, s6, V6, "shutdown"),
                       O((O1) => {
                         if (!O1.teamContext?.teammates) return O1;
@@ -36596,7 +36596,7 @@ ${M1.text}
             }
             if (X && !M) {
               ((M = !0),
-                y(
+                writeDebugLog(
                   "[print.ts] Input closed with active teammates, injecting shutdown prompt",
                 ),
                 IG({ mode: "prompt", value: XEq, uuid: H0() }),
@@ -37015,7 +37015,7 @@ ${M1.text}
                       }));
                   })
                   .catch((j1) => {
-                    y(`MCP OAuth failed for ${Z6}: ${j1}`, { level: "error" });
+                    writeDebugLog(`MCP OAuth failed for ${Z6}: ${j1}`, { level: "error" });
                   })
                   .finally(() => {
                     if (E6.get(Z6) === d6)
@@ -37161,7 +37161,7 @@ ${M1.text}
                           };
                       },
                       onStateChange(C6, d6) {
-                        (y(
+                        (writeDebugLog(
                           `[bridge:sdk] State change: ${C6}${d6 ? ` — ${d6}` : ""}`,
                         ),
                           G.enqueue({
@@ -37170,7 +37170,7 @@ ${M1.text}
                             state: C6,
                             detail: d6,
                             uuid: H0(),
-                            session_id: d1(),
+                            session_id: getSessionId(),
                           }));
                       },
                       initialMessages: V.length > 0 ? V : void 0,
@@ -37223,13 +37223,13 @@ ${M1.text}
         }
         if (r.type !== "user") continue;
         if (((y6 = !0), r.uuid)) {
-          let Z6 = d1();
+          let Z6 = getSessionId();
           if ((await yd8(Z6, r.uuid)) || tR1.has(r.uuid)) {
             if (
-              (y(`Skipping duplicate user message: ${r.uuid}`),
+              (writeDebugLog(`Skipping duplicate user message: ${r.uuid}`),
               j.replayUserMessages)
             )
-              (y(
+              (writeDebugLog(
                 `Sending acknowledgment for duplicate user message: ${r.uuid}`,
               ),
                 G.enqueue({
@@ -37429,7 +37429,7 @@ async function bTz(A, q, K, Y, z, w, _, $, O, H, j) {
         output: G.output,
         error: G.error,
         uuid: H0(),
-        session_id: d1(),
+        session_id: getSessionId(),
       });
   }
 }
@@ -37492,7 +37492,7 @@ function sR1(A, q) {
       is_error: !0,
       num_turns: 0,
       stop_reason: null,
-      session_id: d1(),
+      session_id: getSessionId(),
       total_cost_usd: 0,
       usage: qZ,
       modelUsage: {},
@@ -37501,7 +37501,7 @@ function sR1(A, q) {
       errors: [A],
     };
     process.stdout.write(
-      p6(K) +
+      trySafeStringify(K) +
         `
 `,
     );
@@ -37520,7 +37520,7 @@ async function mTz(A, q) {
   let K = !ML();
   if (q.continue)
     try {
-      n("tengu_continue_print", {});
+      emitEvent("tengu_continue_print", {});
       let Y = await j16(void 0, void 0);
       if (Y) {
         if (!q.forkSession) {
@@ -37540,7 +37540,7 @@ async function mTz(A, q) {
       }
     } catch (Y) {
       return (
-        $6(Y instanceof Error ? Y : Error(String(Y))),
+        sendError(Y instanceof Error ? Y : Error(String(Y))),
         _3(1),
         { messages: [] }
       );
@@ -37551,7 +37551,7 @@ async function mTz(A, q) {
         throw Error(
           "Remote sessions are disabled by your organization's policy.",
         );
-      if ((n("tengu_teleport_print", {}), typeof q.teleport !== "string"))
+      if ((emitEvent("tengu_teleport_print", {}), typeof q.teleport !== "string"))
         throw Error("No session ID provided for teleport");
       await ZV1();
       let Y = await J16(q.teleport),
@@ -37559,14 +37559,14 @@ async function mTz(A, q) {
       return { messages: YT6(Y.log, z) };
     } catch (Y) {
       return (
-        $6(Y instanceof Error ? Y : Error(String(Y))),
+        sendError(Y instanceof Error ? Y : Error(String(Y))),
         _3(1),
         { messages: [] }
       );
     }
   if (q.resume)
     try {
-      n("tengu_resume_print", {});
+      emitEvent("tengu_resume_print", {});
       let Y = zEq(typeof q.resume === "string" ? q.resume : "");
       if (!Y) {
         let w =
@@ -37575,11 +37575,11 @@ async function mTz(A, q) {
           w += `. Session IDs must be in UUID format (e.g., 550e8400-e29b-41d4-a716-446655440000). Provided value "${q.resume}" is not a valid UUID`;
         return (sR1(w, q.outputFormat), _3(1), { messages: [] });
       }
-      if (X1(process.env.CLAUDE_CODE_USE_CCR_V2)) await vd8(Y.sessionId);
+      if (isTruthy(process.env.CLAUDE_CODE_USE_CCR_V2)) await vd8(Y.sessionId);
       else if (Y.isUrl && Y.ingressUrl) await Vd8(Y.sessionId, Y.ingressUrl);
       let z = await j16(Y.sessionId, Y.jsonlFile || void 0);
       if (!z)
-        if (Y.isUrl || X1(process.env.CLAUDE_CODE_USE_CCR_V2))
+        if (Y.isUrl || isTruthy(process.env.CLAUDE_CODE_USE_CCR_V2))
           return { messages: await xP("startup") };
         else
           return (
@@ -37616,7 +37616,7 @@ async function mTz(A, q) {
         }
       );
     } catch (Y) {
-      $6(Y instanceof Error ? Y : Error(String(Y)));
+      sendError(Y instanceof Error ? Y : Error(String(Y)));
       let z =
         Y instanceof Error
           ? `Failed to resume session: ${Y.message}`
@@ -37630,7 +37630,7 @@ function BTz(A, q) {
   if (typeof A === "string")
     if (A.trim() !== "")
       K = cI8([
-        p6({
+        trySafeStringify({
           type: "user",
           session_id: "",
           message: { role: "user", content: A },
@@ -37658,13 +37658,13 @@ async function ZEq({
       { toolUseID: w } = z;
     if (!w) return !1;
     if (
-      (y(
+      (writeDebugLog(
         `handleOrphanedPermissionResponse: received orphaned control_response for toolUseID=${w} request_id=${A.response.request_id}`,
       ),
       Y.has(w))
     )
       return (
-        y(
+        writeDebugLog(
           `handleOrphanedPermissionResponse: skipping duplicate orphaned permission for toolUseID=${w} (already handled)`,
         ),
         !1
@@ -37672,14 +37672,14 @@ async function ZEq({
     let _ = await Rd8(w);
     if (!_)
       return (
-        y(
+        writeDebugLog(
           `handleOrphanedPermissionResponse: no unresolved tool_use found for toolUseID=${w} (already resolved in transcript)`,
         ),
         !1
       );
     return (
       Y.add(w),
-      y(
+      writeDebugLog(
         `handleOrphanedPermissionResponse: enqueuing orphaned permission for toolUseID=${w} messageID=${_.message.id}`,
       ),
       IG({
@@ -37762,7 +37762,7 @@ async function TEq(A, q, K) {
         try {
           await G.cleanup();
         } catch (N) {
-          $6(N instanceof Error ? N : Error(String(N)));
+          sendError(N instanceof Error ? N : Error(String(N)));
         }
       await ik(W, Z);
     }
@@ -37791,7 +37791,7 @@ async function TEq(A, q, K) {
       j.push(W);
     } catch (f) {
       let N = f instanceof Error ? f.message : String(f);
-      ((J[W] = N), $6(f instanceof Error ? f : Error(N)));
+      ((J[W] = N), sendError(f instanceof Error ? f : Error(N)));
     }
   }
   let M = {};
@@ -37930,7 +37930,7 @@ var initHeadless = E(() => {
   ((tR1 = new Set()), (aR1 = []));
 });
 function kEq(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     { getFpsMetrics: K, children: Y } = A,
     z;
   if (q[0] !== Y || q[1] !== K)
@@ -37952,7 +37952,7 @@ var On8 = E(() => {
 var appExports = {};
 s1(appExports, { App: () => gTz });
 function gTz(A) {
-  let q = w6(9),
+  let q = reactMemoCache(9),
     { getFpsMetrics: K, stats: Y, initialState: z, children: w } = A,
     _;
   if (q[0] !== w || q[1] !== z)
@@ -37991,7 +37991,7 @@ var initApp = E(() => {
   eR1 = Y6(W6(), 1);
 });
 function REq(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { onDone: K } = A,
     Y;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -38061,7 +38061,7 @@ function dTz() {
   if (nV6 !== null) return;
   ((nV6 = setInterval(() => {
     if (e26 > 0)
-      (y("Restarting caffeinate to maintain sleep prevention"), Hn8(), bEq());
+      (writeDebugLog("Restarting caffeinate to maintain sleep prevention"), Hn8(), bEq());
   }, QTz)),
     nV6.unref());
 }
@@ -38080,12 +38080,12 @@ function bEq() {
     ((kb = FTz("caffeinate", ["-i", "-t", String(pTz)], { stdio: "ignore" })),
       kb.unref(),
       kb.on("error", (A) => {
-        (y(`caffeinate spawn error: ${A.message}`), (kb = null));
+        (writeDebugLog(`caffeinate spawn error: ${A.message}`), (kb = null));
       }),
       kb.on("exit", () => {
         kb = null;
       }),
-      y("Started caffeinate to prevent sleep"));
+      writeDebugLog("Started caffeinate to prevent sleep"));
   } catch {
     kb = null;
   }
@@ -38093,7 +38093,7 @@ function bEq() {
 function Hn8() {
   if (kb !== null) {
     try {
-      (kb.kill(), y("Stopped caffeinate, allowing sleep"));
+      (kb.kill(), writeDebugLog("Stopped caffeinate, allowing sleep"));
     } catch {}
     kb = null;
   }
@@ -38155,7 +38155,7 @@ class jn8 {
   }
 }
 function mEq(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { name: K, color: Y } = A,
     z;
   if (q[0] !== Y) ((z = gP(Y)), (q[0] = Y), (q[1] = z));
@@ -38187,7 +38187,7 @@ var BEq = E(() => {
   Aw6 = Y6(W6(), 1);
 });
 function Jn8(A) {
-  let q = w6(15),
+  let q = reactMemoCache(15),
     { toolName: K, description: Y } = A,
     z;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -38300,7 +38300,7 @@ var gEq = E(() => {
   _w = Y6(W6(), 1);
 });
 function pEq(A, q = !1) {
-  let K = T1((Y) => Y.teamContext);
+  let K = useAppState((Y) => Y.teamContext);
   FEq.useEffect(() => {
     if (!q)
       gx(A, {
@@ -38322,7 +38322,7 @@ function dEq(A) {
     if (q)
       q.client.setNotificationHandler(cTz(), async (K) => {
         let { eventName: Y, eventData: z } = K.params;
-        n(`tengu_ide_${Y}`, z);
+        emitEvent(`tengu_ide_${Y}`, z);
       });
   }, [A]);
 }
@@ -38343,7 +38343,7 @@ var cEq = E(() => {
     )));
 });
 function AC1(A) {
-  let q = w6(26),
+  let q = reactMemoCache(26),
     { file_path: K, edits: Y } = A,
     { columns: z } = zA(),
     w;
@@ -38454,7 +38454,7 @@ var Dn8 = E(() => {
   Yn = Y6(W6(), 1);
 });
 function HW(A) {
-  n("tengu_unary_event", {
+  emitEvent("tengu_unary_event", {
     event: A.event,
     completion_type: A.completion_type,
     language_name: A.metadata.language_name,
@@ -38478,7 +38478,7 @@ function sF(A, q) {
         permissionPromptCount: z.attribution.permissionPromptCount + 1,
       },
     })),
-      n("tengu_tool_use_show_permission_request", {
+      emitEvent("tengu_tool_use_show_permission_request", {
         messageID: A.assistantMessage.message.id,
         toolName: gK(A.tool.name),
         isMcp: A.tool.isMcp ?? !1,
@@ -38516,14 +38516,14 @@ var oV6 = E(() => {
 import { basename as nTz, sep as iEq } from "path";
 import { homedir as rTz } from "os";
 function oTz(A) {
-  let q = Q4(A),
-    K = Q4(`${HA()}/.claude`),
+  let q = resolveFilePath(A),
+    K = resolveFilePath(`${HA()}/.claude`),
     Y = aV(q),
     z = aV(K);
   return Y.startsWith(z + iEq.toLowerCase()) || Y.startsWith(z + "/");
 }
 function aTz(A) {
-  let q = Q4(A),
+  let q = resolveFilePath(A),
     K = `${rTz()}/.claude`,
     Y = aV(q),
     z = aV(K);
@@ -38645,7 +38645,7 @@ function sTz(A, q) {
     languageName: _,
   } = A;
   (Xn8("accept", w, _, K),
-    n("tengu_accept_submitted", {
+    emitEvent("tengu_accept_submitted", {
       toolName: gK(Y.tool.name),
       isMcp: Y.tool.isMcp ?? !1,
       has_instructions: !!q?.feedback,
@@ -38695,7 +38695,7 @@ function eTz(A, q) {
     languageName: $,
   } = A;
   (Xn8("reject", _, $, K, q?.hasFeedback),
-    n("tengu_reject_submitted", {
+    emitEvent("tengu_reject_submitted", {
       toolName: gK(Y.tool.name),
       isMcp: Y.tool.isMcp ?? !1,
       has_instructions: !!q?.feedback,
@@ -38725,7 +38725,7 @@ function sEq({
   parseInput: _,
   operationType: $ = "write",
 }) {
-  let O = T1((F) => F.toolPermissionContext),
+  let O = useAppState((F) => F.toolPermissionContext),
     [H, j] = TT.useState(""),
     [J, D] = TT.useState(""),
     [X, M] = TT.useState("yes"),
@@ -38793,11 +38793,11 @@ function sEq({
       (F) => {
         let g = { toolName: gK(Y.tool.name), isMcp: Y.tool.isMcp ?? !1 };
         if (F === "yes")
-          if (P) (W(!1), n("tengu_accept_feedback_mode_collapsed", g));
-          else (W(!0), N(!0), n("tengu_accept_feedback_mode_entered", g));
+          if (P) (W(!1), emitEvent("tengu_accept_feedback_mode_collapsed", g));
+          else (W(!0), N(!0), emitEvent("tengu_accept_feedback_mode_entered", g));
         else if (F === "no")
-          if (G) (Z(!1), n("tengu_reject_feedback_mode_collapsed", g));
-          else (Z(!0), v(!0), n("tengu_reject_feedback_mode_entered", g));
+          if (G) (Z(!1), emitEvent("tengu_reject_feedback_mode_collapsed", g));
+          else (Z(!0), v(!0), emitEvent("tengu_reject_feedback_mode_entered", g));
       },
       [P, G, Y],
     );
@@ -38844,13 +38844,13 @@ function eEq({
   async function D() {
     if (!j) return;
     try {
-      n("tengu_ext_will_show_diff", {});
+      emitEvent("tengu_ext_will_show_diff", {});
       let { oldContent: X, newContent: M } = await YNz(K, Y, q, H);
       if (w.current) return;
-      n("tengu_ext_diff_accepted", {});
+      emitEvent("tengu_ext_diff_accepted", {});
       let P = KNz(K, X, M, z);
       if (P.length === 0) {
-        n("tengu_ext_diff_rejected", {});
+        emitEvent("tengu_ext_diff_rejected", {});
         let W = HV(q.options.mcpClients);
         if (W) await Mn8(H, W);
         A({ type: "reject" }, { file_path: K, edits: Y });
@@ -38858,7 +38858,7 @@ function eEq({
       }
       A({ type: "accept-once" }, { file_path: K, edits: P });
     } catch (X) {
-      ($6(X), $(!0));
+      (sendError(X), $(!0));
     }
   }
   return (
@@ -38887,12 +38887,12 @@ function KNz(A, q, K, Y) {
     w = xH4({ filePath: A, oldContent: q, newContent: K, singleHunk: z });
   if (w.length === 0) return [];
   if (z && w.length > 1)
-    $6(Error(`Unexpected number of hunks: ${w.length}. Expected 1 hunk.`));
+    sendError(Error(`Unexpected number of hunks: ${w.length}. Expected 1 hunk.`));
   return mH4(w);
 }
 async function YNz(A, q, K, Y) {
   let z = !1,
-    w = Q4(A),
+    w = resolveFilePath(A),
     _ = "";
   try {
     _ = KH(w);
@@ -38905,7 +38905,7 @@ async function YNz(A, q, K, Y) {
     try {
       await Mn8(Y, O);
     } catch (H) {
-      $6(H);
+      sendError(H);
     }
     (process.off("beforeExit", $),
       K.abortController.signal.removeEventListener("abort", $));
@@ -38936,7 +38936,7 @@ async function YNz(A, q, K, Y) {
     else if (wNz(X)) return ($(), { oldContent: _, newContent: _ });
     throw Error("Not accepted");
   } catch (H) {
-    throw ($6(H), $(), H);
+    throw (sendError(H), $(), H);
   }
 }
 async function Mn8(A, q) {
@@ -38944,7 +38944,7 @@ async function Mn8(A, q) {
     if (!q || q.type !== "connected") throw Error("IDE client not available");
     await tI("close_tab", { tab_name: A }, q);
   } catch (K) {
-    $6(K);
+    sendError(K);
   }
 }
 function zNz(A) {
@@ -38994,7 +38994,7 @@ var ALq = E(() => {
 });
 import { basename as $Nz, relative as ONz } from "path";
 function qLq(A) {
-  let q = w6(37),
+  let q = reactMemoCache(37),
     {
       onChange: K,
       options: Y,
@@ -39170,7 +39170,7 @@ var KLq = E(() => {
 });
 import { relative as HNz } from "path";
 function tF(A) {
-  let q = w6(79),
+  let q = reactMemoCache(79),
     {
       toolUseConfirm: K,
       toolUseContext: Y,
@@ -39208,7 +39208,7 @@ function tF(A) {
     }
     let Z6;
     if (q[3] !== D) {
-      let d6 = Q4(D),
+      let d6 = resolveFilePath(D),
         o6 = P1();
       ((Z6 = P$(o6, d6)), (q[3] = D), (q[4] = Z6));
     } else Z6 = q[4];
@@ -39538,7 +39538,7 @@ function qC1(A, q, K, Y) {
 import { basename as DNz } from "path";
 import { relative as XNz } from "path";
 function YLq(A) {
-  let q = w6(61),
+  let q = reactMemoCache(61),
     K = A.toolUseConfirm.input,
     Y = PNz,
     z,
@@ -40036,9 +40036,9 @@ function $Lq(A) {
   }
 }
 function fNz(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { title: K, decisionReason: Y } = A,
-    [z] = E7(),
+    [z] = useTheme(),
     w;
   if (q[0] !== Y || q[1] !== z)
     ((w = function () {
@@ -40051,8 +40051,8 @@ function fNz(A) {
               let [D, X] = J,
                 M =
                   X.behavior === "allow"
-                    ? bA("success", z)(a6.tick)
-                    : bA("error", z)(a6.cross);
+                    ? bA("success", z)(figures.tick)
+                    : bA("error", z)(figures.cross);
               return kq.default.createElement(
                 m,
                 { flexDirection: "column", key: D },
@@ -40142,7 +40142,7 @@ function VNz(A) {
   return;
 }
 function vNz(A) {
-  let q = w6(22),
+  let q = reactMemoCache(22),
     { suggestions: K, width: Y } = A;
   if (!K || K.length === 0) {
     let _;
@@ -40286,15 +40286,15 @@ function vNz(A) {
   return z;
 }
 function kNz(A, q) {
-  return kq.default.createElement(T, { key: q }, a6.bullet, " ", A);
+  return kq.default.createElement(T, { key: q }, figures.bullet, " ", A);
 }
 function ENz(A, q) {
-  return kq.default.createElement(T, { key: q }, a6.bullet, " ", v5(A));
+  return kq.default.createElement(T, { key: q }, figures.bullet, " ", v5(A));
 }
 function OLq(A) {
-  let q = w6(25),
+  let q = reactMemoCache(25),
     { permissionResult: K, toolName: Y } = A,
-    z = T1(yNz),
+    z = useAppState(yNz),
     w = K.decisionReason,
     _ = "suggestions" in K ? K.suggestions : void 0,
     $;
@@ -40405,7 +40405,7 @@ function OLq(A) {
         kq.default.createElement(
           T,
           { color: "warning" },
-          a6.warning,
+          figures.warning,
           " Unreachable Rules (",
           O.length,
           ")",
@@ -40495,7 +40495,7 @@ ${A.reason}`
   }
 }
 function dC(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { permissionResult: K, toolType: Y } = A,
     z = K?.decisionReason,
     w;
@@ -40546,7 +40546,7 @@ var qw6 = E(() => {
 });
 import { basename as SNz, relative as hNz } from "path";
 function jLq(A) {
-  let q = w6(43),
+  let q = reactMemoCache(43),
     K,
     Y;
   if (q[0] !== A)
@@ -40724,7 +40724,7 @@ var JLq = E(() => {
 function FNz(A) {
   if (typeof A === "string") return A;
   try {
-    return p6(A, null, 2);
+    return trySafeStringify(A, null, 2);
   } catch {
     return String(A);
   }
@@ -40792,12 +40792,12 @@ Explain this command in context.`,
         signal: z,
       }),
       J = Date.now() - w;
-    y(
+    writeDebugLog(
       `Permission explainer: API returned in ${J}ms, stop_reason=${j.stop_reason}`,
     );
     let D = j.content.find((X) => X.type === "tool_use");
     if (D && D.type === "tool_use") {
-      y(`Permission explainer: tool input: ${p6(D.input).slice(0, 500)}`);
+      writeDebugLog(`Permission explainer: tool input: ${trySafeStringify(D.input).slice(0, 500)}`);
       let X = gNz().safeParse(D.input);
       if (X.success) {
         let M = {
@@ -40807,35 +40807,35 @@ Explain this command in context.`,
           risk: X.data.risk,
         };
         return (
-          n("tengu_permission_explainer_generated", {
+          emitEvent("tengu_permission_explainer_generated", {
             tool_name: gK(A),
             risk_level: INz[M.riskLevel],
             latency_ms: J,
           }),
-          y(`Permission explainer: ${M.riskLevel} risk for ${A} (${J}ms)`),
+          writeDebugLog(`Permission explainer: ${M.riskLevel} risk for ${A} (${J}ms)`),
           M
         );
       }
     }
     return (
-      n("tengu_permission_explainer_error", {
+      emitEvent("tengu_permission_explainer_error", {
         tool_name: gK(A),
         error_type: xNz,
         latency_ms: J,
       }),
-      y("Permission explainer: no parsed output in response"),
+      writeDebugLog("Permission explainer: no parsed output in response"),
       null
     );
   } catch (_) {
     let $ = Date.now() - w;
     if (z.aborted)
-      return (y(`Permission explainer: request aborted for ${A}`), null);
+      return (writeDebugLog(`Permission explainer: request aborted for ${A}`), null);
     return (
-      y(
+      writeDebugLog(
         `Permission explainer error: ${_ instanceof Error ? _.message : String(_)}`,
       ),
-      $6(_ instanceof Error ? _ : Error(String(_))),
-      n("tengu_permission_explainer_error", {
+      sendError(_ instanceof Error ? _ : Error(String(_))),
+      emitEvent("tengu_permission_explainer_error", {
         tool_name: gK(A),
         error_type: _ instanceof Error && _.name === "AbortError" ? bNz : uNz,
         latency_ms: $,
@@ -40903,7 +40903,7 @@ var XLq = E(() => {
     )));
 });
 function QNz() {
-  let A = w6(7),
+  let A = reactMemoCache(7),
     [q, K] = KU6("responding", MLq, !0, !1),
     Y;
   if (A[0] !== K)
@@ -40963,7 +40963,7 @@ function cNz(A) {
   }).catch(() => null);
 }
 function PLq(A) {
-  let q = w6(9),
+  let q = reactMemoCache(9),
     K;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
     ((K = Gn8()), (q[0] = K));
@@ -40975,7 +40975,7 @@ function PLq(A) {
   if (q[1] !== _ || q[2] !== A || q[3] !== z)
     ((O = () => {
       if (!z) {
-        if ((n("tengu_permission_explainer_shortcut_used", {}), !_)) $(cNz(A));
+        if ((emitEvent("tengu_permission_explainer_shortcut_used", {}), !_)) $(cNz(A));
       }
       w(lNz);
     }),
@@ -41002,7 +41002,7 @@ function lNz(A) {
   return !A;
 }
 function iNz(A) {
-  let q = w6(21),
+  let q = reactMemoCache(21),
     { promise: K } = A,
     Y = Kw6.use(K);
   if (!Y) {
@@ -41086,7 +41086,7 @@ function iNz(A) {
   return J;
 }
 function WLq(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     { visible: K, promise: Y } = A;
   if (!K || !Y) return null;
   let z;
@@ -41631,7 +41631,7 @@ var FLq = E(() => {
     }));
 });
 function pLq(A) {
-  let q = w6(21),
+  let q = reactMemoCache(21),
     {
       toolUseConfirm: K,
       toolUseContext: Y,
@@ -41726,8 +41726,8 @@ function jVz({
   command: _,
   description: $,
 }) {
-  let [O] = E7(),
-    H = T1((O6) => O6.toolPermissionContext),
+  let [O] = useTheme(),
+    H = useAppState((O6) => O6.toolPermissionContext),
     j = tA(),
     J = PLq({
       toolName: A.tool.name,
@@ -41823,17 +41823,17 @@ function jVz({
     A.onUserInteraction();
     let X6 = { toolName: gK(A.tool.name), isMcp: A.tool.isMcp ?? !1 };
     if (O6 === "yes")
-      if (I) (B(!1), n("tengu_accept_feedback_mode_collapsed", X6));
-      else (B(!0), c(!0), n("tengu_accept_feedback_mode_entered", X6));
+      if (I) (B(!1), emitEvent("tengu_accept_feedback_mode_collapsed", X6));
+      else (B(!0), c(!0), emitEvent("tengu_accept_feedback_mode_entered", X6));
     else if (O6 === "no")
-      if (h) (F(!1), n("tengu_reject_feedback_mode_collapsed", X6));
-      else (F(!0), a(!0), n("tengu_reject_feedback_mode_entered", X6));
+      if (h) (F(!1), emitEvent("tengu_reject_feedback_mode_collapsed", X6));
+      else (F(!0), a(!0), emitEvent("tengu_reject_feedback_mode_entered", X6));
   }
   function K6(O6) {
     let X6 = O6?.trim(),
       E6 = !!X6;
     if (!E6)
-      (n("tengu_permission_request_escape", { explainer_visible: J.visible }),
+      (emitEvent("tengu_permission_request_escape", { explainer_visible: J.visible }),
         j((L6) => ({
           ...L6,
           attribution: {
@@ -41846,7 +41846,7 @@ function jVz({
     (Y(), K());
   }
   function s(O6) {
-    n("tengu_permission_request_option_selected", {
+    emitEvent("tengu_permission_request_option_selected", {
       option_index: {
         yes: 1,
         "yes-apply-suggestions": 2,
@@ -41877,7 +41877,7 @@ function jVz({
       case "yes": {
         let L6 = W.trim();
         (wn("tool_use_single", A, "accept"),
-          n("tengu_accept_submitted", {
+          emitEvent("tengu_accept_submitted", {
             toolName: E6,
             isMcp: A.tool.isMcp ?? !1,
             has_instructions: !!L6,
@@ -41899,7 +41899,7 @@ function jVz({
       }
       case "no": {
         let L6 = M.trim();
-        (n("tengu_reject_submitted", {
+        (emitEvent("tengu_reject_submitted", {
           toolName: E6,
           isMcp: A.tool.isMcp ?? !1,
           has_instructions: !!L6,
@@ -42041,7 +42041,7 @@ var QLq = E(() => {
   ((xO = Y6(W6(), 1)), (n$ = Y6(W6(), 1)));
 });
 function wC1(A) {
-  let q = w6(54),
+  let q = reactMemoCache(54),
     {
       options: K,
       onSelect: Y,
@@ -42110,11 +42110,11 @@ function wC1(A) {
       let { type: H6 } = z6.feedbackConfig,
         _6 = { toolName: _?.toolName, isMcp: _?.isMcp ?? !1 };
       if (H6 === "accept")
-        if (X) (M(!1), n("tengu_accept_feedback_mode_collapsed", _6));
-        else (M(!0), N(!0), n("tengu_accept_feedback_mode_entered", _6));
+        if (X) (M(!1), emitEvent("tengu_accept_feedback_mode_collapsed", _6));
+        else (M(!0), N(!0), emitEvent("tengu_accept_feedback_mode_entered", _6));
       else if (H6 === "reject")
-        if (P) (W(!1), n("tengu_reject_feedback_mode_collapsed", _6));
-        else (W(!0), v(!0), n("tengu_reject_feedback_mode_entered", _6));
+        if (P) (W(!1), emitEvent("tengu_reject_feedback_mode_collapsed", _6));
+        else (W(!0), v(!0), emitEvent("tengu_reject_feedback_mode_entered", _6));
     }),
       (q[12] = X),
       (q[13] = K),
@@ -42149,9 +42149,9 @@ function wC1(A) {
           instructions_length: K6?.length ?? 0,
           entered_feedback_mode: z6.feedbackConfig.type === "accept" ? f : V,
         };
-        if (z6.feedbackConfig.type === "accept") n("tengu_accept_submitted", s);
+        if (z6.feedbackConfig.type === "accept") emitEvent("tengu_accept_submitted", s);
         else if (z6.feedbackConfig.type === "reject")
-          n("tengu_reject_submitted", s);
+          emitEvent("tengu_reject_submitted", s);
       }
       Y(T6, H6);
     }),
@@ -42181,7 +42181,7 @@ function wC1(A) {
   let j6;
   if (q[31] !== z || q[32] !== O)
     ((j6 = () => {
-      (n("tengu_permission_request_escape", {}), O(DVz), z?.());
+      (emitEvent("tengu_permission_request_escape", {}), O(DVz), z?.());
     }),
       (q[31] = z),
       (q[32] = O),
@@ -42277,9 +42277,9 @@ var Tn8 = E(() => {
     }));
 });
 function tV6(A) {
-  let q = w6(58),
+  let q = reactMemoCache(58),
     { toolUseConfirm: K, onDone: Y, onReject: z, workerBadge: w } = A,
-    [_] = E7(),
+    [_] = useTheme(),
     $,
     O;
   if (q[0] !== K.input || q[1] !== K.tool)
@@ -42579,7 +42579,7 @@ var vn8 = E(() => {
   Vn8 = Y6(W6(), 1);
 });
 function dLq(A) {
-  let q = w6(17),
+  let q = reactMemoCache(17),
     { file_path: K, content: Y } = A,
     { columns: z } = zA(),
     w = P1().existsSync(K),
@@ -42701,7 +42701,7 @@ var cLq = E(() => {
 });
 import { basename as GVz, relative as ZVz } from "path";
 function lLq(A) {
-  let q = w6(28),
+  let q = reactMemoCache(28),
     K = TVz,
     Y;
   if (q[0] !== A.toolUseConfirm.input)
@@ -42838,7 +42838,7 @@ function NVz(A) {
   return null;
 }
 function nLq(A) {
-  let q = w6(30),
+  let q = reactMemoCache(30),
     {
       toolUseConfirm: K,
       onDone: Y,
@@ -42847,7 +42847,7 @@ function nLq(A) {
       toolUseContext: _,
       workerBadge: $,
     } = A,
-    [O] = E7(),
+    [O] = useTheme(),
     H;
   if (q[0] !== K) ((H = NVz(K)), (q[0] = K), (q[1] = H));
   else H = q[1];
@@ -42974,7 +42974,7 @@ function vVz(A) {
   }
 }
 function oLq(A) {
-  let q = w6(41),
+  let q = reactMemoCache(41),
     {
       toolUseConfirm: K,
       onDone: Y,
@@ -42982,7 +42982,7 @@ function oLq(A) {
       verbose: w,
       workerBadge: _,
     } = A,
-    [$] = E7(),
+    [$] = useTheme(),
     { url: O } = K.input,
     H;
   if (q[0] !== O) ((H = new URL(O)), (q[0] = O), (q[1] = H));
@@ -43172,7 +43172,7 @@ var aLq = E(() => {
 });
 import { relative as kVz } from "path";
 function sLq(A) {
-  let q = w6(5),
+  let q = reactMemoCache(5),
     K;
   if (q[0] !== A.notebook_path)
     ((K = P1()
@@ -43203,7 +43203,7 @@ function LVz(A) {
   return s3(A);
 }
 function yVz(A) {
-  let q = w6(34),
+  let q = reactMemoCache(34),
     {
       notebook_path: K,
       cell_id: Y,
@@ -43411,7 +43411,7 @@ var tLq = E(() => {
 });
 import { basename as CVz } from "path";
 function eLq(A) {
-  let q = w6(52),
+  let q = reactMemoCache(52),
     K = SVz,
     Y,
     z,
@@ -43594,7 +43594,7 @@ function SVz(A) {
   let q = Wi.inputSchema.safeParse(A);
   if (!q.success)
     return (
-      $6(Error(`Failed to parse notebook edit input: ${q.error.message}`)),
+      sendError(Error(`Failed to parse notebook edit input: ${q.error.message}`)),
       { notebook_path: "", new_source: "", cell_id: "" }
     );
   return q.data;
@@ -43666,7 +43666,7 @@ function HC1(A, q) {
   return K;
 }
 function qyq({ toolUseConfirm: A, onDone: q, onReject: K, workerBadge: Y }) {
-  let z = T1((d) => d.toolPermissionContext),
+  let z = useAppState((d) => d.toolPermissionContext),
     w = tA(),
     { addNotification: _ } = Nq(),
     [$, O] = iC.useState(""),
@@ -43723,7 +43723,7 @@ function qyq({ toolUseConfirm: A, onDone: q, onReject: K, workerBadge: Y }) {
   );
   OA((d, a) => {
     if ((g(), a.ctrl && d.toLowerCase() === "g"))
-      (n("tengu_plan_external_editor_used", {}),
+      (emitEvent("tengu_plan_external_editor_used", {}),
         (async () => {
           if (G && f) {
             let e = await RE(f);
@@ -43765,7 +43765,7 @@ function qyq({ toolUseConfirm: A, onDone: q, onReject: K, workerBadge: Y }) {
       let D6 = "default";
       if (d === "yes-bypass-permissions") D6 = "bypassPermissions";
       else if (d === "yes-accept-edits") D6 = "acceptEdits";
-      n("tengu_plan_exit", {
+      emitEvent("tengu_plan_exit", {
         planLengthChars: L.length,
         outcome: d,
         clearContext: !0,
@@ -43774,7 +43774,7 @@ function qyq({ toolUseConfirm: A, onDone: q, onReject: K, workerBadge: Y }) {
       let G6 = "",
         T6 = `
 
-If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: ${g$(d1())}`,
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: ${g$(getSessionId())}`,
         z6 = D7()
           ? `
 
@@ -43809,7 +43809,7 @@ ${L}${G6}${T6}${z6}`,
       "yes-default-keep-context": "default",
     }[d];
     if (f6) {
-      (n("tengu_plan_exit", {
+      (emitEvent("tengu_plan_exit", {
         planLengthChars: L.length,
         outcome: d,
         clearContext: !1,
@@ -43826,7 +43826,7 @@ ${L}${G6}${T6}${z6}`,
       "yes-accept-edits": "acceptEdits",
     }[d];
     if (A6) {
-      (n("tengu_plan_exit", {
+      (emitEvent("tengu_plan_exit", {
         planLengthChars: L.length,
         outcome: d,
         interviewPhaseEnabled: vH(),
@@ -43840,7 +43840,7 @@ ${L}${G6}${T6}${z6}`,
     if (d === "no") {
       let D6 = $.trim();
       if (!D6 && !W) return;
-      n("tengu_plan_exit", {
+      emitEvent("tengu_plan_exit", {
         planLengthChars: L.length,
         outcome: "no",
         interviewPhaseEnabled: vH(),
@@ -43888,7 +43888,7 @@ ${L}${G6}${T6}${z6}`,
             ],
             onChange: function (a) {
               if (a === "yes")
-                (n("tengu_plan_exit", {
+                (emitEvent("tengu_plan_exit", {
                   planLengthChars: 0,
                   outcome: "yes-default",
                   interviewPhaseEnabled: vH(),
@@ -43904,7 +43904,7 @@ ${L}${G6}${T6}${z6}`,
                     },
                   ]));
               else
-                (n("tengu_plan_exit", {
+                (emitEvent("tengu_plan_exit", {
                   planLengthChars: 0,
                   outcome: "no",
                   interviewPhaseEnabled: vH(),
@@ -43914,7 +43914,7 @@ ${L}${G6}${T6}${z6}`,
                   A.onReject());
             },
             onCancel: () => {
-              (n("tengu_plan_exit", {
+              (emitEvent("tengu_plan_exit", {
                 planLengthChars: 0,
                 outcome: "no",
                 interviewPhaseEnabled: vH(),
@@ -44044,7 +44044,7 @@ ${L}${G6}${T6}${z6}`,
               onFocus: () => g(),
               onChange: (d) => u(d),
               onCancel: () => {
-                (n("tengu_plan_exit", {
+                (emitEvent("tengu_plan_exit", {
                   planLengthChars: L.length,
                   outcome: "no",
                   interviewPhaseEnabled: vH(),
@@ -44080,7 +44080,7 @@ ${L}${G6}${T6}${z6}`,
             mz.default.createElement(
               T,
               { color: "success" },
-              a6.tick,
+              figures.tick,
               "Plan saved!",
             ),
           ),
@@ -44147,14 +44147,14 @@ var En8 = E(() => {
   ((mz = Y6(W6(), 1)), (iC = Y6(W6(), 1)));
 });
 function Kyq(A) {
-  let q = w6(18),
+  let q = reactMemoCache(18),
     { toolUseConfirm: K, onDone: Y, onReject: z, workerBadge: w } = A,
-    _ = T1(xVz),
+    _ = useAppState(xVz),
     $;
   if (q[0] !== Y || q[1] !== z || q[2] !== _ || q[3] !== K)
     (($ = function (Z) {
       if (Z === "yes")
-        (n("tengu_plan_enter", {
+        (emitEvent("tengu_plan_enter", {
           interviewPhaseEnabled: vH(),
           entryMethod: "tool",
         }),
@@ -44286,7 +44286,7 @@ var Yyq = E(() => {
   Av = Y6(W6(), 1);
 });
 function zyq(A) {
-  let q = w6(51),
+  let q = reactMemoCache(51),
     { toolUseConfirm: K, onDone: Y, onReject: z, workerBadge: w } = A,
     _ = bVz,
     $;
@@ -44581,7 +44581,7 @@ function bVz(A) {
   let q = D16.inputSchema.safeParse(A);
   if (!q.success)
     return (
-      $6(Error(`Failed to parse skill tool input: ${q.error.message}`)),
+      sendError(Error(`Failed to parse skill tool input: ${q.error.message}`)),
       ""
     );
   return q.data.skill;
@@ -44690,14 +44690,14 @@ var $yq = E(() => {
   };
 });
 function eV6(A) {
-  let q = w6(39),
+  let q = reactMemoCache(39),
     { questions: K, currentQuestionIndex: Y, answers: z, hideSubmitTab: w } = A,
     _ = w === void 0 ? !1 : w,
     { columns: $ } = zA(),
     O;
   if (q[0] !== $ || q[1] !== Y || q[2] !== _ || q[3] !== K) {
     A: {
-      let W = _ ? "" : ` ${a6.tick} Submit `,
+      let W = _ ? "" : ` ${figures.tick} Submit `,
         G = h8("← ") + h8(" →") + h8(W),
         Z = $ - G;
       if (Z <= 0) {
@@ -44770,7 +44770,7 @@ function eV6(A) {
     if (q[22] !== z || q[23] !== Y || q[24] !== H)
       ((W = (G, Z) => {
         let f = Z === Y,
-          V = G?.question && !!z[G.question] ? a6.checkboxOn : a6.checkboxOff,
+          V = G?.question && !!z[G.question] ? figures.checkboxOn : figures.checkboxOff,
           v = H[Z] || G?.header || `Q${Z + 1}`;
         return eF.default.createElement(
           m,
@@ -44812,11 +44812,11 @@ function eV6(A) {
               T,
               { backgroundColor: "permission", color: "inverseText" },
               " ",
-              a6.tick,
+              figures.tick,
               " Submit",
               " ",
             )
-          : eF.default.createElement(T, null, " ", a6.tick, " Submit "),
+          : eF.default.createElement(T, null, " ", figures.tick, " Submit "),
       )),
       (q[26] = Y),
       (q[27] = _),
@@ -44876,7 +44876,7 @@ var jC1 = E(() => {
   eF = Y6(W6(), 1);
 });
 function Oyq(A) {
-  let q = w6(30),
+  let q = reactMemoCache(30),
     { content: K, maxLines: Y, minHeight: z, minWidth: w, maxWidth: _ } = A,
     $ = w === void 0 ? 40 : w,
     { columns: O } = zA(),
@@ -45030,7 +45030,7 @@ function jyq({
   onRespondToClaude: M,
   onFinishPlanInterview: P,
 }) {
-  let W = T1((K6) => K6.toolPermissionContext.mode) === "plan",
+  let W = useAppState((K6) => K6.toolPermissionContext.mode) === "plan",
     [G, Z] = GK.useState(!1),
     [f, N] = GK.useState(0),
     [V, v] = GK.useState(!1),
@@ -45171,7 +45171,7 @@ function jyq({
                   ? GK.default.createElement(
                       T,
                       { color: "suggestion" },
-                      a6.pointer,
+                      figures.pointer,
                     )
                   : GK.default.createElement(T, null, " "),
                 GK.default.createElement(T, { dimColor: !0 }, " ", s + 1, "."),
@@ -45189,7 +45189,7 @@ function jyq({
                     T,
                     { color: "success" },
                     " ",
-                    a6.tick,
+                    figures.tick,
                   ),
               );
             }),
@@ -45238,7 +45238,7 @@ function jyq({
             m,
             { flexDirection: "row", gap: 1 },
             G && f === 0
-              ? GK.default.createElement(T, { color: "suggestion" }, a6.pointer)
+              ? GK.default.createElement(T, { color: "suggestion" }, figures.pointer)
               : GK.default.createElement(T, null, " "),
             GK.default.createElement(
               T,
@@ -45254,7 +45254,7 @@ function jyq({
                 ? GK.default.createElement(
                     T,
                     { color: "suggestion" },
-                    a6.pointer,
+                    figures.pointer,
                   )
                 : GK.default.createElement(T, null, " "),
               GK.default.createElement(
@@ -45271,9 +45271,9 @@ function jyq({
             T,
             { color: "inactive", dimColor: !0 },
             "Enter to select · ",
-            a6.arrowUp,
+            figures.arrowUp,
             "/",
-            a6.arrowDown,
+            figures.arrowDown,
             " to navigate · n to add notes",
             q.length > 1 &&
               GK.default.createElement(
@@ -45315,7 +45315,7 @@ var Jyq = E(() => {
   GK = Y6(W6(), 1);
 });
 function Dyq(A) {
-  let q = w6(117),
+  let q = reactMemoCache(117),
     {
       question: K,
       questions: Y,
@@ -45341,7 +45341,7 @@ function Dyq(A) {
       onInteraction: L,
     } = A,
     S = $ === void 0 ? !1 : $,
-    I = T1(cVz) === "plan",
+    I = useAppState(cVz) === "plan",
     [B, h] = qY.useState(!1),
     [F, g] = qY.useState(0),
     [u, U] = qY.useState(!1),
@@ -45680,7 +45680,7 @@ function Dyq(A) {
   if (q[81] !== F || q[82] !== B)
     ((h6 =
       B && F === 0
-        ? qY.default.createElement(T, { color: "suggestion" }, a6.pointer)
+        ? qY.default.createElement(T, { color: "suggestion" }, figures.pointer)
         : qY.default.createElement(T, null, " ")),
       (q[81] = F),
       (q[82] = B),
@@ -45715,7 +45715,7 @@ function Dyq(A) {
         m,
         { flexDirection: "row", gap: 1 },
         B && F === 1
-          ? qY.default.createElement(T, { color: "suggestion" }, a6.pointer)
+          ? qY.default.createElement(T, { color: "suggestion" }, figures.pointer)
           : qY.default.createElement(T, null, " "),
         qY.default.createElement(
           T,
@@ -45750,9 +45750,9 @@ function Dyq(A) {
         ? qY.default.createElement(
             qY.default.Fragment,
             null,
-            a6.arrowUp,
+            figures.arrowUp,
             "/",
-            a6.arrowDown,
+            figures.arrowDown,
             " to navigate",
           )
         : "Tab/Arrow keys to navigate"),
@@ -45872,7 +45872,7 @@ var Xyq = E(() => {
   qY = Y6(W6(), 1);
 });
 function Myq(A) {
-  let q = w6(27),
+  let q = reactMemoCache(27),
     {
       questions: K,
       currentQuestionIndex: Y,
@@ -45917,7 +45917,7 @@ function Myq(A) {
         J0.default.createElement(
           T,
           { color: "warning" },
-          a6.warning,
+          figures.warning,
           " You have not answered all questions",
         ),
       )),
@@ -45943,7 +45943,7 @@ function Myq(A) {
             J0.default.createElement(
               T,
               null,
-              a6.bullet,
+              figures.bullet,
               " ",
               V?.question || "Question",
             ),
@@ -45953,7 +45953,7 @@ function Myq(A) {
               J0.default.createElement(
                 T,
                 { color: "success" },
-                a6.arrowRight,
+                figures.arrowRight,
                 " ",
                 v,
               ),
@@ -46121,7 +46121,7 @@ function Gyq({ toolUseConfirm: A, onDone: q, onReject: K }) {
     M = Object.values(H)
       .flatMap((H6) => Object.values(H6))
       .filter((H6) => H6.type === "image"),
-    W = T1((H6) => H6.toolPermissionContext.mode) === "plan",
+    W = useAppState((H6) => H6.toolPermissionContext.mode) === "plan",
     G = W ? EP() : void 0,
     Z = _yq(),
     {
@@ -46141,7 +46141,7 @@ function Gyq({ toolUseConfirm: A, onDone: q, onReject: K }) {
     U = z.length === 1 && !z[0]?.multiSelect,
     c = NT.useCallback(() => {
       if (O)
-        n("tengu_ask_user_question_rejected", {
+        emitEvent("tengu_ask_user_question_rejected", {
           source: O,
           questionCount: z.length,
           isInPlanMode: W,
@@ -46166,7 +46166,7 @@ ${z.map((s) => {
 }).join(`
 `)}`;
       if (O)
-        n("tengu_ask_user_question_respond_to_claude", {
+        emitEvent("tengu_ask_user_question_respond_to_claude", {
           source: O,
           questionCount: z.length,
           isInPlanMode: W,
@@ -46190,7 +46190,7 @@ ${z.map((s) => {
 }).join(`
 `)}`;
       if (O)
-        n("tengu_ask_user_question_finish_plan_interview", {
+        emitEvent("tengu_ask_user_question_finish_plan_interview", {
           source: O,
           questionCount: z.length,
           isInPlanMode: W,
@@ -46202,7 +46202,7 @@ ${z.map((s) => {
     e = NT.useCallback(
       async (H6) => {
         if (O)
-          n("tengu_ask_user_question_accepted", {
+          emitEvent("tengu_ask_user_question_accepted", {
             source: O,
             questionCount: z.length,
             answerCount: Object.keys(H6).length,
@@ -46243,7 +46243,7 @@ ${z.map((s) => {
           let K6 = _6.options[0];
           if (K6) H6[_6.question] = K6.label;
         }
-        P6.current(H6).catch($6);
+        P6.current(H6).catch(sendError);
       },
       () => A.onUserInteraction(),
     ),
@@ -46268,7 +46268,7 @@ ${z.map((s) => {
         let X6 = z.length === 1;
         if (!O6 && X6 && s) {
           let E6 = { ...N, [H6]: t };
-          e(E6).catch($6);
+          e(E6).catch(sendError);
           return;
         }
         B(H6, t, s);
@@ -46280,7 +46280,7 @@ ${z.map((s) => {
       c();
       return;
     }
-    if (H6 === "submit") e(N).catch($6);
+    if (H6 === "submit") e(N).catch(sendError);
   }
   OA(() => {
     q6();
@@ -46439,7 +46439,7 @@ function eVz(A) {
   return `Claude needs your permission to use ${q}`;
 }
 function fyq(A) {
-  let q = w6(17),
+  let q = reactMemoCache(17),
     {
       toolUseConfirm: K,
       toolUseContext: Y,
@@ -46593,7 +46593,7 @@ Parse the user's input into ISO 8601 format. Return ONLY the formatted string, o
     return { success: !0, value: P };
   } catch (M) {
     return (
-      $6(M instanceof Error ? M : Error(String(M))),
+      sendError(M instanceof Error ? M : Error(String(M))),
       {
         success: !1,
         error:
@@ -46705,7 +46705,7 @@ function Kvz(A) {
     return w;
   }
   if (A.type === "boolean") return x.coerce.boolean();
-  throw Error(`Unsupported schema: ${p6(A)}`);
+  throw Error(`Unsupported schema: ${trySafeStringify(A)}`);
 }
 function Qr6(A, q) {
   let Y = Kvz(q).safeParse(A);
@@ -46774,7 +46774,7 @@ function Yvz(A, q) {
   }
 }
 function Lyq(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { event: K, onResponse: Y, onWaitingDismiss: z } = A;
   if (K.params.mode === "url") {
     let _;
@@ -47309,7 +47309,7 @@ function zvz({ event: A, onResponse: q }) {
           EA.default.createElement(
             T,
             { dimColor: !0 },
-            a6.arrowUp,
+            figures.arrowUp,
             " ",
             E6.start,
             " more above",
@@ -47325,12 +47325,12 @@ function zvz({ event: A, onResponse: q }) {
           j1 = V.has(S6)
             ? EA.default.createElement(T, { color: "warning" }, I[L])
             : t6
-              ? EA.default.createElement(T, { color: "error" }, a6.warning)
+              ? EA.default.createElement(T, { color: "error" }, figures.warning)
               : x6
                 ? EA.default.createElement(
                     T,
                     { color: "success", dimColor: !o6 },
-                    a6.tick,
+                    figures.tick,
                   )
                 : d6
                   ? EA.default.createElement(T, { color: "error" }, "*")
@@ -47351,7 +47351,7 @@ function zvz({ event: A, onResponse: q }) {
             ((V6 = EA.default.createElement(
               T,
               { dimColor: !0 },
-              a6.triangleDownSmall,
+              figures.triangleDownSmall,
             )),
               (s6 = EA.default.createElement(
                 m,
@@ -47366,12 +47366,12 @@ function zvz({ event: A, onResponse: q }) {
                     EA.default.createElement(
                       T,
                       { color: "suggestion" },
-                      AA ? a6.pointer : " ",
+                      AA ? figures.pointer : " ",
                     ),
                     EA.default.createElement(
                       T,
                       { color: A8 ? "success" : void 0 },
-                      A8 ? a6.checkboxOn : a6.checkboxOff,
+                      A8 ? figures.checkboxOn : figures.checkboxOff,
                     ),
                     EA.default.createElement(
                       T,
@@ -47386,7 +47386,7 @@ function zvz({ event: A, onResponse: q }) {
               ? EA.default.createElement(
                   T,
                   { dimColor: !0 },
-                  a6.triangleRightSmall,
+                  figures.triangleRightSmall,
                   " ",
                 )
               : null;
@@ -47420,7 +47420,7 @@ function zvz({ event: A, onResponse: q }) {
             ((V6 = EA.default.createElement(
               T,
               { dimColor: !0 },
-              a6.triangleDownSmall,
+              figures.triangleDownSmall,
             )),
               (s6 = EA.default.createElement(
                 m,
@@ -47435,12 +47435,12 @@ function zvz({ event: A, onResponse: q }) {
                     EA.default.createElement(
                       T,
                       { color: "suggestion" },
-                      A8 ? a6.pointer : " ",
+                      A8 ? figures.pointer : " ",
                     ),
                     EA.default.createElement(
                       T,
                       { color: I1 ? "success" : void 0 },
-                      I1 ? a6.radioOn : a6.radioOff,
+                      I1 ? figures.radioOn : figures.radioOff,
                     ),
                     EA.default.createElement(
                       T,
@@ -47455,7 +47455,7 @@ function zvz({ event: A, onResponse: q }) {
               ? EA.default.createElement(
                   T,
                   { dimColor: !0 },
-                  a6.triangleRightSmall,
+                  figures.triangleRightSmall,
                   " ",
                 )
               : null;
@@ -47488,15 +47488,15 @@ function zvz({ event: A, onResponse: q }) {
               ? EA.default.createElement(
                   T,
                   { color: M1, bold: !0 },
-                  K1 ? a6.checkboxOn : a6.checkboxOff,
+                  K1 ? figures.checkboxOn : figures.checkboxOff,
                 )
-              : EA.default.createElement(T, { dimColor: !0 }, a6.checkboxOff);
+              : EA.default.createElement(T, { dimColor: !0 }, figures.checkboxOff);
           else
             V6 = x6
               ? EA.default.createElement(
                   T,
                   null,
-                  K1 ? a6.checkboxOn : a6.checkboxOff,
+                  K1 ? figures.checkboxOn : figures.checkboxOff,
                 )
               : EA.default.createElement(
                   T,
@@ -47540,7 +47540,7 @@ function zvz({ event: A, onResponse: q }) {
           EA.default.createElement(
             m,
             { gap: 1 },
-            EA.default.createElement(T, { color: R1 }, o6 ? a6.pointer : " "),
+            EA.default.createElement(T, { color: R1 }, o6 ? figures.pointer : " "),
             j1,
             EA.default.createElement(
               m,
@@ -47573,7 +47573,7 @@ function zvz({ event: A, onResponse: q }) {
           EA.default.createElement(
             T,
             { dimColor: !0 },
-            a6.arrowDown,
+            figures.arrowDown,
             " ",
             M.length - E6.end,
             " more below",
@@ -47657,7 +47657,7 @@ ${w}`,
         EA.default.createElement(
           T,
           { color: "success" },
-          O === "accept" ? a6.pointer : " ",
+          O === "accept" ? figures.pointer : " ",
         ),
         EA.default.createElement(
           T,
@@ -47671,7 +47671,7 @@ ${w}`,
         EA.default.createElement(
           T,
           { color: "error" },
-          O === "decline" ? a6.pointer : " ",
+          O === "decline" ? figures.pointer : " ",
         ),
         EA.default.createElement(
           T,
@@ -47820,7 +47820,7 @@ ${$}`,
           EA.default.createElement(
             T,
             { color: "success" },
-            D === "open" ? a6.pointer : " ",
+            D === "open" ? figures.pointer : " ",
           ),
           EA.default.createElement(
             T,
@@ -47834,7 +47834,7 @@ ${$}`,
           EA.default.createElement(
             T,
             { color: "success" },
-            D === "action" ? a6.pointer : " ",
+            D === "action" ? figures.pointer : " ",
           ),
           EA.default.createElement(
             T,
@@ -47853,7 +47853,7 @@ ${$}`,
               EA.default.createElement(
                 T,
                 { color: "error" },
-                D === "cancel" ? a6.pointer : " ",
+                D === "cancel" ? figures.pointer : " ",
               ),
               EA.default.createElement(
                 T,
@@ -47922,7 +47922,7 @@ ${$}`,
         EA.default.createElement(
           T,
           { color: "success" },
-          D === "accept" ? a6.pointer : " ",
+          D === "accept" ? figures.pointer : " ",
         ),
         EA.default.createElement(
           T,
@@ -47936,7 +47936,7 @@ ${$}`,
         EA.default.createElement(
           T,
           { color: "error" },
-          D === "decline" ? a6.pointer : " ",
+          D === "decline" ? figures.pointer : " ",
         ),
         EA.default.createElement(
           T,
@@ -47972,7 +47972,7 @@ var yyq = E(() => {
   ((EA = Y6(W6(), 1)), (C2 = Y6(W6(), 1)));
 });
 function Ryq(A) {
-  let q = w6(15),
+  let q = reactMemoCache(15),
     { title: K, toolInputSummary: Y, request: z, onRespond: w, onAbort: _ } = A,
     $;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -48088,12 +48088,12 @@ function Iyq({
         M = await n66();
       if (M && D && zf(D, M)) {
         if (
-          (y(
+          (writeDebugLog(
             `AutoUpdater: maxVersion ${M} is set, capping update from ${D} to ${M}`,
           ),
           _X(j, M))
         ) {
-          (y(
+          (writeDebugLog(
             `AutoUpdater: current version ${j} is already at or above maxVersion ${M}, skipping update`,
           ),
             $({ global: j, latest: D }));
@@ -48108,35 +48108,35 @@ function Iyq({
         if (W.installMethod !== "native") await td6();
         let G = await _F();
         if (
-          (y(`AutoUpdater: Detected installation type: ${G}`),
+          (writeDebugLog(`AutoUpdater: Detected installation type: ${G}`),
           G === "development")
         ) {
-          (y("AutoUpdater: Cannot auto-update development build"), q(!1));
+          (writeDebugLog("AutoUpdater: Cannot auto-update development build"), q(!1));
           return;
         }
         let Z, f;
         if (G === "npm-local")
-          (y("AutoUpdater: Using local update method"),
+          (writeDebugLog("AutoUpdater: Using local update method"),
             (f = "local"),
             (Z = await dd6(J)));
         else if (G === "npm-global")
-          (y("AutoUpdater: Using global update method"),
+          (writeDebugLog("AutoUpdater: Using global update method"),
             (f = "global"),
             (Z = await id6()));
         else if (G === "native") {
-          (y(
+          (writeDebugLog(
             "AutoUpdater: Unexpected native installation in non-native updater",
           ),
             q(!1));
           return;
         } else {
-          y("AutoUpdater: Unknown installation type, falling back to config");
+          writeDebugLog("AutoUpdater: Unknown installation type, falling back to config");
           let N = W.installMethod === "local";
           if (((f = N ? "local" : "global"), N)) Z = await dd6(J);
           else Z = await id6();
         }
         if ((q(!1), Z === "success"))
-          n("tengu_auto_updater_success", {
+          emitEvent("tengu_auto_updater_success", {
             fromVersion: j,
             toVersion: D,
             durationMs: Date.now() - P,
@@ -48144,7 +48144,7 @@ function Iyq({
             installationType: G,
           });
         else
-          n("tengu_auto_updater_fail", {
+          emitEvent("tengu_auto_updater_fail", {
             fromVersion: j,
             attemptedVersion: D,
             status: Z,
@@ -48301,7 +48301,7 @@ function byq({
       if (A || nF()) return;
       q(!0);
       let G = Date.now();
-      n("tengu_native_auto_updater_start", {});
+      emitEvent("tengu_native_auto_updater_start", {});
       try {
         let Z = await n66();
         if (
@@ -48336,19 +48336,19 @@ function byq({
           }.VERSION,
           V = Date.now() - G;
         if (f.lockFailed) {
-          n("tengu_native_auto_updater_lock_contention", { latency_ms: V });
+          emitEvent("tengu_native_auto_updater_lock_contention", { latency_ms: V });
           return;
         }
         if (($({ current: N, latest: f.latestVersion }), f.wasUpdated))
-          (n("tengu_native_auto_updater_success", { latency_ms: V }),
+          (emitEvent("tengu_native_auto_updater_success", { latency_ms: V }),
             K({ version: f.latestVersion, status: "success" }));
-        else n("tengu_native_auto_updater_up_to_date", { latency_ms: V });
+        else emitEvent("tengu_native_auto_updater_up_to_date", { latency_ms: V });
       } catch (Z) {
         let f = Date.now() - G,
           N = Z instanceof Error ? Z.message : String(Z);
-        $6(Z instanceof Error ? Z : Error(String(Z)));
+        sendError(Z instanceof Error ? Z : Error(String(Z)));
         let V = $vz(N);
-        (n("tengu_native_auto_updater_fail", {
+        (emitEvent("tengu_native_auto_updater_fail", {
           latency_ms: f,
           error_timeout: V === "timeout",
           error_checksum: V === "checksum_mismatch",
@@ -48426,7 +48426,7 @@ var uyq = E(() => {
   ((UX = Y6(W6(), 1)), (ir6 = Y6(W6(), 1)));
 });
 function myq(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { verbose: K } = A,
     [Y, z] = Cn8.useState(!1),
     [w, _] = Cn8.useState("unknown"),
@@ -48443,7 +48443,7 @@ function myq(A) {
         Z = await n66();
       if (Z && G && zf(G, Z)) {
         if (
-          (y(
+          (writeDebugLog(
             `PackageManagerAutoUpdater: maxVersion ${Z} is set, capping update from ${G} to ${Z}`,
           ),
           _X(
@@ -48460,7 +48460,7 @@ function myq(A) {
             Z,
           ))
         ) {
-          (y(
+          (writeDebugLog(
             `PackageManagerAutoUpdater: current version ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "klaudia", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.66-klaudia", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-03-04T00:18:36Z" }.VERSION} is already at or above maxVersion ${Z}, skipping update`,
           ),
             z(!1));
@@ -48485,7 +48485,7 @@ function myq(A) {
         ) &&
         !Rf6(G);
       if ((z(!!f), f))
-        y(
+        writeDebugLog(
           `PackageManagerAutoUpdater: Update available ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "klaudia", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.66-klaudia", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-03-04T00:18:36Z" }.VERSION} -> ${G}`,
         );
     }),
@@ -48567,20 +48567,20 @@ var Byq = E(() => {
 async function MC1() {
   let A = process.argv.includes("-p") || process.argv.includes("--print");
   if (!(await Kl8("auto_migrate_to_native", !1))) return !1;
-  if (X1(!1) || !1 || A || X1(process.env.DISABLE_AUTO_MIGRATE_TO_NATIVE))
+  if (isTruthy(!1) || !1 || A || isTruthy(process.env.DISABLE_AUTO_MIGRATE_TO_NATIVE))
     return !1;
   if (getSettings().installMethod === "native") return !1;
   return !0;
 }
 async function gyq() {
-  n("tengu_auto_migrate_to_native_attempt", {});
+  emitEvent("tengu_auto_migrate_to_native_attempt", {});
   try {
     let A = U7()?.autoUpdatesChannel ?? "latest",
       q = await ol(A),
       K = [];
     if (q.latestVersion) {
-      (n("tengu_auto_migrate_to_native_success", {}),
-        y(
+      (emitEvent("tengu_auto_migrate_to_native_success", {}),
+        writeDebugLog(
           "✅ Upgraded to native installation. Future sessions will use the native version.",
         ));
       let { removed: z, errors: w, warnings: _ } = await Ac6(),
@@ -48602,8 +48602,8 @@ async function gyq() {
       let O = await ed6();
       K = [...(await HF(!0)), ...O, ...$];
     } else
-      (n("tengu_auto_migrate_to_native_partial", {}),
-        y(
+      (emitEvent("tengu_auto_migrate_to_native_partial", {}),
+        writeDebugLog(
           "⚠️ Native installation setup encountered issues but cleanup completed.",
         ),
         (K = await HF(!0)));
@@ -48618,9 +48618,9 @@ async function gyq() {
 `);
         Y.push(w);
       }
-      (y("Migration completed with the following notes:"),
+      (writeDebugLog("Migration completed with the following notes:"),
         K.forEach((w) => {
-          y(`  • [${w.type}] ${w.message}`);
+          writeDebugLog(`  • [${w.type}] ${w.message}`);
         }));
     }
     return {
@@ -48630,10 +48630,10 @@ async function gyq() {
     };
   } catch (A) {
     return (
-      n("tengu_auto_migrate_to_native_failure", {
+      emitEvent("tengu_auto_migrate_to_native_failure", {
         error: A instanceof Error ? A.message : String(A),
       }),
-      $6(A instanceof Error ? A : Error(String(A))),
+      sendError(A instanceof Error ? A : Error(String(A))),
       { success: !1 }
     );
   }
@@ -48666,14 +48666,14 @@ function Fyq({
             w("idle");
             return;
           }
-          if (Y) y("Starting auto-migration from npm to native installation");
-          (n("tengu_auto_migrate_to_native_ui_shown", {}),
+          if (Y) writeDebugLog("Starting auto-migration from npm to native installation");
+          (emitEvent("tengu_auto_migrate_to_native_ui_shown", {}),
             w("migrating"),
             q?.(!0));
           let H = await gyq();
           if (H.success)
             (w("success"),
-              n("tengu_auto_migrate_to_native_ui_success", {}),
+              emitEvent("tengu_auto_migrate_to_native_ui_success", {}),
               K?.({
                 status: "success",
                 version: H.version,
@@ -48684,13 +48684,13 @@ function Fyq({
               }, 5000));
           else
             (w("error"),
-              n("tengu_auto_migrate_to_native_ui_error", {}),
+              emitEvent("tengu_auto_migrate_to_native_ui_error", {}),
               K?.({ status: "install_failed", version: null }),
               setTimeout(() => {
                 (w("idle"), q?.(!1));
               }, 1e4));
         } catch (O) {
-          ($6(O instanceof Error ? O : Error(String(O))),
+          (sendError(O instanceof Error ? O : Error(String(O))),
             w("error"),
             K?.({ status: "install_failed", version: null }),
             setTimeout(() => {
@@ -48713,7 +48713,7 @@ function Fyq({
     return $n.createElement(
       T,
       { color: "success", wrap: "truncate" },
-      a6.tick,
+      figures.tick,
       " Migrated to native installation",
     );
   if (z === "error")
@@ -48735,7 +48735,7 @@ var pyq = E(() => {
   (($n = Y6(W6(), 1)), (PC1 = Y6(W6(), 1)));
 });
 function Qyq(A) {
-  let q = w6(22),
+  let q = reactMemoCache(22),
     {
       isUpdating: K,
       onChangeIsUpdating: Y,
@@ -48756,7 +48756,7 @@ function Qyq(A) {
           V = N === "native",
           v = N === "package-manager";
         if (
-          (y(`AutoUpdaterWrapper: Installation type: ${N}`),
+          (writeDebugLog(`AutoUpdaterWrapper: Installation type: ${N}`),
           H(V),
           J(v),
           !V && !v)
@@ -48807,7 +48807,7 @@ function Qyq(A) {
           let V = (await _F()) === "native";
           (H(V), X(!1));
         } catch (N) {
-          (y(`Error checking installation type after migration: ${N}`),
+          (writeDebugLog(`Error checking installation type after migration: ${N}`),
             H(!0),
             X(!1));
         }
@@ -48873,7 +48873,7 @@ var Uyq = E(() => {
   lE = Y6(W6(), 1);
 });
 function dyq(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { tokenUsage: K, model: Y } = A,
     z;
   if (q[0] !== Y || q[1] !== K)
@@ -48955,7 +48955,7 @@ var WC1 = E(() => {
 });
 import { basename as Ovz } from "path";
 function ryq(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { ideSelection: K, mcpClients: Y } = A,
     { status: z } = Yv6(Y),
     w = z === "connected" && (K?.filePath || (K?.text && K.lineCount > 0));
@@ -49020,7 +49020,7 @@ var tyq = E(() => {
   ayq = Y6(W6(), 1);
 });
 function eyq() {
-  let A = w6(5),
+  let A = reactMemoCache(5),
     q = syq();
   return null;
 }
@@ -49033,7 +49033,7 @@ var ARq = E(() => {
   rr6 = Y6(W6(), 1);
 });
 function qRq() {
-  let A = w6(6),
+  let A = reactMemoCache(6),
     [q, K] = zv6.useState(0),
     Y = zv6.useRef(null),
     z = MK("app:toggleTranscript", "Global", "ctrl+o"),
@@ -49100,7 +49100,7 @@ var KRq = E(() => {
 var wRq = {};
 s1(wRq, { VoiceWarmupHint: () => hn8, VoiceIndicator: () => Mvz });
 function Mvz(A) {
-  let q = w6(2),
+  let q = reactMemoCache(2),
     K;
   if (q[0] !== A)
     ((K = dX.createElement(Pvz, { ...A })), (q[0] = A), (q[1] = K));
@@ -49108,7 +49108,7 @@ function Mvz(A) {
   return K;
 }
 function Pvz(A) {
-  let q = w6(2),
+  let q = reactMemoCache(2),
     { voiceState: K } = A;
   switch (K) {
     case "recording": {
@@ -49130,7 +49130,7 @@ function Pvz(A) {
   }
 }
 function hn8() {
-  let A = w6(1),
+  let A = reactMemoCache(1),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = dX.createElement(Wvz, null)), (A[0] = q));
@@ -49138,7 +49138,7 @@ function hn8() {
   return q;
 }
 function Wvz() {
-  let A = w6(5),
+  let A = reactMemoCache(5),
     K = _H().prefersReducedMotion ?? !1,
     [, Y] = PM(K ? null : 50);
   if (K) {
@@ -49164,7 +49164,7 @@ function Wvz() {
   return O;
 }
 function Gvz() {
-  let A = w6(8),
+  let A = reactMemoCache(8),
     K = _H().prefersReducedMotion ?? !1,
     [Y, z] = PM(K ? null : 50);
   if (K) {
@@ -49211,7 +49211,7 @@ var In8 = E(() => {
     (zRq = { r: 185, g: 185, b: 185 }));
 });
 function $Rq(A) {
-  let q = w6(28),
+  let q = reactMemoCache(28),
     {
       apiKeyStatus: K,
       autoUpdaterResult: Y,
@@ -49241,7 +49241,7 @@ function $Rq(A) {
   let f = Z,
     N = lyq(G, f),
     { status: V } = Yv6(J),
-    v = T1(fvz),
+    v = useAppState(fvz),
     { addNotification: L, removeNotification: S } = Nq(),
     I = It(),
     h =
@@ -49266,7 +49266,7 @@ function $Rq(A) {
   if (q[5] !== L || q[6] !== S || q[7] !== a)
     ((e = () => {
       if (a && d)
-        (n("tengu_external_editor_hint_shown", {}),
+        (emitEvent("tengu_external_editor_hint_shown", {}),
           L({
             key: "external-editor-hint",
             jsx: aq.createElement(
@@ -49388,9 +49388,9 @@ function Tvz({
   onAutoUpdaterResult: M,
   onChangeIsUpdating: P,
 }) {
-  let W = T1((N) => N.voiceState) ?? "idle",
-    Z = (T1((N) => N.voiceEnabled) ?? !1) && VE(),
-    f = T1((N) => N.voiceError) ?? null;
+  let W = useAppState((N) => N.voiceState) ?? "idle",
+    Z = (useAppState((N) => N.voiceEnabled) ?? !1) && VE(),
+    f = useAppState((N) => N.voiceError) ?? null;
   if (Z && (W === "recording" || W === "processing"))
     return aq.createElement(Zvz, { voiceState: W });
   return aq.createElement(
@@ -49958,7 +49958,7 @@ async function WRq(A, q, K) {
       metadata: { ...$.metadata, inputSnapshot: A },
     }));
   } catch (z) {
-    return (y(`Shell completion failed: ${z}`), []);
+    return (writeDebugLog(`Shell completion failed: ${z}`), []);
   }
 }
 var Fn8 = 15,
@@ -49985,7 +49985,7 @@ async function mvz() {
       if (q.length >= 50) break;
     }
   } catch (Y) {
-    y(`Failed to read shell history: ${Y}`);
+    writeDebugLog(`Failed to read shell history: ${Y}`);
   }
   return ((pn8 = q), (ZRq = A), q);
 }
@@ -50050,7 +50050,7 @@ function gvz(A, q, K = !1) {
         w.displayText.toLowerCase().includes(z),
     );
   } catch (Y) {
-    return ($6(Y), []);
+    return (sendError(Y), []);
   }
 }
 async function Un8(A, q, K, Y = !1) {
@@ -50161,7 +50161,7 @@ async function dvz(A, q) {
     if (VC1) VC1.abort();
     return ((VC1 = new AbortController()), await WRq(A, q, VC1.signal));
   } catch {
-    return (n("tengu_shell_completion_failed", {}), []);
+    return (emitEvent("tengu_shell_completion_failed", {}), []);
   }
 }
 function RRq(A, q, K, Y, z) {
@@ -50240,9 +50240,9 @@ function SRq({
       return Math.max(...s.map((O6) => O6.userFacingName().length)) + 6;
     }, [A]),
     [f, N] = gw.useState(void 0),
-    V = T1((s) => s.mcp.resources),
-    v = T1((s) => s.teamContext),
-    L = T1((s) => s.promptSuggestion),
+    V = useAppState((s) => s.mcp.resources),
+    v = useAppState((s) => s.teamContext),
+    L = useAppState((s) => s.promptSuggestion),
     S = Fy(),
     [I, B] = gw.useState(void 0),
     h = gw.useMemo(() => {
@@ -51764,8 +51764,8 @@ var aRq = E(() => {
   jn = Y6(W6(), 1);
 });
 function en8(A) {
-  let q = w6(36),
-    [K] = E7(),
+  let q = reactMemoCache(36),
+    [K] = useTheme(),
     Y = o2();
   pw1(Y, !!A.onImagePaste);
   let {
@@ -52016,7 +52016,7 @@ var Ov6 = E(() => {
   jkz = Y6(W6(), 1);
 });
 function qr8(A) {
-  let q = w6(69),
+  let q = reactMemoCache(69),
     {
       tasksSelected: K,
       showHint: Y,
@@ -52032,14 +52032,14 @@ function qr8(A) {
     ((j = getSettings()), (q[0] = j));
   else j = q[0];
   let J = j.hasSeenTasksHint,
-    D = T1(Nkz),
-    X = T1(Tkz),
+    D = useAppState(Nkz),
+    X = useAppState(Tkz),
     M;
   if (q[1] !== D)
     ((M = Object.values(D ?? {}).filter(fkz)), (q[1] = D), (q[2] = M));
   else M = q[2];
   let P = M,
-    G = T1(Zkz) === "teammates",
+    G = useAppState(Zkz) === "teammates",
     Z = !G && P.length > 0 && P.every(Gkz),
     f;
   if (q[3] !== P) ((f = P.filter(Wkz).sort(Pkz)), (q[3] = P), (q[4] = f));
@@ -52118,7 +52118,7 @@ function qr8(A) {
     let v6 = G6,
       T6;
     if (q[27] !== A6)
-      ((T6 = A6 && d4.createElement(T, { dimColor: !0 }, a6.arrowLeft, " ")),
+      ((T6 = A6 && d4.createElement(T, { dimColor: !0 }, figures.arrowLeft, " ")),
         (q[27] = A6),
         (q[28] = T6));
     else T6 = q[28];
@@ -52146,7 +52146,7 @@ function qr8(A) {
     else z6 = q[32];
     let H6;
     if (q[33] !== D6)
-      ((H6 = D6 && d4.createElement(T, { dimColor: !0 }, " ", a6.arrowRight)),
+      ((H6 = D6 && d4.createElement(T, { dimColor: !0 }, " ", figures.arrowRight)),
         (q[33] = D6),
         (q[34] = H6));
     else H6 = q[34];
@@ -52304,7 +52304,7 @@ function Nkz(A) {
   return A.tasks;
 }
 function Vkz(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     { name: K, color: Y, isSelected: z, isViewed: w, isIdle: _ } = A;
   if (z) {
     let H;
@@ -52415,9 +52415,9 @@ var qCq = E(() => {
   d4 = Y6(W6(), 1);
 });
 function KCq(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     { teamsSelected: K, showHint: Y } = A,
-    z = T1(ykz),
+    z = useAppState(ykz),
     w;
   if (q[0] !== z)
     ((w = z ? Object.values(z.teammates).filter(Lkz).length : 0),
@@ -52481,7 +52481,7 @@ var YCq = E(() => {
   D0 = Y6(W6(), 1);
 });
 function Rkz(A) {
-  let q = w6(9),
+  let q = reactMemoCache(9),
     { value: K, onChange: Y, historyFailedMatch: z } = A,
     w = z ? "no matching prompt:" : "search prompts:",
     _;
@@ -52635,7 +52635,7 @@ var HCq = E(() => {
   er6 = Y6(W6(), 1);
 });
 function DCq(A) {
-  let q = w6(28),
+  let q = reactMemoCache(28),
     {
       exitMessage: K,
       vimMode: Y,
@@ -52767,22 +52767,22 @@ function mkz({
 }) {
   let { columns: $ } = zA(),
     O = MK("chat:cycleMode", "Chat", "shift+tab"),
-    H = T1((K6) => K6.tasks),
-    j = T1((K6) => K6.teamContext),
-    J = T1((K6) => K6.remoteSessionUrl),
-    D = T1((K6) => K6.viewSelectionMode),
-    X = T1((K6) => K6.viewingAgentTaskId),
-    M = T1((K6) => K6.expandedView),
+    H = useAppState((K6) => K6.tasks),
+    j = useAppState((K6) => K6.teamContext),
+    J = useAppState((K6) => K6.remoteSessionUrl),
+    D = useAppState((K6) => K6.viewSelectionMode),
+    X = useAppState((K6) => K6.viewingAgentTaskId),
+    M = useAppState((K6) => K6.expandedView),
     P = M === "teammates",
-    W = T1((K6) => K6.prStatus),
+    W = useAppState((K6) => K6.prStatus),
     G = Hv6.useSyncExternalStore(
       jCq?.subscribeToProactiveChanges ?? ukz,
       jCq?.getNextTickAt ?? JCq,
       JCq,
     ),
-    f = (T1((K6) => K6.voiceEnabled) ?? !1) && VE(),
-    N = T1((K6) => K6.voiceState) ?? "idle",
-    V = T1((K6) => K6.voiceWarmingUp) ?? !1,
+    f = (useAppState((K6) => K6.voiceEnabled) ?? !1) && VE(),
+    N = useAppState((K6) => K6.voiceState) ?? "idle",
+    V = useAppState((K6) => K6.voiceWarmingUp) ?? !1,
     v = G !== null,
     L = !1,
     S = Hv6.useMemo(
@@ -52794,7 +52794,7 @@ function mkz({
     h = MK("chat:cancel", "Chat", "esc").toLowerCase(),
     F = MK("app:toggleTodos", "Global", "ctrl+t"),
     g = MK("chat:killAgents", "Chat", "ctrl+f"),
-    u = T1((K6) => K6.notifications.current?.key === "kill-agents-confirm"),
+    u = useAppState((K6) => K6.notifications.current?.key === "kill-agents-confirm"),
     U =
       D7() &&
       !WF() &&
@@ -52829,7 +52829,7 @@ function mkz({
             i7.createElement(
               B7,
               { url: J, key: "remote" },
-              i7.createElement(T, { color: "ide" }, a6.circleDouble, " remote"),
+              i7.createElement(T, { color: "ide" }, figures.circleDouble, " remote"),
             ),
           ]
         : []),
@@ -53072,7 +53072,7 @@ function pkz(A, q, K, Y, z, w) {
     H = MP1(Y),
     j = fX($, iH()),
     J = yA1(H, j),
-    D = d1(),
+    D = getSessionId(),
     X = NC(D);
   return {
     ...U$(),
@@ -53107,7 +53107,7 @@ function pkz(A, q, K, Y, z, w) {
     exceeds_200k_tokens: q,
     ...(m16() && { vim: { mode: w ?? "INSERT" } }),
     ...(_ && { agent: { name: _ } }),
-    ...(Eq() && { remote: { session_id: d1() } }),
+    ...(Eq() && { remote: { session_id: getSessionId() } }),
   };
 }
 function PCq(A) {
@@ -53116,9 +53116,9 @@ function PCq(A) {
 }
 function WCq({ messages: A, vimMode: q }) {
   let K = jZ.useRef(void 0),
-    Y = T1((Z) => Z.toolPermissionContext.mode),
-    z = T1((Z) => Z.toolPermissionContext.additionalWorkingDirectories),
-    w = T1((Z) => Z.statusLineText),
+    Y = useAppState((Z) => Z.toolPermissionContext.mode),
+    z = useAppState((Z) => Z.toolPermissionContext.additionalWorkingDirectories),
+    w = useAppState((Z) => Z.statusLineText),
     _ = tA(),
     $ = _H(),
     O = jZ.useRef(A);
@@ -53180,13 +53180,13 @@ function WCq({ messages: A, vimMode: q }) {
       let Z = $?.statusLine;
       if (Z) {
         if (
-          (n("tengu_status_line_mount", {
+          (emitEvent("tengu_status_line_mount", {
             command_length: Z.command.length,
             padding: Z.padding,
           }),
           $.disableAllHooks === !0)
         )
-          y("Status line is configured but disableAllHooks is true", {
+          writeDebugLog("Status line is configured but disableAllHooks is true", {
             level: "warn",
           });
       }
@@ -53234,7 +53234,7 @@ var GCq = E(() => {
   ((Ow6 = Y6(W6(), 1)), (jZ = Y6(W6(), 1)));
 });
 function ZCq({ selectedIndex: A }) {
-  let q = T1((O) => O.tasks),
+  let q = useAppState((O) => O.tasks),
     K = gD.useRef([]),
     [, Y] = gD.useState(0);
   gD.useEffect(() => {
@@ -53279,7 +53279,7 @@ function ZCq({ selectedIndex: A }) {
   );
 }
 function fCq() {
-  let A = T1(Ukz),
+  let A = useAppState(Ukz),
     q;
   A: {
     if (!fH()) {
@@ -53303,7 +53303,7 @@ function Ukz(A) {
   return A.tasks;
 }
 function dkz(A) {
-  let q = w6(30),
+  let q = reactMemoCache(30),
     { task: K, isSelected: Y } = A,
     { columns: z } = zA(),
     w = !$v6(K.status),
@@ -53320,7 +53320,7 @@ function dkz(A) {
   let H = O,
     j = K.progress?.tokenCount,
     J = K.progress?.lastActivity,
-    D = J ? a6.arrowDown : a6.arrowUp,
+    D = J ? figures.arrowDown : figures.arrowUp,
     X;
   if (q[2] !== D || q[3] !== j)
     ((X = j !== void 0 && j > 0 ? ` · ${D} ${Y3(j)} tokens` : ""),
@@ -53335,7 +53335,7 @@ function dkz(A) {
     Z;
   if (q[5] !== P || q[6] !== K.id)
     ((G = () => {
-      y(
+      writeDebugLog(
         `[CoordinatorAgentStatus] Summary updated for task ${K.id}: ${P ?? "(none)"}`,
       );
     }),
@@ -53359,7 +53359,7 @@ function dkz(A) {
   else f = q[12];
   let N = f,
     V = N ? ` · ${N}` : "",
-    v = Y ? a6.pointer + " " : "  ",
+    v = Y ? figures.pointer + " " : "  ",
     L = ` · ${H}${M}${V}`,
     S = z - h8(v) - h8(L),
     I = Math.max(0, S),
@@ -53376,7 +53376,7 @@ function dkz(A) {
         T,
         { color: "warning" },
         " · ",
-        a6.cross,
+        figures.cross,
         " Stopped",
       )),
         (q[16] = U));
@@ -53431,7 +53431,7 @@ var Yr8 = E(() => {
   gD = Y6(W6(), 1);
 });
 function ckz(A) {
-  let q = w6(64),
+  let q = reactMemoCache(64),
     {
       apiKeyStatus: K,
       debug: Y,
@@ -53689,12 +53689,12 @@ function ckz(A) {
   return E6;
 }
 function lkz({ bridgeSelected: A }) {
-  let q = T1((j) => j.replBridgeEnabled),
-    K = T1((j) => j.replBridgeConnected),
-    Y = T1((j) => j.replBridgeSessionActive),
-    z = T1((j) => j.replBridgeReconnecting),
-    w = T1((j) => j.replBridgeError),
-    _ = T1((j) => j.replBridgeExplicit);
+  let q = useAppState((j) => j.replBridgeEnabled),
+    K = useAppState((j) => j.replBridgeConnected),
+    Y = useAppState((j) => j.replBridgeSessionActive),
+    z = useAppState((j) => j.replBridgeReconnecting),
+    w = useAppState((j) => j.replBridgeError),
+    _ = useAppState((j) => j.replBridgeExplicit);
   if (!Ei() || !q) return null;
   let $ = $R1({ error: w, connected: K, sessionActive: Y, reconnecting: z });
   if (
@@ -53743,7 +53743,7 @@ function vCq(A, q) {
             $ = w.lineEnd !== void 0 ? w.lineEnd + 1 : void 0;
           q({ filePath: w.filePath, lineStart: _, lineEnd: $ });
         } catch (w) {
-          $6(w);
+          sendError(w);
         }
       });
   }, [A, q]);
@@ -53868,7 +53868,7 @@ function SCq({ initialTeams: A, onDone: q }) {
       if (z.type !== "teammateDetail") return null;
       return j.find((W) => W.name === z.memberName) ?? null;
     }, [z, j]),
-    D = T1((W) => W.toolPermissionContext.isBypassPermissionsModeAvailable),
+    D = useAppState((W) => W.toolPermissionContext.isBypassPermissionsModeAvailable),
     X = () => {
       (w({ type: "teammateList", teamName: z.teamName }), $(0));
     },
@@ -53983,7 +53983,7 @@ function SCq({ initialTeams: A, onDone: q }) {
   return null;
 }
 function okz(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     { teamName: K, teammates: Y, selectedIndex: z, onCancel: w } = A,
     _ = `${Y.length} ${Y.length === 1 ? "teammate" : "teammates"}`,
     $ = sf6()?.supportsHideShow ?? !1,
@@ -54036,9 +54036,9 @@ function okz(A) {
       qq.createElement(
         T,
         { dimColor: !0 },
-        a6.arrowUp,
+        figures.arrowUp,
         "/",
-        a6.arrowDown,
+        figures.arrowDown,
         " select · Enter view · k kill · s shutdown · p prune idle",
         $ && " · h hide/show · H hide/show all",
         " · ",
@@ -54059,7 +54059,7 @@ function okz(A) {
   return X;
 }
 function akz(A) {
-  let q = w6(21),
+  let q = reactMemoCache(21),
     { teammate: K, isSelected: Y } = A,
     z = K.status === "idle",
     w = z && !Y,
@@ -54071,7 +54071,7 @@ function akz(A) {
   } else ((_ = q[1]), ($ = q[2]));
   let O = $,
     H = Y ? "suggestion" : void 0,
-    j = Y ? a6.pointer + " " : "  ",
+    j = Y ? figures.pointer + " " : "  ",
     J;
   if (q[3] !== K.isHidden)
     ((J = K.isHidden && qq.createElement(T, { dimColor: !0 }, "[hidden] ")),
@@ -54132,7 +54132,7 @@ function akz(A) {
   return P;
 }
 function skz(A) {
-  let q = w6(39),
+  let q = reactMemoCache(39),
     { teammate: K, teamName: Y, onCancel: z } = A,
     [w, _] = iE.useState(!1),
     $ = MK("confirm:cycleMode", "Confirmation", "shift+tab"),
@@ -54272,7 +54272,7 @@ function skz(A) {
       qq.createElement(
         T,
         { dimColor: !0 },
-        a6.arrowLeft,
+        figures.arrowLeft,
         " back · Esc close · k kill · s shutdown",
         sf6()?.supportsHideShow && " · h hide/show",
         " · ",
@@ -54296,7 +54296,7 @@ function tkz(A) {
   return qq.createElement(
     T,
     { key: A.id, color: A.status === "completed" ? "success" : void 0 },
-    A.status === "completed" ? a6.tick : "◼",
+    A.status === "completed" ? figures.tick : "◼",
     " ",
     A.subject,
   );
@@ -54325,7 +54325,7 @@ async function zr8(A, q, K, Y, z) {
           {
             id: rkz(),
             from: "system",
-            text: p6({ type: "teammate_terminated", message: w }),
+            text: trySafeStringify({ type: "teammate_terminated", message: w }),
             timestamp: new Date().toISOString(),
             status: "pending",
           },
@@ -54333,7 +54333,7 @@ async function zr8(A, q, K, Y, z) {
       },
     };
   }),
-    y(`[TeamsDialog] Removed ${K} from teamContext`));
+    writeDebugLog(`[TeamsDialog] Removed ${K} from teamContext`));
 }
 async function AEz(A) {
   if (hCq(A)) await M8("it2", ["session", "focus", A]);
@@ -54350,10 +54350,10 @@ function KEz(A, q, K) {
   let Y = m01({ mode: K, from: "team-lead" });
   (e5(
     A,
-    { from: "team-lead", text: p6(Y), timestamp: new Date().toISOString() },
+    { from: "team-lead", text: trySafeStringify(Y), timestamp: new Date().toISOString() },
     q,
   ),
-    y(`[TeamsDialog] Sent mode change to ${A}: ${K}`));
+    writeDebugLog(`[TeamsDialog] Sent mode change to ${A}: ${K}`));
 }
 function YEz(A, q, K) {
   let Y = A.mode ? Nh(A.mode) : "default",
@@ -54377,11 +54377,11 @@ function zEz(A, q, K) {
     let O = m01({ mode: w, from: "team-lead" });
     e5(
       $.name,
-      { from: "team-lead", text: p6(O), timestamp: new Date().toISOString() },
+      { from: "team-lead", text: trySafeStringify(O), timestamp: new Date().toISOString() },
       q,
     );
   }
-  y(`[TeamsDialog] Sent mode change to all ${A.length} teammates: ${w}`);
+  writeDebugLog(`[TeamsDialog] Sent mode change to all ${A.length} teammates: ${w}`);
 }
 var qq, iE;
 var bCq = E(() => {
@@ -54434,18 +54434,18 @@ async function mCq(A, q, K, Y) {
 }
 import { basename as wEz } from "path";
 function BCq(A) {
-  let q = w6(86),
+  let q = reactMemoCache(86),
     { onDone: K } = A;
   CX("bridge-dialog");
-  let Y = T1(TEz),
-    z = T1(fEz),
-    w = T1(ZEz),
-    _ = T1(GEz),
-    $ = T1(WEz),
-    O = T1(PEz),
-    H = T1(MEz),
-    j = T1(XEz),
-    J = T1(DEz),
+  let Y = useAppState(TEz),
+    z = useAppState(fEz),
+    w = useAppState(ZEz),
+    _ = useAppState(GEz),
+    $ = useAppState(WEz),
+    O = useAppState(PEz),
+    H = useAppState(MEz),
+    j = useAppState(XEz),
+    J = useAppState(DEz),
     D = tA(),
     [X, M] = Hw6.useState(!1),
     [P, W] = Hw6.useState(""),
@@ -54852,7 +54852,7 @@ var jv6 = E(() => {
 });
 function rCq({ input: A, submitCount: q, viewingAgentName: K }) {
   let Y = Yp(),
-    z = T1((_) => _.promptSuggestionEnabled);
+    z = useAppState((_) => _.promptSuggestionEnabled);
   return nCq.useMemo(() => {
     if (A !== "") return;
     if (K)
@@ -54884,12 +54884,12 @@ function yEz() {
   return;
 }
 function aCq(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     { isLoading: K, themeColor: Y } = A,
     w = Y ?? void 0,
     _;
   if (q[0] !== w || q[1] !== K)
-    ((_ = yb.createElement(T, { color: w, dimColor: K }, a6.pointer, " ")),
+    ((_ = yb.createElement(T, { color: w, dimColor: K }, figures.pointer, " ")),
       (q[0] = w),
       (q[1] = K),
       (q[2] = _));
@@ -54897,7 +54897,7 @@ function aCq(A) {
   return _;
 }
 function wr8(A) {
-  let q = w6(6),
+  let q = reactMemoCache(6),
     { mode: K, isLoading: Y, viewingAgentName: z, viewingAgentColor: w } = A,
     _;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -54943,7 +54943,7 @@ var sCq = E(() => {
   yb = Y6(W6(), 1);
 });
 function eCq(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { isFirst: K, children: Y } = A,
     z;
   if (q[0] !== K)
@@ -54998,7 +54998,7 @@ function xEz(A) {
   return [...Y, ...z, _];
 }
 function qSq() {
-  let A = w6(11),
+  let A = reactMemoCache(11),
     q = Yp(),
     K = a_();
   if (_H4(K.getState())) return null;
@@ -55076,7 +55076,7 @@ var KSq = E(() => {
   ((Jw6 = Y6(W6(), 1)), (SEz = new Set()));
 });
 function YSq(A) {
-  let q = w6(1),
+  let q = reactMemoCache(1),
     { hasStash: K } = A;
   if (!K) return null;
   let Y;
@@ -55087,7 +55087,7 @@ function YSq(A) {
       qo6.createElement(
         T,
         { dimColor: !0 },
-        a6.pointerSmall,
+        figures.pointerSmall,
         " Stashed (auto-restores after submit)",
       ),
     )),
@@ -55110,9 +55110,9 @@ var _Sq = E(() => {
   oz();
 });
 function $Sq() {
-  let A = T1((_) => _.teamContext),
-    q = T1((_) => _.standaloneAgentContext),
-    K = T1((_) => _.agent),
+  let A = useAppState((_) => _.teamContext),
+    q = useAppState((_) => _.standaloneAgentContext),
+    K = useAppState((_) => _.agent),
     Y = a_(),
     [z, w] = bC1.useState(null);
   if (
@@ -55183,7 +55183,7 @@ var OSq = E(() => {
   bC1 = Y6(W6(), 1);
 });
 function HSq(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     { pastedContents: K, isSelected: Y, selectedIndex: z } = A,
     w = Y === void 0 ? !1 : Y,
     _ = z === void 0 ? 0 : z,
@@ -55416,7 +55416,7 @@ var JSq = E(() => {
   w$ = Y6(W6(), 1);
 });
 function DSq({ inputValue: A, isAssistantResponding: q }) {
-  let K = T1((f) => f.promptSuggestion),
+  let K = useAppState((f) => f.promptSuggestion),
     Y = tA(),
     z = o2(),
     {
@@ -55471,7 +55471,7 @@ function DSq({ inputValue: A, isAssistantResponding: q }) {
         let N = O > $,
           V = N || f === w,
           v = V ? O || Date.now() : Date.now();
-        (n("tengu_prompt_suggestion", {
+        (emitEvent("tengu_prompt_suggestion", {
           source: "cli",
           outcome: V ? "accepted" : "ignored",
           prompt_id: _,
@@ -55504,7 +55504,7 @@ var XSq = E(() => {
   Jn = Y6(W6(), 1);
 });
 function PSq(A) {
-  let q = w6(28),
+  let q = reactMemoCache(28),
     { currentValue: K, onSelect: Y, onCancel: z, isMidConversation: w } = A,
     _ = Fq(),
     [$, O] = MSq.useState(null),
@@ -55801,22 +55801,22 @@ function pEz({
     };
   let L6 = a_(),
     h6 = tA(),
-    g6 = T1((m6) => m6.tasks),
-    y6 = T1((m6) => m6.replBridgeConnected),
-    r = T1((m6) => m6.replBridgeError),
+    g6 = useAppState((m6) => m6.tasks),
+    y6 = useAppState((m6) => m6.replBridgeConnected),
+    r = useAppState((m6) => m6.replBridgeError),
     Z6 = y6 || !!r,
-    S6 = T1((m6) => m6.teamContext),
+    S6 = useAppState((m6) => m6.teamContext),
     C6 = Yp(),
-    d6 = T1((m6) => m6.promptSuggestion),
-    o6 = T1((m6) => m6.speculation),
-    K1 = T1((m6) => m6.speculationSessionTimeSavedMs),
-    x6 = T1((m6) => m6.viewingAgentTaskId),
-    t6 = T1((m6) => m6.viewSelectionMode),
-    D1 = T1((m6) => m6.expandedView) === "teammates",
-    j1 = T1((m6) => m6.mainLoopModel),
-    R1 = T1((m6) => m6.mainLoopModelForSession),
-    M1 = T1((m6) => m6.thinkingEnabled),
-    M6 = T1((m6) => (xq() ? m6.fastMode : !1)),
+    d6 = useAppState((m6) => m6.promptSuggestion),
+    o6 = useAppState((m6) => m6.speculation),
+    K1 = useAppState((m6) => m6.speculationSessionTimeSavedMs),
+    x6 = useAppState((m6) => m6.viewingAgentTaskId),
+    t6 = useAppState((m6) => m6.viewSelectionMode),
+    D1 = useAppState((m6) => m6.expandedView) === "teammates",
+    j1 = useAppState((m6) => m6.mainLoopModel),
+    R1 = useAppState((m6) => m6.mainLoopModelForSession),
+    M1 = useAppState((m6) => m6.thinkingEnabled),
+    M6 = useAppState((m6) => (xq() ? m6.fastMode : !1)),
     V6 = FR(L6.getState()),
     s6 = V6?.identity.agentName,
     O1 =
@@ -56049,7 +56049,7 @@ function pEz({
     YY = p4.useCallback(
       (m6) => {
         if (m6 === "?") {
-          (n("tengu_help_toggled", {}), A6((s4) => !s4));
+          (emitEvent("tengu_help_toggled", {}), A6((s4) => !s4));
           return;
         }
         (A6(!1), CA(), _o4(), Fx(h6));
@@ -56216,7 +56216,7 @@ function pEz({
         let $K = wH4(L6.getState());
         if (D7()) {
           if ($K.type === "viewed" && a) {
-            (n("tengu_transcript_input_to_teammate", {}),
+            (emitEvent("tengu_transcript_input_to_teammate", {}),
               await a(m6, $K.task, {
                 setCursorOffset: O6,
                 clearBuffer: Dq,
@@ -56282,7 +56282,7 @@ function pEz({
         },
       })));
   function Zq(m6, E1, a1, c8, H7) {
-    (n("tengu_paste_image", {}), P("prompt"));
+    (emitEvent("tengu_paste_image", {}), P("prompt"));
     let s4 = qA.current++,
       $K = {
         id: s4,
@@ -56332,7 +56332,7 @@ function pEz({
       return !0;
     }, [E6, P, D, t, v]);
   vCq(N, function (m6) {
-    n("tengu_ext_at_mentioned", {});
+    emitEvent("tengu_ext_at_mentioned", {});
     let E1,
       a1 = TSq.relative(y1(), m6.filePath);
     if (m6.lineStart && m6.lineEnd)
@@ -56361,7 +56361,7 @@ function pEz({
       (E6(m6), O6(t + 1));
     }, [D, t, E6, O6, R7, V]),
     FO = p4.useCallback(async () => {
-      (n("tengu_external_editor_used", {}), W9(!0));
+      (emitEvent("tengu_external_editor_used", {}), W9(!0));
       try {
         let m6 = await BV(D, V);
         if (m6.error)
@@ -56374,7 +56374,7 @@ function pEz({
         if (m6.content !== null && m6.content !== D)
           (R7(D, t, V), E6(m6.content), O6(m6.content.length));
       } catch (m6) {
-        if (m6 instanceof Error) $6(m6);
+        if (m6 instanceof Error) sendError(m6);
         H8({
           key: "external-editor-error",
           text: `External editor failed: ${m6 instanceof Error ? m6.message : String(m6)}`,
@@ -56411,7 +56411,7 @@ function pEz({
       if (D7() && V6 && x6) {
         let c8 = { ...K, mode: V6.permissionMode },
           H7 = _w6(c8, void 0);
-        n("tengu_mode_cycle", { to: H7 });
+        emitEvent("tengu_mode_cycle", { to: H7 });
         let s4 = x6;
         if (
           (h6(($K) => {
@@ -56431,7 +56431,7 @@ function pEz({
       let m6 = _w6(K, S6),
         E1 = !1,
         { context: a1 } = tRq(K, S6);
-      if ((n("tengu_mode_cycle", { to: m6 }), m6 === "plan"))
+      if ((emitEvent("tengu_mode_cycle", { to: m6 }), m6 === "plan"))
         updateSettings((c8) => ({ ...c8, lastPlanModeUse: Date.now() }));
       if (
         (h6((c8) => ({ ...c8, toolPermissionContext: { ...a1, mode: m6 } })),
@@ -56683,7 +56683,7 @@ function pEz({
           priority: "immediate",
           timeoutMs: 3000,
         }),
-          n("tengu_model_picker_hotkey", { model: m6 }));
+          emitEvent("tengu_model_picker_hotkey", { model: m6 }));
       },
       [h6, H8, M6],
     ),
@@ -56729,7 +56729,7 @@ function pEz({
       (m6) => {
         (h6((E1) => ({ ...E1, thinkingEnabled: m6 })),
           Y2(!1),
-          n("tengu_thinking_toggled_hotkey", { enabled: m6 }),
+          emitEvent("tengu_thinking_toggled_hotkey", { enabled: m6 }),
           H8({
             key: "thinking-toggled-hotkey",
             jsx: M7.createElement(
@@ -57198,29 +57198,29 @@ function mC1(A, q) {
       if (A.subtype === "compact_boundary")
         return { type: "message", message: oEz(A) };
       return (
-        y(`[sdkMessageAdapter] Ignoring system message subtype: ${A.subtype}`),
+        writeDebugLog(`[sdkMessageAdapter] Ignoring system message subtype: ${A.subtype}`),
         { type: "ignored" }
       );
     case "tool_progress":
       return { type: "message", message: rEz(A) };
     case "auth_status":
       return (
-        y("[sdkMessageAdapter] Ignoring auth_status message"),
+        writeDebugLog("[sdkMessageAdapter] Ignoring auth_status message"),
         { type: "ignored" }
       );
     case "tool_use_summary":
       return (
-        y("[sdkMessageAdapter] Ignoring tool_use_summary message"),
+        writeDebugLog("[sdkMessageAdapter] Ignoring tool_use_summary message"),
         { type: "ignored" }
       );
     case "rate_limit_event":
       return (
-        y("[sdkMessageAdapter] Ignoring rate_limit_event message"),
+        writeDebugLog("[sdkMessageAdapter] Ignoring rate_limit_event message"),
         { type: "ignored" }
       );
     default:
       return (
-        y(`[sdkMessageAdapter] Unknown message type: ${A.type}`),
+        writeDebugLog(`[sdkMessageAdapter] Unknown message type: ${A.type}`),
         { type: "ignored" }
       );
   }
@@ -57276,7 +57276,7 @@ function FC1(A) {
       if (K.length === 0) return "";
       return K.slice(0, 3)
         .map(([Y, z]) => {
-          let w = typeof z === "string" ? z : p6(z);
+          let w = typeof z === "string" ? z : trySafeStringify(z);
           return `${Y}: ${w}`;
         })
         .join(", ");
@@ -57313,16 +57313,16 @@ function vSq({
   }, [w]),
     nC.useEffect(() => {
       if (!A) return;
-      y(`[useRemoteSession] Initializing for session ${A.sessionId}`);
+      writeDebugLog(`[useRemoteSession] Initializing for session ${A.sessionId}`);
       let G = new Gi8(A, {
         onMessage: (Z) => {
           if (
-            (y(`[useRemoteSession] Received message type: ${Z.type}`),
+            (writeDebugLog(`[useRemoteSession] Received message type: ${Z.type}`),
             j.current)
           )
             (clearTimeout(j.current), (j.current = null));
           if (Z.type === "system" && Z.subtype === "init" && Y)
-            (y(
+            (writeDebugLog(
               `[useRemoteSession] Init received with ${Z.slash_commands.length} slash commands`,
             ),
               Y(Z.slash_commands));
@@ -57354,12 +57354,12 @@ function vSq({
                 _,
               );
             else
-              y(
+              writeDebugLog(
                 "[useRemoteSession] Stream event received but streaming callbacks not provided",
               );
         },
         onPermissionRequest: (Z, f) => {
-          y(`[useRemoteSession] Permission request for tool: ${Z.tool_name}`);
+          writeDebugLog(`[useRemoteSession] Permission request for tool: ${Z.tool_name}`);
           let N = q5(X.current, Z.tool_name) ?? FC1(Z.tool_name),
             V = gC1(Z, f),
             v = {
@@ -57403,20 +57403,20 @@ function vSq({
           (z((S) => [...S, L]), K(!1));
         },
         onConnected: () => {
-          y("[useRemoteSession] Connected");
+          writeDebugLog("[useRemoteSession] Connected");
         },
         onDisconnected: () => {
-          (y("[useRemoteSession] Disconnected"), K(!1));
+          (writeDebugLog("[useRemoteSession] Disconnected"), K(!1));
         },
         onError: (Z) => {
-          y(`[useRemoteSession] Error: ${Z.message}`);
+          writeDebugLog(`[useRemoteSession] Error: ${Z.message}`);
         },
       });
       return (
         (J.current = G),
         G.connect(),
         () => {
-          if ((y("[useRemoteSession] Cleanup - disconnecting"), j.current))
+          if ((writeDebugLog("[useRemoteSession] Cleanup - disconnecting"), j.current))
             (clearTimeout(j.current), (j.current = null));
           (G.disconnect(), (J.current = null));
         }
@@ -57425,7 +57425,7 @@ function vSq({
   let M = nC.useCallback(
       async (G) => {
         let Z = J.current;
-        if (!Z) return (y("[useRemoteSession] Cannot send - no manager"), !1);
+        if (!Z) return (writeDebugLog("[useRemoteSession] Cannot send - no manager"), !1);
         if (j.current) clearTimeout(j.current);
         K(!0);
         let f = await Z.sendMessage(G);
@@ -57443,7 +57443,7 @@ function vSq({
             Ws4(V, new AbortController().signal)
               .then((v) => i$8(N, v))
               .catch((v) =>
-                $6(
+                sendError(
                   v instanceof Error
                     ? v
                     : Error(`Failed to update session title: ${v}`),
@@ -57452,7 +57452,7 @@ function vSq({
         }
         return (
           (j.current = setTimeout(() => {
-            y("[useRemoteSession] Response timeout - attempting reconnect");
+            writeDebugLog("[useRemoteSession] Response timeout - attempting reconnect");
             let N = IX(
               "Remote session may be unresponsive. Attempting to reconnect…",
               "warning",
@@ -57530,7 +57530,7 @@ class Jr8 {
             if (_.request.subtype === "can_use_tool")
               this.callbacks.onPermissionRequest(_.request, _.request_id);
             else
-              (y(
+              (writeDebugLog(
                 `[DirectConnect] Unsupported control request subtype: ${_.request.subtype}`,
               ),
                 this.sendErrorResponse(
@@ -57558,7 +57558,7 @@ class Jr8 {
   }
   sendMessage(A) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return !1;
-    let q = p6({
+    let q = trySafeStringify({
       type: "user",
       message: { role: "user", content: A },
       parent_tool_use_id: null,
@@ -57568,7 +57568,7 @@ class Jr8 {
   }
   respondToPermissionRequest(A, q) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    let K = p6({
+    let K = trySafeStringify({
       type: "control_response",
       response: {
         subtype: "success",
@@ -57585,7 +57585,7 @@ class Jr8 {
   }
   sendInterrupt() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    let A = p6({
+    let A = trySafeStringify({
       type: "control_request",
       request_id: crypto.randomUUID(),
       request: { subtype: "interrupt" },
@@ -57594,7 +57594,7 @@ class Jr8 {
   }
   sendErrorResponse(A, q) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    let K = p6({
+    let K = trySafeStringify({
       type: "control_response",
       response: { subtype: "error", request_id: A, error: q },
     });
@@ -57628,7 +57628,7 @@ function LSq({
   }, [z]),
     rC.useEffect(() => {
       if (!A) return;
-      (($.current = !1), y(`[useDirectConnect] Connecting to ${A.wsUrl}`));
+      (($.current = !1), writeDebugLog(`[useDirectConnect] Connecting to ${A.wsUrl}`));
       let X = new Jr8(A, {
         onMessage: (M) => {
           if (BC1(M)) K(!1);
@@ -57640,7 +57640,7 @@ function LSq({
           if (P.type === "message") q((W) => [...W, P.message]);
         },
         onPermissionRequest: (M, P) => {
-          y(`[useDirectConnect] Permission request for tool: ${M.tool_name}`);
+          writeDebugLog(`[useDirectConnect] Permission request for tool: ${M.tool_name}`);
           let W = q5(H.current, M.tool_name) ?? FC1(M.tool_name),
             G = gC1(M, P),
             Z = {
@@ -57684,10 +57684,10 @@ function LSq({
           (Y((N) => [...N, f]), K(!1));
         },
         onConnected: () => {
-          (y("[useDirectConnect] Connected"), (O.current = !0));
+          (writeDebugLog("[useDirectConnect] Connected"), (O.current = !0));
         },
         onDisconnected: () => {
-          if ((y("[useDirectConnect] Disconnected"), !O.current))
+          if ((writeDebugLog("[useDirectConnect] Disconnected"), !O.current))
             process.stderr.write(`
 Failed to connect to server at ${A.wsUrl}
 `);
@@ -57698,14 +57698,14 @@ Server disconnected.
           ((O.current = !1), rq(1), K(!1));
         },
         onError: (M) => {
-          y(`[useDirectConnect] Error: ${M.message}`);
+          writeDebugLog(`[useDirectConnect] Error: ${M.message}`);
         },
       });
       return (
         (_.current = X),
         X.connect(),
         () => {
-          (y("[useDirectConnect] Cleanup - disconnecting"),
+          (writeDebugLog("[useDirectConnect] Cleanup - disconnecting"),
             X.disconnect(),
             (_.current = null));
         }
@@ -57737,7 +57737,7 @@ var ySq = E(() => {
   rC = Y6(W6(), 1);
 });
 function RSq(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     { onSelect: K, inputValue: Y, setInputValue: z, message: w } = A,
     _ = w === void 0 ? KLz : w,
     $ = Ko6.useRef(Y),
@@ -57882,7 +57882,7 @@ var CSq = E(() => {
   Xr8 = Y6(W6(), 1);
 });
 function SSq(A) {
-  let q = T1((O) => O.skillImprovement.suggestion),
+  let q = useAppState((O) => O.skillImprovement.suggestion),
     K = tA(),
     [Y, z] = Dw6.useState(!1),
     w = Dw6.useRef(q),
@@ -57891,7 +57891,7 @@ function SSq(A) {
   if (q && !Y) {
     if ((z(!0), !_.current))
       ((_.current = !0),
-        n("tengu_skill_improvement_survey", {
+        emitEvent("tengu_skill_improvement_survey", {
           event_type: "appeared",
           skill_name: q.skillName ?? "unknown",
         }));
@@ -57902,7 +57902,7 @@ function SSq(A) {
       if (!H) return;
       let j = O !== "dismissed";
       if (
-        (n("tengu_skill_improvement_survey", {
+        (emitEvent("tengu_skill_improvement_survey", {
           event_type: "responded",
           response: j ? "applied" : "dismissed",
           skill_name: H.skillName,
@@ -57940,7 +57940,7 @@ var hSq = E(() => {
 function xSq() {
   ISq.useEffect(() => {
     let A = Math.round(process.uptime() * 1000);
-    (n("tengu_timer", { event: "startup", durationMs: A }), W16());
+    (emitEvent("tengu_timer", { event: "startup", durationMs: A }), W16());
   }, []);
 }
 var ISq;
@@ -58029,7 +58029,7 @@ var FSq = E(() => {
   B1();
 });
 function Mr8(A) {
-  let q = w6(36),
+  let q = reactMemoCache(36),
     {
       screen: K,
       setScreen: Y,
@@ -58040,13 +58040,13 @@ function Mr8(A) {
       onEnterTranscript: O,
       onExitTranscript: H,
     } = A,
-    j = T1(JLz),
+    j = useAppState(JLz),
     J = tA();
   a_();
   let D;
   if (q[0] !== j || q[1] !== J)
     ((D = () => {
-      (n("tengu_toggle_todos", { is_expanded: j === "tasks" }), J(HLz));
+      (emitEvent("tengu_toggle_todos", { is_expanded: j === "tasks" }), J(HLz));
     }),
       (q[0] = j),
       (q[1] = J),
@@ -58067,7 +58067,7 @@ function Mr8(A) {
     ((M = () => {
       let u = K !== "transcript";
       if (
-        (n("tengu_toggle_transcript", {
+        (emitEvent("tengu_toggle_transcript", {
           is_entering: u,
           show_all: w,
           message_count: $,
@@ -58094,7 +58094,7 @@ function Mr8(A) {
     W;
   if (q[12] !== $ || q[13] !== z || q[14] !== _ || q[15] !== w)
     ((W = () => {
-      (n("tengu_transcript_toggle_show_all", {
+      (emitEvent("tengu_transcript_toggle_show_all", {
         is_expanding: !w,
         message_count: $,
       }),
@@ -58119,7 +58119,7 @@ function Mr8(A) {
   )
     ((Z = () => {
       if (
-        (n("tengu_transcript_exit", { show_all: w, message_count: $ }),
+        (emitEvent("tengu_transcript_exit", { show_all: w, message_count: $ }),
         Y("prompt"),
         z(zLz),
         _(!1),
@@ -58226,7 +58226,7 @@ var pSq = E(() => {
   FSq();
 });
 function Pr8(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { onSubmit: K, isActive: Y } = A,
     z = Y === void 0 ? !0 : Y,
     w = Fy(),
@@ -58305,8 +58305,8 @@ function Wr8(A) {
     { addNotification: Z, removeNotification: f } = Nq(),
     N = zo6.useRef(0),
     V = void 0,
-    v = T1((e) => e.viewSelectionMode),
-    L = T1((e) =>
+    v = useAppState((e) => e.viewSelectionMode),
+    L = useAppState((e) =>
       Object.values(e.tasks).some(
         (j6) => j6.type === "local_agent" && j6.status === "running",
       ),
@@ -58314,7 +58314,7 @@ function Wr8(A) {
     S = zo6.useCallback(() => {
       let e = { source: "escape", streamMode: M };
       if (_ !== void 0 && !_.aborted) {
-        (n("tengu_cancel", e), q(() => []), K());
+        (emitEvent("tengu_cancel", e), q(() => []), K());
         return;
       }
       if (L && !X) return;
@@ -58324,7 +58324,7 @@ function Wr8(A) {
           return;
         }
       }
-      (n("tengu_cancel", e), q(() => []), K());
+      (emitEvent("tengu_cancel", e), q(() => []), K());
     }, [P, W, _, $, q, K, L, X, M]),
     I = ZGq(),
     B = _ !== void 0 && !_.aborted,
@@ -58350,7 +58350,7 @@ function Wr8(A) {
     if (e - N.current <= USq) {
       ((N.current = 0), f("kill-agents-confirm"));
       let P6 = P.getState().tasks;
-      (n("tengu_cancel", { source: "kill_agents" }), Do4(P6, W), iH4());
+      (emitEvent("tengu_cancel", { source: "kill_agents" }), Do4(P6, W), iH4());
       let f6 = [];
       for (let [q6, A6] of Object.entries(P6))
         if (A6.type === "local_agent" && A6.status === "running")
@@ -58396,10 +58396,10 @@ function Gr8(A) {
     .sort((q, K) => q.identity.agentName.localeCompare(K.identity.agentName));
 }
 function cSq(A) {
-  let q = T1((D) => D.tasks),
-    K = T1((D) => D.viewSelectionMode),
-    Y = T1((D) => D.viewingAgentTaskId),
-    z = T1((D) => D.selectedIPAgentIndex),
+  let q = useAppState((D) => D.tasks),
+    K = useAppState((D) => D.viewSelectionMode),
+    Y = useAppState((D) => D.viewingAgentTaskId),
+    z = useAppState((D) => D.selectedIPAgentIndex),
     w = tA(),
     _ = a_(),
     $ = Gr8(q),
@@ -58512,17 +58512,17 @@ function Zr8(A, q, K) {
   let { teamName: Y, agentId: z, agentName: w } = K,
     _ = ED(Y);
   if (!_) {
-    y(`[TeammateInit] Team file not found for team: ${Y}`);
+    writeDebugLog(`[TeammateInit] Team file not found for team: ${Y}`);
     return;
   }
   let $ = _.leadAgentId;
   if (_.teamAllowedPaths && _.teamAllowedPaths.length > 0) {
-    y(
+    writeDebugLog(
       `[TeammateInit] Found ${_.teamAllowedPaths.length} team-wide allowed path(s)`,
     );
     for (let j of _.teamAllowedPaths) {
       let J = j.path.startsWith("/") ? `/${j.path}/**` : `${j.path}/**`;
-      (y(
+      (writeDebugLog(
         `[TeammateInit] Applying team permission: ${j.toolName} allowed in ${j.path} (rule: ${J})`,
       ),
         A((D) => ({
@@ -58538,12 +58538,12 @@ function Zr8(A, q, K) {
   }
   let H = _.members.find((j) => j.agentId === $)?.name || "team-lead";
   if (z === $) {
-    y(
+    writeDebugLog(
       "[TeammateInit] This agent is the team leader - skipping idle notification hook",
     );
     return;
   }
-  (y(
+  (writeDebugLog(
     `[TeammateInit] Registering Stop hook for teammate ${w} to notify leader ${H}`,
   ),
     _W1(
@@ -58557,11 +58557,11 @@ function Zr8(A, q, K) {
         return (
           await e5(H, {
             from: w,
-            text: p6(D),
+            text: trySafeStringify(D),
             timestamp: new Date().toISOString(),
             color: fO(),
           }),
-          y(`[TeammateInit] Sent idle notification to leader ${H}`),
+          writeDebugLog(`[TeammateInit] Sent idle notification to leader ${H}`),
           !0
         );
       },
@@ -58588,11 +58588,11 @@ function rSq(A, q, { enabled: K = !0 } = {}) {
       if (z && w) {
         iTq(A, z, w);
         let $ = ED(z)?.members.find((O) => O.name === w);
-        if ($) Zr8(A, d1(), { teamName: z, agentId: $.agentId, agentName: w });
+        if ($) Zr8(A, getSessionId(), { teamName: z, agentId: $.agentId, agentName: w });
       } else {
         let _ = hg6?.();
         if (_?.teamName && _?.agentId && _?.agentName)
-          Zr8(A, d1(), {
+          Zr8(A, getSessionId(), {
             teamName: _.teamName,
             agentId: _.agentId,
             agentName: _.agentName,
@@ -58613,8 +58613,8 @@ var oSq = E(() => {
 });
 function sSq() {
   let A = tA(),
-    q = T1((O) => O.viewingAgentTaskId),
-    K = T1((O) => O.tasks),
+    q = useAppState((O) => O.viewingAgentTaskId),
+    K = useAppState((O) => O.tasks),
     Y = q ? K[q] : void 0,
     z = Y && jj(Y) ? Y : void 0,
     w = q,
@@ -58683,7 +58683,7 @@ function eSq(A, q, K, Y, z, w, _) {
         );
       },
       logCancelled() {
-        n("tengu_tool_use_cancelled", { messageID: $, toolName: gK(A.name) });
+        emitEvent("tengu_tool_use_cancelled", { messageID: $, toolName: gK(A.name) });
       },
       async persistPermissions(H) {
         if (H.length === 0) return !1;
@@ -58703,7 +58703,7 @@ function eSq(A, q, K, Y, z, w, _) {
           X = H ? `${D ? gc6 : dQ6}${H}` : D ? Ux : zY6,
           M = D ? X : QT6(X);
         if (j || (!H && !J?.length && !D))
-          (y(
+          (writeDebugLog(
             `Aborting: tool=${A.name} isAbort=${j} hasFeedback=${!!H} isSubagent=${D}`,
           ),
             K.abortController.abort());
@@ -58737,7 +58737,7 @@ function eSq(A, q, K, Y, z, w, _) {
                 ),
                 M.interrupt)
               )
-                (y(`Hook interrupt: tool=${A.name} hookMessage=${M.message}`),
+                (writeDebugLog(`Hook interrupt: tool=${A.name} hookMessage=${M.message}`),
                   K.abortController.abort());
               return this.buildDeny(M.message || "Permission denied by hook", {
                 type: "hook",
@@ -58833,7 +58833,7 @@ async function qhq(A) {
     let _ = null;
     if (_) return _;
   } catch (w) {
-    $6(
+    sendError(
       w instanceof Error
         ? w
         : Error(`Automated permission check failed: ${String(w)}`),
@@ -58903,7 +58903,7 @@ async function Yhq(A) {
     });
   } catch (_) {
     return (
-      $6(
+      sendError(
         _ instanceof Error
           ? _
           : Error(`Failed to submit swarm permission request: ${String(_)}`),
@@ -59171,12 +59171,12 @@ function MLz(A, q) {
           })
           .catch((J) => {
             if (J instanceof j2 || J instanceof Rz)
-              (y(
+              (writeDebugLog(
                 `Permission check threw ${J.constructor.name} for tool=${K.name}: ${J.message}`,
               ),
                 H.logCancelled(),
                 O(H.cancelAndAbort(void 0, !0)));
-            else ($6(J), O(H.cancelAndAbort(void 0, !0)));
+            else (sendError(J), O(H.cancelAndAbort(void 0, !0)));
           })
           .finally(() => {
             oe(_);
@@ -59280,7 +59280,7 @@ async function lC1(A) {
             P6.userFacingName() === a),
       );
     if (j6 && j6.type === "local-jsx" && (K.isActive || Y)) {
-      (n("tengu_immediate_command_executed", { commandName: j6.name }),
+      (emitEvent("tengu_immediate_command_executed", { commandName: j6.name }),
         w(""),
         V(0),
         v());
@@ -59311,11 +59311,11 @@ async function lC1(A) {
     let d = B[c.id];
     if (d && d.type === "text") ((F = F.replace(c.match, d.content)), u++);
   }
-  if ((n("tengu_paste_text", { pastedTextCount: u }), K.isActive || Y)) {
+  if ((emitEvent("tengu_paste_text", { pastedTextCount: u }), K.isActive || Y)) {
     if (I !== "prompt" && I !== "bash") return;
     if (A.hasInterruptibleToolInProgress)
-      (y(`[interrupt] Aborting current turn: streamMode=${A.streamMode}`),
-        n("tengu_cancel", {
+      (writeDebugLog(`[interrupt] Aborting current turn: streamMode=${A.streamMode}`),
+        emitEvent("tengu_cancel", {
           source: "interrupt_on_submit",
           streamMode: A.streamMode,
         }),
@@ -59543,7 +59543,7 @@ function khq(A, q) {
       let Y = await rG(A);
       q(Y);
     } catch (Y) {
-      if (Y instanceof Error) $6(Y);
+      if (Y instanceof Error) sendError(Y);
     }
   }, [A, q]);
   iC1.useEffect(() => gV6.subscribe(K), [K]);
@@ -59557,7 +59557,7 @@ var Ehq = E(() => {
 });
 function nC1({ enabled: A = !0 } = {}) {
   let q = tA(),
-    K = T1((w) => w.plugins.needsRefresh),
+    K = useAppState((w) => w.plugins.needsRefresh),
     { addNotification: Y } = Nq(),
     z = $o6.useCallback(async () => {
       try {
@@ -59637,7 +59637,7 @@ function nC1({ enabled: A = !0 } = {}) {
             },
           };
         }),
-          y(
+          writeDebugLog(
             `Loaded plugins - Enabled: ${w.length}, Disabled: ${_.length}, Commands: ${H.length}, Agents: ${j.length}, Errors: ${$.length}`,
           ));
         let J = w.reduce((X, M) => {
@@ -59666,8 +59666,8 @@ function nC1({ enabled: A = !0 } = {}) {
       } catch (w) {
         let _ = w instanceof Error ? w : Error(String(w));
         return (
-          $6(_),
-          y(`Error loading plugins: ${w}`),
+          sendError(_),
+          writeDebugLog(`Error loading plugins: ${w}`),
           q(($) => {
             let O = $.plugins.errors.filter(
                 (j) =>
@@ -59714,7 +59714,7 @@ function nC1({ enabled: A = !0 } = {}) {
           has_custom_plugin_cache_dir:
             !!process.env.CLAUDE_CODE_PLUGIN_CACHE_DIR,
         };
-        (n("tengu_plugins_loaded", _), $8("info", "tengu_plugins_loaded", _));
+        (emitEvent("tengu_plugins_loaded", _), $8("info", "tengu_plugins_loaded", _));
       });
     }, [z, A]),
     $o6.useEffect(() => {
@@ -59727,7 +59727,7 @@ function nC1({ enabled: A = !0 } = {}) {
             has_custom_plugin_cache_dir:
               !!process.env.CLAUDE_CODE_PLUGIN_CACHE_DIR,
           };
-          (n("tengu_plugins_loaded", _),
+          (emitEvent("tengu_plugins_loaded", _),
             $8("info", "tengu_plugins_loaded", _),
             q(($) => {
               if (!$.plugins.needsRefresh) return $;
@@ -59755,8 +59755,8 @@ var Tr8 = E(() => {
   $o6 = Y6(W6(), 1);
 });
 function Lhq() {
-  let A = w6(14),
-    q = T1(WLz);
+  let A = reactMemoCache(14),
+    q = useAppState(WLz);
   if (!q) return null;
   let K;
   if (A[0] !== q.identity.color)
@@ -59858,7 +59858,7 @@ function Rhq(A, q) {
         else if ($.text !== void 0)
           w({ selection: null, text: $.text, filePath: $.filePath });
       } catch ($) {
-        $6($);
+        sendError($);
       }
     }),
       (K.current = !0));
@@ -59906,7 +59906,7 @@ function hhq({
   let z = Y,
     w = a_(),
     _ = tA(),
-    $ = T1((D) => D.inbox.messages.length),
+    $ = useAppState((D) => D.inbox.messages.length),
     O = Lm(),
     H = Mw6.useCallback(async () => {
       if (!A) return;
@@ -59916,13 +59916,13 @@ function hhq({
       let M = await R96(X, D.teamContext?.teamName);
       if (M.length === 0) return;
       if (
-        (y(`[InboxPoller] Found ${M.length} unread message(s)`), T2() && Ig6())
+        (writeDebugLog(`[InboxPoller] Found ${M.length} unread message(s)`), T2() && Ig6())
       )
         for (let F of M) {
           let g = GG6(F.text);
           if (g && F.from === "team-lead")
             if (
-              (y(
+              (writeDebugLog(
                 `[InboxPoller] Received plan approval response from team-lead: approved=${g.approved}`,
               ),
               g.approved)
@@ -59936,15 +59936,15 @@ function hhq({
                   destination: "session",
                 }),
               })),
-                y(
+                writeDebugLog(
                   `[InboxPoller] Plan approved by team lead, exited plan mode to ${u}`,
                 ));
             } else
-              y(
+              writeDebugLog(
                 `[InboxPoller] Plan rejected by team lead: ${g.feedback || "No feedback provided"}`,
               );
           else if (g)
-            y(
+            writeDebugLog(
               `[InboxPoller] Ignoring plan approval response from non-team-lead: ${F.from}`,
             );
         }
@@ -59983,7 +59983,7 @@ function hhq({
         else I.push(F);
       }
       if (W.length > 0 && NG(D.teamContext)) {
-        y(`[InboxPoller] Found ${W.length} permission request(s)`);
+        writeDebugLog(`[InboxPoller] Found ${W.length} permission request(s)`);
         let F = cN1(),
           g = D.teamContext?.teamName;
         for (let U of W) {
@@ -59992,7 +59992,7 @@ function hhq({
           if (F) {
             let d = q5(R16(), c.tool_name);
             if (!d) {
-              y(
+              writeDebugLog(
                 `[InboxPoller] Unknown tool ${c.tool_name}, skipping permission request`,
               );
               continue;
@@ -60044,7 +60044,7 @@ function hhq({
               return [...e, a];
             });
           } else
-            y(
+            writeDebugLog(
               `[InboxPoller] ToolUseConfirmQueue unavailable, dropping permission request from ${c.agent_id}`,
             );
         }
@@ -60059,13 +60059,13 @@ function hhq({
           );
       }
       if (G.length > 0 && T2()) {
-        y(`[InboxPoller] Found ${G.length} permission response(s)`);
+        writeDebugLog(`[InboxPoller] Found ${G.length} permission response(s)`);
         for (let F of G) {
           let g = C96(F.text);
           if (!g) continue;
           if (no4(g.request_id))
             if (
-              (y(
+              (writeDebugLog(
                 `[InboxPoller] Processing permission response for ${g.request_id}: ${g.subtype}`,
               ),
               g.subtype === "success")
@@ -60085,13 +60085,13 @@ function hhq({
         }
       }
       if (Z.length > 0 && NG(D.teamContext)) {
-        y(`[InboxPoller] Found ${Z.length} sandbox permission request(s)`);
+        writeDebugLog(`[InboxPoller] Found ${Z.length} sandbox permission request(s)`);
         let F = [];
         for (let g of Z) {
           let u = h01(g.text);
           if (!u) continue;
           if (!u.hostPattern?.host) {
-            y(
+            writeDebugLog(
               "[InboxPoller] Invalid sandbox permission request: missing hostPattern.host",
             );
             continue;
@@ -60125,12 +60125,12 @@ function hhq({
         }
       }
       if (f.length > 0 && T2()) {
-        y(`[InboxPoller] Found ${f.length} sandbox permission response(s)`);
+        writeDebugLog(`[InboxPoller] Found ${f.length} sandbox permission response(s)`);
         for (let F of f) {
           let g = Qp6(F.text);
           if (!g) continue;
           if (ao4(g.requestId))
-            (y(
+            (writeDebugLog(
               `[InboxPoller] Processing sandbox permission response for ${g.requestId}: allow=${g.allow}`,
             ),
               so4({ requestId: g.requestId, host: g.host, allow: g.allow }),
@@ -60138,26 +60138,26 @@ function hhq({
         }
       }
       if (v.length > 0 && T2()) {
-        y(`[InboxPoller] Found ${v.length} team permission update(s)`);
+        writeDebugLog(`[InboxPoller] Found ${v.length} team permission update(s)`);
         for (let F of v) {
           let g = u01(F.text);
           if (!g) {
-            y(
+            writeDebugLog(
               `[InboxPoller] Failed to parse team permission update: ${F.text.substring(0, 100)}`,
             );
             continue;
           }
           if (!g.permissionUpdate?.rules || !g.permissionUpdate?.behavior) {
-            y(
+            writeDebugLog(
               "[InboxPoller] Invalid team permission update: missing permissionUpdate.rules or permissionUpdate.behavior",
             );
             continue;
           }
-          (y(
+          (writeDebugLog(
             `[InboxPoller] Applying team permission update: ${g.toolName} allowed in ${g.directoryPath}`,
           ),
-            y(
-              `[InboxPoller] Permission update rules: ${p6(g.permissionUpdate.rules)}`,
+            writeDebugLog(
+              `[InboxPoller] Permission update rules: ${trySafeStringify(g.permissionUpdate.rules)}`,
             ),
             _((u) => {
               let U = a2(u.toolPermissionContext, {
@@ -60167,8 +60167,8 @@ function hhq({
                 destination: "session",
               });
               return (
-                y(
-                  `[InboxPoller] Updated session allow rules: ${p6(U.alwaysAllowRules.session)}`,
+                writeDebugLog(
+                  `[InboxPoller] Updated session allow rules: ${trySafeStringify(U.alwaysAllowRules.session)}`,
                 ),
                 { ...u, toolPermissionContext: U }
               );
@@ -60176,23 +60176,23 @@ function hhq({
         }
       }
       if (L.length > 0 && T2()) {
-        y(`[InboxPoller] Found ${L.length} mode set request(s)`);
+        writeDebugLog(`[InboxPoller] Found ${L.length} mode set request(s)`);
         for (let F of L) {
           if (F.from !== "team-lead") {
-            y(
+            writeDebugLog(
               `[InboxPoller] Ignoring mode set request from non-team-lead: ${F.from}`,
             );
             continue;
           }
           let g = B01(F.text);
           if (!g) {
-            y(
+            writeDebugLog(
               `[InboxPoller] Failed to parse mode set request: ${F.text.substring(0, 100)}`,
             );
             continue;
           }
           let u = Nh(g.mode);
-          (y(`[InboxPoller] Applying mode change from team-lead: ${u}`),
+          (writeDebugLog(`[InboxPoller] Applying mode change from team-lead: ${u}`),
             _((d) => ({
               ...d,
               toolPermissionContext: a2(d.toolPermissionContext, {
@@ -60207,7 +60207,7 @@ function hhq({
         }
       }
       if (S.length > 0 && NG(D.teamContext)) {
-        y(
+        writeDebugLog(
           `[InboxPoller] Found ${S.length} plan approval request(s), auto-approving`,
         );
         let F = D.teamContext?.teamName,
@@ -60225,7 +60225,7 @@ function hhq({
           };
           e5(
             U.from,
-            { from: xz, text: p6(d), timestamp: new Date().toISOString() },
+            { from: xz, text: trySafeStringify(d), timestamp: new Date().toISOString() },
             F,
           );
           let a = Fv1(U.from, D);
@@ -60241,18 +60241,18 @@ function hhq({
               },
               _,
             );
-          (y(
+          (writeDebugLog(
             `[InboxPoller] Auto-approved plan from ${U.from} (request ${c.requestId})`,
           ),
             I.push(U));
         }
       }
       if (N.length > 0 && T2()) {
-        y(`[InboxPoller] Found ${N.length} shutdown request(s)`);
+        writeDebugLog(`[InboxPoller] Found ${N.length} shutdown request(s)`);
         for (let F of N) I.push(F);
       }
       if (V.length > 0 && NG(D.teamContext)) {
-        y(`[InboxPoller] Found ${V.length} shutdown approval(s)`);
+        writeDebugLog(`[InboxPoller] Found ${V.length} shutdown approval(s)`);
         for (let F of V) {
           let g = cf(F.text);
           if (!g) continue;
@@ -60262,9 +60262,9 @@ function hhq({
                 await _16();
                 let U = await dx(),
                   d = await Ab8(g.backendType)?.killPane(g.paneId, !U);
-                y(`[InboxPoller] Killed pane ${g.paneId} for ${g.from}: ${d}`);
+                writeDebugLog(`[InboxPoller] Killed pane ${g.paneId} for ${g.from}: ${d}`);
               } catch (U) {
-                y(`[InboxPoller] Failed to kill pane for ${g.from}: ${U}`);
+                writeDebugLog(`[InboxPoller] Failed to kill pane for ${g.from}: ${U}`);
               }
             })();
           let u = g.from;
@@ -60300,7 +60300,7 @@ function hhq({
                       {
                         id: Shq(),
                         from: "system",
-                        text: p6({ type: "teammate_terminated", message: d }),
+                        text: trySafeStringify({ type: "teammate_terminated", message: d }),
                         timestamp: new Date().toISOString(),
                         status: "pending",
                       },
@@ -60308,7 +60308,7 @@ function hhq({
                   },
                 };
               }),
-                y(`[InboxPoller] Removed ${u} (${U}) from teamContext`));
+                writeDebugLog(`[InboxPoller] Removed ${u} (${U}) from teamContext`));
             }
           }
           I.push(F);
@@ -60348,10 +60348,10 @@ ${U}
           }));
         };
       if (!q && !K) {
-        if ((y("[InboxPoller] Session idle, submitting immediately"), !z(B)))
-          (y("[InboxPoller] Submission rejected, queuing for later delivery"),
+        if ((writeDebugLog("[InboxPoller] Session idle, submitting immediately"), !z(B)))
+          (writeDebugLog("[InboxPoller] Submission rejected, queuing for later delivery"),
             h());
-      } else (y("[InboxPoller] Session busy, queuing for later delivery"), h());
+      } else (writeDebugLog("[InboxPoller] Session busy, queuing for later delivery"), h());
       P();
     }, [A, q, K, z, _, O, w]);
   Mw6.useEffect(() => {
@@ -60362,7 +60362,7 @@ ${U}
     let M = D.inbox.messages.filter((Z) => Z.status === "pending"),
       P = D.inbox.messages.filter((Z) => Z.status === "processed");
     if (P.length > 0) {
-      y(
+      writeDebugLog(
         `[InboxPoller] Cleaning up ${P.length} processed message(s) that were delivered mid-turn`,
       );
       let Z = new Set(P.map((f) => f.id));
@@ -60372,7 +60372,7 @@ ${U}
       }));
     }
     if (M.length === 0) return;
-    y(`[InboxPoller] Session idle, delivering ${M.length} pending message(s)`);
+    writeDebugLog(`[InboxPoller] Session idle, delivering ${M.length} pending message(s)`);
     let W = M.map((Z) => {
       let f = Z.color ? ` color="${Z.color}"` : "",
         N = Z.summary ? ` summary="${Z.summary}"` : "";
@@ -60388,7 +60388,7 @@ ${Z.text}
         ...f,
         inbox: { messages: f.inbox.messages.filter((N) => !Z.has(N.id)) },
       }));
-    } else y("[InboxPoller] Submission rejected, keeping messages queued");
+    } else writeDebugLog("[InboxPoller] Submission rejected, keeping messages queued");
   }, [A, q, K, z, _, $, w]);
   let j = A && !!rC1(w.getState());
   eJ(() => void H(), j ? ZLz : null);
@@ -60432,7 +60432,7 @@ var bhq = E(() => {
   xhq = Y6(W6(), 1);
 });
 function mhq(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     {
       autoConnectIdeFlag: K,
       ideToInstallExtension: Y,
@@ -60453,7 +60453,7 @@ function mhq(A) {
                 K ||
                 vD() ||
                 Y ||
-                X1(process.env.CLAUDE_CODE_AUTO_CONNECT_IDE)) &&
+                isTruthy(process.env.CLAUDE_CODE_AUTO_CONNECT_IDE)) &&
               !Qw(process.env.CLAUDE_CODE_AUTO_CONNECT_IDE)
             )
           )
@@ -60498,7 +60498,7 @@ var Bhq = E(() => {
   uhq = Y6(W6(), 1);
 });
 function Fhq(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { onBackgroundSession: K, isLoading: Y } = A,
     z = tA(),
     w = a_(),
@@ -60507,7 +60507,7 @@ function Fhq(A) {
     H;
   if (q[0] !== w || q[1] !== O || q[2] !== Y || q[3] !== z)
     ((H = () => {
-      if (X1(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS)) return;
+      if (isTruthy(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS)) return;
       let P = w.getState();
       if (Lo4(P)) BN1(() => w.getState(), z);
     }),
@@ -60564,8 +60564,8 @@ function Qhq({
   setAbortController: Y,
   onBackgroundQuery: z,
 }) {
-  let w = T1((J) => J.foregroundedTaskId),
-    _ = T1((J) => J.tasks),
+  let w = useAppState((J) => J.foregroundedTaskId),
+    _ = useAppState((J) => J.tasks),
     $ = tA(),
     O = Dv6.useRef(0),
     H = Dv6.useCallback(() => {
@@ -60667,7 +60667,7 @@ function dhq({ model: A, onDone: q }) {
       }, TLz);
       return () => clearTimeout(D);
     }, [Y]));
-  let z = T1((D) => D.effortValue),
+  let z = useAppState((D) => D.effortValue),
     w = bX6(A),
     _ = w ? vK6(w) : "high",
     $ = jW.useCallback(
@@ -60817,7 +60817,7 @@ var vr8 = E(() => {
 import { readFile as NLz } from "fs/promises";
 async function aC1(A, q = "bad_feedback_survey") {
   try {
-    y("Collecting transcript for sharing", { level: "info" });
+    writeDebugLog("Collecting transcript for sharing", { level: "info" });
     let K = PD(A),
       Y = dl6(A),
       z = await cl6(Y),
@@ -60841,7 +60841,7 @@ async function aC1(A, q = "bad_feedback_survey") {
         subagentTranscripts: Object.keys(z).length > 0 ? z : void 0,
         rawTranscriptJsonl: w,
       },
-      $ = h16(p6(_));
+      $ = h16(trySafeStringify(_));
     await HO();
     let O = u_();
     if (O.error) return { success: !1 };
@@ -60858,14 +60858,14 @@ async function aC1(A, q = "bad_feedback_survey") {
     if (j.status === 200 || j.status === 201) {
       let J = j.data;
       return (
-        y("Transcript shared successfully", { level: "info" }),
+        writeDebugLog("Transcript shared successfully", { level: "info" }),
         { success: !0, transcriptId: J?.transcript_id }
       );
     }
     return { success: !1 };
   } catch (K) {
     return (
-      y(K instanceof Error ? K.message : String(K), { level: "error" }),
+      writeDebugLog(K instanceof Error ? K.message : String(K), { level: "error" }),
       { success: !1 }
     );
   }
@@ -60883,7 +60883,7 @@ var kr8 = E(() => {
 function nhq(A, q, K, Y = "session", z = !1) {
   let w = JW.useRef("unknown");
   w.current = XV(A)?.message?.id || "unknown";
-  let _ = T1((B) => B.feedbackSurvey),
+  let _ = useAppState((B) => B.feedbackSurvey),
     $ = tA(),
     O = Ho6("tengu_feedback_survey_config", VLz),
     H = Ho6("tengu_bad_survey_transcript_ask_config", vLz),
@@ -60905,7 +60905,7 @@ function nhq(A, q, K, Y = "session", z = !1) {
     P = JW.useCallback(
       (B) => {
         (M(Date.now(), D.current),
-          n("tengu_feedback_survey_event", {
+          emitEvent("tengu_feedback_survey_event", {
             event_type: "appeared",
             appearance_id: B,
             last_assistant_message_id: w.current,
@@ -60917,7 +60917,7 @@ function nhq(A, q, K, Y = "session", z = !1) {
     W = JW.useCallback(
       (B, h) => {
         (M(Date.now(), D.current),
-          n("tengu_feedback_survey_event", {
+          emitEvent("tengu_feedback_survey_event", {
             event_type: "responded",
             appearance_id: B,
             response: h,
@@ -60933,7 +60933,7 @@ function nhq(A, q, K, Y = "session", z = !1) {
     Z = JW.useCallback(
       async (B, h) => {
         if (
-          (n("tengu_feedback_survey_event", {
+          (emitEvent("tengu_feedback_survey_event", {
             event_type: `transcript_share_${h}`,
             appearance_id: B,
             last_assistant_message_id: w.current,
@@ -60945,7 +60945,7 @@ function nhq(A, q, K, Y = "session", z = !1) {
         if (h === "yes") {
           let F = await aC1(X.current);
           return (
-            n("tengu_feedback_survey_event", {
+            emitEvent("tengu_feedback_survey_event", {
               event_type: F.success
                 ? "transcript_share_submitted"
                 : "transcript_share_failed",
@@ -60983,7 +60983,7 @@ function nhq(A, q, K, Y = "session", z = !1) {
       if (process.env.CLAUDE_FORCE_DISPLAY_SURVEY && !_.timeLastShown)
         return !0;
       if (!S) return !1;
-      if (X1(process.env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY)) return !1;
+      if (isTruthy(process.env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY)) return !1;
       if (b0()) return !1;
       if (!ZH("allow_product_feedback")) return !1;
       if (_.timeLastShown) {
@@ -61059,7 +61059,7 @@ function yLz(A, q) {
   return !1;
 }
 function ohq(A, q, K, Y) {
-  let z = w6(22),
+  let z = reactMemoCache(22),
     w = K === void 0 ? !1 : K,
     _;
   if (z[0] !== Y) ((_ = Y === void 0 ? {} : Y), (z[0] = Y), (z[1] = _));
@@ -61116,7 +61116,7 @@ function ohq(A, q, K, Y) {
       if (w) return;
       if (H !== !0) return;
       if (b0()) return;
-      if (X1(process.env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY)) return;
+      if (isTruthy(process.env.CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY)) return;
       if (X.current !== null) {
         if (yLz(A, X.current)) {
           if (((X.current = null), Math.random() < LLz)) Z();
@@ -61157,7 +61157,7 @@ function CLz(A) {
 }
 function SLz(A, q) {
   let K = bP1();
-  n("tengu_post_compact_survey_event", {
+  emitEvent("tengu_post_compact_survey_event", {
     event_type: "responded",
     appearance_id: A,
     response: q,
@@ -61166,7 +61166,7 @@ function SLz(A, q) {
 }
 function hLz(A) {
   let q = bP1();
-  n("tengu_post_compact_survey_event", {
+  emitEvent("tengu_post_compact_survey_event", {
     event_type: "appeared",
     appearance_id: A,
     session_memory_compaction_enabled: q,
@@ -61188,7 +61188,7 @@ var ahq = E(() => {
   Q86 = Y6(W6(), 1);
 });
 function shq(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { onSelect: K, inputValue: Y, setInputValue: z } = A,
     w = jo6.useRef(Y),
     _ = jo6.useRef(null),
@@ -61315,7 +61315,7 @@ var thq = E(() => {
     (xLz = { 1: "yes", 2: "no", 3: "dont_ask_again" }));
 });
 function sC1(A) {
-  let q = w6(12),
+  let q = reactMemoCache(12),
     {
       state: K,
       handleSelect: Y,
@@ -61467,13 +61467,13 @@ function AIq(A, q, K = !1, Y = !1) {
           lastShownTime: Date.now(),
         },
       })),
-      n("tengu_feedback_survey_event", {
+      emitEvent("tengu_feedback_survey_event", {
         event_type: "frustration_transcript_prompt_appeared",
       }));
   }, [w, q, K, Y, J, D, z.minSessionTurns, j]);
   let X = nE.useCallback((M) => {
     if (
-      (n("tengu_feedback_survey_event", {
+      (emitEvent("tengu_feedback_survey_event", {
         event_type: `frustration_transcript_share_${M}`,
       }),
       M === "dont_ask_again")
@@ -61486,7 +61486,7 @@ function AIq(A, q, K = !1, Y = !1) {
             try {
               let P = await aC1(O.current, "frustration");
               if (
-                (n("tengu_feedback_survey_event", {
+                (emitEvent("tengu_feedback_survey_event", {
                   event_type: P.success
                     ? "frustration_transcript_share_submitted"
                     : "frustration_transcript_share_failed",
@@ -61525,7 +61525,7 @@ var qIq = E(() => {
     }));
 });
 function YIq() {
-  let A = w6(3),
+  let A = reactMemoCache(3),
     { addNotification: q } = Nq(),
     K,
     Y;
@@ -61567,7 +61567,7 @@ function BLz() {
   return;
 }
 function wIq() {
-  let A = w6(3),
+  let A = reactMemoCache(3),
     { addNotification: q } = Nq(),
     K,
     Y;
@@ -61623,7 +61623,7 @@ function wIq() {
   oC.useEffect(K, Y);
 }
 function gLz(A) {
-  $6(A);
+  sendError(A);
 }
 var oC;
 var _Iq = E(() => {
@@ -61638,7 +61638,7 @@ var _Iq = E(() => {
   oC = Y6(W6(), 1);
 });
 function $Iq() {
-  let A = w6(3),
+  let A = reactMemoCache(3),
     { addNotification: q } = Nq(),
     K = rE.useRef(!1),
     Y,
@@ -61651,7 +61651,7 @@ function $Iq() {
         oR1()
           .then((w) => {
             if (w.configSaveFailed)
-              (y("Showing marketplace config save failure notification"),
+              (writeDebugLog("Showing marketplace config save failure notification"),
                 q({
                   key: "marketplace-config-save-failed",
                   jsx: rE.createElement(
@@ -61663,7 +61663,7 @@ function $Iq() {
                   timeoutMs: 1e4,
                 }));
             if (w.installed)
-              (y("Showing marketplace installation success notification"),
+              (writeDebugLog("Showing marketplace installation success notification"),
                 q({
                   key: "marketplace-installed",
                   jsx: rE.createElement(
@@ -61675,7 +61675,7 @@ function $Iq() {
                   timeoutMs: 7000,
                 }));
             else if (w.skipped && w.reason === "unknown")
-              (y("Showing marketplace installation failure notification"),
+              (writeDebugLog("Showing marketplace installation failure notification"),
                 q({
                   key: "marketplace-install-failed",
                   jsx: rE.createElement(
@@ -61687,7 +61687,7 @@ function $Iq() {
                   timeoutMs: 8000,
                 }));
             else if (w.skipped && w.reason === "git_unavailable")
-              (y("Showing marketplace git unavailable notification"),
+              (writeDebugLog("Showing marketplace git unavailable notification"),
                 q({
                   key: "marketplace-git-unavailable",
                   jsx: rE.createElement(
@@ -61709,7 +61709,7 @@ function $Iq() {
   rE.useEffect(Y, z);
 }
 function FLz(A) {
-  $6(A instanceof Error ? A : Error(String(A)));
+  sendError(A instanceof Error ? A : Error(String(A)));
 }
 var rE;
 var OIq = E(() => {
@@ -61723,7 +61723,7 @@ var OIq = E(() => {
   rE = Y6(W6(), 1);
 });
 function HIq(A, q) {
-  let K = w6(6);
+  let K = reactMemoCache(6);
   Jo6.useRef(void 0);
   let Y;
   if (K[0] !== A) ((Y = [A]), (K[0] = A), (K[1] = Y));
@@ -61798,7 +61798,7 @@ async function JIq(A) {
 }
 function DIq(A) {
   (PNq(A.id),
-    n("tengu_tip_shown", {
+    emitEvent("tengu_tip_shown", {
       tipIdLength: A.id,
       cooldownSessions: A.cooldownSessions,
     }));
@@ -61822,7 +61822,7 @@ var PIq = E(() => {
   tC1 = Y6(W6(), 1);
 });
 function Er8(A) {
-  let q = w6(22),
+  let q = reactMemoCache(22),
     { hostPattern: K, onUserResponse: Y } = A,
     { host: z } = K,
     w;
@@ -61964,7 +61964,7 @@ function dLz(A) {
   return `${q}:${K}:${Y}${z}`;
 }
 function GIq() {
-  let A = w6(15),
+  let A = reactMemoCache(15),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel")) ((q = []), (A[0] = q));
   else q = A[0];
@@ -62060,7 +62060,7 @@ var ZIq = E(() => {
   ((vT = Y6(W6(), 1)), (Do6 = Y6(W6(), 1)));
 });
 function TIq(A) {
-  let q = w6(4),
+  let q = reactMemoCache(4),
     { mcpClients: K } = A,
     Y = K === void 0 ? lLz : K,
     { addNotification: z } = Nq(),
@@ -62140,7 +62140,7 @@ var NIq = E(() => {
   ((M0 = Y6(W6(), 1)), (fIq = Y6(W6(), 1)), (lLz = []));
 });
 function VIq() {
-  let A = w6(9),
+  let A = reactMemoCache(9),
     { addNotification: q } = Nq(),
     K = tA(),
     [Y, z] = JZ.useState(!0),
@@ -62155,7 +62155,7 @@ function VIq() {
       let P = `${X}:${M}`;
       if (_.current.has(P)) return;
       (_.current.add(P),
-        y(`LSP error: ${X} - ${M}`),
+        writeDebugLog(`LSP error: ${X} - ${M}`),
         K((G) => {
           let Z = new Set(G.plugins.errors.map(oLz)),
             f = `generic-error:${X}:${M}`;
@@ -62243,15 +62243,15 @@ var vIq = E(() => {
 });
 async function EIq(A) {
   if (!A || !A.trim())
-    return (y("[binaryCheck] Empty command provided, returning false"), !1);
+    return (writeDebugLog("[binaryCheck] Empty command provided, returning false"), !1);
   let q = A.trim(),
     K = kIq.get(q);
-  if (K !== void 0) return (y(`[binaryCheck] Cache hit for '${q}': ${K}`), K);
+  if (K !== void 0) return (writeDebugLog(`[binaryCheck] Cache hit for '${q}': ${K}`), K);
   let Y = !1;
   if (await C0(q).catch(() => null)) Y = !0;
   return (
     kIq.set(q, Y),
-    y(`[binaryCheck] Binary '${q}' ${Y ? "found" : "not found"}`),
+    writeDebugLog(`[binaryCheck] Binary '${q}' ${Y ? "found" : "not found"}`),
     Y
   );
 }
@@ -62269,7 +62269,7 @@ function eLz(A) {
   if (!A) return null;
   if (typeof A === "string")
     return (
-      y(
+      writeDebugLog(
         "[lspRecommendation] Skipping string path lspServers (not readable from marketplace)",
       ),
       null
@@ -62321,29 +62321,29 @@ async function Ayz() {
           });
         }
       } catch (Y) {
-        y(`[lspRecommendation] Failed to load marketplace ${K}: ${Y}`);
+        writeDebugLog(`[lspRecommendation] Failed to load marketplace ${K}: ${Y}`);
       }
   } catch (q) {
-    y(`[lspRecommendation] Failed to load marketplaces config: ${q}`);
+    writeDebugLog(`[lspRecommendation] Failed to load marketplaces config: ${q}`);
   }
   return A;
 }
 async function CIq(A) {
-  if (qyz()) return (y("[lspRecommendation] Recommendations are disabled"), []);
+  if (qyz()) return (writeDebugLog("[lspRecommendation] Recommendations are disabled"), []);
   let q = aLz(A).toLowerCase();
-  if (!q) return (y("[lspRecommendation] No file extension found"), []);
-  y(`[lspRecommendation] Looking for LSP plugins for ${q}`);
+  if (!q) return (writeDebugLog("[lspRecommendation] No file extension found"), []);
+  writeDebugLog(`[lspRecommendation] Looking for LSP plugins for ${q}`);
   let K = await Ayz(),
     z = getSettings().lspRecommendationNeverPlugins ?? [],
     w = [];
   for (let [$, O] of K) {
     if (!O.extensions.has(q)) continue;
     if (z.includes($)) {
-      y(`[lspRecommendation] Skipping ${$} (in never suggest list)`);
+      writeDebugLog(`[lspRecommendation] Skipping ${$} (in never suggest list)`);
       continue;
     }
     if (PP($)) {
-      y(`[lspRecommendation] Skipping ${$} (already installed)`);
+      writeDebugLog(`[lspRecommendation] Skipping ${$} (already installed)`);
       continue;
     }
     w.push({ info: O, pluginId: $ });
@@ -62352,9 +62352,9 @@ async function CIq(A) {
   for (let { info: $, pluginId: O } of w)
     if (await EIq($.command))
       (_.push({ info: $, pluginId: O }),
-        y(`[lspRecommendation] Binary '${$.command}' found for ${O}`));
+        writeDebugLog(`[lspRecommendation] Binary '${$.command}' found for ${O}`));
     else
-      y(`[lspRecommendation] Skipping ${O} (binary '${$.command}' not found)`);
+      writeDebugLog(`[lspRecommendation] Skipping ${O} (binary '${$.command}' not found)`);
   return (
     _.sort(($, O) => {
       if ($.info.isOfficial && !O.info.isOfficial) return -1;
@@ -62378,14 +62378,14 @@ function SIq(A) {
     if (K.includes(A)) return q;
     return { ...q, lspRecommendationNeverPlugins: [...K, A] };
   }),
-    y(`[lspRecommendation] Added ${A} to never suggest`));
+    writeDebugLog(`[lspRecommendation] Added ${A} to never suggest`));
 }
 function hIq() {
   (updateSettings((A) => {
     let q = (A.lspRecommendationIgnoredCount ?? 0) + 1;
     return { ...A, lspRecommendationIgnoredCount: q };
   }),
-    y("[lspRecommendation] Incremented ignored count"));
+    writeDebugLog("[lspRecommendation] Incremented ignored count"));
 }
 function qyz() {
   let A = getSettings();
@@ -62405,8 +62405,8 @@ var IIq = E(() => {
 });
 import { extname as Kyz, join as Yyz } from "path";
 function xIq() {
-  let A = w6(11),
-    q = T1(_yz),
+  let A = reactMemoCache(11),
+    q = useAppState(_yz),
     { addNotification: K } = Nq(),
     [Y, z] = aC.useState(null),
     w;
@@ -62435,7 +62435,7 @@ function xIq() {
           try {
             let Z = (await CIq(W))[0];
             if (Z) {
-              (y(
+              (writeDebugLog(
                 `[useLspPluginRecommendation] Found match: ${Z.pluginName} for ${W}`,
               ),
                 z({
@@ -62450,7 +62450,7 @@ function xIq() {
             }
           } catch (G) {
             let Z = G;
-            $6(Z instanceof Error ? Z : Error(String(Z)));
+            sendError(Z instanceof Error ? Z : Error(String(Z)));
           }
       }
     }),
@@ -62466,7 +62466,7 @@ function xIq() {
     ((j = (X) => {
       if (!Y) return;
       let { pluginId: M, pluginName: P, shownAt: W } = Y;
-      y(`[useLspPluginRecommendation] User response: ${X} for ${P}`);
+      writeDebugLog(`[useLspPluginRecommendation] User response: ${X} for ${P}`);
       A: switch (X) {
         case "yes": {
           $yz(M, P, K);
@@ -62475,7 +62475,7 @@ function xIq() {
         case "no": {
           let G = Date.now() - W;
           if (G >= zyz)
-            (y(
+            (writeDebugLog(
               `[useLspPluginRecommendation] Timeout detected (${G}ms), incrementing ignored count`,
             ),
               hIq());
@@ -62513,7 +62513,7 @@ function _yz(A) {
 }
 async function $yz(A, q, K) {
   try {
-    y(`[useLspPluginRecommendation] Installing plugin: ${A}`);
+    writeDebugLog(`[useLspPluginRecommendation] Installing plugin: ${A}`);
     let Y = await kM(A);
     if (!Y) throw Error(`Plugin ${A} not found in marketplace`);
     let z =
@@ -62523,13 +62523,13 @@ async function $yz(A, q, K) {
     await sk(A, Y.entry, "user", void 0, z);
     let w = getConfigValue("userSettings");
     (iA("userSettings", { enabledPlugins: { ...w?.enabledPlugins, [A]: !0 } }),
-      y(`[useLspPluginRecommendation] Plugin installed: ${A}`),
+      writeDebugLog(`[useLspPluginRecommendation] Plugin installed: ${A}`),
       K({
         key: "lsp-plugin-installed",
         jsx: aC.createElement(
           T,
           { color: "success" },
-          a6.tick,
+          figures.tick,
           " ",
           q,
           " installed · restart to apply",
@@ -62538,7 +62538,7 @@ async function $yz(A, q, K) {
         timeoutMs: 5000,
       }));
   } catch (Y) {
-    ($6(Y instanceof Error ? Y : Error(String(Y))),
+    (sendError(Y instanceof Error ? Y : Error(String(Y))),
       K({
         key: "lsp-plugin-install-failed",
         jsx: aC.createElement(T, { color: "error" }, "Failed to install ", q),
@@ -62671,9 +62671,9 @@ var BIq = E(() => {
   B3 = Y6(W6(), 1);
 });
 function FIq() {
-  let A = w6(20),
+  let A = reactMemoCache(20),
     { addNotification: q } = Nq(),
-    K = T1(Jyz),
+    K = useAppState(Jyz),
     Y;
   A: {
     if (!K) {
@@ -62720,18 +62720,18 @@ function FIq() {
     (($ = () => {
       if (Eq()) return;
       if (!K) {
-        y("No installation status to monitor");
+        writeDebugLog("No installation status to monitor");
         return;
       }
       if (z === 0) return;
       if (
-        (y(
+        (writeDebugLog(
           `Plugin installation status: ${w} failed marketplaces, ${_} failed plugins`,
         ),
         z === 0)
       )
         return;
-      (y(`Adding notification for ${z} failed installations`),
+      (writeDebugLog(`Adding notification for ${z} failed installations`),
         q({
           key: "plugin-install-failed",
           jsx: _p.createElement(
@@ -62788,7 +62788,7 @@ var pIq = E(() => {
   ((_p = Y6(W6(), 1)), (gIq = Y6(W6(), 1)));
 });
 function QIq() {
-  let A = w6(7),
+  let A = reactMemoCache(7),
     { addNotification: q } = Nq(),
     K;
   if (A[0] === Symbol.for("react.memo_cache_sentinel")) ((K = []), (A[0] = K));
@@ -62800,7 +62800,7 @@ function QIq() {
     ((w = () => {
       if (Eq()) return;
       return Dkq((j) => {
-        (y(`Plugin autoupdate notification: ${j.length} plugin(s) updated`),
+        (writeDebugLog(`Plugin autoupdate notification: ${j.length} plugin(s) updated`),
           z(j));
       });
     }),
@@ -62834,7 +62834,7 @@ function QIq() {
         priority: "low",
         timeoutMs: 1e4,
       }),
-        y(`Showing plugin autoupdate notification for: ${H.join(", ")}`));
+        writeDebugLog(`Showing plugin autoupdate notification for: ${H.join(", ")}`));
     }),
       (O = [Y, q]),
       (A[3] = q),
@@ -62859,14 +62859,14 @@ var UIq = E(() => {
   (($p = Y6(W6(), 1)), (Xo6 = Y6(W6(), 1)));
 });
 async function dIq(A) {
-  if ((y("performStartupChecks called"), !Ew())) {
-    y(
+  if ((writeDebugLog("performStartupChecks called"), !Ew())) {
+    writeDebugLog(
       "Trust not accepted for current directory - skipping plugin installations",
     );
     return;
   }
   try {
-    if ((y("Starting background plugin installations"), await s01()))
+    if ((writeDebugLog("Starting background plugin installations"), await s01()))
       (oc(),
         LG(),
         A((K) => {
@@ -62875,7 +62875,7 @@ async function dIq(A) {
         }));
     await HE1(A);
   } catch (q) {
-    y(`Error initiating background plugin installations: ${q}`);
+    writeDebugLog(`Error initiating background plugin installations: ${q}`);
   }
 }
 var cIq = E(() => {
@@ -62886,7 +62886,7 @@ var cIq = E(() => {
   l8();
 });
 function lIq() {
-  let A = w6(11),
+  let A = reactMemoCache(11),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = OZ.getInstance().getStatus()), (A[0] = q));
@@ -62972,7 +62972,7 @@ var iIq = E(() => {
   ((Ww6 = Y6(W6(), 1)), (eC1 = Y6(W6(), 1)));
 });
 function nIq(A) {
-  let q = w6(17),
+  let q = reactMemoCache(17),
     { addNotification: K } = Nq(),
     Y = It(),
     z;
@@ -63051,7 +63051,7 @@ var rIq = E(() => {
   ((Mo6 = Y6(W6(), 1)), (Gw6 = Y6(W6(), 1)));
 });
 function oIq(A) {
-  let q = w6(4),
+  let q = reactMemoCache(4),
     { addNotification: K } = Nq(),
     Y = AS1.useRef(null),
     z,
@@ -63087,7 +63087,7 @@ var aIq = E(() => {
   AS1 = Y6(W6(), 1);
 });
 function sIq() {
-  let A = w6(3),
+  let A = reactMemoCache(3),
     { addNotification: q } = Nq(),
     K = qS1.useRef(!1),
     Y,
@@ -63095,7 +63095,7 @@ function sIq() {
   if (A[0] !== q)
     ((Y = () => {
       if (Eq()) return;
-      if (K.current || T9() || X1(process.env.DISABLE_INSTALLATION_CHECKS))
+      if (K.current || T9() || isTruthy(process.env.DISABLE_INSTALLATION_CHECKS))
         return;
       _F().then((w) => {
         if (K.current || w === "development") return;
@@ -63128,7 +63128,7 @@ var tIq = E(() => {
   qS1 = Y6(W6(), 1);
 });
 function eIq() {
-  let A = w6(3),
+  let A = reactMemoCache(3),
     { addNotification: q } = Nq(),
     K = KS1.useRef(!1),
     Y,
@@ -63165,7 +63165,7 @@ var Axq = E(() => {
   KS1 = Y6(W6(), 1);
 });
 function qxq(A) {
-  let q = w6(26),
+  let q = reactMemoCache(26),
     { ideSelection: K, mcpClients: Y, ideInstallationStatus: z } = A,
     { addNotification: w, removeNotification: _ } = Nq(),
     { status: $, ideName: O } = Yv6(Y),
@@ -63313,7 +63313,7 @@ var Kxq = E(() => {
   Op = Y6(W6(), 1);
 });
 function zxq() {
-  let A = w6(3),
+  let A = reactMemoCache(3),
     { addNotification: q } = Nq(),
     K,
     Y;
@@ -63348,7 +63348,7 @@ var wxq = E(() => {
   Yxq = Y6(W6(), 1);
 });
 function $xq() {
-  let A = w6(3),
+  let A = reactMemoCache(3),
     { addNotification: q } = Nq(),
     K,
     Y;
@@ -63359,7 +63359,7 @@ function $xq() {
       Tyz().then((z) => {
         if (z === null) return;
         (updateSettings(fyz),
-          n("tengu_switch_to_subscription_notice_shown", {}),
+          emitEvent("tengu_switch_to_subscription_notice_shown", {}),
           q({
             key: "switch-to-subscription",
             jsx: Po6.createElement(
@@ -63444,7 +63444,7 @@ function Jxq(A) {
   };
 }
 function Dxq() {
-  let A = T1((z) => z.tasks),
+  let A = useAppState((z) => z.tasks),
     { addNotification: q } = Nq(),
     K = Wo6.useRef(new Set()),
     Y = Wo6.useRef(new Set());
@@ -63467,9 +63467,9 @@ var Xxq = E(() => {
   Wo6 = Y6(W6(), 1);
 });
 function Gxq() {
-  let A = w6(13),
+  let A = reactMemoCache(13),
     { addNotification: q } = Nq(),
-    K = T1(Lyz),
+    K = useAppState(Lyz),
     Y = tA(),
     z,
     w;
@@ -63588,7 +63588,7 @@ var Zxq = E(() => {
   YS1 = Y6(W6(), 1);
 });
 function fxq(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { onRun: K, onCancel: Y, reason: z } = A,
     w = zS1.useRef(!1),
     _;
@@ -63878,25 +63878,25 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
       }));
   }, []);
   function S() {
-    (y(
+    (writeDebugLog(
       "[voice] finishRecording: stopping recording, transitioning to processing",
     ),
       (P.current = !1),
       v("processing"),
       Dn?.stopRecording());
     let F = Date.now() - Z.current;
-    (y("[voice] Recording stopped"),
+    (writeDebugLog("[voice] Recording stopped"),
       ($.current ? $.current.finalize() : Promise.resolve()).then(() => {
         let u = O.current.trim();
         if (
-          (y(
+          (writeDebugLog(
             `[voice] Final transcript assembled (${String(u.length)} chars): "${u.slice(0, 200)}"`,
           ),
           $.current)
         )
           ($.current.close(), ($.current = null));
         if (u)
-          (y(`[voice] Injecting transcript (${String(u.length)} chars)`),
+          (writeDebugLog(`[voice] Injecting transcript (${String(u.length)} chars)`),
             H.current(u),
             V((U) => ({ ...U, voiceLastTranscriptAt: Date.now() })));
         else if (F > 2000) j.current?.("No speech detected.");
@@ -63920,7 +63920,7 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
     if (W.current) clearTimeout(W.current);
     W.current = setTimeout(() => {
       if (((W.current = null), _.current === "recording" && P.current))
-        (y("[voice] Focus silence timeout — tearing down session"),
+        (writeDebugLog("[voice] Focus silence timeout — tearing down session"),
           (G.current = !0),
           S());
     }, pyz);
@@ -63928,14 +63928,14 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
   uO.useEffect(() => {
     if (!K || !Y) {
       if (P.current && _.current === "recording")
-        (y("[voice] Focus mode disabled during recording, finishing"), S());
+        (writeDebugLog("[voice] Focus mode disabled during recording, finishing"), S());
       return;
     }
     let F = !1;
     if (N && _.current === "idle" && !G.current) {
       let g = () => {
         if (F || _.current !== "idle" || G.current) return;
-        (y("[voice] Focus gained, starting recording session"),
+        (writeDebugLog("[voice] Focus gained, starting recording session"),
           (P.current = !0),
           B(),
           I());
@@ -63949,7 +63949,7 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
           });
     } else if (!N) {
       if (((G.current = !1), _.current === "recording"))
-        (y("[voice] Focus lost, finishing recording"), S());
+        (writeDebugLog("[voice] Focus lost, finishing recording"), S());
     }
     return () => {
       F = !0;
@@ -63962,23 +63962,23 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
     }
     let F = Dn.checkRecordingAvailability();
     if (!F.available) {
-      (y(`[voice] Recording not available: ${F.reason ?? "unknown"}`),
+      (writeDebugLog(`[voice] Recording not available: ${F.reason ?? "unknown"}`),
         j.current?.(F.reason ?? "Audio recording is not available."));
       return;
     }
-    (y("[voice] Starting recording session"),
+    (writeDebugLog("[voice] Starting recording session"),
       (O.current = ""),
       (X.current = !1),
       v("recording"),
       (Z.current = Date.now()),
-      y("[voice] State set to recording, connecting voice stream"),
+      writeDebugLog("[voice] State set to recording, connecting voice stream"),
       V((U) => {
         if (!U.voiceError) return U;
         return { ...U, voiceError: null };
       }));
     let g = [];
     if (
-      (y("[voice] startRecording: buffering audio while WebSocket connects"),
+      (writeDebugLog("[voice] startRecording: buffering audio while WebSocket connects"),
       (f.current = []),
       !Dn.startRecording(
         (U) => {
@@ -63997,7 +63997,7 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
         { silenceDetection: !1 },
       ))
     ) {
-      ($6(Error("[voice] Recording failed — no audio tool found")),
+      (sendError(Error("[voice] Recording failed — no audio tool found")),
         j.current?.(
           "Failed to start audio capture. Check that your microphone is accessible.",
         ),
@@ -64009,17 +64009,17 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
         })));
       return;
     }
-    (n("tengu_voice_recording_started", { focusTriggered: P.current }),
+    (emitEvent("tengu_voice_recording_started", { focusTriggered: P.current }),
       hxq().then((U) =>
         $d8(
           {
             onTranscript: (c, d) => {
               if (
-                (y(`[voice] onTranscript: isFinal=${String(d)} text="${c}"`),
+                (writeDebugLog(`[voice] onTranscript: isFinal=${String(d)} text="${c}"`),
                 d && c.trim())
               )
                 if (P.current)
-                  (y(
+                  (writeDebugLog(
                     `[voice] Focus mode: flushing final transcript immediately: "${c.trim()}"`,
                   ),
                     H.current(c.trim()),
@@ -64033,7 +64033,7 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
                 else {
                   if (O.current) O.current += " ";
                   ((O.current += c.trim()),
-                    y(`[voice] Accumulated final transcript: "${O.current}"`),
+                    writeDebugLog(`[voice] Accumulated final transcript: "${O.current}"`),
                     V((a) => {
                       let e = O.current;
                       if (a.voiceInterimTranscript === e) return a;
@@ -64050,7 +64050,7 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
               }
             },
             onError: (c) => {
-              ($6(Error(`[voice] voice_stream error: ${c}`)),
+              (sendError(Error(`[voice] voice_stream error: ${c}`)),
                 j.current?.(`Voice stream error: ${c}`),
                 (g.length = 0),
                 L(),
@@ -64063,7 +64063,7 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
                 return;
               }
               (($.current = c),
-                y(
+                writeDebugLog(
                   `[voice] onReady: flushing ${String(g.length)} buffered audio chunks (WebSocket open)`,
                 ));
               for (let d of g) c.send(d);
@@ -64077,7 +64077,7 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
           { language: gyz(U7().language), keyterms: U },
         ).then((c) => {
           if (!c) {
-            (y("[voice] Failed to connect to voice_stream (no OAuth token?)"),
+            (writeDebugLog("[voice] Failed to connect to voice_stream (no OAuth token?)"),
               j.current?.(
                 "Voice mode requires a Claude.ai account. Please run /login to sign in.",
               ),
@@ -64097,7 +64097,7 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
     if (!K || !FL1()) return;
     if (P.current) return;
     if (Y && G.current) {
-      (y("[voice] Re-arming focus recording after silence timeout"),
+      (writeDebugLog("[voice] Re-arming focus recording after silence timeout"),
         (G.current = !1),
         (P.current = !0),
         B(),
@@ -64107,13 +64107,13 @@ function dyz({ onTranscript: A, onError: q, enabled: K, focusMode: Y }) {
     let F = _.current;
     if (F === "processing") return;
     if (F === "idle")
-      (y(
+      (writeDebugLog(
         "[voice] handleKeyEvent: idle, starting recording session immediately",
       ),
         B(),
         (M.current = setTimeout(() => {
           if (((M.current = null), _.current === "recording" && !X.current))
-            (y(
+            (writeDebugLog(
               "[voice] No auto-repeat seen, arming release timer via fallback",
             ),
               (X.current = !0),
@@ -64222,10 +64222,10 @@ function nyz({ setInputValueRaw: A, inputValueRef: q, insertTextRef: K }) {
       if (K.current) K.current.setInputWithCursor(L, v.length);
       else A(L);
     }, [A, q, K]),
-    O = (T1((P) => P.voiceEnabled) ?? !1) && VE(),
-    H = T1((P) => P.voiceFocusMode) ?? !1,
-    j = T1((P) => P.voiceState) ?? "idle",
-    J = T1((P) => P.voiceInterimTranscript) ?? "";
+    O = (useAppState((P) => P.voiceEnabled) ?? !1) && VE(),
+    H = useAppState((P) => P.voiceFocusMode) ?? !1,
+    j = useAppState((P) => P.voiceState) ?? "idle",
+    J = useAppState((P) => P.voiceInterimTranscript) ?? "";
   (kT.useEffect(() => {
     if (j === "recording" && z.current === null) {
       let P = q.current,
@@ -64295,7 +64295,7 @@ function nyz({ setInputValueRaw: A, inputValueRef: q, insertTextRef: K }) {
 function ryz({ voiceHandleKeyEvent: A, stripTrailingSpaces: q }) {
   let K = a_(),
     Y = tA(),
-    z = T1((O) => O.voiceState) ?? "idle",
+    z = useAppState((O) => O.voiceState) ?? "idle",
     w = kT.useRef(0),
     _ = kT.useRef(!1),
     $ = kT.useRef(null);
@@ -64367,7 +64367,7 @@ var Qxq = {};
 s1(Qxq, { computeIsStreamingTextEnabled: () => pxq, REPL: () => Ir8 });
 import { randomUUID as Xv6 } from "crypto";
 function tyz(A) {
-  let q = w6(4),
+  let q = reactMemoCache(4),
     { showAllInTranscript: K } = A,
     Y = MK("app:toggleTranscript", "Global", "ctrl+o"),
     z = MK("transcript:toggleShowAll", "Transcript", "ctrl+e"),
@@ -64435,32 +64435,32 @@ function Ir8({
   let L = !!N;
   n8.useEffect(() => {
     return (
-      y(`[REPL:mount] REPL mounted, disabled=${W}`),
-      () => y("[REPL:unmount] REPL unmounting")
+      writeDebugLog(`[REPL:mount] REPL mounted, disabled=${W}`),
+      () => writeDebugLog("[REPL:unmount] REPL unmounting")
     );
   }, [W]);
   let [S, I] = n8.useState(G),
-    B = T1((V1) => V1.toolPermissionContext),
-    h = T1((V1) => V1.verbose),
-    F = T1((V1) => V1.mcp),
-    g = T1((V1) => V1.plugins),
-    u = T1((V1) => V1.agentDefinitions),
-    U = T1((V1) => V1.fileHistory),
-    c = T1((V1) => V1.thinkingEnabled),
-    d = T1((V1) => V1.initialMessage),
+    B = useAppState((V1) => V1.toolPermissionContext),
+    h = useAppState((V1) => V1.verbose),
+    F = useAppState((V1) => V1.mcp),
+    g = useAppState((V1) => V1.plugins),
+    u = useAppState((V1) => V1.agentDefinitions),
+    U = useAppState((V1) => V1.fileHistory),
+    c = useAppState((V1) => V1.thinkingEnabled),
+    d = useAppState((V1) => V1.initialMessage),
     a = Yp(),
     e = void 0,
     j6 = !1,
     P6 = void 0,
-    f6 = T1((V1) => V1.spinnerTip),
-    q6 = T1((V1) => V1.expandedView) === "tasks",
-    A6 = T1((V1) => V1.pendingWorkerRequest),
-    D6 = T1((V1) => V1.pendingSandboxRequest),
-    G6 = T1((V1) => V1.teamContext),
-    v6 = T1((V1) => V1.tasks),
-    T6 = T1((V1) => V1.workerSandboxPermissions),
-    z6 = T1((V1) => V1.elicitation),
-    H6 = T1((V1) => V1.viewingAgentTaskId),
+    f6 = useAppState((V1) => V1.spinnerTip),
+    q6 = useAppState((V1) => V1.expandedView) === "tasks",
+    A6 = useAppState((V1) => V1.pendingWorkerRequest),
+    D6 = useAppState((V1) => V1.pendingSandboxRequest),
+    G6 = useAppState((V1) => V1.teamContext),
+    v6 = useAppState((V1) => V1.tasks),
+    T6 = useAppState((V1) => V1.workerSandboxPermissions),
+    z6 = useAppState((V1) => V1.elicitation),
+    H6 = useAppState((V1) => V1.viewingAgentTaskId),
     _6 = tA(),
     K6 = a_(),
     s = Lm(),
@@ -64496,7 +64496,7 @@ function Ir8({
       return !1;
     }),
     [g1, Z1] = n8.useState(() => chq(t)),
-    I1 = T1((V1) => V1.showRemoteCallout);
+    I1 = useAppState((V1) => V1.showRemoteCallout);
   (zxq(),
     $xq(),
     qxq({ ideSelection: D1, mcpClients: t6, ideInstallationStatus: M6 }),
@@ -64611,15 +64611,15 @@ function Ir8({
     [V8, JA] = n8.useState([]),
     r8 = n8.useRef(new Map()),
     R7 =
-      T1((V1) => V1.settings.terminalTitleFromRename) !== !1
-        ? NC(d1())
+      useAppState((V1) => V1.settings.terminalTitleFromRename) !== !1
+        ? NC(getSessionId())
         : void 0,
     [i4, y3] = n8.useState(),
     Dq = R7 ?? i4 ?? "Claude Code",
     P5 = L1.length > 0 || V8.length > 0 || A6 || D6,
     YY = O7?.isLocalJSXCommand === !0,
     zY = Jq && !P5 && !YY,
-    tY = X1(process.env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE),
+    tY = isTruthy(process.env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE),
     mO = o2(),
     [hH, EJ] = n8.useState(0);
   n8.useEffect(() => {
@@ -64652,7 +64652,7 @@ function Ir8({
     P0 = n8.useDeferredValue(c5),
     _$ = Rq.length - IH.length;
   if (_$ > 0)
-    y(
+    writeDebugLog(
       `[useDeferredValue] Messages deferred by ${_$} (${IH.length}→${Rq.length})`,
     );
   let [yJ, WW] = n8.useState(null),
@@ -64720,7 +64720,7 @@ function Ir8({
       }
     }, []),
     [n5, I2] = n8.useState(null),
-    yj = T1((V1) => V1.settings.prefersReducedMotion) ?? !1,
+    yj = useAppState((V1) => V1.settings.prefersReducedMotion) ?? !1,
     $$ = pxq(yj),
     T_ = n8.useCallback(
       (V1) => {
@@ -64751,11 +64751,11 @@ function Ir8({
     [eY, Rj] = n8.useState(!1),
     [Cj, ET] = n8.useState(!1),
     [Rb, l86] = n8.useState(!1),
-    Jp = T1((V1) => V1.isBriefOnly),
+    Jp = useAppState((V1) => V1.isBriefOnly),
     Xn = o2(),
     Zw6 = n8.useRef(Xn);
   Zw6.current = Xn;
-  let [eC] = E7(),
+  let [eC] = useTheme(),
     sE = n8.useCallback(() => {
       JIq({ theme: eC, readFileState: GY.current }).then(async (V1) => {
         if (V1) {
@@ -64872,14 +64872,14 @@ function Ir8({
             N1(null),
             i5(""),
             G5([]),
-            n("tengu_session_resumed", {
+            emitEvent("tengu_session_resumed", {
               entrypoint: U8,
               success: !0,
               resume_duration_ms: Math.round(performance.now() - S4),
             }));
         } catch (x7) {
           throw (
-            n("tengu_session_resumed", { entrypoint: U8, success: !1 }),
+            emitEvent("tengu_session_resumed", { entrypoint: U8, success: !1 }),
             x7
           );
         }
@@ -64930,7 +64930,7 @@ function Ir8({
   function KS() {
     if (O$ === "elicitation") return;
     if (
-      (y(`[onCancel] focusedInputDialog=${O$} streamMode=${UA}`),
+      (writeDebugLog(`[onCancel] focusedInputDialog=${O$} streamMode=${UA}`),
       d5.forceEnd(),
       n5?.trim())
     )
@@ -64970,7 +64970,7 @@ function Ir8({
     };
   n8.useEffect(() => {
     if (sX() >= 5 && !FD && !E1) {
-      if ((n("tengu_cost_threshold_reached", {}), ln6())) b6(!0);
+      if ((emitEvent("tengu_cost_threshold_reached", {}), ln6())) b6(!0);
     }
   }, [Rq, FD, E1]);
   let Gp = n8.useCallback(
@@ -65349,13 +65349,13 @@ function Ir8({
         }
         let dK = d5.tryStart();
         if (dK === null) {
-          (n("tengu_concurrent_onquery_detected", {}),
+          (emitEvent("tengu_concurrent_onquery_detected", {}),
             V1.filter((cK) => cK.type === "user" && !cK.isMeta)
               .map((cK) => Ai(cK.message.content))
               .filter((cK) => cK !== null)
               .forEach((cK, $q) => {
                 if ((IG({ value: cK, mode: "prompt" }), $q === 0))
-                  n("tengu_concurrent_onquery_enqueued", {});
+                  emitEvent("tengu_concurrent_onquery_enqueued", {});
               }));
           return;
         }
@@ -65420,7 +65420,7 @@ function Ir8({
           }),
           j7)
         )
-          AN8(d1(), j7);
+          AN8(getSessionId(), j7);
       }
       let S4 = U8.message.planContent && !1;
       if (
@@ -65481,7 +65481,7 @@ function Ir8({
           if ($q && _Y && $q.type === "local-jsx") {
             if (V1.trim() === bH.current.trim())
               (i5(""), m8.setCursorOffset(0), m8.clearBuffer());
-            (n("tengu_immediate_command_executed", {
+            (emitEvent("tengu_immediate_command_executed", {
               commandName: $q.name,
               fromKeybinding: S4?.fromKeybinding ?? !1,
             }),
@@ -65668,7 +65668,7 @@ function Ir8({
           clearBuffer: () => {},
           resetHistory: () => {},
         }).catch((m8) => {
-          y(
+          writeDebugLog(
             `Auto-run ${V1} failed: ${m8 instanceof Error ? m8.message : String(m8)}`,
           );
         }));
@@ -65711,9 +65711,9 @@ function Ir8({
           `  [${U8.type}] ${U8.path} (${U8.content.length} chars)${U8.parent ? ` (included by ${U8.parent})` : ""}`,
       ).join(`
 `);
-      y(`Loaded ${V1.length} CLAUDE.md/rules files:
+      writeDebugLog(`Loaded ${V1.length} CLAUDE.md/rules files:
 ${m8}`);
-    } else y("No CLAUDE.md/rules files found");
+    } else writeDebugLog("No CLAUDE.md/rules files found");
     for (let m8 of V1)
       GY.current.set(m8.path, {
         content: m8.content,
@@ -66198,7 +66198,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
               (b6(!1),
                 a1(!0),
                 updateSettings((V1) => ({ ...V1, hasAcknowledgedCostThreshold: !0 })),
-                n("tengu_cost_threshold_acknowledged", {}));
+                emitEvent("tengu_cost_threshold_acknowledged", {}));
             },
           }),
         O$ === "ide-onboarding" &&
@@ -66402,7 +66402,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
               (eK([...U8]),
                 m6(Xv6()),
                 le(),
-                n("tengu_conversation_rewind", {
+                emitEvent("tengu_conversation_rewind", {
                   preRewindMessageCount: Rq.length,
                   postRewindMessageCount: m8,
                   messagesRemoved: Rq.length - m8,
@@ -66464,7 +66464,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
 function pxq(A) {
   return (
     !A &&
-    (X1(process.env.CLAUDE_CODE_STREAMING_TEXT) ||
+    (isTruthy(process.env.CLAUDE_CODE_STREAMING_TEXT) ||
       jA("tengu_streaming_text", !1))
   );
 }
@@ -66660,7 +66660,7 @@ function dxq({ onSelect: A, onCancel: q, isEmbedded: K = !1 }) {
       try {
         (H(!0), J(null));
         let g = await IU();
-        ($(g), y(`Current repository: ${g || "not detected"}`));
+        ($(g), writeDebugLog(`Current repository: ${g || "not detected"}`));
         let u = await c$8(),
           U = u;
         if (g)
@@ -66668,7 +66668,7 @@ function dxq({ onSelect: A, onCancel: q, isEmbedded: K = !1 }) {
             if (!d.repo) return !1;
             return `${d.repo.owner.login}/${d.repo.name}` === g;
           })),
-            y(
+            writeDebugLog(
               `Filtered ${U.length} sessions for repo ${g} from ${u.length} total`,
             ));
         let c = [...U].sort((d, a) => {
@@ -66678,7 +66678,7 @@ function dxq({ onSelect: A, onCancel: q, isEmbedded: K = !1 }) {
         w(c);
       } catch (g) {
         let u = g instanceof Error ? g.message : String(g);
-        (y(`Error loading code sessions: ${u}`), J(qRz(u)));
+        (writeDebugLog(`Error loading code sessions: ${u}`), J(qRz(u)));
       } finally {
         (H(!1), X(!1));
       }
@@ -66949,7 +66949,7 @@ var cxq = E(() => {
   ZK = Y6(W6(), 1);
 });
 function lxq(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     [K, Y] = _S1.useState(!1),
     [z, w] = _S1.useState(null),
     [_, $] = _S1.useState(null),
@@ -66959,7 +66959,7 @@ function lxq(A) {
       (Y(!0),
         w(null),
         $(X),
-        n("tengu_teleport_resume_session", { source: A, session_id: X.id }));
+        emitEvent("tengu_teleport_resume_session", { source: A, session_id: X.id }));
       try {
         let M = await J16(X.id);
         return (Bk6({ sessionId: X.id }), Y(!1), M);
@@ -67019,7 +67019,7 @@ var ixq = E(() => {
 var rxq = {};
 s1(rxq, { TeleportResumeWrapper: () => YRz });
 function YRz(A) {
-  let q = w6(25),
+  let q = reactMemoCache(25),
     { onComplete: K, onCancel: Y, onError: z, isEmbedded: w, source: _ } = A,
     $ = w === void 0 ? !1 : w,
     { resumeSession: O, isResuming: H, error: j, selectedSession: J } = lxq(_),
@@ -67027,7 +67027,7 @@ function YRz(A) {
     X;
   if (q[0] !== _)
     ((D = () => {
-      n("tengu_teleport_started", { source: _ });
+      emitEvent("tengu_teleport_started", { source: _ });
     }),
       (X = [_]),
       (q[0] = _),
@@ -67054,7 +67054,7 @@ function YRz(A) {
     W;
   if (q[8] !== Y)
     ((W = () => {
-      (n("tengu_teleport_cancelled", {}), Y());
+      (emitEvent("tengu_teleport_cancelled", {}), Y());
     }),
       (q[8] = Y),
       (q[9] = W));
@@ -67168,7 +67168,7 @@ var oxq = E(() => {
 var axq = {};
 s1(axq, { TeleportRepoMismatchDialog: () => zRz });
 function zRz(A) {
-  let q = w6(18),
+  let q = reactMemoCache(18),
     { targetRepo: K, initialPaths: Y, onSelectPath: z, onCancel: w } = A,
     [_, $] = $S1.useState(Y),
     [O, H] = $S1.useState(null),
@@ -67308,7 +67308,7 @@ var sxq = E(() => {
 var qbq = {};
 s1(qbq, { teleportWithProgress: () => _Rz, TeleportProgress: () => Abq });
 function Abq(A) {
-  let q = w6(16),
+  let q = reactMemoCache(16),
     { currentStep: K, sessionId: Y } = A,
     [z, w] = PM(100),
     _ = Math.floor(w / 100) % br8.length,
@@ -67352,9 +67352,9 @@ function Abq(A) {
         f = W > O,
         N,
         V;
-      if (G) ((N = a6.tick), (V = "green"));
+      if (G) ((N = figures.tick), (V = "green"));
       else if (Z) ((N = br8[_]), (V = "claude"));
-      else ((N = a6.circle), (V = void 0));
+      else ((N = figures.circle), (V = void 0));
       return G_.createElement(
         m,
         { key: P.key, flexDirection: "row" },
@@ -67452,7 +67452,7 @@ function HRz({
   onTurnComplete: G,
 }) {
   let { rows: Z } = zA(),
-    f = T1((D6) => D6.agentDefinitions),
+    f = useAppState((D6) => D6.agentDefinitions),
     N = tA(),
     [V, v] = Gz.default.useState([]),
     [L, S] = Gz.default.useState(!0),
@@ -67482,7 +67482,7 @@ function HRz({
           ((d.current = D6), v(D6.logs), S(!1));
         })
         .catch((D6) => {
-          ($6(D6), S(!1));
+          (sendError(D6), S(!1));
         }));
   }, [q]);
   let j6 = Gz.default.useCallback((D6) => {
@@ -67504,7 +67504,7 @@ function HRz({
               ((d.current = v6), v(v6.logs));
             })
             .catch((v6) => {
-              $6(v6);
+              sendError(v6);
             })
             .finally(() => {
               S(!1);
@@ -67541,7 +67541,7 @@ function HRz({
       let H6 = Mi8(T6.agentName, T6.agentColor);
       if (H6) N((_6) => ({ ..._6, standaloneAgentContext: H6 }));
       (pF(T6),
-        n("tengu_session_resumed", {
+        emitEvent("tengu_session_resumed", {
           entrypoint: "picker",
           success: !0,
           resume_duration_ms: Math.round(performance.now() - G6),
@@ -67556,8 +67556,8 @@ function HRz({
         }));
     } catch (T6) {
       throw (
-        n("tengu_session_resumed", { entrypoint: "picker", success: !1 }),
-        $6(T6),
+        emitEvent("tengu_session_resumed", { entrypoint: "picker", success: !1 }),
+        sendError(T6),
         T6
       );
     }
@@ -67613,7 +67613,7 @@ function HRz({
   });
 }
 function jRz() {
-  let A = w6(2),
+  let A = reactMemoCache(2),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = { context: "Global" }), (A[0] = q));
@@ -67639,7 +67639,7 @@ function JRz() {
   process.exit(1);
 }
 function DRz(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { command: K } = A,
     Y;
   if (q[0] === Symbol.for("react.memo_cache_sentinel")) ((Y = []), (q[0] = Y));
@@ -67836,7 +67836,7 @@ var _bq = E(() => {
   wbq = Symbol("skip");
 });
 function $bq(A) {
-  let q = w6(33),
+  let q = reactMemoCache(33),
     { servers: K, scope: Y, onDone: z } = A,
     w;
   if (q[0] !== K) ((w = Object.keys(K)), (q[0] = K), (q[1] = w));
@@ -67884,7 +67884,7 @@ function $bq(A) {
       }
       G(U);
     },
-    [P] = E7(),
+    [P] = useTheme(),
     W;
   if (q[8] !== z || q[9] !== Y || q[10] !== P)
     ((W = (g) => {
@@ -68141,12 +68141,12 @@ async function PRz(A, q, K) {
         );
         return {
           content: [
-            { type: "text", text: typeof M === "string" ? M : p6(M.data) },
+            { type: "text", text: typeof M === "string" ? M : trySafeStringify(M.data) },
           ],
         };
       } catch (D) {
         return (
-          $6(D instanceof Error ? D : Error(String(D))),
+          sendError(D instanceof Error ? D : Error(String(D))),
           {
             isError: !0,
             content: [
@@ -68248,7 +68248,7 @@ async function Xbq() {
       }
     } catch {}
   } catch (K) {
-    $6(K instanceof Error ? K : Error(String(K)));
+    sendError(K instanceof Error ? K : Error(String(K)));
   }
   throw Error(
     "Could not find Claude Desktop config file in Windows. Make sure Claude Desktop is installed on Windows.",
@@ -68280,7 +68280,7 @@ async function GRz() {
     }
     return z;
   } catch (A) {
-    return ($6(A instanceof Error ? A : Error(String(A))), {});
+    return (sendError(A instanceof Error ? A : Error(String(A))), {});
   }
 }
 var Pbq = E(() => {
@@ -68313,7 +68313,7 @@ async function Wbq(A, q) {
 }
 async function TRz({ debug: A, verbose: q }) {
   let K = ZRz();
-  n("tengu_mcp_start", {});
+  emitEvent("tengu_mcp_start", {});
   try {
     await fRz(K);
   } catch {
@@ -68338,7 +68338,7 @@ async function NRz(A, q) {
   try {
     if (q.scope) {
       let H = UW6(q.scope);
-      (n("tengu_mcp_delete", { name: A, scope: H }),
+      (emitEvent("tengu_mcp_delete", { name: A, scope: H }),
         await rN8(A, H),
         Y(),
         process.stdout.write(`Removed MCP server ${A} from ${H} config
@@ -68361,7 +68361,7 @@ async function NRz(A, q) {
         process.exit(1));
     else if (O.length === 1) {
       let H = O[0];
-      (n("tengu_mcp_delete", { name: A, scope: H }),
+      (emitEvent("tengu_mcp_delete", { name: A, scope: H }),
         await rN8(A, H),
         Y(),
         process.stdout.write(`Removed MCP server "${A}" from ${H} config
@@ -68391,7 +68391,7 @@ To remove from a specific scope, use:
   }
 }
 async function VRz() {
-  n("tengu_mcp_list", {});
+  emitEvent("tengu_mcp_list", {});
   let { servers: A } = await Pg();
   if (Object.keys(A).length === 0)
     console.log(
@@ -68419,7 +68419,7 @@ async function VRz() {
   await rq(0);
 }
 async function vRz(A) {
-  n("tengu_mcp_get", { name: A });
+  emitEvent("tengu_mcp_get", { name: A });
   let q = $V(A);
   if (!q)
     (console.error(`No MCP server found with name: ${A}`), process.exit(1));
@@ -68504,7 +68504,7 @@ async function kRz(A, q, K) {
       typeof z.url === "string"
     )
       fp6(A, { type: z.type, url: z.url }, _);
-    (n("tengu_mcp_add", { scope: Y, source: "json", type: $ }),
+    (emitEvent("tengu_mcp_add", { scope: Y, source: "json", type: $ }),
       console.log(`Added ${$} MCP server ${A} to ${Y} config`),
       process.exit(0));
   } catch (Y) {
@@ -68515,7 +68515,7 @@ async function ERz(A) {
   try {
     let q = UW6(A.scope),
       K = i8();
-    n("tengu_mcp_add", { scope: q, platform: K, source: "desktop" });
+    emitEvent("tengu_mcp_add", { scope: q, platform: K, source: "desktop" });
     let { readClaudeDesktopMcpServers: Y } = await Promise.resolve().then(
         () => (Pbq(), Mbq),
       ),
@@ -68548,7 +68548,7 @@ async function ERz(A) {
   }
 }
 async function LRz() {
-  (n("tengu_mcp_reset_mcpjson_choices", {}),
+  (emitEvent("tengu_mcp_reset_mcpjson_choices", {}),
     sw((A) => ({
       ...A,
       enabledMcpjsonServers: [],
@@ -68599,9 +68599,9 @@ s1(sC, {
   VALID_INSTALLABLE_SCOPES: () => wW,
 });
 function Zo6(A, q) {
-  ($6(A instanceof Error ? A : Error(String(A))),
+  (sendError(A instanceof Error ? A : Error(String(A))),
     console.error(
-      `${a6.cross} Failed to ${q}: ${A instanceof Error ? A.message : String(A)}`,
+      `${figures.cross} Failed to ${q}: ${A instanceof Error ? A.message : String(A)}`,
     ),
     process.exit(1));
 }
@@ -68614,36 +68614,36 @@ async function yRz(A, q) {
 `),
       K.errors.length > 0)
     )
-      (console.log(`${a6.cross} Found ${K.errors.length} error${K.errors.length === 1 ? "" : "s"}:
+      (console.log(`${figures.cross} Found ${K.errors.length} error${K.errors.length === 1 ? "" : "s"}:
 `),
         K.errors.forEach((Y) => {
-          console.log(`  ${a6.pointer} ${Y.path}: ${Y.message}`);
+          console.log(`  ${figures.pointer} ${Y.path}: ${Y.message}`);
         }),
         console.log(""));
     if (K.warnings.length > 0)
-      (console.log(`${a6.warning} Found ${K.warnings.length} warning${K.warnings.length === 1 ? "" : "s"}:
+      (console.log(`${figures.warning} Found ${K.warnings.length} warning${K.warnings.length === 1 ? "" : "s"}:
 `),
         K.warnings.forEach((Y) => {
-          console.log(`  ${a6.pointer} ${Y.path}: ${Y.message}`);
+          console.log(`  ${figures.pointer} ${Y.path}: ${Y.message}`);
         }),
         console.log(""));
     if (K.success) {
       if (K.warnings.length > 0)
-        console.log(`${a6.tick} Validation passed with warnings`);
-      else console.log(`${a6.tick} Validation passed`);
+        console.log(`${figures.tick} Validation passed with warnings`);
+      else console.log(`${figures.tick} Validation passed`);
       process.exit(0);
-    } else (console.log(`${a6.cross} Validation failed`), process.exit(1));
+    } else (console.log(`${figures.cross} Validation failed`), process.exit(1));
   } catch (K) {
-    ($6(K instanceof Error ? K : Error(String(K))),
+    (sendError(K instanceof Error ? K : Error(String(K))),
       console.error(
-        `${a6.cross} Unexpected error during validation: ${K instanceof Error ? K.message : String(K)}`,
+        `${figures.cross} Unexpected error during validation: ${K instanceof Error ? K.message : String(K)}`,
       ),
       process.exit(2));
   }
 }
 async function RRz(A) {
   if (A.cowork) Nv(!0);
-  n("tengu_plugin_list_command", {});
+  emitEvent("tengu_plugin_list_command", {});
   let q = TX(),
     { getPluginEditableScopes: K } = await Promise.resolve().then(
       () => (LN6(), F2q),
@@ -68704,8 +68704,8 @@ async function RRz(A) {
                 });
             }
       } catch {}
-      console.log(p6({ installed: J, available: D }, null, 2));
-    } else console.log(p6(J, null, 2));
+      console.log(trySafeStringify({ installed: J, available: D }, null, 2));
+    } else console.log(trySafeStringify(J, null, 2));
     process.exit(0);
   }
   if (z.length === 0)
@@ -68725,13 +68725,13 @@ async function RRz(A) {
       let J = Y.has(_),
         D =
           H.length > 0
-            ? `${a6.cross} failed to load`
+            ? `${figures.cross} failed to load`
             : J
-              ? `${a6.tick} enabled`
-              : `${a6.cross} disabled`,
+              ? `${figures.tick} enabled`
+              : `${figures.cross} disabled`,
         X = j.version || "unknown",
         M = j.scope;
-      (console.log(`  ${a6.pointer} ${_}`),
+      (console.log(`  ${figures.pointer} ${_}`),
         console.log(`    Version: ${X}`),
         console.log(`    Scope: ${M}`),
         console.log(`    Status: ${D}`));
@@ -68747,15 +68747,15 @@ async function CRz(A, q) {
     let K = await ek1(A);
     if (!K)
       (console.error(
-        `${a6.cross} Invalid marketplace source format. Try: owner/repo, https://..., or ./path`,
+        `${figures.cross} Invalid marketplace source format. Try: owner/repo, https://..., or ./path`,
       ),
         process.exit(1));
     if ("error" in K)
-      (console.error(`${a6.cross} ${K.error}`), process.exit(1));
+      (console.error(`${figures.cross} ${K.error}`), process.exit(1));
     let Y = q.scope ?? "user";
     if (Y !== "user" && Y !== "project" && Y !== "local")
       (console.error(
-        `${a6.cross} Invalid scope '${Y}'. Use: user, project, or local`,
+        `${figures.cross} Invalid scope '${Y}'. Use: user, project, or local`,
       ),
         process.exit(1));
     let z = vR(Y),
@@ -68765,7 +68765,7 @@ async function CRz(A, q) {
         w = { ...w, sparsePaths: q.sparse };
       else
         (console.error(
-          `${a6.cross} --sparse is only supported for github and git marketplace sources (got: ${w.source})`,
+          `${figures.cross} --sparse is only supported for github and git marketplace sources (got: ${w.source})`,
         ),
           process.exit(1));
     console.log("Adding marketplace...");
@@ -68779,11 +68779,11 @@ async function CRz(A, q) {
     (Cv8(_, { source: O }, z), Lw());
     let H = w.source;
     if (w.source === "github") H = w.repo;
-    (n("tengu_marketplace_added", { source_type: H }),
+    (emitEvent("tengu_marketplace_added", { source_type: H }),
       console.log(
         $
-          ? `${a6.tick} Marketplace '${_}' already on disk — declared in ${Y} settings`
-          : `${a6.tick} Successfully added marketplace: ${_} (declared in ${Y} settings)`,
+          ? `${figures.tick} Marketplace '${_}' already on disk — declared in ${Y} settings`
+          : `${figures.tick} Successfully added marketplace: ${_} (declared in ${Y} settings)`,
       ),
       process.exit(0));
   } catch (K) {
@@ -68810,7 +68810,7 @@ async function SRz(A) {
           installLocation: w?.installLocation,
         };
       });
-      (console.log(p6(Y, null, 2)), process.exit(0));
+      (console.log(trySafeStringify(Y, null, 2)), process.exit(0));
     }
     if (K.length === 0)
       (console.log("No marketplaces configured"), process.exit(0));
@@ -68818,7 +68818,7 @@ async function SRz(A) {
 `),
       K.forEach((Y) => {
         let z = q[Y];
-        if ((console.log(`  ${a6.pointer} ${Y}`), z?.source)) {
+        if ((console.log(`  ${figures.pointer} ${Y}`), z?.source)) {
           let w = z.source;
           if (w.source === "github")
             console.log(`    Source: GitHub (${w.repo})`);
@@ -68843,8 +68843,8 @@ async function hRz(A, q) {
   try {
     (await t01(A),
       Lw(),
-      n("tengu_marketplace_removed", { marketplace_name: A }),
-      console.log(`${a6.tick} Successfully removed marketplace: ${A}`),
+      emitEvent("tengu_marketplace_removed", { marketplace_name: A }),
+      console.log(`${figures.tick} Successfully removed marketplace: ${A}`),
       process.exit(0));
   } catch (K) {
     Zo6(K, "remove marketplace");
@@ -68859,8 +68859,8 @@ async function IRz(A, q) {
           console.log(K);
         }),
         Lw(),
-        n("tengu_marketplace_updated", { marketplace_name: A }),
-        console.log(`${a6.tick} Successfully updated marketplace: ${A}`),
+        emitEvent("tengu_marketplace_updated", { marketplace_name: A }),
+        console.log(`${figures.tick} Successfully updated marketplace: ${A}`),
         process.exit(0));
     else {
       let K = await k3(),
@@ -68870,9 +68870,9 @@ async function IRz(A, q) {
       (console.log(`Updating ${Y.length} marketplace(s)...`),
         await zJ4(),
         Lw(),
-        n("tengu_marketplace_updated_all", { count: Y.length }),
+        emitEvent("tengu_marketplace_updated_all", { count: Y.length }),
         console.log(
-          `${a6.tick} Successfully updated ${Y.length} marketplace(s)`,
+          `${figures.tick} Successfully updated ${Y.length} marketplace(s)`,
         ),
         process.exit(0));
     }
@@ -68889,7 +68889,7 @@ async function xRz(A, q) {
   if (!wW.includes(K))
     (console.error(`Invalid scope: ${K}. Must be one of: ${wW.join(", ")}.`),
       process.exit(1));
-  (n("tengu_plugin_install_command", { plugin: A, scope: K }), await nTq(A, K));
+  (emitEvent("tengu_plugin_install_command", { plugin: A, scope: K }), await nTq(A, K));
 }
 async function bRz(A, q) {
   if (q.cowork) Nv(!0);
@@ -68900,7 +68900,7 @@ async function bRz(A, q) {
   if (!wW.includes(K))
     (console.error(`Invalid scope: ${K}. Must be one of: ${wW.join(", ")}.`),
       process.exit(1));
-  (n("tengu_plugin_uninstall_command", { plugin: A, scope: K }),
+  (emitEvent("tengu_plugin_uninstall_command", { plugin: A, scope: K }),
     await rTq(A, K));
 }
 async function uRz(A, q) {
@@ -68918,7 +68918,7 @@ async function uRz(A, q) {
     (console.error("--cowork can only be used with user scope"),
       process.exit(1));
   if (q.cowork && K === void 0) K = "user";
-  (n("tengu_plugin_enable_command", { plugin: A, scope: K ?? "auto" }),
+  (emitEvent("tengu_plugin_enable_command", { plugin: A, scope: K ?? "auto" }),
     await oTq(A, K));
 }
 async function mRz(A, q) {
@@ -68937,7 +68937,7 @@ async function mRz(A, q) {
       (process.stderr.write(`Cannot use --scope with --all
 `),
         process.exit(1));
-    (n("tengu_plugin_disable_command", { plugin: "--all" }), await sTq());
+    (emitEvent("tengu_plugin_disable_command", { plugin: "--all" }), await sTq());
     return;
   }
   let K;
@@ -68953,12 +68953,12 @@ async function mRz(A, q) {
     (console.error("--cowork can only be used with user scope"),
       process.exit(1));
   if (q.cowork && K === void 0) K = "user";
-  (n("tengu_plugin_disable_command", { plugin: A, scope: K ?? "auto" }),
+  (emitEvent("tengu_plugin_disable_command", { plugin: A, scope: K ?? "auto" }),
     await aTq(A, K));
 }
 async function BRz(A, q) {
   if (q.cowork) Nv(!0);
-  n("tengu_plugin_update_command", {});
+  emitEvent("tengu_plugin_update_command", {});
   let K = "user";
   if (q.scope) {
     if (!J26.includes(q.scope))
@@ -69003,7 +69003,7 @@ function pRz() {
   return "~/.local/bin/claude";
 }
 function Gbq(A) {
-  let q = w6(5),
+  let q = reactMemoCache(5),
     { messages: K } = A;
   if (K.length === 0) return null;
   let Y;
@@ -69049,15 +69049,15 @@ function URz({ onDone: A, force: q, target: K }) {
     fo6.useEffect(() => {
       async function w() {
         try {
-          y(`Install: Starting installation process (force=${q}, target=${K})`);
+          writeDebugLog(`Install: Starting installation process (force=${q}, target=${K})`);
           let _ = K || U7()?.autoUpdatesChannel || "latest";
           (z({ type: "installing", version: _ }),
-            y(
+            writeDebugLog(
               `Install: Calling installLatest(channelOrVersion=${_}, forceReinstall=${q})`,
             ));
           let $ = await ol(_, q);
           if (
-            (y(
+            (writeDebugLog(
               `Install: installLatest returned version=${$.latestVersion}, wasUpdated=${$.wasUpdated}, lockFailed=${$.lockFailed}`,
             ),
             $.lockFailed)
@@ -69066,34 +69066,34 @@ function URz({ onDone: A, force: q, target: K }) {
               "Could not install - another process is currently installing Claude. Please try again in a moment.",
             );
           if (!$.latestVersion)
-            y(
+            writeDebugLog(
               "Install: Failed to retrieve version information during install",
               { level: "error" },
             );
-          if (!$.wasUpdated) y("Install: Already up to date");
+          if (!$.wasUpdated) writeDebugLog("Install: Already up to date");
           z({ type: "setting-up" });
           let O = await HF(!0);
           if (
-            (y(`Install: Setup launcher completed with ${O.length} messages`),
+            (writeDebugLog(`Install: Setup launcher completed with ${O.length} messages`),
             O.length > 0)
           )
-            O.forEach((M) => y(`Install: Setup message: ${M.message}`));
-          y("Install: Cleaning up npm installations after successful install");
+            O.forEach((M) => writeDebugLog(`Install: Setup message: ${M.message}`));
+          writeDebugLog("Install: Cleaning up npm installations after successful install");
           let { removed: H, errors: j, warnings: J } = await Ac6();
-          if (H > 0) y(`Cleaned up ${H} npm installation(s)`);
-          if (j.length > 0) y(`Cleanup errors: ${j.join(", ")}`);
+          if (H > 0) writeDebugLog(`Cleaned up ${H} npm installation(s)`);
+          if (j.length > 0) writeDebugLog(`Cleanup errors: ${j.join(", ")}`);
           let D = await ed6();
           if (D.length > 0)
-            y(`Shell alias cleanup: ${D.map((M) => M.message).join("; ")}`);
+            writeDebugLog(`Shell alias cleanup: ${D.map((M) => M.message).join("; ")}`);
           if (
-            (n("tengu_claude_install_command", {
+            (emitEvent("tengu_claude_install_command", {
               has_version: $.latestVersion ? 1 : 0,
               forced: q ? 1 : 0,
             }),
             K === "latest" || K === "stable")
           )
             (iA("userSettings", { autoUpdatesChannel: K }),
-              y(`Install: Saved autoUpdatesChannel=${K} to user settings`));
+              writeDebugLog(`Install: Saved autoUpdatesChannel=${K} to user settings`));
           let X = [...J, ...D.map((M) => M.message)];
           if (O.length > 0)
             (z({ type: "set-up", messages: O.map((M) => M.message) }),
@@ -69105,14 +69105,14 @@ function URz({ onDone: A, force: q, target: K }) {
                 });
               }, 2000));
           else
-            (y("Install: Shell PATH already configured"),
+            (writeDebugLog("Install: Shell PATH already configured"),
               z({
                 type: "success",
                 version: $.latestVersion || "current",
                 setupMessages: X.length > 0 ? X : void 0,
               }));
         } catch (_) {
-          (y(`Install command failed: ${_}`, { level: "error" }),
+          (writeDebugLog(`Install command failed: ${_}`, { level: "error" }),
             z({
               type: "error",
               message: _ instanceof Error ? _.message : String(_),
@@ -69281,7 +69281,7 @@ s1(jS1, {
 });
 import { cwd as cRz } from "process";
 async function lRz(A) {
-  n("tengu_setup_token_command", {});
+  emitEvent("tengu_setup_token_command", {});
   let q = !PJ(),
     { ConsoleOAuthFlow: K } = await Promise.resolve().then(() => (wc6(), si4));
   (await new Promise((Y) => {
@@ -69328,7 +69328,7 @@ async function lRz(A) {
     process.exit(0));
 }
 function nRz(A) {
-  let q = w6(2),
+  let q = reactMemoCache(2),
     { onDone: K } = A;
   nC1();
   let Y;
@@ -69344,7 +69344,7 @@ function nRz(A) {
   return Y;
 }
 async function rRz(A) {
-  (n("tengu_doctor_command", {}),
+  (emitEvent("tengu_doctor_command", {}),
     await new Promise((q) => {
       A.render(
         PW.default.createElement(
@@ -69453,18 +69453,18 @@ var Vbq = E(() => {
 var vbq = {};
 s1(vbq, { update: () => sRz });
 async function sRz() {
-  (n("tengu_update_check", {}),
+  (emitEvent("tengu_update_check", {}),
     L4(`Current version: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "klaudia", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.66-klaudia", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-03-04T00:18:36Z" }.VERSION}
 `));
   let A = U7()?.autoUpdatesChannel ?? "latest";
   (L4(`Checking for updates to ${A} version...
 `),
-    y("update: Starting update check"),
-    y("update: Running diagnostic"));
+    writeDebugLog("update: Starting update check"),
+    writeDebugLog("update: Running diagnostic"));
   let q = await tY6();
   if (
-    (y(`update: Installation type: ${q.installationType}`),
-    y(`update: Config install method: ${q.configInstallMethod}`),
+    (writeDebugLog(`update: Installation type: ${q.installationType}`),
+    writeDebugLog(`update: Config install method: ${q.configInstallMethod}`),
     q.multipleInstallations.length > 1)
   ) {
     (L4(`
@@ -69484,8 +69484,8 @@ async function sRz() {
     L4(`
 `);
     for (let H of q.warnings)
-      (y(`update: Warning detected: ${H.issue}`),
-        y(`update: Showing warning: ${H.issue}`),
+      (writeDebugLog(`update: Warning detected: ${H.issue}`),
+        writeDebugLog(`update: Showing warning: ${H.issue}`),
         L4(
           H1.yellow(`Warning: ${H.issue}
 `),
@@ -69679,7 +69679,7 @@ async function sRz() {
 `));
   }
   if (q.installationType === "native") {
-    y("update: Detected native installation, using native updater");
+    writeDebugLog("update: Detected native installation, using native updater");
     try {
       let H = await ol(A, !0);
       if (H.lockFailed) {
@@ -69740,17 +69740,17 @@ async function sRz() {
     }
   }
   if (K.installMethod !== "native") await td6();
-  (y("update: Checking npm registry for latest version"),
-    y(
+  (writeDebugLog("update: Checking npm registry for latest version"),
+    writeDebugLog(
       `update: Package URL: ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "klaudia", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.66-klaudia", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-03-04T00:18:36Z" }.PACKAGE_URL}`,
     ));
   let Y = A === "stable" ? "stable" : "latest",
     z = `npm view ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "klaudia", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.66-klaudia", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-03-04T00:18:36Z" }.PACKAGE_URL}@${Y} version`;
-  y(`update: Running: ${z}`);
+  writeDebugLog(`update: Running: ${z}`);
   let w = await oY6(A);
-  if ((y(`update: Latest version from npm: ${w || "FAILED"}`), !w)) {
+  if ((writeDebugLog(`update: Latest version from npm: ${w || "FAILED"}`), !w)) {
     if (
-      (y("update: Failed to get latest version from npm registry"),
+      (writeDebugLog("update: Failed to get latest version from npm registry"),
       process.stderr.write(
         H1.red("Failed to check for updates") +
           `
@@ -69867,16 +69867,16 @@ async function sRz() {
   }
   (L4(`Using ${$} installation update method...
 `),
-    y(`update: Update method determined: ${$}`),
-    y(`update: useLocalUpdate: ${_}`));
+    writeDebugLog(`update: Update method determined: ${$}`),
+    writeDebugLog(`update: useLocalUpdate: ${_}`));
   let O;
   if (_)
-    (y("update: Calling installOrUpdateClaudePackage() for local update"),
+    (writeDebugLog("update: Calling installOrUpdateClaudePackage() for local update"),
       (O = await dd6(A)));
   else
-    (y("update: Calling installGlobalPackage() for global update"),
+    (writeDebugLog("update: Calling installGlobalPackage() for global update"),
       (O = await id6()));
-  switch ((y(`update: Installation status: ${O}`), O)) {
+  switch ((writeDebugLog(`update: Installation status: ${O}`), O)) {
     case "success":
       (L4(
         H1.green(

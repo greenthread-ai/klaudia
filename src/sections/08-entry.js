@@ -13,7 +13,7 @@ function loadManagedSettings() {
     let A = getConfigValue("policySettings");
     if (A) {
       let q = MZq(A);
-      n("tengu_managed_settings_loaded", {
+      emitEvent("tengu_managed_settings_loaded", {
         keyCount: q.length,
         keys: q.join(","),
       });
@@ -76,7 +76,7 @@ async function To6(A, q) {
   (A.render(q), Fr8(), await A.waitUntilExit(), await rq(0));
 }
 async function showSetupScreens(A, q, K, Y, z) {
-  if (X1(!1) || process.env.IS_DEMO) return !1;
+  if (isTruthy(!1) || process.env.IS_DEMO) return !1;
   let w = getSettings(),
     _ = !1;
   if (!w.theme || !w.hasCompletedOnboarding) {
@@ -96,7 +96,7 @@ async function showSetupScreens(A, q, K, Y, z) {
       { onChangeAppState: h86 },
     );
   }
-  if (!X1(process.env.CLAUBBIT)) {
+  if (!isTruthy(process.env.CLAUBBIT)) {
     if (!Ew()) {
       let { TrustDialog: O } = await Promise.resolve().then(() => ($Vq(), _Vq));
       await jp(A, (H) =>
@@ -131,7 +131,7 @@ async function showSetupScreens(A, q, K, Y, z) {
         }),
       )) === "escape"
     )
-      return (n("tengu_grove_policy_exited", {}), _3(0), !1);
+      return (emitEvent("tengu_grove_policy_exited", {}), _3(0), !1);
   }
   if (process.env.ANTHROPIC_API_KEY && !SZ()) {
     let $ = mV(process.env.ANTHROPIC_API_KEY);
@@ -176,7 +176,7 @@ function _Cz() {
 }
 async function $Cz() {
   let [A, q, K] = await Promise.all([Aj(), qD6(), eTq(y1())]);
-  n("tengu_startup_telemetry", {
+  emitEvent("tengu_startup_telemetry", {
     is_git: A,
     worktree_count: q,
     repo_text_file_size_bytes: K ?? void 0,
@@ -201,21 +201,21 @@ function HCz() {
   else $8("info", "prefetch_system_context_skipped_no_trust");
 }
 function Fr8() {
-  if (X1(process.env.CLAUDE_CODE_EXIT_AFTER_FIRST_RENDER)) return;
+  if (isTruthy(process.env.CLAUDE_CODE_EXIT_AFTER_FIRST_RENDER)) return;
   if (
     (kZA(),
     Q_(),
     HCz(),
     LR1(),
-    X1(process.env.CLAUDE_CODE_USE_BEDROCK) &&
-      !X1(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH))
+    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) &&
+      !isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH))
   )
     Tl8();
   if (
     (Z81(y1(), AbortSignal.timeout(3000), []),
     vl8(),
     qH.initialize(),
-    !X1(process.env.CLAUDE_CODE_SIMPLE))
+    !isTruthy(process.env.CLAUDE_CODE_SIMPLE))
   )
     gV6.initialize();
 }
@@ -244,7 +244,7 @@ function jCz(A) {
     }
     (JI1(Y), M$());
   } catch (q) {
-    if (q instanceof Error) $6(q);
+    if (q instanceof Error) sendError(q);
     (process.stderr.write(
       H1.red(`Error processing settings: ${q instanceof Error ? q.message : String(q)}
 `),
@@ -257,7 +257,7 @@ function JCz(A) {
     let q = k_7(A);
     (fI1(q), M$());
   } catch (q) {
-    if (q instanceof Error) $6(q);
+    if (q instanceof Error) sendError(q);
     (process.stderr.write(
       H1.red(`Error processing --setting-sources: ${q instanceof Error ? q.message : String(q)}
 `),
@@ -281,7 +281,7 @@ function XCz(A) {
     process.env.CLAUDE_CODE_ENTRYPOINT = "mcp";
     return;
   }
-  if (X1(process.env.CLAUDE_CODE_ACTION)) {
+  if (isTruthy(process.env.CLAUDE_CODE_ACTION)) {
     process.env.CLAUDE_CODE_ENTRYPOINT = "claude-code-github-action";
     return;
   }
@@ -335,7 +335,7 @@ async function cliMain() {
 function PCz(A) {
   let q = 0,
     K = Z66(A);
-  if (K.stdin) n("tengu_stdin_interactive", {});
+  if (K.stdin) emitEvent("tengu_stdin_interactive", {});
   let Y = new _i8(),
     z = Oi8();
   return (
@@ -356,7 +356,7 @@ function PCz(A) {
             if (_.reason === "resize") continue;
             let $ = Date.now();
             if ($ - q < 1000)
-              n("tengu_flicker", {
+              emitEvent("tengu_flicker", {
                 desiredHeight: _.desiredHeight,
                 actualHeight: _.availableHeight,
                 reason: _.reason,
@@ -717,13 +717,13 @@ async function setupCommander() {
       )
       .action(async (_, $) => {
         if ((Bq("action_handler_start"), _ === "code"))
-          (n("tengu_code_prompt_ignored", {}),
+          (emitEvent("tengu_code_prompt_ignored", {}),
             console.warn(
               H1.yellow("Tip: You can launch Claude Code with just `claude`"),
             ),
             (_ = void 0));
         if (_ && typeof _ === "string" && !/\s/.test(_) && _.length > 0)
-          n("tengu_single_word_prompt", { length: _.length });
+          emitEvent("tengu_single_word_prompt", { length: _.length });
         let {
             debug: O = !1,
             debugToStderr: H = !1,
@@ -814,7 +814,7 @@ ${Gb8()}
             eRz().setCliTeammateModeOverride?.(F8.teammateMode);
         }
         let v6 = $.sdkUrl ?? void 0,
-          T6 = v || X1(process.env.CLAUDE_CODE_INCLUDE_PARTIAL_MESSAGES);
+          T6 = v || isTruthy(process.env.CLAUDE_CODE_INCLUDE_PARTIAL_MESSAGES);
         if (v6) {
           if (!F) F = "stream-json";
           if (!h) h = "stream-json";
@@ -856,7 +856,7 @@ ${Gb8()}
 `),
             ),
               process.exit(1));
-          let O7 = process.env.CLAUDE_CODE_REMOTE_SESSION_ID || d1(),
+          let O7 = process.env.CLAUDE_CODE_REMOTE_SESSION_ID || getSessionId(),
             U6 = FTq(K6);
           if (U6.length > 0) {
             let r6 = {
@@ -998,7 +998,7 @@ ${r6}`);
         if (g6) {
           let F8 = i8();
           try {
-            n("tengu_claude_in_chrome_setup", { platform: F8 });
+            emitEvent("tengu_claude_in_chrome_setup", { platform: F8 });
             let { mcpConfig: O7, allowedTools: U6, systemPrompt: r6 } = LU8();
             if (((L6 = { ...L6, ...O7 }), X.push(...U6), r6))
               O6 = O6
@@ -1007,9 +1007,9 @@ ${r6}`);
 ${O6}`
                 : r6;
           } catch (O7) {
-            (n("tengu_claude_in_chrome_setup_failed", { platform: F8 }),
-              y(`[Claude in Chrome] Error: ${O7}`),
-              $6(O7 instanceof Error ? O7 : Error(String(O7))),
+            (emitEvent("tengu_claude_in_chrome_setup_failed", { platform: F8 }),
+              writeDebugLog(`[Claude in Chrome] Error: ${O7}`),
+              sendError(O7 instanceof Error ? O7 : Error(String(O7))),
               console.error("Error: Failed to run with Claude in Chrome."),
               process.exit(1));
           }
@@ -1023,7 +1023,7 @@ ${O6}`
 ${kU8}`
                 : kU8));
           } catch (F8) {
-            y(`[Claude in Chrome] Error (auto-enable): ${F8}`);
+            writeDebugLog(`[Claude in Chrome] Error (auto-enable): ${F8}`);
           }
         let r = $.strictMcpConfig || !1;
         if (Dp6()) {
@@ -1061,7 +1061,7 @@ ${kU8}`
           console.error(F8);
         }),
           Pi4(),
-          y("[STARTUP] Loading MCP configs..."));
+          writeDebugLog("[STARTUP] Loading MCP configs..."));
         let K1 = Date.now(),
           x6 = r ? Promise.resolve({ servers: {} }) : s ? Pg() : pW6();
         if (F && F !== "text" && F !== "stream-json")
@@ -1113,29 +1113,29 @@ ${kU8}`
           let F8 = KW1(M1);
           if (F8)
             ((R1 = [...R1, F8]),
-              n("tengu_structured_output_enabled", {
+              emitEvent("tengu_structured_output_enabled", {
                 schema_property_count: Object.keys(M1.properties || {}).length,
                 has_required_fields: Boolean(M1.required),
               }));
           else
-            n("tengu_structured_output_failure", {
+            emitEvent("tengu_structured_output_failure", {
               error: "Invalid JSON schema",
             });
         }
-        (Bq("action_before_setup"), y("[STARTUP] Running setup()..."));
+        (Bq("action_before_setup"), writeDebugLog("[STARTUP] Running setup()..."));
         let M6 = Date.now(),
           { setup: V6 } = await Promise.resolve().then(() => (mR1(), uR1)),
           s6 = void 0;
         (await V6(qCz(), X6, J, q6, f6, D6, V ? Tk(V) : void 0, A6, s6),
-          y(`[STARTUP] setup() completed in ${Date.now() - M6}ms`),
+          writeDebugLog(`[STARTUP] setup() completed in ${Date.now() - M6}ms`),
           Bq("action_after_setup"));
         let O1 = $.model === "default" ? KW() : $.model,
           w1 = Z === "default" ? KW() : Z,
           J1 = y1();
-        y("[STARTUP] Loading commands and agents...");
+        writeDebugLog("[STARTUP] Loading commands and agents...");
         let g1 = Date.now(),
           [Z1, I1] = await Promise.all([rG(J1), Eg(J1)]);
-        (y(`[STARTUP] Commands and agents loaded in ${Date.now() - g1}ms`),
+        (writeDebugLog(`[STARTUP] Commands and agents loaded in ${Date.now() - g1}ms`),
           Bq("action_commands_loaded"));
         let A8 = [];
         if (I)
@@ -1143,7 +1143,7 @@ ${kU8}`
             let F8 = s3(I);
             if (F8) A8 = _P1(F8, "flagSettings");
           } catch (F8) {
-            $6(F8 instanceof Error ? F8 : Error(String(F8)));
+            sendError(F8 instanceof Error ? F8 : Error(String(F8)));
           }
         let AA = [...I1.allAgents, ...A8],
           qA = { ...I1, allAgents: AA, activeAgents: tk(AA) },
@@ -1151,16 +1151,16 @@ ${kU8}`
           BA;
         if (y7) {
           if (((BA = qA.activeAgents.find((F8) => F8.agentType === y7)), !BA))
-            y(
+            writeDebugLog(
               `Warning: agent "${y7}" not found. Available agents: ${qA.activeAgents.map((F8) => F8.agentType).join(", ")}. Using default behavior.`,
             );
         }
         if ((tp(BA?.agentType), BA))
-          n("tengu_agent_flag", {
+          emitEvent("tengu_agent_flag", {
             agentType: LD(BA) ? BA.agentType : "custom",
             ...(B && { source: "cli" }),
           });
-        if (BA?.agentType) Pn6(d1(), BA.agentType);
+        if (BA?.agentType) Pn6(getSessionId(), BA.agentType);
         if (s && BA && !t && !LD(BA)) {
           let F8 = BA.getSystemPrompt();
           if (F8) t = F8;
@@ -1181,12 +1181,12 @@ ${kU8}`
           if (F8) {
             let O7;
             if (F8.source === "built-in")
-              y(
+              writeDebugLog(
                 `[teammate] Built-in agent ${G6.agentType} - skipping custom prompt (not supported)`,
               );
             else O7 = F8.getSystemPrompt();
             if (F8.memory)
-              n("tengu_agent_memory_loaded", {
+              emitEvent("tengu_agent_memory_loaded", {
                 ...{},
                 scope: F8.memory,
                 source: "teammate",
@@ -1202,7 +1202,7 @@ ${U6}`
                 : U6;
             }
           } else
-            y(
+            writeDebugLog(
               `[teammate] Custom agent ${G6.agentType} not found in available agents`,
             );
         }
@@ -1215,11 +1215,11 @@ ${U6}`
             () => (Q6(), oI6),
           );
           ((v4 = await O7(F8.renderOptions)),
-            y("[STARTUP] Running showSetupScreens()..."));
+            writeDebugLog("[STARTUP] Running showSetupScreens()..."));
           let U6 = Date.now(),
             r6 = await showSetupScreens(v4, X6, J, Z1, g6);
           if (
-            (y(
+            (writeDebugLog(
               `[STARTUP] showSetupScreens() completed in ${Date.now() - U6}ms`,
             ),
             r6 && _?.trim().toLowerCase() === "/login")
@@ -1228,7 +1228,7 @@ ${U6}`
           if (r6) (sG1(), kU6(), Fv.cache?.clear?.(), Lf6());
         }
         if (process.exitCode !== void 0) {
-          y("Graceful shutdown initiated, skipping further initialization");
+          writeDebugLog("Graceful shutdown initiated, skipping further initialization");
           return;
         }
         if ((Fe4(), !s)) {
@@ -1247,9 +1247,9 @@ ${U6}`
             );
           }
         }
-        if ((Y14().catch((F8) => $6(F8)), xOq(), AL1(), !s)) HNq();
+        if ((Y14().catch((F8) => sendError(F8)), xOq(), AL1(), !s)) HNq();
         let { servers: X4 } = await x6;
-        y(`[STARTUP] MCP configs loaded in ${Date.now() - K1}ms`);
+        writeDebugLog(`[STARTUP] MCP configs loaded in ${Date.now() - K1}ms`);
         let H3 = { ...X4, ...L6 },
           Zz = {},
           UK = {};
@@ -1264,7 +1264,7 @@ ${U6}`
             c || U || d || s
               ? null
               : xP("startup", { agentType: BA?.agentType, model: fK }),
-          W9 = (j1 || s) && !X1(process.env.MCP_CONNECTION_NONBLOCKING),
+          W9 = (j1 || s) && !isTruthy(process.env.MCP_CONNECTION_NONBLOCKING),
           K2 = W9 ? void 0 : gz,
           Tz,
           d5;
@@ -1428,7 +1428,7 @@ ${U6}`
           return;
         }
         let { App: SY } = await Promise.resolve().then(() => (initApp(), appExports));
-        n("tengu_startup_manual_model_config", {
+        emitEvent("tengu_startup_manual_model_config", {
           cli_flag: $.model,
           env_var: process.env.ANTHROPIC_MODEL,
           settings_file: (U7() || {}).model,
@@ -1598,7 +1598,7 @@ ${U6}`
             let r6 = await j16(void 0, void 0);
             if (!r6)
               return (
-                n("tengu_continue", { success: !1 }),
+                emitEvent("tengu_continue", { success: !1 }),
                 await c86(v4, "No conversation found to continue")
               );
             let N1 = await Pi8(
@@ -1610,7 +1610,7 @@ ${U6}`
             if (Zu8(N1.messages)) W16();
             (gr8($),
               XS1($),
-              n("tengu_continue", {
+              emitEvent("tengu_continue", {
                 success: !0,
                 resume_duration_ms: Math.round(performance.now() - O7),
               }),
@@ -1635,8 +1635,8 @@ ${U6}`
                 ),
               ));
           } catch (O7) {
-            if (!F8) n("tengu_continue", { success: !1 });
-            ($6(O7 instanceof Error ? O7 : Error(String(O7))), process.exit(1));
+            if (!F8) emitEvent("tengu_continue", { success: !1 });
+            (sendError(O7 instanceof Error ? O7 : Error(String(O7))), process.exit(1));
           }
         } else if ($.resume || $.fromPr || z6 || _6 !== null) {
           let { clearSessionCaches: F8 } = await Promise.resolve().then(
@@ -1679,7 +1679,7 @@ ${U6}`
 Usage: claude --remote "your task description"`,
                 () => rq(1),
               );
-            n("tengu_remote_create_session", {
+            emitEvent("tengu_remote_create_session", {
               has_initial_prompt: String(H8),
             });
             let JA = await Qj(),
@@ -1691,7 +1691,7 @@ Usage: claude --remote "your task description"`,
               );
             if (!r8)
               return (
-                n("tengu_remote_create_session_error", {
+                emitEvent("tengu_remote_create_session_error", {
                   error: "unable_to_create_session",
                 }),
                 await c86(v4, "Error: Unable to create remote session", () =>
@@ -1699,7 +1699,7 @@ Usage: claude --remote "your task description"`,
                 )
               );
             if (
-              (n("tengu_remote_create_session_success", { session_id: r8.id }),
+              (emitEvent("tengu_remote_create_session_success", { session_id: r8.id }),
               !V8)
             )
               (process.stdout.write(`Created remote session: ${r8.title}
@@ -1716,7 +1716,7 @@ Usage: claude --remote "your task description"`,
               CA = await xN();
             } catch (zY) {
               return (
-                $6(
+                sendError(
                   zY instanceof Error
                     ? zY
                     : Error("Failed to authenticate for remote session"),
@@ -1759,8 +1759,8 @@ Usage: claude --remote "your task description"`,
             return;
           } else if (z6) {
             if (z6 === !0 || z6 === "") {
-              (n("tengu_teleport_interactive_mode", {}),
-                y("selectAndResumeTeleportTask: Starting teleport flow..."));
+              (emitEvent("tengu_teleport_interactive_mode", {}),
+                writeDebugLog("selectAndResumeTeleportTask: Starting teleport flow..."));
               let { TeleportResumeWrapper: H8 } = await Promise.resolve().then(
                   () => (oxq(), rxq),
                 ),
@@ -1775,7 +1775,7 @@ Usage: claude --remote "your task description"`,
               let { branchError: JA } = await zT6(V8.branch);
               O7 = YT6(V8.log, JA);
             } else if (typeof z6 === "string") {
-              n("tengu_teleport_resume_session", { mode: "direct" });
+              emitEvent("tengu_teleport_resume_session", { mode: "direct" });
               try {
                 let H8 = await pM6(z6),
                   V8 = await hb8(H8);
@@ -1824,7 +1824,7 @@ Usage: claude --remote "your task description"`,
 `,
                   );
                 else
-                  ($6(H8 instanceof Error ? H8 : Error(String(H8))),
+                  (sendError(H8 instanceof Error ? H8 : Error(String(H8))),
                     process.stderr.write(
                       H1.red(`Error: ${H8 instanceof Error ? H8.message : String(H8)}
 `),
@@ -1840,7 +1840,7 @@ Usage: claude --remote "your task description"`,
                 JA = await j16(L1 ?? H8, void 0);
               if (!JA)
                 return (
-                  n("tengu_session_resumed", {
+                  emitEvent("tengu_session_resumed", {
                     entrypoint: "cli_flag",
                     success: !1,
                   }),
@@ -1860,17 +1860,17 @@ Usage: claude --remote "your task description"`,
                 U6.restoredAgentDef)
               )
                 BA = U6.restoredAgentDef;
-              n("tengu_session_resumed", {
+              emitEvent("tengu_session_resumed", {
                 entrypoint: "cli_flag",
                 success: !0,
                 resume_duration_ms: Math.round(performance.now() - V8),
               });
             } catch (V8) {
-              (n("tengu_session_resumed", {
+              (emitEvent("tengu_session_resumed", {
                 entrypoint: "cli_flag",
                 success: !1,
               }),
-                $6(V8 instanceof Error ? V8 : Error(String(V8))),
+                sendError(V8 instanceof Error ? V8 : Error(String(V8))),
                 await c86(v4, `Failed to resume session ${H8}`));
             }
           }
@@ -2453,7 +2453,7 @@ async function ZCz({
   thinkingConfig: N,
 }) {
   try {
-    n("tengu_init", {
+    emitEvent("tengu_init", {
       entrypoint: "claude",
       hasInitialPrompt: A,
       hasStdin: q,
@@ -2476,13 +2476,13 @@ async function ZCz({
       thinkingType: N.type,
       ...(Z && { systemPromptFlag: Z }),
       ...(f && { appendSystemPromptFlag: f }),
-      is_simple: X1(process.env.CLAUDE_CODE_SIMPLE) || void 0,
+      is_simple: isTruthy(process.env.CLAUDE_CODE_SIMPLE) || void 0,
       is_coordinator: void 0,
       autoUpdatesChannel: U7().autoUpdatesChannel ?? "latest",
       ...{},
     });
   } catch (V) {
-    $6(V instanceof Error ? V : Error(String(V)));
+    sendError(V instanceof Error ? V : Error(String(V)));
   }
 }
 function gr8(A) {}

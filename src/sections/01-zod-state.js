@@ -1799,7 +1799,7 @@ s1(UI1, {
   getSessionTrustAccepted: () => i_6,
   getSessionSource: () => XQq,
   getSessionIngressToken: () => XI1,
-  getSessionId: () => d1,
+  getSessionId: () => getSessionId,
   getSessionCounter: () => KI1,
   getSessionBypassPermissionsMode: () => uA6,
   getSdkBetas: () => iH,
@@ -1968,7 +1968,7 @@ function as8() {
     promptId: null,
   };
 }
-function d1() {
+function getSessionId() {
   return x1.sessionId;
 }
 function xh1(A = {}) {
@@ -3095,7 +3095,7 @@ import {
 function zdq() {
   return Ydq;
 }
-function p6(A, q, K) {
+function trySafeStringify(A, q, K) {
   let z = [];
   try {
     const Y = hY(z, m2`JSON.stringify(${A})`, 0);
@@ -3645,7 +3645,7 @@ function sI1(A) {
   if (!q) return !1;
   return q.split(/\s+/).includes(A);
 }
-function X1(A) {
+function isTruthy(A) {
   if (!A) return !1;
   if (typeof A === "boolean") return A;
   let q = A.toLowerCase().trim();
@@ -3680,7 +3680,7 @@ function ys6() {
   return process.env.CLOUD_ML_REGION || "us-east5";
 }
 function tI1() {
-  return X1(process.env.CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR);
+  return isTruthy(process.env.CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR);
 }
 function SZ() {
   return !1;
@@ -3787,14 +3787,14 @@ function Zdq() {
   }
   return Cs6;
 }
-function y(A, { level: q } = { level: "debug" }) {
+function writeDebugLog(A, { level: q } = { level: "debug" }) {
   if (!Gdq(A)) return;
   if (
     He8 &&
     A.includes(`
 `)
   )
-    A = p6(A);
+    A = trySafeStringify(A);
   let Y = `${new Date().toISOString()} [${q.toUpperCase()}] ${A.trim()}
 `;
   if (qu()) {
@@ -3807,7 +3807,7 @@ function cA6() {
   return (
     Oe8() ??
     process.env.CLAUDE_CODE_DEBUG_LOGS_DIR ??
-    $e8(_A(), "debug", `${d1()}.txt`)
+    $e8(_A(), "debug", `${getSessionId()}.txt`)
   );
 }
 function GL(A, q) {
@@ -3830,8 +3830,8 @@ var f1 = E(() => {
   r1();
   ((en = T8(() => {
     return (
-      X1(process.env.DEBUG) ||
-      X1(process.env.DEBUG_SDK) ||
+      isTruthy(process.env.DEBUG) ||
+      isTruthy(process.env.DEBUG_SDK) ||
       process.argv.includes("--debug") ||
       process.argv.includes("-d") ||
       qu() ||
@@ -3891,7 +3891,7 @@ function Je8(A) {
       }));
   }
 }
-function n(A, q) {
+function emitEvent(A, q) {
   if (q$6 === null) {
     Ss6.push({ eventName: A, metadata: q, async: !1 });
     return;
@@ -3961,15 +3961,15 @@ function ik6() {
       q = Ndq(A);
     (P1().mkdirSync(q),
       Nz(A, Xe8(), { encoding: "utf8", flush: !0 }),
-      y("Startup profiling report:"),
-      y(Xe8()));
+      writeDebugLog("Startup profiling report:"),
+      writeDebugLog(Xe8()));
   }
 }
 function kdq() {
   return lk6;
 }
 function Ze8() {
-  return Tdq(_A(), "startup-perf", `${d1()}.txt`);
+  return Tdq(_A(), "startup-perf", `${getSessionId()}.txt`);
 }
 function fe8() {
   if (!Pe8) return;
@@ -3983,7 +3983,7 @@ function fe8() {
       O = K.get(_);
     if ($ !== void 0 && O !== void 0) Y[`${z}_ms`] = Math.round(O - $);
   }
-  ((Y.checkpoint_count = q.length), n("tengu_startup_perf", Y));
+  ((Y.checkpoint_count = q.length), emitEvent("tengu_startup_perf", Y));
 }
 var lk6,
   Vdq = 0.005,

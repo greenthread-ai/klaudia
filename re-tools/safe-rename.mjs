@@ -28,9 +28,153 @@ function isIdChar(ch) {
   return ch && SAFE_BOUNDARY.test(ch);
 }
 
+// Track whether a position is inside a string/comment/regex literal.
+// map[i] === 0 means code, map[i] === 1 means string/comment/regex.
+// Handles template literal interpolation: ${...} inside backticks is code.
+// Handles regex literals: /pattern/flags after operator/keyword context.
+function buildStringMap(source) {
+  const map = new Uint8Array(source.length); // 0 = code
+  let i = 0;
+
+  // Characters that can precede a regex literal (the preceding non-whitespace char).
+  const REGEX_PREV = new Set("=(!|&?:;,+-*%^~<>[{/");
+
+  // Check if `/` at position i is the start of a regex literal.
+  // Look back for the preceding non-whitespace character.
+  function isRegexStart() {
+    let j = i - 1;
+    while (j >= 0 && (source[j] === " " || source[j] === "\t" || source[j] === "\n" || source[j] === "\r")) j--;
+    if (j < 0) return true; // start of file
+    const prev = source[j];
+    if (REGEX_PREV.has(prev)) return true;
+    // Also check for keyword endings: return, typeof, void, delete, throw, new, case, in, instanceof
+    // Simple check: if prev is a letter, look at the word
+    if (/[a-z]/.test(prev)) {
+      let start = j;
+      while (start > 0 && /[a-z]/.test(source[start - 1])) start--;
+      const word = source.substring(start, j + 1);
+      return ["return", "typeof", "void", "delete", "throw", "new", "case", "in", "instanceof"].includes(word);
+    }
+    return false;
+  }
+
+  // Scan a regex literal: /pattern/flags
+  function scanRegex() {
+    map[i] = 1; i++; // opening /
+    let inCharClass = false;
+    while (i < source.length) {
+      if (source[i] === "\\") {
+        map[i] = 1; map[i + 1] = 1; i += 2; continue; // escape
+      }
+      if (source[i] === "[") { inCharClass = true; map[i] = 1; i++; continue; }
+      if (source[i] === "]") { inCharClass = false; map[i] = 1; i++; continue; }
+      if (source[i] === "/" && !inCharClass) {
+        map[i] = 1; i++; // closing /
+        // Consume flags
+        while (i < source.length && /[gimsuy]/.test(source[i])) { map[i] = 1; i++; }
+        return;
+      }
+      if (source[i] === "\n") return; // unterminated regex, bail
+      map[i] = 1; i++;
+    }
+  }
+
+  function scanCode() {
+    while (i < source.length) {
+      const ch = source[i];
+      if (ch === "/" && source[i + 1] === "/") {
+        // Line comment — skip to end of line
+        while (i < source.length && source[i] !== "\n") { map[i] = 1; i++; }
+      } else if (ch === "/" && source[i + 1] === "*") {
+        // Block comment
+        map[i] = 1; map[i + 1] = 1; i += 2;
+        while (i < source.length && !(source[i] === "*" && source[i + 1] === "/")) { map[i] = 1; i++; }
+        if (i < source.length) { map[i] = 1; map[i + 1] = 1; i += 2; }
+      } else if (ch === "/" && isRegexStart()) {
+        // Regex literal
+        scanRegex();
+      } else if (ch === '"' || ch === "'") {
+        // Regular string
+        map[i] = 1; i++;
+        while (i < source.length) {
+          if (source[i] === "\\") { map[i] = 1; map[i + 1] = 1; i += 2; continue; }
+          if (source[i] === ch) { map[i] = 1; i++; break; }
+          map[i] = 1; i++;
+        }
+      } else if (ch === "`") {
+        // Template literal — need to handle ${...} interpolation
+        scanTemplateLiteral();
+      } else {
+        i++;
+      }
+    }
+  }
+
+  function scanTemplateLiteral() {
+    map[i] = 1; i++; // opening backtick
+    while (i < source.length) {
+      if (source[i] === "\\") {
+        map[i] = 1; map[i + 1] = 1; i += 2; continue;
+      }
+      if (source[i] === "$" && source[i + 1] === "{") {
+        // Interpolation — mark ${ as string, then parse contents as code
+        map[i] = 1; map[i + 1] = 1; i += 2;
+        scanInterpolation();
+        continue;
+      }
+      if (source[i] === "`") {
+        map[i] = 1; i++; break; // closing backtick
+      }
+      map[i] = 1; i++;
+    }
+  }
+
+  // Scan inside ${...} — this is code, but we need to track brace depth
+  // and handle nested strings/template literals.
+  function scanInterpolation() {
+    let depth = 1;
+    while (i < source.length && depth > 0) {
+      const ch = source[i];
+      if (ch === "{") {
+        depth++; i++;
+      } else if (ch === "}") {
+        depth--;
+        if (depth === 0) { map[i] = 1; i++; break; } // closing } is part of template syntax
+        i++;
+      } else if (ch === '"' || ch === "'") {
+        // String inside interpolation
+        map[i] = 1; i++;
+        while (i < source.length) {
+          if (source[i] === "\\") { map[i] = 1; map[i + 1] = 1; i += 2; continue; }
+          if (source[i] === ch) { map[i] = 1; i++; break; }
+          map[i] = 1; i++;
+        }
+      } else if (ch === "`") {
+        // Nested template literal inside interpolation
+        scanTemplateLiteral();
+      } else if (ch === "/" && source[i + 1] === "/") {
+        while (i < source.length && source[i] !== "\n") { map[i] = 1; i++; }
+      } else if (ch === "/" && source[i + 1] === "*") {
+        map[i] = 1; map[i + 1] = 1; i += 2;
+        while (i < source.length && !(source[i] === "*" && source[i + 1] === "/")) { map[i] = 1; i++; }
+        if (i < source.length) { map[i] = 1; map[i + 1] = 1; i += 2; }
+      } else if (ch === "/" && isRegexStart()) {
+        scanRegex();
+      } else {
+        i++; // regular code character — stays as 0
+      }
+    }
+  }
+
+  scanCode();
+  return map;
+}
+
 function replaceIdentifier(source, oldId, newId) {
+  const stringMap = buildStringMap(source);
   let result = "";
   let count = 0;
+  let skipped = 0;
   let i = 0;
 
   while (i < source.length) {
@@ -38,17 +182,55 @@ function replaceIdentifier(source, oldId, newId) {
       const before = i > 0 ? source[i - 1] : "";
       const after = source[i + oldId.length] || "";
       if (!isIdChar(before) && !isIdChar(after)) {
-        result += newId;
-        count++;
-        i += oldId.length;
-        continue;
+        // Skip if inside a string/comment/regex
+        if (stringMap[i] === 1) {
+          skipped++;
+        // Skip property access: obj.n, obj?.n
+        } else if (before === "." || (before === "?" && i > 1 && source[i - 2] === ".")) {
+          skipped++;
+        // Skip object property key: { n: value } or { ..., n: value }
+        // Detect by checking if followed by ":" (not "::") after optional whitespace.
+        // But allow ternary: n ? a : b (preceded by different context).
+        } else if (isPropertyKey(source, i, oldId.length)) {
+          skipped++;
+        } else {
+          result += newId;
+          count++;
+          i += oldId.length;
+          continue;
+        }
       }
     }
     result += source[i];
     i++;
   }
 
-  return { result, count };
+  return { result, count, skipped };
+}
+
+// Check if the identifier at position `pos` (with length `len`) is an object property key.
+// Pattern: identifier followed by ":" (not "::") with optional whitespace.
+// Exclude: variable declarations (var n =), function params, standalone statements.
+// Heuristic: look at what precedes the identifier — if it's after "{", ",", or newline
+// in an object-like context, it's likely a property key.
+function isPropertyKey(source, pos, len) {
+  // Check what follows: must be ":" (not "::")
+  let j = pos + len;
+  while (j < source.length && (source[j] === " " || source[j] === "\t")) j++;
+  if (source[j] !== ":") return false;
+  if (source[j + 1] === ":") return false; // :: is not property assignment
+
+  // Check what precedes: skip whitespace/newlines
+  let k = pos - 1;
+  while (k >= 0 && (source[k] === " " || source[k] === "\t" || source[k] === "\n" || source[k] === "\r")) k--;
+  if (k < 0) return false;
+  const prev = source[k];
+
+  // After { or , or ; at start of object literal or after another property
+  // Also after ( for destructuring patterns like ({ n: alias })
+  if (prev === "{" || prev === "," || prev === "(" || prev === ";") return true;
+
+  return false;
 }
 
 // Check if the old name appears in contexts where boundary detection fails.

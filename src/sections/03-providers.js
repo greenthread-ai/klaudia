@@ -211,21 +211,21 @@ var s5 = E(() => {
       "androidstudio",
     ]));
   kNK = T8(() => {
-    if (X1(process.env.CODESPACES)) return "codespaces";
+    if (isTruthy(process.env.CODESPACES)) return "codespaces";
     if (process.env.GITPOD_WORKSPACE_ID) return "gitpod";
     if (process.env.REPL_ID || process.env.REPL_SLUG) return "replit";
     if (process.env.PROJECT_DOMAIN) return "glitch";
-    if (X1(process.env.VERCEL)) return "vercel";
+    if (isTruthy(process.env.VERCEL)) return "vercel";
     if (
       process.env.RAILWAY_ENVIRONMENT_NAME ||
       process.env.RAILWAY_SERVICE_NAME
     )
       return "railway";
-    if (X1(process.env.RENDER)) return "render";
-    if (X1(process.env.NETLIFY)) return "netlify";
+    if (isTruthy(process.env.RENDER)) return "render";
+    if (isTruthy(process.env.NETLIFY)) return "netlify";
     if (process.env.DYNO) return "heroku";
     if (process.env.FLY_APP_NAME || process.env.FLY_MACHINE_ID) return "fly.io";
-    if (X1(process.env.CF_PAGES)) return "cloudflare-pages";
+    if (isTruthy(process.env.CF_PAGES)) return "cloudflare-pages";
     if (process.env.DENO_DEPLOYMENT_ID) return "deno-deploy";
     if (process.env.AWS_LAMBDA_FUNCTION_NAME) return "aws-lambda";
     if (process.env.AWS_EXECUTION_ENV === "AWS_ECS_FARGATE")
@@ -251,11 +251,11 @@ var s5 = E(() => {
     if (process.env.APP_URL?.includes("ondigitalocean.app"))
       return "digitalocean-app-platform";
     if (process.env.SPACE_CREATOR_USER_ID) return "huggingface-spaces";
-    if (X1(process.env.GITHUB_ACTIONS)) return "github-actions";
-    if (X1(process.env.GITLAB_CI)) return "gitlab-ci";
+    if (isTruthy(process.env.GITHUB_ACTIONS)) return "github-actions";
+    if (isTruthy(process.env.GITLAB_CI)) return "gitlab-ci";
     if (process.env.CIRCLECI) return "circleci";
     if (process.env.BUILDKITE) return "buildkite";
-    if (X1(!1)) return "ci";
+    if (isTruthy(!1)) return "ci";
     if (process.env.KUBERNETES_SERVICE_HOST) return "kubernetes";
     try {
       if (P1().existsSync("/.dockerenv")) return "docker";
@@ -267,7 +267,7 @@ var s5 = E(() => {
   });
   s8 = {
     hasInternetAccess: ZNK,
-    isCI: X1(!1),
+    isCI: isTruthy(!1),
     platform: ["win32", "darwin"].includes(process.platform)
       ? process.platform
       : "linux",
@@ -498,12 +498,12 @@ function $0A(A) {
       }
   }
 }
-function $6(A) {
+function sendError(A) {
   try {
     if (
-      X1(process.env.CLAUDE_CODE_USE_BEDROCK) ||
-      X1(process.env.CLAUDE_CODE_USE_VERTEX) ||
-      X1(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
+      isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
+      isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
+      isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
       process.env.DISABLE_ERROR_REPORTING ||
       process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
     )
@@ -2055,7 +2055,7 @@ var DH6 = E(() => {
             ((q[z] = w !== 0 ? _ : 0), (A[z] = w), w !== 0 && this.ttlAutopurge)
           ) {
             let $ = setTimeout(() => {
-              if (this.#v(z)) this.#y(this.#j[z], "expire");
+              if (this.#v(z)) this.#writeDebugLog(this.#j[z], "expire");
             }, w + 1);
             if ($.unref) $.unref();
           }
@@ -2233,7 +2233,7 @@ var DH6 = E(() => {
     purgeStale() {
       let A = !1;
       for (let q of this.#L({ allowStale: !0 }))
-        if (this.#v(q)) (this.#y(this.#j[q], "expire"), (A = !0));
+        if (this.#v(q)) (this.#writeDebugLog(this.#j[q], "expire"), (A = !0));
       return A;
     }
     info(A) {
@@ -2295,7 +2295,7 @@ var DH6 = E(() => {
         H = this.#B(A, q, K.size || 0, _);
       if (this.maxEntrySize && H > this.maxEntrySize) {
         if ($) (($.set = "miss"), ($.maxEntrySizeExceeded = !0));
-        return (this.#y(A, "set"), this);
+        return (this.#writeDebugLog(A, "set"), this);
       }
       let j = this.#w === 0 ? void 0 : this.#H.get(A);
       if (j === void 0) {
@@ -2432,7 +2432,7 @@ var DH6 = E(() => {
           if (this.#$[q] === D)
             if (M === void 0)
               if (Z.__staleWhileFetching) this.#$[q] = Z.__staleWhileFetching;
-              else this.#y(A, "fetch");
+              else this.#writeDebugLog(A, "fetch");
             else {
               if (K.status) K.status.fetchUpdated = !0;
               this.set(A, M, $.options);
@@ -2451,7 +2451,7 @@ var DH6 = E(() => {
             Z = G || K.noDeleteOnFetchRejection,
             f = D;
           if (this.#$[q] === D) {
-            if (!Z || f.__staleWhileFetching === void 0) this.#y(A, "fetch");
+            if (!Z || f.__staleWhileFetching === void 0) this.#writeDebugLog(A, "fetch");
             else if (!W) this.#$[q] = f.__staleWhileFetching;
           }
           if (G) {
@@ -2596,7 +2596,7 @@ var DH6 = E(() => {
         if (this.#v(_)) {
           if (w) w.get = "stale";
           if (!O) {
-            if (!z) this.#y(A, "expire");
+            if (!z) this.#writeDebugLog(A, "expire");
             if (w && K) w.returnedStale = !0;
             return K ? $ : void 0;
           } else {
@@ -2623,9 +2623,9 @@ var DH6 = E(() => {
       }
     }
     delete(A) {
-      return this.#y(A, "delete");
+      return this.#writeDebugLog(A, "delete");
     }
-    #y(A, q) {
+    #writeDebugLog(A, q) {
       let K = !1;
       if (this.#w !== 0) {
         let Y = this.#H.get(A);
@@ -2702,7 +2702,7 @@ var DH6 = E(() => {
 function cc1(A, q = 300000) {
   let K = new Map(),
     Y = (...z) => {
-      let w = p6(z),
+      let w = trySafeStringify(z),
         _ = K.get(w),
         $ = Date.now();
       if (!_) {
@@ -2718,7 +2718,7 @@ function cc1(A, q = 300000) {
               K.set(w, { value: O, timestamp: Date.now(), refreshing: !1 });
             })
             .catch((O) => {
-              ($6(O instanceof Error ? O : Error(String(O))), K.delete(w));
+              (sendError(O instanceof Error ? O : Error(String(O))), K.delete(w));
             }),
           _.value
         );
@@ -2729,7 +2729,7 @@ function cc1(A, q = 300000) {
 function z81(A, q = 300000) {
   let K = new Map(),
     Y = async (...z) => {
-      let w = p6(z),
+      let w = trySafeStringify(z),
         _ = K.get(w),
         $ = Date.now();
       if (!_) {
@@ -2744,7 +2744,7 @@ function z81(A, q = 300000) {
               K.set(w, { value: O, timestamp: Date.now(), refreshing: !1 });
             })
             .catch((O) => {
-              ($6(O instanceof Error ? O : Error(String(O))), K.delete(w));
+              (sendError(O instanceof Error ? O : Error(String(O))), K.delete(w));
             }),
           _.value
         );
@@ -2786,7 +2786,7 @@ function E0A(A) {
   try {
     return Uc1(XH6(A));
   } catch (q) {
-    return ($6(q), null);
+    return (sendError(q), null);
   }
 }
 function cNK(A) {
@@ -2881,7 +2881,7 @@ async function er(A) {
 }
 function y0A(A, q) {
   try {
-    if (!A || A.trim() === "") return p6([q], null, 4);
+    if (!A || A.trim() === "") return trySafeStringify([q], null, 4);
     let K = XH6(A),
       Y = Uc1(K);
     if (Array.isArray(Y)) {
@@ -2892,12 +2892,12 @@ function y0A(A, q) {
         });
       if (!$ || $.length === 0) {
         let O = [...Y, q];
-        return p6(O, null, 4);
+        return trySafeStringify(O, null, 4);
       }
       return Z0A(K, $);
-    } else return p6([q], null, 4);
+    } else return trySafeStringify([q], null, 4);
   } catch (K) {
-    return ($6(K), p6([q], null, 4));
+    return (sendError(K), trySafeStringify([q], null, 4));
   }
 }
 var dNK = "\uFEFF",
@@ -2915,7 +2915,7 @@ var lw = E(() => {
       try {
         return { ok: !0, value: JSON.parse(XH6(A)) };
       } catch (K) {
-        if (q) $6(K);
+        if (q) sendError(K);
         return { ok: !1 };
       }
     },
@@ -2968,13 +2968,13 @@ var iK = E(() => {
             )
               return "wsl";
           } catch (A) {
-            $6(A instanceof Error ? A : Error(String(A)));
+            sendError(A instanceof Error ? A : Error(String(A)));
           }
           return "linux";
         }
         return "unknown";
       } catch (A) {
-        return ($6(A instanceof Error ? A : Error(String(A))), "unknown");
+        return (sendError(A instanceof Error ? A : Error(String(A))), "unknown");
       }
     })),
     (F76 = T8(() => {
@@ -2986,7 +2986,7 @@ var iK = E(() => {
         if (A.toLowerCase().includes("microsoft")) return "1";
         return;
       } catch (A) {
-        $6(A instanceof Error ? A : Error(String(A)));
+        sendError(A instanceof Error ? A : Error(String(A)));
         return;
       }
     })),
@@ -3046,7 +3046,7 @@ function sNK(A) {
     for (let z of K) {
       let w = MH6.resolve(z).toLowerCase();
       if (MH6.dirname(w).toLowerCase() === Y || w.startsWith(Y + MH6.sep)) {
-        y(
+        writeDebugLog(
           `Skipping potentially malicious executable in current directory: ${z}`,
         );
         continue;
@@ -3061,7 +3061,7 @@ function sNK(A) {
 var I0A = () => {
     if (i8() === "windows") {
       let A = nc1();
-      ((process.env.SHELL = A), y(`Using bash path: "${A}"`));
+      ((process.env.SHELL = A), writeDebugLog(`Using bash path: "${A}"`));
     }
   },
   nc1,
@@ -3227,7 +3227,7 @@ import {
   normalize as oc1,
   dirname as B0A,
 } from "path";
-function Q4(A, q) {
+function resolveFilePath(A, q) {
   let K = q ?? y1() ?? P1().cwd();
   if (typeof A !== "string")
     throw TypeError(`Path must be a string, received ${typeof A}`);
@@ -3250,7 +3250,7 @@ function Q4(A, q) {
   return KVK(K, z).normalize("NFC");
 }
 function CQ(A) {
-  let q = Q4(A);
+  let q = resolveFilePath(A);
   if (q.startsWith("\\\\") || q.startsWith("//")) return B0A(q);
   try {
     if (P1().statSync(q).isDirectory()) return q;
@@ -4703,7 +4703,7 @@ function Z7(
         else j({ stdout: J.stdout, stderr: J.stderr, code: 0 });
       })
       .catch((J) => {
-        ($6(J), j({ stdout: "", stderr: "", code: 1 }));
+        (sendError(J), j({ stdout: "", stderr: "", code: 1 }));
       });
   });
 }
@@ -4793,7 +4793,7 @@ async function Lu(A, q, K) {
   if (!T9()) await eVK();
   return (
     tVK().catch((Y) => {
-      $6(Y instanceof Error ? Y : Error(String(Y)));
+      sendError(Y instanceof Error ? Y : Error(String(Y)));
     }),
     new Promise((Y, z) => {
       let w = (_, $, O, H) => {
@@ -4817,10 +4817,10 @@ async function Lu(A, q, K) {
           return;
         }
         if (!H && sVK(O)) {
-          (y(
+          (writeDebugLog(
             "rg EAGAIN error detected, retrying with single-threaded mode (-j 1)",
           ),
-            n("tengu_ripgrep_eagain_retry", {}),
+            emitEvent("tengu_ripgrep_eagain_retry", {}),
             JPA(
               A,
               q,
@@ -4852,12 +4852,12 @@ async function Lu(A, q, K) {
             M = M.slice(0, -1);
         }
         if (
-          (y(
+          (writeDebugLog(
             `rg error (signal=${_.signal}, code=${_.code}, stderr: ${O}), ${M.length} results`,
           ),
           _.code !== 2)
         )
-          $6(_);
+          sendError(_);
         if (D && M.length === 0) {
           z(
             new MPA(
@@ -4912,12 +4912,12 @@ async function eVK() {
       q,
     ]);
     if (z.code !== 0)
-      $6(Error(`Failed to sign ripgrep: ${z.stdout} ${z.stderr}`));
+      sendError(Error(`Failed to sign ripgrep: ${z.stdout} ${z.stderr}`));
     let w = await M8("xattr", ["-d", "com.apple.quarantine", q]);
     if (w.code !== 0)
-      $6(Error(`Failed to remove quarantine: ${w.stdout} ${w.stderr}`));
+      sendError(Error(`Failed to remove quarantine: ${w.stdout} ${w.stderr}`));
   } catch (z) {
-    $6(z);
+    sendError(z);
   }
 }
 var XPA,
@@ -4955,7 +4955,7 @@ var yu = E(() => {
         if (Y !== "rg") return { mode: "system", command: "rg", args: [] };
       }
       if (T9()) {
-        if (X1(process.env.RIPGREP_EMBEDDED))
+        if (isTruthy(process.env.RIPGREP_EMBEDDED))
           return {
             mode: "embedded",
             command: process.execPath,
@@ -5000,7 +5000,7 @@ var yu = E(() => {
           $ = Math.pow(10, _);
         return Math.round(w / $) * $;
       } catch (Y) {
-        $6(Y instanceof Error ? Y : Error(String(Y)));
+        sendError(Y instanceof Error ? Y : Error(String(Y)));
       }
     },
     (A, q, K = []) => `${A}|${K.join(",")}`,
@@ -5022,16 +5022,16 @@ var yu = E(() => {
         q = await M8(A.command, [...A.args, "--version"], { timeout: 5000 });
       let K = q.code === 0 && !!q.stdout && q.stdout.startsWith("ripgrep ");
       ((W81 = { working: K, lastTested: Date.now(), config: A }),
-        y(
+        writeDebugLog(
           `Ripgrep first use test: ${K ? "PASSED" : "FAILED"} (mode=${A.mode}, path=${A.command})`,
         ),
-        n("tengu_ripgrep_availability", {
+        emitEvent("tengu_ripgrep_availability", {
           working: K ? 1 : 0,
           using_system: A.mode === "system" ? 1 : 0,
         }));
     } catch (q) {
       ((W81 = { working: !1, lastTested: Date.now(), config: A }),
-        $6(q instanceof Error ? q : Error(String(q))));
+        sendError(q instanceof Error ? q : Error(String(q))));
     }
   });
 });
@@ -8533,7 +8533,7 @@ var a76 = E(() => {
       O = _?.accountUuid;
     return {
       deviceId: q,
-      sessionId: d1(),
+      sessionId: getSessionId(),
       email: qLK(),
       appVersion: {
         ISSUES_EXPLAINER:
@@ -8566,9 +8566,9 @@ var a76 = E(() => {
 });
 function b0() {
   return (
-    X1(process.env.CLAUDE_CODE_USE_BEDROCK) ||
-    X1(process.env.CLAUDE_CODE_USE_VERTEX) ||
-    X1(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
+    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
+    isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
+    isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
     !!process.env.DISABLE_TELEMETRY ||
     !!process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
   );
@@ -15430,11 +15430,11 @@ var P46 = E(() => {
     ])));
 });
 function h7() {
-  return X1(process.env.CLAUDE_CODE_USE_BEDROCK)
+  return isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)
     ? "bedrock"
-    : X1(process.env.CLAUDE_CODE_USE_VERTEX)
+    : isTruthy(process.env.CLAUDE_CODE_USE_VERTEX)
       ? "vertex"
-      : X1(process.env.CLAUDE_CODE_USE_FOUNDRY)
+      : isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
         ? "foundry"
         : "firstParty";
 }
@@ -15455,7 +15455,7 @@ var Q2 = E(() => {
   N8();
 });
 function G46() {
-  return X1(process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT);
+  return isTruthy(process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT);
 }
 function pv(A) {
   if (G46()) return !1;
@@ -15580,7 +15580,7 @@ function CbA() {
 function FH6() {
   return (
     (h7() === "firstParty" || h7() === "foundry") &&
-    !X1(process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS)
+    !isTruthy(process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS)
   );
 }
 function RA1(A, q) {
@@ -15616,8 +15616,8 @@ var Uv = E(() => {
     if (!K) q.push(vA1);
     if (Y7()) q.push(BZ);
     if (pv(A)) q.push(Xo);
-    if (!X1(process.env.DISABLE_INTERLEAVED_THINKING) && EcK(A)) q.push(TbA);
-    let w = X1(process.env.USE_API_CONTEXT_MANAGEMENT) && !1,
+    if (!isTruthy(process.env.DISABLE_INTERLEAVED_THINKING) && EcK(A)) q.push(TbA);
+    let w = isTruthy(process.env.USE_API_CONTEXT_MANAGEMENT) && !1,
       _ = ycK(A) && jA("tengu_marble_anvil", !1);
     if (FH6() && (w || _)) q.push(kA1);
     let $ = Jw("tengu_tool_pear");
@@ -30671,7 +30671,7 @@ function _a1() {
   if (!A) return {};
   if (typeof Bun < "u") return { tls: A };
   return (
-    y("mTLS: Created undici agent with custom certificates"),
+    writeDebugLog("mTLS: Created undici agent with custom certificates"),
     {
       dispatcher: new Ka1({
         connect: { cert: A.cert, key: A.key, passphrase: A.passphrase },
@@ -30683,7 +30683,7 @@ function _a1() {
 function tdA() {
   if (!_h()) return;
   if (process.env.NODE_EXTRA_CA_CERTS)
-    y(
+    writeDebugLog(
       "NODE_EXTRA_CA_CERTS detected - Node.js will automatically append to built-in CAs",
     );
 }
@@ -30700,22 +30700,22 @@ var bj6 = E(() => {
         ((A.cert = P1().readFileSync(process.env.CLAUDE_CODE_CLIENT_CERT, {
           encoding: "utf8",
         })),
-          y("mTLS: Loaded client certificate from CLAUDE_CODE_CLIENT_CERT"));
+          writeDebugLog("mTLS: Loaded client certificate from CLAUDE_CODE_CLIENT_CERT"));
       } catch (q) {
-        y(`mTLS: Failed to load client certificate: ${q}`, { level: "error" });
+        writeDebugLog(`mTLS: Failed to load client certificate: ${q}`, { level: "error" });
       }
     if (process.env.CLAUDE_CODE_CLIENT_KEY)
       try {
         ((A.key = P1().readFileSync(process.env.CLAUDE_CODE_CLIENT_KEY, {
           encoding: "utf8",
         })),
-          y("mTLS: Loaded client key from CLAUDE_CODE_CLIENT_KEY"));
+          writeDebugLog("mTLS: Loaded client key from CLAUDE_CODE_CLIENT_KEY"));
       } catch (q) {
-        y(`mTLS: Failed to load client key: ${q}`, { level: "error" });
+        writeDebugLog(`mTLS: Failed to load client key: ${q}`, { level: "error" });
       }
     if (process.env.CLAUDE_CODE_CLIENT_KEY_PASSPHRASE)
       ((A.passphrase = process.env.CLAUDE_CODE_CLIENT_KEY_PASSPHRASE),
-        y("mTLS: Using client key passphrase"));
+        writeDebugLog("mTLS: Using client key passphrase"));
     if (Object.keys(A).length === 0) return;
     return A;
   })),
@@ -30724,7 +30724,7 @@ var bj6 = E(() => {
       if (!A) return;
       let q = { ...A, keepAlive: !0 };
       return (
-        y("mTLS: Creating HTTPS agent with custom certificates"),
+        writeDebugLog("mTLS: Creating HTTPS agent with custom certificates"),
         new X73(q)
       );
     })));
@@ -37694,7 +37694,7 @@ var MrA = C((ij6) => {
     c(A = {}) {
       return ((this._additionalContext = A), this);
     }
-    n(A, q) {
+    emitEvent(A, q) {
       return ((this._clientName = A), (this._commandName = q), this);
     }
     f(A = (K) => K, q = (K) => K) {
@@ -42554,7 +42554,7 @@ var he1 = C((tj6) => {
     c(A = {}) {
       return ((this._additionalContext = A), this);
     }
-    n(A, q) {
+    emitEvent(A, q) {
       return ((this._clientName = A), (this._commandName = q), this);
     }
     f(A = (K) => K, q = (K) => K) {
@@ -44654,7 +44654,7 @@ var Be1 = C((MsA) => {
     removeAttribute(A) {
       return (delete this.attributes[A], this);
     }
-    n(A) {
+    emitEvent(A) {
       return ((this.name = A), this);
     }
     c(A) {
@@ -48057,7 +48057,7 @@ var atA = C((KJ6) => {
     c(A = {}) {
       return ((this._additionalContext = A), this);
     }
-    n(A, q) {
+    emitEvent(A, q) {
       return ((this._clientName = A), (this._commandName = q), this);
     }
     f(A = (K) => K, q = (K) => K) {
@@ -48961,7 +48961,7 @@ var nZ = C((wJ6) => {
     c(A = {}) {
       return ((this._additionalContext = A), this);
     }
-    n(A, q) {
+    emitEvent(A, q) {
       return ((this._clientName = A), (this._commandName = q), this);
     }
     f(A = (K) => K, q = (K) => K) {
@@ -52552,7 +52552,7 @@ var CS6 = C((JJ6) => {
     c(A = {}) {
       return ((this._additionalContext = A), this);
     }
-    n(A, q) {
+    emitEvent(A, q) {
       return ((this._clientName = A), (this._commandName = q), this);
     }
     f(A = (K) => K, q = (K) => K) {
@@ -57337,7 +57337,7 @@ function Hq6(A, q = $x3()) {
 function c47(A) {
   let q = _h(),
     K = { ...(q && { cert: q.cert, key: q.key, passphrase: q.passphrase }) };
-  if (X1(process.env.CLAUDE_CODE_PROXY_RESOLVES_HOSTS))
+  if (isTruthy(process.env.CLAUDE_CODE_PROXY_RESOLVES_HOSTS))
     K.lookup = (Y, z, w) => {
       w(null, Y, _x3(z));
     };
@@ -57630,7 +57630,7 @@ var cS6 = C((VJ6) => {
     c(A = {}) {
       return ((this._additionalContext = A), this);
     }
-    n(A, q) {
+    emitEvent(A, q) {
       return ((this._clientName = A), (this._commandName = q), this);
     }
     f(A = (K) => K, q = (K) => K) {
@@ -67058,7 +67058,7 @@ var Xh6 = C((uJ6) => {
     c(A = {}) {
       return ((this._additionalContext = A), this);
     }
-    n(A, q) {
+    emitEvent(A, q) {
       return ((this._clientName = A), (this._commandName = q), this);
     }
     f(A = (K) => K, q = (K) => K) {
@@ -70199,7 +70199,7 @@ function My(A, q) {
 async function rw7() {
   let { BedrockClient: A } = await Promise.resolve().then(() => Y6(H31(), 1)),
     q = dA6(),
-    K = X1(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH),
+    K = isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH),
     Y = {
       region: q,
       ...(process.env.ANTHROPIC_BEDROCK_BASE_URL && {
@@ -70238,7 +70238,7 @@ async function ow7() {
       Y6(n31(), 1),
     ),
     q = dA6(),
-    K = X1(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH),
+    K = isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH),
     Y = {
       region: q,
       ...(process.env.ANTHROPIC_BEDROCK_BASE_URL && {
@@ -70320,7 +70320,7 @@ var kh6 = E(() => {
         .map((z) => z.inferenceProfileId)
         .filter(Boolean);
     } catch (z) {
-      throw ($6(z), z);
+      throw (sendError(z), z);
     }
   });
   r31 = T8(async function (A) {
@@ -70337,7 +70337,7 @@ var kh6 = E(() => {
       let _ = w.modelArn.lastIndexOf("/");
       return _ >= 0 ? w.modelArn.substring(_ + 1) : w.modelArn;
     } catch (q) {
-      return ($6(q), null);
+      return (sendError(q), null);
     }
   });
   FN5 = ["us", "eu", "apac", "global"];
@@ -70478,7 +70478,7 @@ async function QN5() {
   try {
     A = await nw7();
   } catch (D) {
-    return ($6(D), uh6("bedrock"));
+    return (sendError(D), uh6("bedrock"));
   }
   if (!A?.length) return uh6("bedrock");
   let q = My(A, "claude-3-5-haiku-20241022"),
@@ -70540,7 +70540,7 @@ var Eq6 = E(() => {
       let A = await QN5();
       Rk6(A);
     } catch (A) {
-      $6(A);
+      sendError(A);
     }
   });
 });
@@ -71443,7 +71443,7 @@ function $8(A, q, K = {}) {
   try {
     w.appendFileSync(
       Y,
-      p6(z) +
+      trySafeStringify(z) +
         `
 `,
     );
@@ -71452,7 +71452,7 @@ function $8(A, q, K = {}) {
       (w.mkdirSync(Ov5(Y)),
         w.appendFileSync(
           Y,
-          p6(z) +
+          trySafeStringify(z) +
             `
 `,
         ));

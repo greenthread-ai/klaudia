@@ -2554,16 +2554,16 @@ async function rh6() {
   if (eJ6.has(A)) return eJ6.get(A) ?? null;
   try {
     let q = await Va();
-    if ((y(`Git remote URL: ${q}`), !q))
+    if ((writeDebugLog(`Git remote URL: ${q}`), !q))
       return (
-        y("No git remote URL found"),
+        writeDebugLog("No git remote URL found"),
         eJ6.set(A, null),
         AD6.set(A, null),
         null
       );
     let K = oh6(q);
     if (
-      (y(
+      (writeDebugLog(
         `Parsed repository: ${K ? `${K.host}/${K.owner}/${K.name}` : null} from URL: ${q}`,
       ),
       eJ6.set(A, K),
@@ -2574,7 +2574,7 @@ async function rh6() {
     return K;
   } catch (q) {
     return (
-      y(`Error detecting repository: ${q}`),
+      writeDebugLog(`Error detecting repository: ${q}`),
       eJ6.set(A, null),
       AD6.set(A, null),
       null
@@ -2621,7 +2621,7 @@ function Sq6(A) {
       return `${Y[0]}/${z}`;
     }
   }
-  return (y(`Could not parse repository from: ${q}`), null);
+  return (writeDebugLog(`Could not parse repository from: ${q}`), null);
 }
 function D$7(A) {
   if (!A.includes(".")) return !1;
@@ -2766,13 +2766,13 @@ async function eK8() {
 async function A38() {
   let { parseGitRemote: A } = await Promise.resolve().then(() => (fN(), ah6)),
     q = await Va();
-  if (!q) return (y("Local GitHub repo: unknown"), null);
+  if (!q) return (writeDebugLog("Local GitHub repo: unknown"), null);
   let K = A(q);
   if (K && K.host === "github.com") {
     let Y = `${K.owner}/${K.name}`;
-    return (y(`Local GitHub repo: ${Y}`), Y);
+    return (writeDebugLog(`Local GitHub repo: ${Y}`), Y);
   }
-  return (y("Local GitHub repo: unknown"), null);
+  return (writeDebugLog("Local GitHub repo: unknown"), null);
 }
 function yk5(A) {
   let q = A.slice(A.lastIndexOf(".")).toLowerCase();
@@ -2823,25 +2823,25 @@ async function D51() {
     z = 0;
   for (let w of K) {
     if (Y.length >= N$7) {
-      y(`Untracked file capture: reached max file count (${N$7})`);
+      writeDebugLog(`Untracked file capture: reached max file count (${N$7})`);
       break;
     }
     if (yk5(w)) continue;
     try {
       let $ = (await Gk5(w)).size;
       if ($ > f$7) {
-        y(`Untracked file capture: skipping ${w} (exceeds ${f$7} bytes)`);
+        writeDebugLog(`Untracked file capture: skipping ${w} (exceeds ${f$7} bytes)`);
         continue;
       }
       if (z + $ > T$7) {
-        y(`Untracked file capture: reached total size limit (${T$7} bytes)`);
+        writeDebugLog(`Untracked file capture: reached total size limit (${T$7} bytes)`);
         break;
       }
       let O = await Zk5(w, "utf-8");
       if (O.includes("\x00")) continue;
       (Y.push({ path: w, content: O }), (z += $));
     } catch (_) {
-      y(`Failed to read untracked file ${w}: ${_}`);
+      writeDebugLog(`Failed to read untracked file ${w}: ${_}`);
     }
   }
   return Y;
@@ -2850,7 +2850,7 @@ async function Ck5() {
   try {
     if (!(await Aj())) return null;
     if (await Rk5()) {
-      y("Shallow clone detected, using HEAD-only mode for issue");
+      writeDebugLog("Shallow clone detected, using HEAD-only mode for issue");
       let { stdout: D } = await M8(eA(), ["diff", "HEAD"]),
         X = await D51();
       return {
@@ -2865,7 +2865,7 @@ async function Ck5() {
     }
     let q = await y$7();
     if (!q) {
-      y("No remote found, using HEAD-only mode for issue");
+      writeDebugLog("No remote found, using HEAD-only mode for issue");
       let { stdout: D } = await M8(eA(), ["diff", "HEAD"]),
         X = await D51();
       return {
@@ -2882,7 +2882,7 @@ async function Ck5() {
       preserveOutputOnError: !1,
     });
     if (Y !== 0 || !K.trim()) {
-      y("Merge-base failed, using HEAD-only mode for issue");
+      writeDebugLog("Merge-base failed, using HEAD-only mode for issue");
       let { stdout: D } = await M8(eA(), ["diff", "HEAD"]),
         X = await D51();
       return {
@@ -2917,7 +2917,7 @@ async function Ck5() {
       branch_name: J?.trim() && J.trim() !== "HEAD" ? J.trim() : null,
     };
   } catch (A) {
-    return ($6(A instanceof Error ? A : Error(String(A))), null);
+    return (sendError(A instanceof Error ? A : Error(String(A))), null);
   }
 }
 function Sk5(A) {
@@ -3275,7 +3275,7 @@ ${K}
       else throw _;
     }
   } catch (K) {
-    $6(K instanceof Error ? K : Error(String(K)));
+    sendError(K instanceof Error ? K : Error(String(K)));
   }
 }
 var C$7 = E(() => {
@@ -3401,7 +3401,7 @@ var h$7 = E(() => {
 });
 function K38() {
   let A = zQ(DM(), { unrepresentable: "any" });
-  return p6(A, null, 2);
+  return trySafeStringify(A, null, 2);
 }
 var I$7 = E(() => {
   K4();
@@ -5939,7 +5939,7 @@ async function hO7(A, q, K = CO7) {
   } catch (Y) {
     if (Y.code === "ENOENT") return { content: "", newOffset: q };
     return (
-      $6(Y instanceof Error ? Y : Error(String(Y))),
+      sendError(Y instanceof Error ? Y : Error(String(Y))),
       { content: "", newOffset: q }
     );
   }
@@ -5953,7 +5953,7 @@ ${K}`;
     return K;
   } catch (K) {
     if (K.code === "ENOENT") return "";
-    return ($6(K instanceof Error ? K : Error(String(K))), "");
+    return (sendError(K instanceof Error ? K : Error(String(K))), "");
   }
 }
 async function R38(A) {
@@ -5982,7 +5982,7 @@ async function OD6(A, q) {
     }
     return K;
   } catch (K) {
-    return ($6(K instanceof Error ? K : Error(String(K))), R38(A));
+    return (sendError(K instanceof Error ? K : Error(String(K))), R38(A));
   }
 }
 async function IO7() {
@@ -6175,7 +6175,7 @@ function Ea(A, q, K, Y) {
       status: "invalid",
       message: `Invalid value "${q}" (using default: ${K})`,
     };
-    return (y(`${A} ${w.message}`), w);
+    return (writeDebugLog(`${A} ${w.message}`), w);
   }
   if (z > Y) {
     let w = {
@@ -6183,7 +6183,7 @@ function Ea(A, q, K, Y) {
       status: "capped",
       message: `Capped from ${z} to ${Y}`,
     };
-    return (y(`${A} ${w.message}`), w);
+    return (writeDebugLog(`${A} ${w.message}`), w);
   }
   return { effective: z, status: "valid" };
 }
@@ -6786,7 +6786,7 @@ function iz(A, q) {
       tokens: typeof q === "function" ? jD6.parse(A, q) : jD6.parse(A, q),
     };
   } catch (K) {
-    if (K instanceof Error) $6(K);
+    if (K instanceof Error) sendError(K);
     return {
       success: !1,
       error: K instanceof Error ? K.message : "Unknown parse error",
@@ -6816,7 +6816,7 @@ function JL5(A) {
     });
     return { success: !0, quoted: jD6.quote(q) };
   } catch (q) {
-    if (q instanceof Error) $6(q);
+    if (q instanceof Error) sendError(q);
     return {
       success: !1,
       error: q instanceof Error ? q.message : "Unknown quote error",
@@ -6857,11 +6857,11 @@ function P4(A) {
       if (Y === null || Y === void 0) return String(Y);
       let z = typeof Y;
       if (z === "string" || z === "number" || z === "boolean") return String(Y);
-      return p6(Y);
+      return trySafeStringify(Y);
     });
     return jD6.quote(K);
   } catch (K) {
-    if (K instanceof Error) $6(K);
+    if (K instanceof Error) sendError(K);
     throw Error("Failed to quote shell arguments safely");
   }
 }
@@ -6885,7 +6885,7 @@ var B38 = E(() => {
 import { readFile as sO7, mkdir as DL5, readdir as XL5 } from "fs/promises";
 import { join as g38 } from "node:path";
 async function tO7() {
-  let A = g38(_A(), "session-env", d1());
+  let A = g38(_A(), "session-env", getSessionId());
   return (await DL5(A, { recursive: !0 }), A);
 }
 async function eO7(A, q) {
@@ -6893,11 +6893,11 @@ async function eO7(A, q) {
   return g38(await tO7(), `${K}-hook-${q}.sh`);
 }
 function AH7() {
-  (y("Invalidating session environment cache"), (La = void 0));
+  (writeDebugLog("Invalidating session environment cache"), (La = void 0));
 }
 async function qH7() {
   if (i8() === "windows")
-    return (y("Session environment not yet supported on Windows"), null);
+    return (writeDebugLog("Session environment not yet supported on Windows"), null);
   if (La !== void 0) return La;
   let A = [],
     q = process.env.CLAUDE_ENV_FILE;
@@ -6906,12 +6906,12 @@ async function qH7() {
       let Y = (await sO7(q, "utf8")).trim();
       if (Y)
         (A.push(Y),
-          y(
+          writeDebugLog(
             `Session environment loaded from CLAUDE_ENV_FILE: ${q} (${Y.length} chars)`,
           ));
     } catch (Y) {
       if (Y.code !== "ENOENT")
-        y(
+        writeDebugLog(
           `Failed to read CLAUDE_ENV_FILE: ${Y instanceof Error ? Y.message : String(Y)}`,
         );
     }
@@ -6936,25 +6936,25 @@ async function qH7() {
         if ($) A.push($);
       } catch ($) {
         if ($.code !== "ENOENT")
-          y(
+          writeDebugLog(
             `Failed to read hook file ${_}: ${$ instanceof Error ? $.message : String($)}`,
           );
       }
     }
     if (z.length > 0)
-      y(`Session environment loaded from ${z.length} hook file(s)`);
+      writeDebugLog(`Session environment loaded from ${z.length} hook file(s)`);
   } catch (Y) {
     if (Y.code !== "ENOENT")
-      y(
+      writeDebugLog(
         `Failed to load session environment from hooks: ${Y instanceof Error ? Y.message : String(Y)}`,
       );
   }
   if (A.length === 0)
-    return (y("No session environment scripts found"), (La = null), La);
+    return (writeDebugLog("No session environment scripts found"), (La = null), La);
   return (
     (La = A.join(`
 `)),
-    y(`Session environment script ready (${La.length} chars total)`),
+    writeDebugLog(`Session environment script ready (${La.length} chars total)`),
     La
   );
 }
@@ -6967,7 +6967,7 @@ var m51 = E(() => {
 });
 var KH7,
   ML5,
-  w6 = function (A) {
+  reactMemoCache = function (A) {
     return ML5.H.useMemoCache(A);
   };
 var e6 = E(() => {
@@ -20170,7 +20170,7 @@ var ij7 = () => {};
 function AH(A, q) {
   if (A === void 0) return;
   if (Number.isInteger(A)) return;
-  y(`${q} should be an integer, got ${A}`, { level: "warn" });
+  writeDebugLog(`${q} should be an integer, got ${A}`, { level: "warn" });
 }
 var d58 = E(() => {
   f1();
@@ -20827,7 +20827,7 @@ class L91 {
     }
     let z = q + K;
     if (z > 1000 && K > q)
-      y(
+      writeDebugLog(
         `High write ratio: blit=${q}, write=${K} (${((K / z) * 100).toFixed(1)}% writes), screen=${this.height}x${this.width}`,
       );
     return A;
@@ -20893,7 +20893,7 @@ function o58(A, q) {
       P = X === void 0 || !Number.isFinite(X) || X < 0;
     if (!A.yogaNode || M || P) {
       if (A.yogaNode && (M || P))
-        y(
+        writeDebugLog(
           `Invalid yoga dimensions: width=${X}, height=${D}, childNodes=${A.childNodes.length}, terminalWidth=${_}, terminalRows=${$}`,
         );
       return {
@@ -21070,7 +21070,7 @@ class e58 {
       $ = q.screen.height <= A.viewport.height;
     if (w && $ && _)
       return (
-        y(
+        writeDebugLog(
           `Full reset (shrink->below): prevHeight=${A.screen.height}, nextHeight=${q.screen.height}, viewport=${A.viewport.height}`,
         ),
         CI6(q, "offscreen", this.options.stylePool)
@@ -21096,7 +21096,7 @@ class e58 {
         for (let L = 0; L < q.screen.width; L++)
           v += n58(q.screen, L, N) ?? " ";
         return (
-          y(`Full reset (scrollback changes): scrollbackRows=${f}, firstChangeY=${N}
+          writeDebugLog(`Full reset (scrollback changes): scrollbackRows=${f}, firstChangeY=${N}
   prev: "${V}"
   next: "${v}"`),
           CI6(q, "offscreen", this.options.stylePool)
@@ -21213,7 +21213,7 @@ class e58 {
     if (G > 50) {
       let Z = q.screen.damage,
         f = Z ? `${Z.width}x${Z.height} at (${Z.x},${Z.y})` : "none";
-      y(
+      writeDebugLog(
         `Slow render: ${G.toFixed(1)}ms, screen: ${q.screen.height}x${q.screen.width}, damage: ${f}, changes: ${O.diff.length}`,
       );
     }
@@ -21455,7 +21455,7 @@ var u91 = E(() => {
   ((GJ7 = new Set()), (z98 = new Set()));
 });
 function fJ7(A) {
-  let q = w6(6),
+  let q = reactMemoCache(6),
     { children: K } = A,
     Y = sq6.useSyncExternalStore($98, b91),
     z = sq6.useSyncExternalStore($98, ZJ7),
@@ -21710,7 +21710,7 @@ var SJ7 = E(() => {
   CJ7 = $R5;
 });
 function OR5(A) {
-  let q = w6(20),
+  let q = reactMemoCache(20),
     K,
     Y,
     z,
@@ -21816,7 +21816,7 @@ var SI6 = E(() => {
   tW = OR5;
 });
 function _z(A) {
-  let q = w6(29),
+  let q = reactMemoCache(29),
     {
       color: K,
       backgroundColor: Y,
@@ -21955,7 +21955,7 @@ var tq6 = E(() => {
 import * as m91 from "node:fs";
 import { cwd as xJ7 } from "node:process";
 function D98(A) {
-  let q = w6(21),
+  let q = reactMemoCache(21),
     { error: K } = A,
     Y,
     z,
@@ -22208,7 +22208,7 @@ function JR5(A) {
   };
 }
 function gJ7(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { children: K } = A,
     [Y] = ua.useState(XR5),
     z = o2(),
@@ -22622,7 +22622,7 @@ function hR5(A) {
   updateSettings((q) => ({ ...q, theme: A }));
 }
 function g91(A) {
-  let q = w6(22),
+  let q = reactMemoCache(22),
     { children: K, initialState: Y, onThemeChange: z, onThemeSave: w } = A,
     _ = w === void 0 ? hR5 : w,
     [$, O] = ma.useState(Y ?? SR5),
@@ -22699,8 +22699,8 @@ function g91(A) {
   else Z = q[21];
   return Z;
 }
-function E7() {
-  let A = w6(3),
+function useTheme() {
+  let A = reactMemoCache(3),
     { currentTheme: q, setTheme: K } = ma.useContext(M98),
     Y;
   if (A[0] !== q || A[1] !== K)
@@ -22709,7 +22709,7 @@ function E7() {
   return Y;
 }
 function F91() {
-  let A = w6(4),
+  let A = reactMemoCache(4),
     {
       setPreviewTheme: q,
       savePreview: K,
@@ -23101,7 +23101,7 @@ var AD7 = E(() => {
       );
     }
     componentDidMount() {
-      if (this.props.stdout.isTTY && !X1(process.env.CLAUDE_CODE_ACCESSIBILITY))
+      if (this.props.stdout.isTTY && !isTruthy(process.env.CLAUDE_CODE_ACCESSIBILITY))
         this.props.stdout.write(xI6);
     }
     componentWillUnmount() {
@@ -23199,7 +23199,7 @@ Read about how to prevent this error on https://github.com/vadimdemedes/ink/#isr
         for (let K = 0; K < A; K++)
           if (this.isRawModeSupported()) this.handleSetRawMode(!0);
         if (this.props.stdout.isTTY) {
-          if (!X1(process.env.CLAUDE_CODE_ACCESSIBILITY))
+          if (!isTruthy(process.env.CLAUDE_CODE_ACCESSIBILITY))
             this.props.stdout.write(xI6);
           this.props.stdout.write(Z98);
         }
@@ -25367,8 +25367,8 @@ class lI6 {
   }
   patchConsole() {
     return wH7((A, q) => {
-      if (A === "stdout") y(`console.log: ${q}`);
-      if (A === "stderr") $6(Error(`console.error: ${q}`));
+      if (A === "stdout") writeDebugLog(`console.log: ${q}`);
+      if (A === "stderr") sendError(Error(`console.error: ${q}`));
     });
   }
 }
@@ -25450,12 +25450,12 @@ var ph5 = (A, q) => {
     );
   },
   Qh5 = async (A, q) => {
-    (y("[render] initLayout starting"),
+    (writeDebugLog("[render] initLayout starting"),
       await O91(),
-      y("[render] initLayout complete"));
+      writeDebugLog("[render] initLayout complete"));
     let K = ph5(A, q);
     return (
-      y(
+      writeDebugLog(
         `[render] first ink render: ${Math.round(process.uptime() * 1000)}ms since process start`,
       ),
       K
@@ -25490,7 +25490,7 @@ function iI6(A, q) {
   return q[A];
 }
 function ch5(A) {
-  let q = w6(29),
+  let q = reactMemoCache(29),
     K,
     Y,
     z,
@@ -25528,7 +25528,7 @@ function ch5(A) {
       ($ = q[6]),
       (O = q[7]),
       (H = q[8]));
-  let [j] = E7(),
+  let [j] = useTheme(),
     J,
     D,
     X,
@@ -25618,7 +25618,7 @@ function lh5(A, q) {
   return q[A];
 }
 function T(A) {
-  let q = w6(15),
+  let q = reactMemoCache(15),
     {
       color: K,
       backgroundColor: Y,
@@ -25638,7 +25638,7 @@ function T(A) {
     W = O === void 0 ? !1 : O,
     G = H === void 0 ? !1 : H,
     Z = j === void 0 ? "wrap" : j,
-    [f] = E7(),
+    [f] = useTheme(),
     N,
     V;
   if (q[0] !== K || q[1] !== D || q[2] !== f)
@@ -25863,7 +25863,7 @@ var lU = E(() => {
     (OM7 = ["ghostty", "Hyper", "kitty", "alacritty", "iTerm.app", "iTerm2"]));
 });
 function B7(A) {
-  let q = w6(5),
+  let q = reactMemoCache(5),
     { children: K, url: Y, fallback: z } = A,
     w = K ?? Y;
   if (wf()) {
@@ -26463,7 +26463,7 @@ function _I5(A, q) {
   );
 }
 function WM7(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     K,
     Y,
     z,
@@ -26513,7 +26513,7 @@ var GM7 = E(() => {
   MM7();
   ((_f = Y6(W6(), 1)),
     (M3 = _f.default.memo(function (q) {
-      let K = w6(12),
+      let K = reactMemoCache(12),
         { children: Y, dimColor: z } = q;
       if (typeof Y !== "string") {
         let H;
@@ -26601,7 +26601,7 @@ var GM7 = E(() => {
   };
 });
 function tJ(A) {
-  let q = w6(4),
+  let q = reactMemoCache(4),
     { count: K } = A,
     Y = K === void 0 ? 1 : K,
     z;
@@ -26625,7 +26625,7 @@ var fM7 = E(() => {
   ZM7 = Y6(W6(), 1);
 });
 function l98() {
-  let A = w6(1),
+  let A = reactMemoCache(1),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = TM7.default.createElement(tW, { flexGrow: 1 })), (A[0] = q));
@@ -27058,7 +27058,7 @@ var pM7 = E(() => {
 var oI6 = {};
 s1(oI6, {
   wrapText: () => Af,
-  useTheme: () => E7,
+  useTheme: () => useTheme,
   useTerminalViewport: () => Ua,
   useTerminalTitle: () => DY1,
   useTerminalFocus: () => o2,
@@ -27136,7 +27136,7 @@ function s98() {
   );
 }
 var UM7 = () => {};
-var dM7, cM7, hI5, II5, xI5, bI5, uI5, a6, tR2;
+var dM7, cM7, hI5, II5, xI5, bI5, uI5, figures, tR2;
 var p7 = E(() => {
   UM7();
   ((dM7 = {
@@ -27411,11 +27411,11 @@ var p7 = E(() => {
     (xI5 = { ...dM7, ...hI5 }),
     (bI5 = s98()),
     (uI5 = bI5 ? II5 : xI5),
-    (a6 = uI5),
+    (figures = uI5),
     (tR2 = Object.entries(cM7)));
 });
 function Rm(A) {
-  let q = w6(29),
+  let q = reactMemoCache(29),
     {
       isFocused: K,
       isSelected: Y,
@@ -27434,9 +27434,9 @@ function Rm(A) {
     ((X = function () {
       if (D) return Cy.default.createElement(T, null, " ");
       if (K)
-        return Cy.default.createElement(T, { color: "suggestion" }, a6.pointer);
-      if (_) return Cy.default.createElement(T, { dimColor: !0 }, a6.arrowDown);
-      if ($) return Cy.default.createElement(T, { dimColor: !0 }, a6.arrowUp);
+        return Cy.default.createElement(T, { color: "suggestion" }, figures.pointer);
+      if (_) return Cy.default.createElement(T, { dimColor: !0 }, figures.arrowDown);
+      if ($) return Cy.default.createElement(T, { dimColor: !0 }, figures.arrowUp);
       return Cy.default.createElement(T, null, " ");
     }),
       (q[0] = D),
@@ -27476,7 +27476,7 @@ function Rm(A) {
   let f;
   if (q[17] !== D || q[18] !== j)
     ((f =
-      j && !D && Cy.default.createElement(T, { color: "success" }, a6.tick)),
+      j && !D && Cy.default.createElement(T, { color: "success" }, figures.tick)),
       (q[17] = D),
       (q[18] = j),
       (q[19] = f));
@@ -27524,7 +27524,7 @@ var aI6 = E(() => {
   Cy = Y6(W6(), 1);
 });
 function da(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     {
       isFocused: K,
       isSelected: Y,
@@ -27957,7 +27957,7 @@ function aM7(A) {
     if (_) return !1;
     return !0;
   } catch (w) {
-    return ($6(w instanceof Error ? w : Error(String(w))), !1);
+    return (sendError(w instanceof Error ? w : Error(String(w))), !1);
   }
 }
 function UI5() {
@@ -27979,7 +27979,7 @@ function sM7({ ruleValues: A, ruleBehavior: q }, K) {
     if (j.error) throw j.error;
     return !0;
   } catch (w) {
-    return ($6(w instanceof Error ? w : Error(String(w))), !1);
+    return (sendError(w instanceof Error ? w : Error(String(w))), !1);
   }
 }
 var gI5, QI5;
@@ -28010,13 +28010,13 @@ function a2(A, q) {
   switch (q.type) {
     case "setMode":
       return (
-        y(`Applying permission update: Setting mode to '${q.mode}'`),
+        writeDebugLog(`Applying permission update: Setting mode to '${q.mode}'`),
         { ...A, mode: q.mode }
       );
     case "addRules": {
       let K = q.rules.map((z) => v5(z));
-      y(
-        `Applying permission update: Adding ${q.rules.length} ${q.behavior} rule(s) to destination '${q.destination}': ${p6(K)}`,
+      writeDebugLog(
+        `Applying permission update: Adding ${q.rules.length} ${q.behavior} rule(s) to destination '${q.destination}': ${trySafeStringify(K)}`,
       );
       let Y =
         q.behavior === "allow"
@@ -28034,8 +28034,8 @@ function a2(A, q) {
     }
     case "replaceRules": {
       let K = q.rules.map((z) => v5(z));
-      y(
-        `Replacing all ${q.behavior} rules for destination '${q.destination}' with ${q.rules.length} rule(s): ${p6(K)}`,
+      writeDebugLog(
+        `Replacing all ${q.behavior} rules for destination '${q.destination}' with ${q.rules.length} rule(s): ${trySafeStringify(K)}`,
       );
       let Y =
         q.behavior === "allow"
@@ -28046,8 +28046,8 @@ function a2(A, q) {
       return { ...A, [Y]: { ...A[Y], [q.destination]: K } };
     }
     case "addDirectories": {
-      y(
-        `Applying permission update: Adding ${q.directories.length} director${q.directories.length === 1 ? "y" : "ies"} with destination '${q.destination}': ${p6(q.directories)}`,
+      writeDebugLog(
+        `Applying permission update: Adding ${q.directories.length} director${q.directories.length === 1 ? "y" : "ies"} with destination '${q.destination}': ${trySafeStringify(q.directories)}`,
       );
       let K = new Map(A.additionalWorkingDirectories);
       for (let Y of q.directories) K.set(Y, { path: Y, source: q.destination });
@@ -28055,8 +28055,8 @@ function a2(A, q) {
     }
     case "removeRules": {
       let K = q.rules.map(($) => v5($));
-      y(
-        `Applying permission update: Removing ${q.rules.length} ${q.behavior} rule(s) from source '${q.destination}': ${p6(K)}`,
+      writeDebugLog(
+        `Applying permission update: Removing ${q.rules.length} ${q.behavior} rule(s) from source '${q.destination}': ${trySafeStringify(K)}`,
       );
       let Y =
           q.behavior === "allow"
@@ -28070,8 +28070,8 @@ function a2(A, q) {
       return { ...A, [Y]: { ...A[Y], [q.destination]: _ } };
     }
     case "removeDirectories": {
-      y(
-        `Applying permission update: Removing ${q.directories.length} director${q.directories.length === 1 ? "y" : "ies"}: ${p6(q.directories)}`,
+      writeDebugLog(
+        `Applying permission update: Removing ${q.directories.length} director${q.directories.length === 1 ? "y" : "ies"}: ${trySafeStringify(q.directories)}`,
       );
       let K = new Map(A.additionalWorkingDirectories);
       for (let Y of q.directories) K.delete(Y);
@@ -28094,18 +28094,18 @@ function e98(A) {
 function hm(A) {
   if (!e98(A.destination)) return;
   switch (
-    (y(`Persisting permission update: ${A.type} to source '${A.destination}'`),
+    (writeDebugLog(`Persisting permission update: ${A.type} to source '${A.destination}'`),
     A.type)
   ) {
     case "addRules": {
-      (y(
+      (writeDebugLog(
         `Persisting ${A.rules.length} ${A.behavior} rule(s) to ${A.destination}`,
       ),
         sM7({ ruleValues: A.rules, ruleBehavior: A.behavior }, A.destination));
       break;
     }
     case "addDirectories": {
-      y(
+      writeDebugLog(
         `Persisting ${A.directories.length} director${A.directories.length === 1 ? "y" : "ies"} to ${A.destination}`,
       );
       let K = getConfigValue(A.destination)?.permissions?.additionalDirectories || [],
@@ -28117,7 +28117,7 @@ function hm(A) {
       break;
     }
     case "removeRules": {
-      y(
+      writeDebugLog(
         `Removing ${A.rules.length} ${A.behavior} rule(s) from ${A.destination}`,
       );
       let Y = (getConfigValue(A.destination)?.permissions || {})[A.behavior] || [],
@@ -28130,7 +28130,7 @@ function hm(A) {
       break;
     }
     case "removeDirectories": {
-      y(
+      writeDebugLog(
         `Removing ${A.directories.length} director${A.directories.length === 1 ? "y" : "ies"} from ${A.destination}`,
       );
       let K = getConfigValue(A.destination)?.permissions?.additionalDirectories || [],
@@ -28140,12 +28140,12 @@ function hm(A) {
       break;
     }
     case "setMode": {
-      (y(`Persisting mode '${A.mode}' to ${A.destination}`),
+      (writeDebugLog(`Persisting mode '${A.mode}' to ${A.destination}`),
         iA(A.destination, { permissions: { defaultMode: A.mode } }));
       break;
     }
     case "replaceRules": {
-      y(
+      writeDebugLog(
         `Replacing all ${A.behavior} rules in ${A.destination} with ${A.rules.length} rule(s)`,
       );
       let q = A.rules.map(v5);
@@ -36712,7 +36712,7 @@ function Yf7() {
     let A = SA();
     return Kf7(A);
   } catch (A) {
-    return (y(`Failed to get settings for sandbox check: ${A}`), !1);
+    return (writeDebugLog(`Failed to get settings for sandbox check: ${A}`), !1);
   }
 }
 function zF5() {
@@ -36728,7 +36728,7 @@ function $f7() {
     let A = U7();
     return _f7(A);
   } catch (A) {
-    return (y(`Failed to check enabledPlatforms: ${A}`), !0);
+    return (writeDebugLog(`Failed to check enabledPlatforms: ${A}`), !0);
   }
 }
 function oz1() {
@@ -36760,7 +36760,7 @@ function _F5() {
     }
     return Y;
   } catch (q) {
-    return (y(`Failed to get Linux glob pattern warnings: ${q}`), []);
+    return (writeDebugLog(`Failed to get Linux glob pattern warnings: ${q}`), []);
   }
 }
 function $F5() {
@@ -36814,11 +36814,11 @@ async function JF5(A) {
             let Y = SA(),
               z = rz1(Y);
             (wH.updateConfig(z),
-              y("Sandbox configuration updated from settings change"));
+              writeDebugLog("Sandbox configuration updated from settings change"));
           })));
       } catch (q) {
         ((Os = void 0),
-          y(
+          writeDebugLog(
             `Failed to initialize sandbox: ${q instanceof Error ? q.message : String(q)}`,
           ));
       }
@@ -37307,7 +37307,7 @@ function tz1(A) {
   let q = `${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "klaudia", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.66-klaudia", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-03-04T00:18:36Z" }.VERSION}.${A}`,
     K = process.env.CLAUDE_CODE_ENTRYPOINT ?? "unknown",
     z = `x-anthropic-billing-header: cc_version=${q}; cc_entrypoint=${K};${" cch=00000;"}`;
-  return (y(`attribution header ${z}`), z);
+  return (writeDebugLog(`attribution header ${z}`), z);
 }
 var q28 = "You are Klaudia, an agentic coding assistant.",
   Gf7 =
@@ -37365,10 +37365,10 @@ var A21 = E(() => {
 import { join as q21, normalize as xF5, sep as bF5 } from "path";
 function NY() {
   let A = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
-  if (X1(A)) return !1;
+  if (isTruthy(A)) return !1;
   if (Qw(A)) return !0;
   if (
-    X1(process.env.CLAUDE_CODE_REMOTE) &&
+    isTruthy(process.env.CLAUDE_CODE_REMOTE) &&
     !process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR
   )
     return !1;
@@ -37408,7 +37408,7 @@ function mF5() {
   return process.argv.includes("--agent-teams");
 }
 function D7() {
-  if (!X1(process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) && !mF5())
+  if (!isTruthy(process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) && !mF5())
     return !1;
   if (!jA("tengu_amber_flint", !0)) return !1;
   return !0;
@@ -44265,7 +44265,7 @@ function cj(A, q) {
       if (O && typeof O === "object" && !Array.isArray(O)) _ = O;
     } catch ($) {
       let O = q ? ` in ${q}` : "";
-      y(
+      writeDebugLog(
         `Failed to parse YAML frontmatter${O}: ${$ instanceof Error ? $.message : $}`,
         { level: "warn" },
       );
@@ -44318,7 +44318,7 @@ function gy(A, q, K) {
   if (typeof A === "number" || typeof A === "boolean") return String(A);
   let Y = K ? `${K}:${q}` : (q ?? "unknown");
   return (
-    y(`Description invalid for ${Y} - omitting`, { level: "warn" }),
+    writeDebugLog(`Description invalid for ${Y} - omitting`, { level: "warn" }),
     null
   );
 }
@@ -44567,7 +44567,7 @@ function r21(A, q, K, Y, z) {
 }
 var o21 = () => {};
 function a21(A) {
-  let q = w6(27),
+  let q = reactMemoCache(27),
     {
       bindings: K,
       pendingChordRef: Y,
@@ -44683,7 +44683,7 @@ function Fy() {
   return iX6.useContext(FN7);
 }
 function s21(A, q) {
-  let K = w6(5),
+  let K = reactMemoCache(5),
     Y = q === void 0 ? !0 : q,
     z = Fy(),
     w,
@@ -45550,7 +45550,7 @@ var rX6 = E(() => {
   ((Ur5 = /^[\p{L}\p{N}\p{M}_]$/u), (hb6 = /\s/));
 });
 function _w1(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { children: K } = A,
     { marker: Y } = ks.useContext(dr5),
     z;
@@ -45581,7 +45581,7 @@ var UN7 = E(() => {
   ((ks = Y6(W6(), 1)), (dr5 = ks.createContext({ marker: "" })));
 });
 function cN7(A) {
-  let q = w6(9),
+  let q = reactMemoCache(9),
     { children: K } = A,
     { marker: Y } = CN.useContext(dN7),
     z = 0;
@@ -45726,7 +45726,7 @@ async function sN7() {
       q
     );
   } catch (K) {
-    return ($6(K instanceof Error ? K : Error(String(K))), null);
+    return (sendError(K instanceof Error ? K : Error(String(K))), null);
   }
 }
 async function $w1() {
@@ -45744,7 +45744,7 @@ async function $w1() {
     return (await M8("killall", ["cfprefsd"]), aX6(), { status: "restored" });
   } catch (K) {
     return (
-      $6(Error(`Failed to restore Terminal.app settings with: ${K}`)),
+      sendError(Error(`Failed to restore Terminal.app settings with: ${K}`)),
       aX6(),
       { status: "failed", backupPath: q }
     );
@@ -45797,16 +45797,16 @@ function tr5() {
 async function Vw8() {
   let A = tr5();
   if (!A) return;
-  y(`update: Regenerating ${A.name} completion cache`);
+  writeDebugLog(`update: Regenerating ${A.name} completion cache`);
   let q = process.argv[1] || "claude";
   if (
     (await M8(q, ["completion", A.shellFlag, "--output", A.cacheFile])).code !==
     0
   ) {
-    y(`update: Failed to regenerate ${A.name} completion cache`);
+    writeDebugLog(`update: Failed to regenerate ${A.name} completion cache`);
     return;
   }
-  y(`update: Regenerated ${A.name} completion cache at ${A.cacheFile}`);
+  writeDebugLog(`update: Regenerated ${A.name} completion cache at ${A.cacheFile}`);
 }
 var vw8 = E(() => {
   Q6();
@@ -46014,7 +46014,7 @@ async function kw8(A = "VSCode", q) {
     );
   } catch (w) {
     throw (
-      $6(w instanceof Error ? w : Error(String(w))),
+      sendError(w instanceof Error ? w : Error(String(w))),
       Error(`Failed to install ${A} terminal Shift+Enter key binding`)
     );
   }
@@ -46033,7 +46033,7 @@ async function tN7(A) {
     ]);
     if (K !== 0)
       return (
-        $6(
+        sendError(
           Error(
             `Failed to enable Option as Meta key for Terminal.app profile: ${A}`,
           ),
@@ -46057,7 +46057,7 @@ async function eN7(A) {
     ]);
     if (K !== 0)
       return (
-        $6(
+        sendError(
           Error(`Failed to disable audio bell for Terminal.app profile: ${A}`),
         ),
         !1
@@ -46106,7 +46106,7 @@ async function Yo5(A) {
       `${bA("success", A)("Configured Terminal.app settings:")}${F9}${bA("success", A)('- Enabled "Use Option as Meta key"')}${F9}${bA("success", A)("- Switched to visual bell")}${F9}${H1.dim("Option+Enter will now enter a newline.")}${F9}${H1.dim("You must restart Terminal.app for changes to take effect.", A)}${F9}`
     );
   } catch (q) {
-    $6(q instanceof Error ? q : Error(String(q)));
+    sendError(q instanceof Error ? q : Error(String(q)));
     let K = await $w1(),
       Y = "Failed to enable Option as Meta key for Terminal.app.";
     if (K.status === "restored")
@@ -46172,7 +46172,7 @@ chars = "\\u001B\\r"
     );
   } catch ($) {
     throw (
-      $6($ instanceof Error ? $ : Error(String($))),
+      sendError($ instanceof Error ? $ : Error(String($))),
       Error("Failed to install Alacritty Shift+Enter key binding")
     );
   }
@@ -46214,7 +46214,7 @@ async function wo5(A) {
       }),
       await Cw8(
         K,
-        p6(w, null, 2) +
+        trySafeStringify(w, null, 2) +
           `
 `,
         { encoding: "utf-8" },
@@ -46223,7 +46223,7 @@ async function wo5(A) {
     );
   } catch (Y) {
     throw (
-      $6(Y instanceof Error ? Y : Error(String(Y))),
+      sendError(Y instanceof Error ? Y : Error(String(Y))),
       Error("Failed to install Zed Shift+Enter key binding")
     );
   }
@@ -46278,9 +46278,9 @@ async function YV7(A, q) {
     await $o5(K, { recursive: !0 });
     let Y = KV7(A);
     (await Oo5(Y, q, { encoding: "utf8", mode: 384 }),
-      y(`Stored paste ${A} to ${Y}`));
+      writeDebugLog(`Stored paste ${A} to ${Y}`));
   } catch (K) {
-    y(`Failed to store paste: ${K}`);
+    writeDebugLog(`Failed to store paste: ${K}`);
   }
 }
 async function zV7(A) {
@@ -46289,7 +46289,7 @@ async function zV7(A) {
     return await Ho5(q, { encoding: "utf8" });
   } catch (q) {
     if (q && typeof q === "object" && "code" in q) {
-      if (q.code !== "ENOENT") y(`Failed to retrieve paste ${A}: ${q}`);
+      if (q.code !== "ENOENT") writeDebugLog(`Failed to retrieve paste ${A}: ${q}`);
     }
     return null;
   }
@@ -46308,7 +46308,7 @@ async function wV7(A) {
     let w = uw8(q, z);
     try {
       if ((await Jo5(w)).mtimeMs < Y)
-        (await Do5(w), y(`Cleaned up old paste: ${w}`));
+        (await Do5(w), writeDebugLog(`Cleaned up old paste: ${w}`));
     } catch {}
   }
 }
@@ -46344,7 +46344,7 @@ async function* HV7() {
       try {
         yield Zo5(q);
       } catch (K) {
-        y(`Failed to parse history line: ${K}`);
+        writeDebugLog(`Failed to parse history line: ${K}`);
       }
   } catch (q) {
     if (q.code === "ENOENT") return;
@@ -46406,13 +46406,13 @@ async function JV7() {
       })));
     let K = Pd.map(
       (Y) =>
-        p6(Y) +
+        trySafeStringify(Y) +
         `
 `,
     );
     ((Pd = []), await Mo5(q, K.join(""), { mode: 384 }));
   } catch (q) {
-    y(`Failed to write prompt history: ${q}`);
+    writeDebugLog(`Failed to write prompt history: ${q}`);
   } finally {
     if (A) await A();
   }
@@ -46459,12 +46459,12 @@ async function To5(A) {
     pastedContents: K,
     timestamp: Date.now(),
     project: pw(),
-    sessionId: d1(),
+    sessionId: getSessionId(),
   };
   (Pd.push(Y), (Jw1 = DV7(0)));
 }
 function IK6(A) {
-  if (X1(process.env.CLAUDE_CODE_SKIP_PROMPT_HISTORY)) return;
+  if (isTruthy(process.env.CLAUDE_CODE_SKIP_PROMPT_HISTORY)) return;
   if (!_V7)
     ((_V7 = !0),
       Xq(async () => {
@@ -46511,7 +46511,7 @@ function MV7(A) {
   return A === "!";
 }
 function Nq() {
-  let A = T1((w) => w.notifications.queue.length),
+  let A = useAppState((w) => w.notifications.queue.length),
     q = tA(),
     K = qM6.useCallback(() => {
       q((w) => {
@@ -53193,7 +53193,7 @@ async function om(A, q, K) {
     }
     if (j > PM6) ((J = Math.round((J * PM6) / j)), (j = PM6));
     if (J > WM6) ((j = Math.round((j * WM6) / J)), (J = WM6));
-    y(`Resizing to ${j}x${J}`);
+    writeDebugLog(`Resizing to ${j}x${J}`);
     let M = await Y(A)
       .resize(j, J, { fit: "inside", withoutEnlargement: !0 })
       .toBuffer();
@@ -53234,13 +53234,13 @@ async function om(A, q, K) {
       }
       let P = Math.min(j, 1000),
         W = Math.round((J * P) / Math.max(j, 1));
-      y("Still too large, compressing with JPEG");
+      writeDebugLog("Still too large, compressing with JPEG");
       let G = await Y(A)
         .resize(P, W, { fit: "inside", withoutEnlargement: !0 })
         .jpeg({ quality: 20 })
         .toBuffer();
       return (
-        y(`JPEG compressed buffer size: ${G.length}`),
+        writeDebugLog(`JPEG compressed buffer size: ${G.length}`),
         {
           buffer: G,
           mediaType: "jpeg",
@@ -53264,10 +53264,10 @@ async function om(A, q, K) {
       },
     };
   } catch (Y) {
-    $6(Y);
+    sendError(Y);
     let z = ik7(Y),
       w = Y instanceof Error ? Y.message : String(Y);
-    n("tengu_image_resize_failed", {
+    emitEvent("tengu_image_resize_failed", {
       original_size_bytes: q,
       error_type: z,
       error_message_hash: nk7(w),
@@ -53276,7 +53276,7 @@ async function om(A, q, K) {
       O = Math.ceil((q * 4) / 3);
     if (O <= MM6)
       return (
-        n("tengu_image_resize_fallback", {
+        emitEvent("tengu_image_resize_fallback", {
           original_size_bytes: q,
           base64_size_bytes: O,
           error_type: z,
@@ -53332,11 +53332,11 @@ async function uw1(A, q = dh, K) {
     if (J) return J;
     return await K69(H, w);
   } catch (w) {
-    $6(w);
+    sendError(w);
     let _ = ik7(w),
       $ = w instanceof Error ? w.message : String(w);
     if (
-      (n("tengu_image_compress_failed", {
+      (emitEvent("tengu_image_compress_failed", {
         original_size_bytes: A.length,
         max_bytes: q,
         error_type: _,
@@ -53580,7 +53580,7 @@ async function $69() {
     if (q.exitCode !== 0 || !q.stdout) return null;
     return q.stdout.trim();
   } catch (q) {
-    return ($6(q), null);
+    return (sendError(q), null);
   }
 }
 function ek7(A) {
@@ -53621,7 +53621,7 @@ async function qE7(A) {
       if (O && K === z69(O)) Y = P1().readFileBytesSync(O);
     }
   } catch (O) {
-    return ($6(O), null);
+    return (sendError(O), null);
   }
   if (!Y) return null;
   if (Y.length >= 2 && Y[0] === 66 && Y[1] === 77)
@@ -53661,7 +53661,7 @@ function KE7({ onPaste: A, onInput: q, onImagePaste: K }) {
           if (X && $.current) K(X.base64, X.mediaType, void 0, X.dimensions);
         })
         .catch((X) => {
-          if ($.current) $6(X);
+          if ($.current) sendError(X);
         })
         .finally(() => {
           if ($.current) _(!1);
@@ -53867,7 +53867,7 @@ var HE7 = E(() => {
   nq6();
 });
 function jE7(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     { text: K, highlights: Y } = A,
     z;
   if (q[0] !== Y || q[1] !== K) {
@@ -53920,7 +53920,7 @@ var JE7 = E(() => {
   DX = Y6(W6(), 1);
 });
 function gw1(A) {
-  let q = w6(9),
+  let q = reactMemoCache(9),
     {
       inputState: K,
       children: Y,
@@ -54079,7 +54079,7 @@ var v_8 = E(() => {
   VM6 = Y6(W6(), 1);
 });
 function _H() {
-  return T1((A) => A.settings);
+  return useAppState((A) => A.settings);
 }
 var ch = E(() => {
   RA();
@@ -54107,17 +54107,17 @@ function T69(A) {
   ];
 }
 function mK(A) {
-  let [q] = E7(),
+  let [q] = useTheme(),
     K = o2(),
     z = _H().prefersReducedMotion ?? !1,
-    _ = (T1((W) => W.voiceState) ?? "idle") === "recording",
-    $ = T1((W) => W.voiceWarmingUp) ?? !1,
-    O = T1((W) => W.voiceAudioLevels) ?? [],
+    _ = (useAppState((W) => W.voiceState) ?? "idle") === "recording",
+    $ = useAppState((W) => W.voiceWarmingUp) ?? !1,
+    O = useAppState((W) => W.voiceAudioLevels) ?? [],
     H = nb6.useRef(Array(G69).fill(0)),
     j = (_ || $) && !z,
     [J, D] = PM(j ? 50 : null);
   pw1(K, !!A.onImagePaste);
-  let X = K && !X1(process.env.CLAUDE_CODE_ACCESSIBILITY),
+  let X = K && !isTruthy(process.env.CLAUDE_CODE_ACCESSIBILITY),
     M;
   if (!X) M = (W) => W;
   else if ($ && !z) {
@@ -54199,7 +54199,7 @@ var y$ = E(() => {
 import { dirname as N69, basename as V69, join as PE7, sep as Qw1 } from "path";
 function ZE7(A, q) {
   if (!A) return { directory: q || y1(), prefix: "" };
-  let K = Q4(A, q);
+  let K = resolveFilePath(A, q);
   if (A.endsWith("/") || A.endsWith(Qw1)) return { directory: K, prefix: "" };
   let Y = N69(K),
     z = V69(A);
@@ -54215,7 +54215,7 @@ async function v69(A) {
       .slice(0, 100);
     return (XE7.set(A, z), z);
   } catch (K) {
-    return ($6(K instanceof Error ? K : Error(String(K))), []);
+    return (sendError(K instanceof Error ? K : Error(String(K))), []);
   }
 }
 async function Uw1(A, q = {}) {
@@ -54263,7 +54263,7 @@ async function k69(A, q = !1) {
       .slice(0, 100);
     return (ME7.set(K, _), _);
   } catch (z) {
-    return ($6(z instanceof Error ? z : Error(String(z))), []);
+    return (sendError(z instanceof Error ? z : Error(String(z))), []);
   }
 }
 async function TE7(A, q = {}) {
@@ -54336,7 +54336,7 @@ function L69(A) {
   );
 }
 function rb6(A) {
-  let q = w6(21),
+  let q = reactMemoCache(21),
     { suggestions: K, selectedSuggestion: Y, query: z, maxColumnWidth: w } = A,
     { rows: _ } = zA(),
     $ = Math.min(6, Math.max(1, _ - 3));
@@ -54413,7 +54413,7 @@ var R_8 = E(() => {
   e3();
   ((Zk = Y6(W6(), 1)), (y_8 = Y6(W6(), 1)));
   y69 = y_8.memo(function (q) {
-    let K = w6(33),
+    let K = reactMemoCache(33),
       { item: Y, maxColumnWidth: z, isSelected: w } = q,
       _ = zA().columns;
     if (L69(Y.id)) {
@@ -54531,7 +54531,7 @@ var R_8 = E(() => {
   Qi2 = y_8.memo(rb6);
 });
 function VE7() {
-  let A = w6(1),
+  let A = reactMemoCache(1),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = BK.createElement(
@@ -54544,7 +54544,7 @@ function VE7() {
   return q;
 }
 function S69(A) {
-  let q = w6(5),
+  let q = reactMemoCache(5),
     { path: K } = A,
     Y;
   if (q[0] !== K)
@@ -54570,7 +54570,7 @@ function S69(A) {
   return w;
 }
 function h69(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     {
       value: K,
       onChange: Y,
@@ -54591,7 +54591,7 @@ function h69(A) {
       { borderDimColor: !0, borderStyle: "round", marginY: 1, paddingLeft: 1 },
       BK.createElement(mK, {
         showCursor: !0,
-        placeholder: `Directory path${a6.ellipsis}`,
+        placeholder: `Directory path${figures.ellipsis}`,
         value: K,
         onChange: Y,
         onSubmit: z,
@@ -54636,7 +54636,7 @@ function h69(A) {
 }
 function I69() {}
 function ob6(A) {
-  let q = w6(34),
+  let q = reactMemoCache(34),
     {
       onAddDirectory: K,
       onCancel: Y,
@@ -54877,7 +54877,7 @@ var C_8 = E(() => {
     ]));
 });
 function vE7(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { children: K, lock: Y } = A,
     z = Y === void 0 ? "always" : Y,
     [w, _] = Ua(),
@@ -54933,7 +54933,7 @@ var kE7 = E(() => {
   sm = Y6(W6(), 1);
 });
 function ScrollableContent(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { children: K, height: Y } = A;
   if (EE7.useContext(LE7)) return K;
   let w;
@@ -54973,7 +54973,7 @@ function ScrollableContent(A) {
   return H;
 }
 function x69(A) {
-  let q = w6(2),
+  let q = reactMemoCache(2),
     { children: K } = A,
     Y;
   if (q[0] !== K)

@@ -7,7 +7,7 @@ s1(RE7, {
 import { dirname as b69 } from "path";
 import { stat as u69 } from "fs/promises";
 function m69(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { message: K, args: Y, onDone: z } = A,
     w,
     _;
@@ -27,7 +27,7 @@ function m69(A) {
     (($ = hs.default.createElement(
       T,
       { dimColor: !0 },
-      a6.pointer,
+      figures.pointer,
       " /add-dir ",
       Y,
     )),
@@ -55,7 +55,7 @@ function m69(A) {
 }
 async function vM6(A, q) {
   if (!A) return { resultType: "emptyPath" };
-  let K = Q4(A);
+  let K = resolveFilePath(A);
   try {
     if (!(await u69(K)).isDirectory())
       return { resultType: "notADirectory", directoryPath: A, absolutePath: K };
@@ -173,7 +173,7 @@ async function S_8() {
       timeout: d69,
     });
   } catch (q) {
-    $6(q instanceof Error ? q : Error(String(q)));
+    sendError(q instanceof Error ? q : Error(String(q)));
   }
 }
 function i69() {
@@ -232,7 +232,7 @@ async function h_8(A, q) {
       S_8();
     } else i69();
   } catch (Y) {
-    $6(Y instanceof Error ? Y : Error(String(Y)));
+    sendError(Y instanceof Error ? Y : Error(String(Y)));
   }
 }
 function a69() {
@@ -324,7 +324,7 @@ var iw1 = E(() => {
     try {
       return ((cw1 = !0), !0);
     } catch (A) {
-      return ($6(A instanceof Error ? A : Error(String(A))), (cw1 = !1), !1);
+      return (sendError(A instanceof Error ? A : Error(String(A))), (cw1 = !1), !1);
     }
   });
   o69 = T8(() => {
@@ -15796,7 +15796,7 @@ async function m$8(A, q) {
     }
     K.track($);
   } catch (Y) {
-    $6(Y instanceof Error ? Y : Error(String(Y)));
+    sendError(Y instanceof Error ? Y : Error(String(Y)));
   }
 }
 async function aC7(A) {
@@ -15812,7 +15812,7 @@ async function aC7(A) {
     }
     q.identify(z);
   } catch (K) {
-    $6(K instanceof Error ? K : Error(String(K)));
+    sendError(K instanceof Error ? K : Error(String(K)));
   }
 }
 var nC7,
@@ -15844,7 +15844,7 @@ var P_1 = E(() => {
         u$8
       );
     } catch (q) {
-      return ($6(q instanceof Error ? q : Error(String(q))), null);
+      return (sendError(q instanceof Error ? q : Error(String(q))), null);
     }
   });
 });
@@ -15865,7 +15865,7 @@ async function Ed(A) {
     z = Date.now() - q;
   if (Y !== 0)
     return (
-      n("tengu_worktree_detection", {
+      emitEvent("tengu_worktree_detection", {
         duration_ms: z,
         worktree_count: 0,
         success: !1,
@@ -15878,7 +15878,7 @@ async function Ed(A) {
   )
     .filter((O) => O.startsWith("worktree "))
     .map((O) => O.slice(9).normalize("NFC"));
-  n("tengu_worktree_detection", {
+  emitEvent("tengu_worktree_detection", {
     duration_ms: z,
     worktree_count: w.length,
     success: !0,
@@ -15898,7 +15898,7 @@ function OK9() {
   let q = process.env.CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR;
   if (!q)
     return (
-      y(
+      writeDebugLog(
         "CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR not set, no file descriptor token available",
         { level: "debug" },
       ),
@@ -15908,7 +15908,7 @@ function OK9() {
   let K = parseInt(q, 10);
   if (Number.isNaN(K))
     return (
-      y(
+      writeDebugLog(
         `CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR must be a valid file descriptor number, got: ${q}`,
         { level: "error" },
       ),
@@ -15924,14 +15924,14 @@ function OK9() {
       w = Y.readFileSync(z, { encoding: "utf8" }).trim();
     if (!w)
       return (
-        y("File descriptor contained empty token", { level: "error" }),
+        writeDebugLog("File descriptor contained empty token", { level: "error" }),
         hA6(null),
         null
       );
-    return (y(`Successfully read token from file descriptor ${K}`), hA6(w), w);
+    return (writeDebugLog(`Successfully read token from file descriptor ${K}`), hA6(w), w);
   } catch (Y) {
     return (
-      y(
+      writeDebugLog(
         `Failed to read token from file descriptor ${K}: ${Y instanceof Error ? Y.message : String(Y)}`,
         { level: "error" },
       ),
@@ -15977,7 +15977,7 @@ async function tC7() {
       })
     ).data;
   } catch (z) {
-    $6(z);
+    sendError(z);
   }
 }
 async function Qs(A) {
@@ -15992,7 +15992,7 @@ async function Qs(A) {
       })
     ).data;
   } catch (K) {
-    $6(K);
+    sendError(K);
   }
 }
 var wu6 = E(() => {
@@ -16077,7 +16077,7 @@ async function g$8(A, q, K, Y, z = !1, w) {
         ? "Authentication failed: Invalid authorization code"
         : `Token exchange failed (${$.status}): ${$.statusText}`,
     );
-  return (n("tengu_oauth_token_exchange_success", {}), $.data);
+  return (emitEvent("tengu_oauth_token_exchange_success", {}), $.data);
 }
 async function $u6(A, { scopes: q } = {}) {
   let K = {
@@ -16095,7 +16095,7 @@ async function $u6(A, { scopes: q } = {}) {
       { access_token: w, refresh_token: _ = A, expires_in: $ } = z,
       O = Date.now() + $ * 1000,
       H = _u6(z.scope);
-    n("tengu_oauth_token_refresh_success", {});
+    emitEvent("tengu_oauth_token_refresh_success", {});
     let j = await Z_1(w);
     if (getSettings().oauthAccount) {
       let D = {};
@@ -16137,7 +16137,7 @@ async function $u6(A, { scopes: q } = {}) {
         ? JSON.stringify(Y.response.data)
         : void 0;
     throw (
-      n("tengu_oauth_token_refresh_failure", {
+      emitEvent("tengu_oauth_token_refresh_failure", {
         error: Y.message,
         ...(z && { responseBody: z }),
       }),
@@ -16165,7 +16165,7 @@ async function F$8(A) {
         }
       : z.oauthAccount,
   })),
-    n("tengu_oauth_roles_stored", { org_role: K.organization_role }));
+    emitEvent("tengu_oauth_roles_stored", { org_role: K.organization_role }));
 }
 async function p$8(A) {
   try {
@@ -16176,13 +16176,13 @@ async function p$8(A) {
     if (K)
       return (
         await U$8(K),
-        n("tengu_oauth_api_key", { status: "success", statusCode: q.status }),
+        emitEvent("tengu_oauth_api_key", { status: "success", statusCode: q.status }),
         K
       );
     return null;
   } catch (q) {
     throw (
-      n("tengu_oauth_api_key", {
+      emitEvent("tengu_oauth_api_key", {
         status: "failure",
         error: q instanceof Error ? q.message : String(q),
       }),
@@ -16226,7 +16226,7 @@ async function Z_1(A) {
   if (q?.account?.created_at) z.accountCreatedAt = q.account.created_at;
   if (q?.organization?.subscription_created_at)
     z.subscriptionCreatedAt = q.organization.subscription_created_at;
-  return (n("tengu_oauth_profile_fetch_success", {}), { ...z, rawProfile: q });
+  return (emitEvent("tengu_oauth_profile_fetch_success", {}), { ...z, rawProfile: q });
 }
 async function ny() {
   let q = getSettings().oauthAccount?.organizationUuid;
@@ -16261,7 +16261,7 @@ async function Q$8() {
     let _ = await Qs(w.accessToken);
     if (_) {
       if (Y)
-        y("OAuth profile fetch succeeded, overriding env var account info", {
+        writeDebugLog("OAuth profile fetch succeeded, overriding env var account info", {
           level: "info",
         });
       return (
@@ -16354,13 +16354,13 @@ async function AS7(A, q) {
       if (((K = z), !jK9(z))) throw z;
       if (Y >= d$8)
         throw (
-          y(
+          writeDebugLog(
             `Teleport request failed after ${Y + 1} attempts: ${z instanceof Error ? z.message : String(z)}`,
           ),
           z
         );
       let w = eC7[Y] ?? 2000;
-      (y(
+      (writeDebugLog(
         `Teleport request failed (attempt ${Y + 1}/${d$8 + 1}), retrying in ${w}ms: ${z instanceof Error ? z.message : String(z)}`,
       ),
         await new Promise((_) => setTimeout(_, w)));
@@ -16419,7 +16419,7 @@ async function c$8() {
     });
   } catch (Y) {
     let z = Y instanceof Error ? Y : Error(String(Y));
-    throw ($6(z), Y);
+    throw (sendError(z), Y);
   }
 }
 function _D(A) {
@@ -16475,22 +16475,22 @@ async function l$8(A, q) {
           },
         ],
       };
-    y(`[sendEventToRemoteSession] Sending event to session ${A}`);
+    writeDebugLog(`[sendEventToRemoteSession] Sending event to session ${A}`);
     let O = await g8.post(z, $, { headers: w, validateStatus: (H) => H < 500 });
     if (O.status === 200 || O.status === 201)
       return (
-        y(`[sendEventToRemoteSession] Successfully sent event to session ${A}`),
+        writeDebugLog(`[sendEventToRemoteSession] Successfully sent event to session ${A}`),
         !0
       );
     return (
-      y(
-        `[sendEventToRemoteSession] Failed with status ${O.status}: ${p6(O.data)}`,
+      writeDebugLog(
+        `[sendEventToRemoteSession] Failed with status ${O.status}: ${trySafeStringify(O.data)}`,
       ),
       !1
     );
   } catch (K) {
     return (
-      y(
+      writeDebugLog(
         `[sendEventToRemoteSession] Error: ${K instanceof Error ? K.message : String(K)}`,
       ),
       !1
@@ -16506,7 +16506,7 @@ async function i$8(A, q) {
         "anthropic-beta": "ccr-byoc-2025-07-29",
         "x-organization-uuid": Y,
       };
-    y(`[updateSessionTitle] Updating title for session ${A}: "${q}"`);
+    writeDebugLog(`[updateSessionTitle] Updating title for session ${A}: "${q}"`);
     let _ = await g8.patch(
       z,
       { title: q },
@@ -16514,16 +16514,16 @@ async function i$8(A, q) {
     );
     if (_.status === 200)
       return (
-        y(`[updateSessionTitle] Successfully updated title for session ${A}`),
+        writeDebugLog(`[updateSessionTitle] Successfully updated title for session ${A}`),
         !0
       );
     return (
-      y(`[updateSessionTitle] Failed with status ${_.status}: ${p6(_.data)}`),
+      writeDebugLog(`[updateSessionTitle] Failed with status ${_.status}: ${trySafeStringify(_.data)}`),
       !1
     );
   } catch (K) {
     return (
-      y(
+      writeDebugLog(
         `[updateSessionTitle] Error: ${K instanceof Error ? K.message : String(K)}`,
       ),
       !1
@@ -16585,7 +16585,7 @@ async function MK9(A, q, K, Y) {
       if (O.status === 200 || O.status === 201)
         return (
           lK6.set(A, q.uuid),
-          y(`Successfully persisted session log entry for session ${A}`),
+          writeDebugLog(`Successfully persisted session log entry for session ${A}`),
           !0
         );
       if (O.status === 409) {
@@ -16593,7 +16593,7 @@ async function MK9(A, q, K, Y) {
         if (H === q.uuid)
           return (
             lK6.set(A, q.uuid),
-            y(
+            writeDebugLog(
               `Session entry ${q.uuid} already present on server, recovering from stale state`,
             ),
             $8("info", "session_persist_recovered_from_409"),
@@ -16601,7 +16601,7 @@ async function MK9(A, q, K, Y) {
           );
         if (H)
           (lK6.set(A, H),
-            y(
+            writeDebugLog(
               `Session 409: adopting server lastUuid=${H} from header, retrying entry ${q.uuid}`,
             ));
         else {
@@ -16609,13 +16609,13 @@ async function MK9(A, q, K, Y) {
             J = PK9(j);
           if (J)
             (lK6.set(A, J),
-              y(
+              writeDebugLog(
                 `Session 409: re-fetched ${j.length} entries, adopting lastUuid=${J}, retrying entry ${q.uuid}`,
               ));
           else {
             let X = O.data.error?.message || "Concurrent modification detected";
             return (
-              $6(
+              sendError(
                 Error(
                   `Session persistence conflict: UUID mismatch for session ${A}, entry ${q.uuid}. ${X}`,
                 ),
@@ -16630,18 +16630,18 @@ async function MK9(A, q, K, Y) {
       }
       if (O.status === 401)
         return (
-          y("Session token expired or invalid"),
+          writeDebugLog("Session token expired or invalid"),
           $8("error", "session_persist_fail_bad_token"),
           !1
         );
-      (y(`Failed to persist session log: ${O.status} ${O.statusText}`),
+      (writeDebugLog(`Failed to persist session log: ${O.status} ${O.statusText}`),
         $8("error", "session_persist_fail_status", {
           status: O.status,
           attempt: z,
         }));
     } catch (_) {
       let $ = _;
-      ($6(Error(`Error persisting session log: ${$.message}`)),
+      (sendError(Error(`Error persisting session log: ${$.message}`)),
         $8("error", "session_persist_fail_status", {
           status: $.status,
           attempt: z,
@@ -16649,12 +16649,12 @@ async function MK9(A, q, K, Y) {
     }
     if (z === N_1)
       return (
-        y(`Remote persistence failed after ${N_1} attempts`),
+        writeDebugLog(`Remote persistence failed after ${N_1} attempts`),
         $8("error", "session_persist_error_retries_exhausted", { attempt: z }),
         !1
       );
     let w = Math.min(DK9 * Math.pow(2, z - 1), 8000);
-    (y(`Remote persistence attempt ${z}/${N_1} failed, retrying in ${w}ms…`),
+    (writeDebugLog(`Remote persistence attempt ${z}/${N_1} failed, retrying in ${w}ms…`),
       await new Promise((_) => setTimeout(_, w)));
   }
   return !1;
@@ -16663,7 +16663,7 @@ async function qS7(A, q, K) {
   let Y = _G();
   if (!Y)
     return (
-      y("No session token available for session persistence"),
+      writeDebugLog("No session token available for session persistence"),
       $8("error", "session_persist_fail_jwt_no_token"),
       !1
     );
@@ -16674,7 +16674,7 @@ async function KS7(A, q) {
   let K = _G();
   if (!K)
     return (
-      y("No session token available for fetching session logs"),
+      writeDebugLog("No session token available for fetching session logs"),
       $8("error", "session_get_fail_no_token"),
       null
     );
@@ -16688,7 +16688,7 @@ async function KS7(A, q) {
 }
 async function YS7(A, q, K) {
   let Y = `${r7().BASE_API_URL}/v1/session_ingress/session/${A}`;
-  y(`[session-ingress] Fetching session logs from: ${Y}`);
+  writeDebugLog(`[session-ingress] Fetching session logs from: ${Y}`);
   let z = { ..._D(q), "x-organization-uuid": K };
   return await r$8(A, Y, z);
 }
@@ -16698,7 +16698,7 @@ async function r$8(A, q, K) {
       headers: K,
       timeout: 20000,
       validateStatus: (z) => z < 500,
-      params: X1(process.env.CLAUDE_AFTER_LAST_COMPACT)
+      params: isTruthy(process.env.CLAUDE_AFTER_LAST_COMPACT)
         ? { after_last_compact: !0 }
         : void 0,
     });
@@ -16706,34 +16706,34 @@ async function r$8(A, q, K) {
       let z = Y.data;
       if (!z || typeof z !== "object" || !Array.isArray(z.loglines))
         return (
-          $6(Error(`Invalid session logs response format: ${p6(z)}`)),
+          sendError(Error(`Invalid session logs response format: ${trySafeStringify(z)}`)),
           $8("error", "session_get_fail_invalid_response"),
           null
         );
       let w = z.loglines;
-      return (y(`Fetched ${w.length} session logs for session ${A}`), w);
+      return (writeDebugLog(`Fetched ${w.length} session logs for session ${A}`), w);
     }
     if (Y.status === 404)
       return (
-        y(`No existing logs for session ${A}`),
+        writeDebugLog(`No existing logs for session ${A}`),
         $8("warn", "session_get_no_logs_for_session"),
         []
       );
     if (Y.status === 401)
       throw (
-        y("Auth token expired or invalid"),
+        writeDebugLog("Auth token expired or invalid"),
         $8("error", "session_get_fail_bad_token"),
         Error("Your session has expired. Please run /login to sign in again.")
       );
     return (
-      y(`Failed to fetch session logs: ${Y.status} ${Y.statusText}`),
+      writeDebugLog(`Failed to fetch session logs: ${Y.status} ${Y.statusText}`),
       $8("error", "session_get_fail_status", { status: Y.status }),
       null
     );
   } catch (Y) {
     let z = Y;
     return (
-      $6(Error(`Error fetching session logs: ${z.message}`)),
+      sendError(Error(`Error fetching session logs: ${z.message}`)),
       $8("error", "session_get_fail_status", { status: z.status }),
       null
     );
@@ -19852,7 +19852,7 @@ var Du6 = C((lM6) => {
     c(A = {}) {
       return ((this._additionalContext = A), this);
     }
-    n(A, q) {
+    emitEvent(A, q) {
       return ((this._clientName = A), (this._commandName = q), this);
     }
     f(A = (K) => K, q = (K) => K) {
@@ -25310,7 +25310,7 @@ var tg7 = C((es2, sg7) => {
       c(q = {}) {
         return ((this._additionalContext = q), this);
       }
-      n(q, K) {
+      emitEvent(q, K) {
         return ((this._clientName = q), (this._commandName = K), this);
       }
       f(q = (Y) => Y, K = (Y) => Y) {
@@ -56164,16 +56164,16 @@ async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
       ...(_ ? { "x-client-app": _ } : {}),
     };
   if (
-    (y(
+    (writeDebugLog(
       `[API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: ${!!process.env.ANTHROPIC_CUSTOM_HEADERS}, has Authorization header: ${!!$.Authorization}`,
     ),
-    X1(process.env.CLAUDE_CODE_ADDITIONAL_PROTECTION))
+    isTruthy(process.env.CLAUDE_CODE_ADDITIONAL_PROTECTION))
   )
     O["x-anthropic-additional-protection"] = "true";
   if (
-    (y("[API:auth] OAuth token check starting"),
+    (writeDebugLog("[API:auth] OAuth token check starting"),
     await HO(),
-    y("[API:auth] OAuth token check complete"),
+    writeDebugLog("[API:auth] OAuth token check complete"),
     !Y7())
   )
     AI9(O, C7());
@@ -56185,7 +56185,7 @@ async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
     fetchOptions: jq6(),
     ...(Y && { fetch: Y }),
   };
-  if (X1(process.env.CLAUDE_CODE_USE_BEDROCK)) {
+  if (isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)) {
     let { AnthropicBedrock: D } = await Promise.resolve().then(
         () => (GF7(), WF7),
       ),
@@ -56196,7 +56196,7 @@ async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
       M = {
         ...j,
         awsRegion: X,
-        ...(X1(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH) && { skipAuth: !0 }),
+        ...(isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH) && { skipAuth: !0 }),
         ...(qu() && { logger: dj1() }),
       };
     if (process.env.AWS_BEARER_TOKEN_BEDROCK)
@@ -56205,7 +56205,7 @@ async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
           ...M.defaultHeaders,
           Authorization: `Bearer ${process.env.AWS_BEARER_TOKEN_BEDROCK}`,
         }));
-    else if (!X1(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH)) {
+    else if (!isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH)) {
       let P = await Ma();
       if (P)
         ((M.awsAccessKey = P.accessKeyId),
@@ -56214,13 +56214,13 @@ async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
     }
     return new D(M);
   }
-  if (X1(process.env.CLAUDE_CODE_USE_FOUNDRY)) {
+  if (isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)) {
     let { AnthropicFoundry: D } = await Promise.resolve().then(
         () => (kF7(), vF7),
       ),
       X;
     if (!process.env.ANTHROPIC_FOUNDRY_API_KEY)
-      if (X1(process.env.CLAUDE_CODE_SKIP_FOUNDRY_AUTH))
+      if (isTruthy(process.env.CLAUDE_CODE_SKIP_FOUNDRY_AUTH))
         X = () => Promise.resolve("");
       else {
         let { DefaultAzureCredential: P, getBearerTokenProvider: W } =
@@ -56234,7 +56234,7 @@ async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
     };
     return new D(M);
   }
-  if (X1(process.env.CLAUDE_CODE_USE_VERTEX)) {
+  if (isTruthy(process.env.CLAUDE_CODE_USE_VERTEX)) {
     let [{ AnthropicVertex: D }, { GoogleAuth: X }] = await Promise.all([
         Promise.resolve().then(() => (n64(), i64)),
         Promise.resolve().then(() => Y6(hP8(), 1)),
@@ -56247,7 +56247,7 @@ async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
       P =
         process.env.GOOGLE_APPLICATION_CREDENTIALS ||
         process.env.google_application_credentials,
-      W = X1(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH)
+      W = isTruthy(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH)
         ? { getClient: () => ({ getRequestHeaders: () => ({}) }) }
         : new X({
             scopes: ["https://www.googleapis.com/auth/cloud-platform"],
@@ -56505,7 +56505,7 @@ function jI9(A, q) {
 function dP8(A) {
   ((iN = A), X56.forEach((K) => K(A)));
   let q = Math.round((A.resetsAt ? A.resetsAt - Date.now() / 1000 : 0) / 3600);
-  n("tengu_claudeai_limits_status_changed", {
+  emitEvent("tengu_claudeai_limits_status_changed", {
     status: A.status,
     unifiedRateLimitFallbackAvailable: A.unifiedRateLimitFallbackAvailable,
     hoursTillReset: q,
@@ -56658,7 +56658,7 @@ function ij1(A) {
     }
     if (((q.status = "rejected"), !oT(iN, q))) dP8(q);
   } catch (q) {
-    $6(q);
+    sendError(q);
   }
 }
 var lj1, OI9, HI9, iN, X56;
@@ -56831,7 +56831,7 @@ function _14(A) {
         K++;
         let O = $.source.data.length;
         if (O > MM6)
-          (n("tengu_image_api_validation_failed", {
+          (emitEvent("tengu_image_api_validation_failed", {
             base64_size_bytes: O,
             max_bytes: MM6,
           }),
@@ -56993,7 +56993,7 @@ function NI9(A, q, K) {
           break;
       }
     }
-    n("tengu_tool_use_tool_result_mismatch_error", {
+    emitEvent("tengu_tool_use_tool_result_mismatch_error", {
       toolUseId: A,
       normalizedSequence: w.join(", "),
       preNormalizedSequence: _.join(", "),
@@ -57103,7 +57103,7 @@ function qJ1(A, q, K) {
     A.status === 400 &&
     A.message.includes("unexpected `tool_use_id` found in `tool_result`")
   )
-    n("tengu_unexpected_tool_result", {});
+    emitEvent("tengu_unexpected_tool_result", {});
   if (
     Y7() &&
     A instanceof W4 &&
@@ -57150,7 +57150,7 @@ function qJ1(A, q, K) {
         : `${WO}: ${A.message} · Please run /login`,
     });
   if (
-    X1(process.env.CLAUDE_CODE_USE_BEDROCK) &&
+    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) &&
     A instanceof Error &&
     A.message.toLowerCase().includes("model id")
   ) {
@@ -57270,7 +57270,7 @@ function O14(A) {
   if (A instanceof W4 && (A.status === 401 || A.status === 403))
     return "auth_error";
   if (
-    X1(process.env.CLAUDE_CODE_USE_BEDROCK) &&
+    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) &&
     A instanceof Error &&
     A.message.toLowerCase().includes("model id")
   )
@@ -57288,7 +57288,7 @@ function O14(A) {
 }
 function H14(A, q) {
   if (A !== "refusal") return;
-  n("tengu_refusal_api_response", {});
+  emitEvent("tengu_refusal_api_response", {});
   let K = C7()
     ? `${WO}: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). Try rephrasing the request or attempting a different approach.`
     : `${WO}: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). Please double press esc to edit your last message or start a new session for Claude Code to assist with a different task.`;
@@ -57535,7 +57535,7 @@ var G56 = C((GP6) => {
     c(A = {}) {
       return ((this._additionalContext = A), this);
     }
-    n(A, q) {
+    emitEvent(A, q) {
       return ((this._clientName = A), (this._commandName = q), this);
     }
     f(A = (K) => K, q = (K) => K) {
@@ -59717,12 +59717,12 @@ function NA4(A) {
 }
 async function VA4() {
   try {
-    y("Clearing AWS credential provider cache");
+    writeDebugLog("Clearing AWS credential provider cache");
     let { fromIni: A } = await Promise.resolve().then(() => Y6(VH8(), 1));
     (await A({ ignoreCache: !0 })(),
-      y("AWS credential provider cache refreshed"));
+      writeDebugLog("AWS credential provider cache refreshed"));
   } catch (A) {
-    y(
+    writeDebugLog(
       "Failed to clear AWS credential cache (this is expected if no credentials are configured)",
     );
   }
@@ -59765,7 +59765,7 @@ async function* DJ1(A, q, K) {
     } catch (j) {
       if (
         (($ = j),
-        y(
+        writeDebugLog(
           `API error (attempt ${O}/${Y + 1}): ${j instanceof W4 ? `${j.status} ${j.message}` : j instanceof Error ? j.message : String(j)}`,
           { level: "error" },
         ),
@@ -59799,7 +59799,7 @@ async function* DJ1(A, q, K) {
         if ((_++, _ >= zg9)) {
           if (K.fallbackModel)
             throw (
-              n("tengu_api_opus_fallback_triggered", {
+              emitEvent("tengu_api_opus_fallback_triggered", {
                 original_model: K.model,
                 fallback_model: K.fallbackModel,
                 provider: W46(),
@@ -59808,7 +59808,7 @@ async function* DJ1(A, q, K) {
             );
           if (!process.env.IS_SANDBOX)
             throw (
-              n("tengu_api_custom_529_overloaded_error", {}),
+              emitEvent("tengu_api_custom_529_overloaded_error", {}),
               new uB(Error(lP8), z)
             );
         }
@@ -59823,7 +59823,7 @@ async function* DJ1(A, q, K) {
             Z = Math.max(0, W - P - 1000);
           if (Z < QW8)
             throw (
-              $6(
+              sendError(
                 Error(
                   `availableContext ${Z} is less than FLOOR_OUTPUT_TOKENS ${QW8}`,
                 ),
@@ -59836,7 +59836,7 @@ async function* DJ1(A, q, K) {
                 : 0) + 1,
             N = Math.max(QW8, Z, f);
           ((z.maxTokensOverride = N),
-            n("tengu_max_tokens_context_overflow_adjustment", {
+            emitEvent("tengu_max_tokens_context_overflow_adjustment", {
               inputTokens: P,
               contextLimit: W,
               adjustedMaxTokens: N,
@@ -59848,7 +59848,7 @@ async function* DJ1(A, q, K) {
       let D = vA4(j),
         X = Hc(O, D);
       if (j instanceof W4) yield LA4(j, X, O, Y);
-      (n("tengu_api_retry", {
+      (emitEvent("tengu_api_retry", {
         attempt: O,
         delayMs: X,
         error: j.message,
@@ -59883,7 +59883,7 @@ function kA4(A) {
     K = A.message.match(q);
   if (!K || K.length !== 4) return;
   if (!K[1] || !K[2] || !K[3]) {
-    $6(
+    sendError(
       Error(
         "Unable to parse max_tokens from max_tokens exceed context limit error message",
       ),
@@ -59916,7 +59916,7 @@ function dW8(A) {
   );
 }
 function EA4(A) {
-  if (X1(process.env.CLAUDE_CODE_USE_BEDROCK)) {
+  if (isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)) {
     if (TA4(A) || (A instanceof W4 && A.status === 403)) return !0;
   }
   return !1;
@@ -60014,7 +60014,7 @@ function cW8() {
 }
 async function Pg9(A, q, K) {
   if (!cW8()) return await K();
-  let Y = IA4("sha1").update(p6(A)).digest("hex").slice(0, 12),
+  let Y = IA4("sha1").update(trySafeStringify(A)).digest("hex").slice(0, 12),
     z = bA4(
       process.env.CLAUDE_CODE_TEST_FIXTURES_ROOT ?? y1(),
       `fixtures/${q}-${Y}.json`,
@@ -60031,7 +60031,7 @@ async function Pg9(A, q, K) {
   let w = await K();
   return (
     await BA4(xA4(z), { recursive: !0 }),
-    await uA4(z, p6(w, null, 2), { encoding: "utf8" }),
+    await uA4(z, trySafeStringify(w, null, 2), { encoding: "utf8" }),
     w
   );
 }
@@ -60050,7 +60050,7 @@ async function MJ1(A, q) {
     ),
     z = bA4(
       process.env.CLAUDE_CODE_TEST_FIXTURES_ROOT ?? y1(),
-      `fixtures/${Y.map((_) => IA4("sha1").update(p6(_)).digest("hex").slice(0, 6)).join("-")}.json`,
+      `fixtures/${Y.map((_) => IA4("sha1").update(trySafeStringify(_)).digest("hex").slice(0, 6)).join("-")}.json`,
     );
   try {
     let _ = w8(await mA4(z, { encoding: "utf8" }));
@@ -60063,14 +60063,14 @@ async function MJ1(A, q) {
   }
   if (s8.isCI)
     throw Error(`Anthropic API fixture missing: ${z}. Re-run npm test locally, then commit the result. Input messages:
-${p6(Y, null, 2)}`);
+${trySafeStringify(Y, null, 2)}`);
   let w = await q();
   if (s8.isCI) return w;
   return (
     await BA4(xA4(z), { recursive: !0 }),
     await uA4(
       z,
-      p6({ input: Y, output: w.map((_, $) => SA4(_, hA4, $)) }, null, 2),
+      trySafeStringify({ input: Y, output: w.map((_, $) => SA4(_, hA4, $)) }, null, 2),
       { encoding: "utf8" },
     ),
     w
@@ -60165,8 +60165,8 @@ function hA4(A) {
   if (process.platform === "win32") {
     let z = q.replaceAll("\\", "/"),
       w = K.replaceAll("\\", "/"),
-      _ = p6(q).slice(1, -1),
-      $ = p6(K).slice(1, -1);
+      _ = trySafeStringify(q).slice(1, -1),
+      $ = trySafeStringify(K).slice(1, -1);
     Y = Y.replaceAll(_, "[CWD]")
       .replaceAll($, "[CONFIG_HOME]")
       .replaceAll(z, "[CWD]")
@@ -60259,7 +60259,7 @@ async function vg9() {
       A
     );
   } catch (A) {
-    return ($6(A), null);
+    return (sendError(A), null);
   }
 }
 function kg9(A, q) {
@@ -64041,14 +64041,14 @@ function F74(A, q) {
         for (let _ of Y)
           if (_.isFile()) z++;
           else if (_.isDirectory()) w++;
-        n("tengu_memdir_loaded", {
+        emitEvent("tengu_memdir_loaded", {
           ...q,
           total_file_count: z,
           total_subdir_count: w,
         });
       },
       () => {
-        n("tengu_memdir_loaded", q);
+        emitEvent("tengu_memdir_loaded", q);
       },
     );
 }
@@ -64327,10 +64327,10 @@ function d74() {
     return wp9();
   }
   return (
-    n("tengu_memdir_disabled", {
-      disabled_by_env_var: X1(process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY),
+    emitEvent("tengu_memdir_disabled", {
+      disabled_by_env_var: isTruthy(process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY),
       disabled_by_setting:
-        !X1(process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY) &&
+        !isTruthy(process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY) &&
         U7().autoMemoryEnabled === !1,
     }),
     null
@@ -64379,7 +64379,7 @@ function MG8(A, q) {
     let Y = P1().readFileSync(A, { encoding: "utf-8" }),
       z = jp9(A).toLowerCase();
     if (z && !Dp9.has(z))
-      return (y(`Skipping non-text file in @include: ${A}`), null);
+      return (writeDebugLog(`Skipping non-text file in @include: ${A}`), null);
     let { content: w, paths: _ } = Xp9(Y),
       $ = w;
     if (q === "AutoMem" || q === "TeamMem") {
@@ -64398,7 +64398,7 @@ function MG8(A, q) {
     let Y = K.code;
     if (Y === "ENOENT" || Y === "EISDIR") return null;
     if (Y === "EACCES")
-      n("tengu_claude_md_permission_error", {
+      emitEvent("tengu_claude_md_permission_error", {
         is_access_error: 1,
         has_home_dir: A.includes(_A()) ? 1 : 0,
       });
@@ -64430,7 +64430,7 @@ function Mp9(A, q) {
                 !J.match(/^[#%^&*()]+/) &&
                 J.match(/^[a-zA-Z0-9._-]/))
             ) {
-              let M = Q4(J, Cg6(q));
+              let M = resolveFilePath(J, Cg6(q));
               K.add(M);
             }
           }
@@ -64536,7 +64536,7 @@ function E56({
     return H;
   } catch (_) {
     if (_ instanceof Error && _.message.includes("EACCES"))
-      n("tengu_claude_rules_md_permission_error", {
+      emitEvent("tengu_claude_rules_md_permission_error", {
         is_access_error: 1,
         has_home_dir: A.includes(_A()) ? 1 : 0,
       });
@@ -64853,7 +64853,7 @@ var HP = E(() => {
         K.push(...ZR(X, "Local", Y, w));
       }
     }
-    if (X1(process.env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD)) {
+    if (isTruthy(process.env.CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD)) {
       let D = mT();
       for (let X of D) {
         let M = bk(X, "CLAUDE.md");
@@ -64886,7 +64886,7 @@ var HP = E(() => {
     for (let D of K) J[D.type] = (J[D.type] ?? 0) + 1;
     if (!c74)
       ((c74 = !0),
-        n("tengu_claudemd__initial_load", {
+        emitEvent("tengu_claudemd__initial_load", {
           file_count: K.length,
           total_content_length: j,
           user_count: J.User ?? 0,
@@ -64975,7 +64975,7 @@ ${$}`
     } catch (Y) {
       return (
         $8("error", "git_status_failed", { duration_ms: Date.now() - A }),
-        $6(Y instanceof Error ? Y : Error(String(Y))),
+        sendError(Y instanceof Error ? Y : Error(String(Y))),
         null
       );
     }
@@ -64983,7 +64983,7 @@ ${$}`
     (ZO = T8(async () => {
       let A = Date.now();
       $8("info", "system_context_started");
-      let q = X1(process.env.CLAUDE_CODE_REMOTE) ? null : await ZG8(),
+      let q = isTruthy(process.env.CLAUDE_CODE_REMOTE) ? null : await ZG8(),
         K = null;
       return (
         $8("info", "system_context_completed", {
@@ -64999,7 +64999,7 @@ ${$}`
       $8("info", "user_context_started");
       let q =
           process.env.CLAUDE_CODE_DISABLE_CLAUDE_MDS ||
-          X1(process.env.CLAUDE_CODE_SIMPLE),
+          isTruthy(process.env.CLAUDE_CODE_SIMPLE),
         K = q ? null : o74();
       return (
         $8("info", "user_context_completed", {
@@ -65405,7 +65405,7 @@ async function P44(A, q) {
   await mJ1(K, String(q));
 }
 function jH() {
-  if (X1(process.env.CLAUDE_CODE_ENABLE_TASKS)) return !0;
+  if (isTruthy(process.env.CLAUDE_CODE_ENABLE_TASKS)) return !0;
   return !C7();
 }
 async function gJ1(A) {
@@ -65442,7 +65442,7 @@ function If() {
     return process.env.CLAUDE_CODE_TASK_LIST_ID;
   let A = fR();
   if (A) return A.teamName;
-  return $5() || xg6 || d1();
+  return $5() || xg6 || getSessionId();
 }
 function LP6(A) {
   return A.replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -65488,7 +65488,7 @@ async function pJ1(A, q) {
       w = String(z + 1),
       _ = { id: w, ...q },
       $ = mg6(A, w);
-    return (await mJ1($, p6(_, null, 2)), Ft(), w);
+    return (await mJ1($, trySafeStringify(_, null, 2)), Ft(), w);
   } finally {
     if (Y) await Y();
   }
@@ -65501,17 +65501,17 @@ async function FB(A, q) {
       w = Lp9().safeParse(z);
     if (!w.success)
       return (
-        y(`[Tasks] Task ${q} failed schema validation: ${w.error.message}`),
+        writeDebugLog(`[Tasks] Task ${q} failed schema validation: ${w.error.message}`),
         null
       );
     return w.data;
   } catch (Y) {
     if (Y.code === "ENOENT") return null;
     return (
-      y(
+      writeDebugLog(
         `[Tasks] Failed to read task ${q}: ${Y instanceof Error ? Y.message : String(Y)}`,
       ),
-      $6(Y instanceof Error ? Y : Error(String(Y))),
+      sendError(Y instanceof Error ? Y : Error(String(Y))),
       null
     );
   }
@@ -65521,7 +65521,7 @@ async function yI(A, q, K) {
   if (!Y) return null;
   let z = { ...Y, ...K, id: q },
     w = mg6(A, q);
-  return (await mJ1(w, p6(z, null, 2)), Ft(), z);
+  return (await mJ1(w, trySafeStringify(z, null, 2)), Ft(), z);
 }
 async function QJ1(A, q) {
   let K = mg6(A, q);
@@ -65602,10 +65602,10 @@ async function RG8(A, q, K, Y = {}) {
     return { success: !0, task: await yI(A, q, { owner: K }) };
   } catch ($) {
     return (
-      y(
+      writeDebugLog(
         `[Tasks] Failed to claim task ${q}: ${$ instanceof Error ? $.message : String($)}`,
       ),
-      $6($ instanceof Error ? $ : Error(String($))),
+      sendError($ instanceof Error ? $ : Error(String($))),
       { success: !1, reason: "task_not_found" }
     );
   } finally {
@@ -65641,10 +65641,10 @@ async function Sp9(A, q, K) {
     return { success: !0, task: await yI(A, q, { owner: K }) };
   } catch (w) {
     return (
-      y(
+      writeDebugLog(
         `[Tasks] Failed to claim task ${q} with busy check: ${w instanceof Error ? w.message : String(w)}`,
       ),
-      $6(w instanceof Error ? w : Error(String(w))),
+      sendError(w instanceof Error ? w : Error(String(w))),
       { success: !1, reason: "task_not_found" }
     );
   } finally {
@@ -65656,7 +65656,7 @@ async function pt(A, q, K, Y) {
     (O) => O.status !== "completed" && (O.owner === q || O.owner === K),
   );
   for (let O of w) await yI(A, O.id, { owner: void 0, status: "pending" });
-  if (w.length > 0) y(`[Tasks] Unassigned ${w.length} task(s) from ${K}`);
+  if (w.length > 0) writeDebugLog(`[Tasks] Unassigned ${w.length} task(s) from ${K}`);
   let $ = `${K} ${Y === "terminated" ? "was terminated" : "has shut down"}.`;
   if (w.length > 0) {
     let O = w.map((H) => `#${H.id} "${H.subject}"`).join(", ");
@@ -65782,7 +65782,7 @@ var yP6 = E(() => {
       renderToolResultMessage: O44,
       async call({ todos: A }, q) {
         let K = await q.getAppState(),
-          Y = q.agentId ?? d1(),
+          Y = q.agentId ?? getSessionId(),
           z = K.todos[Y] ?? [],
           w = A.every((_) => _.status === "completed") ? [] : A;
         return (
@@ -66096,7 +66096,7 @@ function ap9() {
 `);
 }
 async function xf(A, q, K, Y) {
-  if (X1(process.env.CLAUDE_CODE_SIMPLE))
+  if (isTruthy(process.env.CLAUDE_CODE_SIMPLE))
     return [
       `You are Klaudia, an agentic coding assistant.
 
@@ -66135,7 +66135,7 @@ Date: ${IX6()}`,
     rp9(H, w),
     ap9(),
     op9(),
-    ...(X1(process.env.CLAUDE_CODE_FORCE_GLOBAL_CACHE) ||
+    ...(isTruthy(process.env.CLAUDE_CODE_FORCE_GLOBAL_CACHE) ||
     jA("tengu_system_prompt_global_cache", !1)
       ? [S56]
       : []),
@@ -66791,7 +66791,7 @@ ${j}`);
       }
       let $ = SA();
       if (Object.keys($).length > 0) {
-        let j = p6($, null, 2);
+        let j = trySafeStringify($, null, 2);
         K.push(`**User's settings.json:**
 \`\`\`json
 ${j}
@@ -66866,7 +66866,7 @@ function vG(A) {
   return !1;
 }
 function oJ1() {
-  if (X1(process.env.CLAUDE_CODE_TST_NAMES_IN_MESSAGES)) return !0;
+  if (isTruthy(process.env.CLAUDE_CODE_TST_NAMES_IN_MESSAGES)) return !0;
   if (Qw(process.env.CLAUDE_CODE_TST_NAMES_IN_MESSAGES)) return !1;
   return jA("tengu_tst_names_in_messages", !1);
 }
@@ -66875,7 +66875,7 @@ function aJ1(A) {
   let q = A.filter(vG);
   if (q.length === 0) {
     if (dt !== void 0 && dt !== "")
-      n("tengu_tool_prompt_changed", {
+      emitEvent("tengu_tool_prompt_changed", {
         tool: "ToolSearchTool",
         previousDeferredCount: dt.split(`
 `).length,
@@ -66899,7 +66899,7 @@ function aJ1(A) {
         `
 `,
       ).filter(Boolean).length;
-    n("tengu_tool_prompt_changed", {
+    emitEvent("tengu_tool_prompt_changed", {
       tool: "ToolSearchTool",
       previousDeferredCount: Y,
       newDeferredCount: z,
@@ -67015,7 +67015,7 @@ var p44 = E(() => {
   ];
 });
 function sJ1() {
-  if (X1(process.env.CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS) && C7())
+  if (isTruthy(process.env.CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS) && C7())
     return [];
   let A = [Fg6, S44, QB, nJ1];
   if (
@@ -67039,7 +67039,7 @@ var Q44 = E(() => {
 import { join as HQ9 } from "path";
 function JQ9() {
   if (bk6()) return U44;
-  if (X1(process.env.CLAUDE_CODE_USE_COWORK_PLUGINS)) return U44;
+  if (isTruthy(process.env.CLAUDE_CODE_USE_COWORK_PLUGINS)) return U44;
   return jQ9;
 }
 function WD() {
@@ -67112,7 +67112,7 @@ async function Zc(A) {
     } catch (_) {
       let $ = _ instanceof Error ? _.message : String(_);
       (K.push({ name: Y, error: $ }),
-        $6(
+        sendError(
           _ instanceof Error
             ? _
             : Error(`Failed to load marketplace ${Y}: ${_}`),
@@ -67209,7 +67209,7 @@ function GQ9(A, q) {
   try {
     return new RegExp(q.hostPattern).test(K);
   } catch {
-    return ($6(Error(`Invalid hostPattern regex: ${q.hostPattern}`)), !1);
+    return (sendError(Error(`Invalid hostPattern regex: ${q.hostPattern}`)), !1);
   }
 }
 function c44() {
@@ -67387,7 +67387,7 @@ function NQ9() {
       z = A.existsSync(q);
     if (Y) {
       (A.renameSync(K, q),
-        y("Renamed installed_plugins_v2.json to installed_plugins.json"));
+        writeDebugLog("Renamed installed_plugins_v2.json to installed_plugins.json"));
       let w = TX();
       a44(w);
     } else if (z) {
@@ -67396,8 +67396,8 @@ function NQ9() {
       if ((typeof _?.version === "number" ? _.version : 1) === 1) {
         let O = dh6().parse(_),
           H = rG8(O);
-        (Nz(q, p6(H, null, 2), { encoding: "utf-8", flush: !0 }),
-          y(
+        (Nz(q, trySafeStringify(H, null, 2), { encoding: "utf-8", flush: !0 }),
+          writeDebugLog(
             `Converted installed_plugins.json from V1 to V2 format (${Object.keys(O.plugins).length} plugins)`,
           ),
           a44(H));
@@ -67406,8 +67406,8 @@ function NQ9() {
     lG8 = !0;
   } catch (Y) {
     let z = Y instanceof Error ? Y.message : String(Y);
-    (y(`Failed to migrate plugin files: ${z}`, { level: "error" }),
-      $6(
+    (writeDebugLog(`Failed to migrate plugin files: ${z}`, { level: "error" }),
+      sendError(
         Y instanceof Error ? Y : Error(`Failed to migrate plugin files: ${z}`),
       ),
       (lG8 = !0));
@@ -67436,11 +67436,11 @@ function a44(A) {
         continue;
       if (!Y.has($))
         (q.rmSync($, { recursive: !0, force: !0 }),
-          y(`Cleaned up legacy cache directory: ${_}`));
+          writeDebugLog(`Cleaned up legacy cache directory: ${_}`));
     }
   } catch (Y) {
     let z = Y instanceof Error ? Y.message : String(Y);
-    y(`Failed to clean up legacy cache: ${z}`, { level: "warn" });
+    writeDebugLog(`Failed to clean up legacy cache: ${z}`, { level: "warn" });
   }
 }
 function nG8() {
@@ -67478,7 +67478,7 @@ function TX() {
         let z = ch6().parse(q.data);
         return (
           (iB = z),
-          y(
+          writeDebugLog(
             `Loaded ${Object.keys(z.plugins).length} installed plugins from ${A}`,
           ),
           z
@@ -67488,25 +67488,25 @@ function TX() {
         Y = rG8(K);
       return (
         (iB = Y),
-        y(
+        writeDebugLog(
           `Loaded and converted ${Object.keys(K.plugins).length} plugins from V1 format`,
         ),
         Y
       );
     }
     return (
-      y("installed_plugins.json doesn't exist, returning empty V2 object"),
+      writeDebugLog("installed_plugins.json doesn't exist, returning empty V2 object"),
       (iB = { version: 2, plugins: {} }),
       iB
     );
   } catch (q) {
     let K = q instanceof Error ? q.message : String(q);
     return (
-      y(
+      writeDebugLog(
         `Failed to load installed_plugins.json: ${K}. Starting with empty state.`,
         { level: "error" },
       ),
-      $6(
+      sendError(
         q instanceof Error
           ? q
           : Error(`Failed to load installed_plugins.json: ${K}`),
@@ -67522,14 +67522,14 @@ function qD1(A) {
   try {
     let Y = WD();
     if (!q.existsSync(Y)) q.mkdirSync(Y);
-    let z = p6(A, null, 2);
+    let z = trySafeStringify(A, null, 2);
     (Nz(K, z, { encoding: "utf-8", flush: !0 }),
       (iB = A),
-      y(`Saved ${Object.keys(A.plugins).length} installed plugins to ${K}`));
+      writeDebugLog(`Saved ${Object.keys(A.plugins).length} installed plugins to ${K}`));
   } catch (Y) {
     let z = Y instanceof Error ? Y.message : String(Y);
     throw (
-      $6(
+      sendError(
         Y instanceof Error
           ? Y
           : Error(`Failed to save installed_plugins.json: ${z}`),
@@ -67547,7 +67547,7 @@ function t44(A, q, K) {
     Y.plugins[A].length === 0)
   )
     delete Y.plugins[A];
-  (qD1(Y), y(`Removed installation for ${A} at scope ${q}`));
+  (qD1(Y), writeDebugLog(`Removed installation for ${A} at scope ${q}`));
 }
 function cg6() {
   if (iG8 === null) iG8 = TX();
@@ -67565,7 +67565,7 @@ function at() {
   } catch (A) {
     let q = A instanceof Error ? A.message : String(A);
     return (
-      y(`Failed to load installed plugins from disk: ${q}`, { level: "error" }),
+      writeDebugLog(`Failed to load installed plugins from disk: ${q}`, { level: "error" }),
       { version: 2, plugins: {} }
     );
   }
@@ -67574,7 +67574,7 @@ function e44(A, q, K, Y, z) {
   let w = at(),
     _ = w.plugins[A];
   if (!_) {
-    y(`Cannot update ${A} on disk: plugin not found in installed plugins`);
+    writeDebugLog(`Cannot update ${A} on disk: plugin not found in installed plugins`);
     return;
   }
   let $ = _.find((O) => O.scope === q && O.projectPath === K);
@@ -67583,20 +67583,20 @@ function e44(A, q, K, Y, z) {
       ($.version = z),
       ($.lastUpdated = new Date().toISOString()));
     let O = dg6();
-    (Nz(O, p6(w, null, 2), { encoding: "utf-8", flush: !0 }),
+    (Nz(O, trySafeStringify(w, null, 2), { encoding: "utf-8", flush: !0 }),
       (iB = null),
-      y(`Updated ${A} on disk to version ${z} at ${Y}`));
-  } else y(`Cannot update ${A} on disk: no installation for scope ${q}`);
+      writeDebugLog(`Updated ${A} on disk to version ${z} at ${Y}`));
+  } else writeDebugLog(`Cannot update ${A} on disk: no installation for scope ${q}`);
 }
 async function oG8() {
   NQ9();
   try {
     await sG8();
   } catch (q) {
-    $6(q instanceof Error ? q : Error(String(q)));
+    sendError(q instanceof Error ? q : Error(String(q)));
   }
   let A = cg6();
-  y(
+  writeDebugLog(
     `Initialized versioned plugins system with ${Object.keys(A.plugins).length} plugins`,
   );
 }
@@ -67624,7 +67624,7 @@ function Aq4(A) {
     for (let _ of q.plugins[w] ?? []) if (_.installPath) Y.add(_.installPath);
     (delete q.plugins[w],
       (z = !0),
-      y(`Removed installed plugin for marketplace removal: ${w}`));
+      writeDebugLog(`Removed installed plugin for marketplace removal: ${w}`));
   }
   if (z) qD1(q);
   return Array.from(Y);
@@ -67650,7 +67650,7 @@ function aG8(A, q, K = "user", Y) {
   else _.push(w);
   ((z.plugins[A] = _),
     qD1(z),
-    y(`${O ? "Updated" : "Added"} installed plugin: ${A} (scope: ${K})`));
+    writeDebugLog(`${O ? "Updated" : "Added"} installed plugin: ${A} (scope: ${K})`));
 }
 async function AD1(A) {
   return (await j51(A)) ?? void 0;
@@ -67663,7 +67663,7 @@ function s44(A, q) {
     let z = K.readFileSync(Y, { encoding: "utf-8" });
     return w8(z).version || "unknown";
   } catch {
-    return (y(`Could not read version from manifest for ${q}`), "unknown");
+    return (writeDebugLog(`Could not read version from manifest for ${q}`), "unknown");
   }
 }
 async function sG8() {
@@ -67683,12 +67683,12 @@ async function sG8() {
             return G && G.length > 0;
           })
       ) {
-        y("All plugins already exist, skipping migration");
+        writeDebugLog("All plugins already exist, skipping migration");
         return;
       }
     }
   }
-  y(
+  writeDebugLog(
     Y
       ? "Syncing installed_plugins.json with enabledPlugins from all settings.json files"
       : "Creating installed_plugins.json from settings.json files",
@@ -67719,7 +67719,7 @@ async function sG8() {
         else delete W.projectPath;
         ((W.lastUpdated = _),
           J++,
-          y(
+          writeDebugLog(
             `Updated ${X} scope to ${M.scope} (settings.json is source of truth)`,
           ));
       }
@@ -67728,10 +67728,10 @@ async function sG8() {
         G = W[0];
       if (!G || W.length !== 2) continue;
       try {
-        y(`Looking up plugin ${X} in marketplace ${W[1]}`);
+        writeDebugLog(`Looking up plugin ${X} in marketplace ${W[1]}`);
         let Z = await kM(X);
         if (!Z) {
-          y(`Plugin ${X} not found in any marketplace, skipping`);
+          writeDebugLog(`Plugin ${X} not found in any marketplace, skipping`);
           continue;
         }
         let { entry: f, marketplaceInstallLocation: N } = Z,
@@ -67745,7 +67745,7 @@ async function sG8() {
             I = G.replace(/[^a-zA-Z0-9-_]/g, "-"),
             B = B56(S, I);
           if (!w.existsSync(B)) {
-            y(`External plugin ${X} not in cache, skipping`);
+            writeDebugLog(`External plugin ${X} not in cache, skipping`);
             continue;
           }
           ((V = B), (v = s44(B, X)), (L = await AD1(B)));
@@ -67764,15 +67764,15 @@ async function sG8() {
           },
         ]),
           D++,
-          y(`Added ${X} with scope ${M.scope}`));
+          writeDebugLog(`Added ${X} with scope ${M.scope}`));
       } catch (Z) {
-        y(`Failed to add plugin ${X}: ${Z}`);
+        writeDebugLog(`Failed to add plugin ${X}: ${Z}`);
       }
     }
   }
   if (!Y || J > 0 || D > 0)
     (qD1({ version: 2, plugins: j }),
-      y(`Sync completed: ${D} added, ${J} updated in installed_plugins.json`));
+      writeDebugLog(`Sync completed: ${D} added, ${J} updated in installed_plugins.json`));
 }
 var lG8 = !1,
   iB = null,
@@ -67853,7 +67853,7 @@ var tG8 = 50000,
 import { join as AZ8 } from "path";
 import { mkdir as vQ9, writeFile as kQ9, stat as EQ9 } from "fs/promises";
 function LQ9() {
-  return AZ8(aj(HA()), d1());
+  return AZ8(aj(HA()), getSessionId());
 }
 function mP6() {
   return AZ8(LQ9(), qZ8);
@@ -67877,7 +67877,7 @@ async function lg6(A, q) {
   }
   await wZ8();
   let Y = zZ8(q, K),
-    z = K ? p6(A, null, 2) : A,
+    z = K ? trySafeStringify(A, null, 2) : A,
     w = !1;
   try {
     (await EQ9(Y), (w = !0));
@@ -67887,9 +67887,9 @@ async function lg6(A, q) {
       await kQ9(Y, z, "utf-8");
     } catch (O) {
       let H = O instanceof Error ? O : Error(String(O));
-      return ($6(H), { error: yQ9(H) });
+      return (sendError(H), { error: yQ9(H) });
     }
-    y(`Persisted tool result to ${Y} (${v3(z.length)})`);
+    writeDebugLog(`Persisted tool result to ${Y} (${v3(z.length)})`);
   }
   let { preview: _, hasMore: $ } = $Z8(z, YD1);
   return {
@@ -67936,12 +67936,12 @@ async function Yq4(A, q, K) {
     )
       return A;
   }
-  if ((typeof Y === "string" ? Y.length : p6(Y).length) <= (K ?? qq4)) return A;
+  if ((typeof Y === "string" ? Y.length : trySafeStringify(Y).length) <= (K ?? qq4)) return A;
   let _ = await lg6(Y, A.tool_use_id);
   if (ig6(_)) return A;
   let $ = _Z8(_);
   return (
-    n("tengu_tool_result_persisted", {
+    emitEvent("tengu_tool_result_persisted", {
       toolName: gK(q),
       originalSizeBytes: _.originalSize,
       persistedSizeBytes: $.length,
@@ -68009,7 +68009,7 @@ async function nB(A, q, K) {
             let _ = await GD(Yq, { command: w }, q, sN({ content: [] }), "");
             if (_.behavior !== "allow")
               throw (
-                y(
+                writeDebugLog(
                   `Bash command permission check failed for command in ${K}: ${w}. Error: ${_.message}`,
                 ),
                 new ku(
@@ -87567,7 +87567,7 @@ function pa9(A) {
       },
     });
   return (
-    y(
+    writeDebugLog(
       `Zip extraction completed: ${K.fileCount} files, ${Math.round(K.totalUncompressedSize / 1024)}KB uncompressed`,
     ),
     Y
@@ -87630,7 +87630,7 @@ function JX1(A) {
       };
     case "macos":
     default: {
-      if (q === "unknown") y("Unknown platform detected, using default paths");
+      if (q === "unknown") writeDebugLog("Unknown platform detected, using default paths");
       return z;
     }
   }
@@ -87662,12 +87662,12 @@ function ez4(A, q) {
   try {
     let Y = SA().pluginConfigs?.[A]?.mcpServers?.[q];
     if (!Y) return null;
-    return (y(`Loaded user config for ${A}/${q} from settings`), Y);
+    return (writeDebugLog(`Loaded user config for ${A}/${q} from settings`), Y);
   } catch (K) {
     let Y = K instanceof Error ? K : Error(String(K));
     return (
-      $6(Y),
-      y(`Failed to load user config for ${A}/${q}: ${K}`, { level: "error" }),
+      sendError(Y),
+      writeDebugLog(`Failed to load user config for ${A}/${q}: ${K}`, { level: "error" }),
       null
     );
   }
@@ -87681,11 +87681,11 @@ function A24(A, q, K) {
     Y.pluginConfigs[A].mcpServers[q] = K;
     let z = iA("userSettings", Y);
     if (z.error) throw z.error;
-    y(`Saved user config for ${A}/${q} to user settings`);
+    writeDebugLog(`Saved user config for ${A}/${q} to user settings`);
   } catch (Y) {
     let z = Y instanceof Error ? Y : Error(String(Y));
     throw (
-      $6(z),
+      sendError(z),
       Error(`Failed to save user configuration for ${A}/${q}: ${z.message}`)
     );
   }
@@ -87737,7 +87737,7 @@ async function K24(A, q) {
     let Y = Error(
       `Failed to generate MCP server configuration from manifest "${A.name}"`,
     );
-    throw ($6(Y), Y);
+    throw (sendError(Y), Y);
   }
   return K;
 }
@@ -87751,18 +87751,18 @@ async function _24(A, q) {
     if (z.code === "ENOENT") return null;
     let _ = z instanceof Error ? z : Error(String(z));
     return (
-      $6(_),
-      y(`Failed to load MCPB cache metadata: ${z}`, { level: "error" }),
+      sendError(_),
+      writeDebugLog(`Failed to load MCPB cache metadata: ${z}`, { level: "error" }),
       null
     );
   }
 }
 async function jT8(A, q, K) {
   let Y = w24(A, q);
-  (await DX1(A, { recursive: !0 }), await XX1(Y, p6(K, null, 2), "utf-8"));
+  (await DX1(A, { recursive: !0 }), await XX1(Y, trySafeStringify(K, null, 2), "utf-8"));
 }
 async function da9(A, q, K) {
-  if ((y(`Downloading MCPB from ${A}`), K)) K(`Downloading ${A}...`);
+  if ((writeDebugLog(`Downloading MCPB from ${A}`), K)) K(`Downloading ${A}...`);
   try {
     let Y = await g8.get(A, {
         timeout: 120000,
@@ -87778,7 +87778,7 @@ async function da9(A, q, K) {
       z = new Uint8Array(Y.data);
     if (
       (await XX1(q, Buffer.from(z)),
-      y(`Downloaded ${z.length} bytes to ${q}`),
+      writeDebugLog(`Downloaded ${z.length} bytes to ${q}`),
       K)
     )
       K("Download complete");
@@ -87786,7 +87786,7 @@ async function da9(A, q, K) {
   } catch (Y) {
     let z = Y instanceof Error ? Y.message : String(Y),
       w = Error(`Failed to download MCPB file from ${A}: ${z}`);
-    throw ($6(w), w);
+    throw (sendError(w), w);
   }
 }
 async function ca9(A, q, K) {
@@ -87812,7 +87812,7 @@ async function ca9(A, q, K) {
     } else await XX1($, Buffer.from(_));
     if ((Y++, K && Y % 10 === 0)) K(`Extracted ${Y}/${z} files`);
   }
-  if ((y(`Extracted ${Y} files to ${q}`), K))
+  if ((writeDebugLog(`Extracted ${Y} files to ${q}`), K))
     K(`Extraction complete (${Y} files)`);
 }
 async function la9(A, q) {
@@ -87824,9 +87824,9 @@ async function la9(A, q) {
     await K.stat(z.extractedPath);
   } catch (w) {
     if (w.code === "ENOENT")
-      y(`MCPB extraction path missing: ${z.extractedPath}`);
+      writeDebugLog(`MCPB extraction path missing: ${z.extractedPath}`);
     else
-      y(`MCPB extraction path inaccessible: ${z.extractedPath}: ${w}`, {
+      writeDebugLog(`MCPB extraction path inaccessible: ${z.extractedPath}: ${w}`, {
         level: "error",
       });
     return !0;
@@ -87837,24 +87837,24 @@ async function la9(A, q) {
     try {
       _ = await K.stat(w);
     } catch (H) {
-      if (H.code === "ENOENT") y(`MCPB source file missing: ${w}`);
-      else y(`MCPB source file inaccessible: ${w}: ${H}`, { level: "error" });
+      if (H.code === "ENOENT") writeDebugLog(`MCPB source file missing: ${w}`);
+      else writeDebugLog(`MCPB source file inaccessible: ${w}: ${H}`, { level: "error" });
       return !0;
     }
     let $ = new Date(z.cachedAt).getTime(),
       O = _.mtimeMs;
     if (O > $)
-      return (y(`MCPB file modified: ${new Date(O)} > ${new Date($)}`), !0);
+      return (writeDebugLog(`MCPB file modified: ${new Date(O)} > ${new Date($)}`), !0);
   }
   return !1;
 }
 async function SF6(A, q, K, Y, z, w) {
   let _ = P1(),
     $ = z24(q);
-  (await DX1($, { recursive: !0 }), y(`Loading MCPB from source: ${A}`));
+  (await DX1($, { recursive: !0 }), writeDebugLog(`Loading MCPB from source: ${A}`));
   let O = await _24($, A);
   if (O && !(await la9(A, q))) {
-    y(`Using cached MCPB from ${O.extractedPath} (hash: ${O.contentHash})`);
+    writeDebugLog(`Using cached MCPB from ${O.extractedPath} (hash: ${O.contentHash})`);
     let Z = Ne(O.extractedPath, "manifest.json"),
       f;
     try {
@@ -87862,7 +87862,7 @@ async function SF6(A, q, K, Y, z, w) {
     } catch (L) {
       if (L.code === "ENOENT") {
         let S = Error(`Cached manifest not found: ${Z}`);
-        throw ($6(S), S);
+        throw (sendError(S), S);
       }
       throw L;
     }
@@ -87895,7 +87895,7 @@ async function SF6(A, q, K, Y, z, w) {
         let F = Error(
           `Failed to generate MCP server configuration from manifest "${V.name}"`,
         );
-        throw ($6(F), F);
+        throw (sendError(F), F);
       }
       return {
         manifest: V,
@@ -87924,27 +87924,27 @@ async function SF6(A, q, K, Y, z, w) {
     } catch (f) {
       if (f.code === "ENOENT") {
         let N = Error(`MCPB file not found: ${Z}`);
-        throw ($6(N), N);
+        throw (sendError(N), N);
       }
       throw f;
     }
   }
   let J = Ua9(H);
-  if ((y(`MCPB content hash: ${J}`), Y)) Y("Extracting MCPB archive...");
+  if ((writeDebugLog(`MCPB content hash: ${J}`), Y)) Y("Extracting MCPB archive...");
   let D = await jX1(j),
     X = D["manifest.json"];
   if (!X) {
     let Z = Error("No manifest.json found in MCPB file");
-    throw ($6(Z), Z);
+    throw (sendError(Z), Z);
   }
   let M = OT8(X);
   if (
-    (y(`MCPB manifest: ${M.name} v${M.version} by ${M.author.name}`), !M.server)
+    (writeDebugLog(`MCPB manifest: ${M.name} v${M.version} by ${M.author.name}`), !M.server)
   ) {
     let Z = Error(
       `MCPB manifest for "${M.name}" does not define a server configuration`,
     );
-    throw ($6(Z), Z);
+    throw (sendError(Z), Z);
   }
   let P = Ne($, J);
   if (
@@ -87988,7 +87988,7 @@ async function SF6(A, q, K, Y, z, w) {
       let S = Error(
         `Failed to generate MCP server configuration from manifest "${M.name}"`,
       );
-      throw ($6(S), S);
+      throw (sendError(S), S);
     }
     let L = {
       source: A,
@@ -88013,7 +88013,7 @@ async function SF6(A, q, K, Y, z, w) {
     };
   return (
     await jT8($, A, G),
-    y(`Successfully loaded MCPB: ${M.name} (extracted to ${P})`),
+    writeDebugLog(`Successfully loaded MCPB: ${M.name} (extracted to ${P})`),
     { manifest: M, mcpConfig: W, extractedPath: P, contentHash: J }
   );
 }
@@ -88045,14 +88045,14 @@ function $W6(A) {
 import { join as ia9 } from "path";
 async function $24(A, q, K) {
   try {
-    y(`Loading MCP servers from MCPB: ${q}`);
+    writeDebugLog(`Loading MCP servers from MCPB: ${q}`);
     let Y = A.repository,
       z = await SF6(q, A.path, Y, ($) => {
-        y(`MCPB [${A.name}]: ${$}`);
+        writeDebugLog(`MCPB [${A.name}]: ${$}`);
       });
     if ("status" in z && z.status === "needs-config")
       return (
-        y(
+        writeDebugLog(
           `MCPB ${q} requires user configuration. ` +
             `User can configure via: /plugin → Manage plugins → ${A.name} → Configure`,
         ),
@@ -88061,12 +88061,12 @@ async function $24(A, q, K) {
     let w = z,
       _ = w.manifest.name;
     return (
-      y(`Loaded MCP server "${_}" from MCPB (extracted to ${w.extractedPath})`),
+      writeDebugLog(`Loaded MCP server "${_}" from MCPB (extracted to ${w.extractedPath})`),
       { [_]: w.mcpConfig }
     );
   } catch (Y) {
     let z = Y instanceof Error ? Y.message : String(Y);
-    y(`Failed to load MCPB ${q}: ${z}`, { level: "error" });
+    writeDebugLog(`Failed to load MCPB ${q}: ${z}`, { level: "error" });
     let w = `${A.name}@${A.repository}`;
     if (
       q.startsWith("http") &&
@@ -88136,7 +88136,7 @@ async function XT8(A, q) {
   } catch (w) {
     if (w.code === "ENOENT") return null;
     return (
-      y(`Failed to load MCP servers from ${Y}: ${w}`, { level: "error" }),
+      writeDebugLog(`Failed to load MCP servers from ${Y}: ${w}`, { level: "error" }),
       null
     );
   }
@@ -88148,14 +88148,14 @@ async function XT8(A, q) {
       let j = Gm().safeParse(H);
       if (j.success) $[O] = j.data;
       else
-        y(`Invalid MCP server config for ${O} in ${Y}: ${j.error.message}`, {
+        writeDebugLog(`Invalid MCP server config for ${O} in ${Y}: ${j.error.message}`, {
           level: "error",
         });
     }
     return $;
   } catch (w) {
     return (
-      y(`Failed to load MCP servers from ${Y}: ${w}`, { level: "error" }),
+      writeDebugLog(`Failed to load MCP servers from ${Y}: ${w}`, { level: "error" }),
       null
     );
   }
@@ -88226,7 +88226,7 @@ function oa9(A, q, K, Y, z, w) {
   if (Y && _.length > 0) {
     let j = [...new Set(_)].join(", ");
     if (
-      (y(`Missing environment variables in plugin MCP config: ${j}`, {
+      (writeDebugLog(`Missing environment variables in plugin MCP config: ${j}`, {
         level: "warn",
       }),
       z && w)
@@ -88358,7 +88358,7 @@ async function sa9(A, q, K) {
         }),
       );
     } catch ($) {
-      y(`Failed to scan directory ${_}: ${$}`, { level: "error" });
+      writeDebugLog(`Failed to scan directory ${_}: ${$}`, { level: "error" });
     }
   }
   return (await w(A), Y);
@@ -88376,7 +88376,7 @@ function ta9(A) {
     if (w.length > 0) {
       let _ = w[0];
       if (w.length > 1)
-        y(`Multiple skill files found in ${Y}, using ${jW6(_.filePath)}`);
+        writeDebugLog(`Multiple skill files found in ${Y}, using ${jW6(_.filePath)}`);
       K.push(_);
     } else K.push(...z);
   }
@@ -88414,10 +88414,10 @@ function bF6(A, q, K, Y, z, w, _ = { isSkillMode: !1 }) {
       f = $.model === "inherit" ? void 0 : $.model ? O5($.model) : void 0,
       N = $["disable-model-invocation"],
       V;
-    if (_.isSkillMode) V = N === void 0 ? !1 : X1(N);
-    else V = X1(N);
+    if (_.isSkillMode) V = N === void 0 ? !1 : isTruthy(N);
+    else V = isTruthy(N);
     let v = $["user-invocable"],
-      S = !(_.isSkillMode ? (v === void 0 || v === null ? !0 : X1(v)) : !0);
+      S = !(_.isSkillMode ? (v === void 0 || v === null ? !0 : isTruthy(v)) : !0);
     return {
       type: "prompt",
       name: A,
@@ -88449,7 +88449,7 @@ ${O}`
         return (
           (h = OW6(h, I, !0, P)),
           (h = hF6(h, z)),
-          (h = h.replace(/\$\{CLAUDE_SESSION_ID\}/g, d1())),
+          (h = h.replace(/\$\{CLAUDE_SESSION_ID\}/g, getSessionId())),
           (h = await nB(
             h,
             {
@@ -88476,7 +88476,7 @@ ${O}`
     };
   } catch ($) {
     return (
-      y(`Failed to create command from ${q.filePath}: ${$}`, {
+      writeDebugLog(`Failed to create command from ${q.filePath}: ${$}`, {
         level: "error",
       }),
       null
@@ -88495,7 +88495,7 @@ async function J24(A, q, K, Y, z, w) {
     H = await _.readFile(O, { encoding: "utf-8" });
   } catch (J) {
     if (J.code !== "ENOENT")
-      return (y(`Failed to load skill from ${O}: ${J}`, { level: "error" }), $);
+      return (writeDebugLog(`Failed to load skill from ${O}: ${J}`, { level: "error" }), $);
   }
   if (H !== null) {
     if (Au(_, O, w)) return $;
@@ -88506,7 +88506,7 @@ async function J24(A, q, K, Y, z, w) {
         P = bF6(X, M, K, Y, z, !0, { isSkillMode: !0 });
       if (P) $.push(P);
     } catch (J) {
-      y(`Failed to load skill from ${O}: ${J}`, { level: "error" });
+      writeDebugLog(`Failed to load skill from ${O}: ${J}`, { level: "error" });
     }
     return $;
   }
@@ -88515,7 +88515,7 @@ async function J24(A, q, K, Y, z, w) {
     j = await _.readdir(A);
   } catch (J) {
     if (J.code !== "ENOENT")
-      y(`Failed to load skills from directory ${A}: ${J}`, { level: "error" });
+      writeDebugLog(`Failed to load skills from directory ${A}: ${J}`, { level: "error" });
     return $;
   }
   return (
@@ -88529,7 +88529,7 @@ async function J24(A, q, K, Y, z, w) {
           M = await _.readFile(X, { encoding: "utf-8" });
         } catch (P) {
           if (P.code !== "ENOENT")
-            y(`Failed to load skill from ${X}: ${P}`, { level: "error" });
+            writeDebugLog(`Failed to load skill from ${X}: ${P}`, { level: "error" });
           return;
         }
         if (Au(_, X, w)) return;
@@ -88540,7 +88540,7 @@ async function J24(A, q, K, Y, z, w) {
             f = bF6(G, Z, K, Y, z, !0, { isSkillMode: !0 });
           if (f) $.push(f);
         } catch (P) {
-          y(`Failed to load skill from ${X}: ${P}`, { level: "error" });
+          writeDebugLog(`Failed to load skill from ${X}: ${P}`, { level: "error" });
         }
       }),
     ),
@@ -88568,7 +88568,7 @@ var uF6 = E(() => {
     let { enabled: A, errors: q } = await jz(),
       K = [];
     if (q.length > 0)
-      y(`Plugin loading errors: ${q.map((Y) => bf(Y)).join(", ")}`);
+      writeDebugLog(`Plugin loading errors: ${q.map((Y) => bf(Y)).join(", ")}`);
     for (let Y of A) {
       let z = new Set();
       if (Y.commandsPath)
@@ -88583,23 +88583,23 @@ var uF6 = E(() => {
             z,
           );
           if ((K.push(...w), w.length > 0))
-            y(
+            writeDebugLog(
               `Loaded ${w.length} commands from plugin ${Y.name} default directory`,
             );
         } catch (w) {
-          y(
+          writeDebugLog(
             `Failed to load commands from plugin ${Y.name} default directory: ${w}`,
             { level: "error" },
           );
         }
       if (Y.commandsPaths) {
-        y(`Plugin ${Y.name} has commandsPaths: ${Y.commandsPaths.join(", ")}`);
+        writeDebugLog(`Plugin ${Y.name} has commandsPaths: ${Y.commandsPaths.join(", ")}`);
         for (let w of Y.commandsPaths)
           try {
             let _ = P1(),
               $ = await _.stat(w);
             if (
-              (y(
+              (writeDebugLog(
                 `Checking commandPath ${w} - isDirectory: ${$.isDirectory()}, isFile: ${$.isFile()}`,
               ),
               $.isDirectory())
@@ -88614,11 +88614,11 @@ var uF6 = E(() => {
                 z,
               );
               if ((K.push(...O), O.length > 0))
-                y(
+                writeDebugLog(
                   `Loaded ${O.length} commands from plugin ${Y.name} custom path: ${w}`,
                 );
               else
-                y(
+                writeDebugLog(
                   `Warning: No commands found in plugin ${Y.name} custom directory: ${w}. Expected .md files or SKILL.md in subdirectories.`,
                   { level: "warn" },
                 );
@@ -88656,12 +88656,12 @@ var uF6 = E(() => {
                 P = bF6(J, M, Y.source, Y.manifest, Y.path, !1);
               if (P)
                 (K.push(P),
-                  y(
+                  writeDebugLog(
                     `Loaded command from plugin ${Y.name} custom file: ${w}${D ? " (with metadata override)" : ""}`,
                   ));
             }
           } catch (_) {
-            y(
+            writeDebugLog(
               `Failed to load commands from plugin ${Y.name} custom path ${w}: ${_}`,
               { level: "error" },
             );
@@ -88694,34 +88694,34 @@ var uF6 = E(() => {
                 D = bF6(j, J, Y.source, Y.manifest, Y.path, !1);
               if (D)
                 (K.push(D),
-                  y(
+                  writeDebugLog(
                     `Loaded inline content command from plugin ${Y.name}: ${j}`,
                   ));
             } catch ($) {
-              y(
+              writeDebugLog(
                 `Failed to load inline content command ${w} from plugin ${Y.name}: ${$}`,
                 { level: "error" },
               );
             }
       }
     }
-    return (y(`Total plugin commands loaded: ${K.length}`), K);
+    return (writeDebugLog(`Total plugin commands loaded: ${K.length}`), K);
   });
   WT8 = T8(async () => {
     let { enabled: A, errors: q } = await jz(),
       K = [];
     if (q.length > 0)
-      y(`Plugin loading errors: ${q.map((Y) => bf(Y)).join(", ")}`);
-    y(`getPluginSkills: Processing ${A.length} enabled plugins`);
+      writeDebugLog(`Plugin loading errors: ${q.map((Y) => bf(Y)).join(", ")}`);
+    writeDebugLog(`getPluginSkills: Processing ${A.length} enabled plugins`);
     for (let Y of A) {
       let z = new Set();
       if (
-        (y(
+        (writeDebugLog(
           `Checking plugin ${Y.name}: skillsPath=${Y.skillsPath ? "exists" : "none"}, skillsPaths=${Y.skillsPaths ? Y.skillsPaths.length : 0} paths`,
         ),
         Y.skillsPath)
       ) {
-        y(
+        writeDebugLog(
           `Attempting to load skills from plugin ${Y.name} default skillsPath: ${Y.skillsPath}`,
         );
         try {
@@ -88734,37 +88734,37 @@ var uF6 = E(() => {
             z,
           );
           (K.push(...w),
-            y(
+            writeDebugLog(
               `Loaded ${w.length} skills from plugin ${Y.name} default directory`,
             ));
         } catch (w) {
-          y(
+          writeDebugLog(
             `Failed to load skills from plugin ${Y.name} default directory: ${w}`,
             { level: "error" },
           );
         }
       }
       if (Y.skillsPaths) {
-        y(
+        writeDebugLog(
           `Attempting to load skills from plugin ${Y.name} skillsPaths: ${Y.skillsPaths.join(", ")}`,
         );
         for (let w of Y.skillsPaths)
           try {
-            y(`Loading from skillPath: ${w} for plugin ${Y.name}`);
+            writeDebugLog(`Loading from skillPath: ${w} for plugin ${Y.name}`);
             let _ = await J24(w, Y.name, Y.source, Y.manifest, Y.path, z);
             (K.push(..._),
-              y(
+              writeDebugLog(
                 `Loaded ${_.length} skills from plugin ${Y.name} custom path: ${w}`,
               ));
           } catch (_) {
-            y(
+            writeDebugLog(
               `Failed to load skills from plugin ${Y.name} custom path ${w}: ${_}`,
               { level: "error" },
             );
           }
       }
     }
-    return (y(`Total plugin skills loaded: ${K.length}`), K);
+    return (writeDebugLog(`Total plugin skills loaded: ${K.length}`), K);
   });
 });
 var ZT8 = {};
@@ -88822,7 +88822,7 @@ function As9() {
 function X24() {
   let A = SA().enabledPlugins;
   if (!A) return "{}";
-  return p6(A, Object.keys(A).sort());
+  return trySafeStringify(A, Object.keys(A).sort());
 }
 function qs9() {
   if (GT8) return;
@@ -88832,11 +88832,11 @@ function qs9() {
       if (A === "policySettings") {
         let q = X24();
         if (q === GX1) {
-          y("Plugin hooks: skipping reload, enabledPlugins unchanged");
+          writeDebugLog("Plugin hooks: skipping reload, enabledPlugins unchanged");
           return;
         }
         ((GX1 = q),
-          y("Plugin hooks: reloading due to enabledPlugins change"),
+          writeDebugLog("Plugin hooks: reloading due to enabledPlugins change"),
           LG(),
           JW6(),
           _g());
@@ -88880,7 +88880,7 @@ var A96 = E(() => {
       };
     for (let Y of A) {
       if (!Y.hooksConfig) continue;
-      y(`Loading hooks from plugin: ${Y.name}`);
+      writeDebugLog(`Loading hooks from plugin: ${Y.name}`);
       let z = ea9(Y);
       for (let w of Object.keys(z)) q[w].push(...z[w]);
     }
@@ -88889,7 +88889,7 @@ var A96 = E(() => {
       (Y, z) => Y + z.reduce((w, _) => w + _.hooks.length, 0),
       0,
     );
-    y(`Registered ${K} hooks from ${A.length} plugins`);
+    writeDebugLog(`Registered ${K} hooks from ${A.length} plugins`);
   });
 });
 import { join as Ks9, basename as Ys9 } from "path";
@@ -88910,7 +88910,7 @@ async function M24(A, q, K) {
         }),
       );
     } catch ($) {
-      y(`Failed to scan output-styles directory ${_}: ${$}`, {
+      writeDebugLog(`Failed to scan output-styles directory ${_}: ${$}`, {
         level: "error",
       });
     }
@@ -88939,7 +88939,7 @@ async function P24(A, q, K) {
     };
   } catch (z) {
     return (
-      y(`Failed to load output style from ${A}: ${z}`, { level: "error" }),
+      writeDebugLog(`Failed to load output style from ${A}: ${z}`, { level: "error" }),
       null
     );
   }
@@ -88960,18 +88960,18 @@ var ZX1 = E(() => {
     let { enabled: A, errors: q } = await jz(),
       K = [];
     if (q.length > 0)
-      y(`Plugin loading errors: ${q.map((Y) => bf(Y)).join(", ")}`);
+      writeDebugLog(`Plugin loading errors: ${q.map((Y) => bf(Y)).join(", ")}`);
     for (let Y of A) {
       let z = new Set();
       if (Y.outputStylesPath)
         try {
           let w = await M24(Y.outputStylesPath, Y.name, z);
           if ((K.push(...w), w.length > 0))
-            y(
+            writeDebugLog(
               `Loaded ${w.length} output styles from plugin ${Y.name} default directory`,
             );
         } catch (w) {
-          y(
+          writeDebugLog(
             `Failed to load output styles from plugin ${Y.name} default directory: ${w}`,
             { level: "error" },
           );
@@ -88983,25 +88983,25 @@ var ZX1 = E(() => {
             if ($.isDirectory()) {
               let O = await M24(w, Y.name, z);
               if ((K.push(...O), O.length > 0))
-                y(
+                writeDebugLog(
                   `Loaded ${O.length} output styles from plugin ${Y.name} custom path: ${w}`,
                 );
             } else if ($.isFile() && w.endsWith(".md")) {
               let O = await P24(w, Y.name, z);
               if (O)
                 (K.push(O),
-                  y(
+                  writeDebugLog(
                     `Loaded output style from plugin ${Y.name} custom file: ${w}`,
                   ));
             }
           } catch (_) {
-            y(
+            writeDebugLog(
               `Failed to load output styles from plugin ${Y.name} custom path ${w}: ${_}`,
               { level: "error" },
             );
           }
     }
-    return (y(`Total plugin output styles loaded: ${K.length}`), K);
+    return (writeDebugLog(`Total plugin output styles loaded: ${K.length}`), K);
   });
 });
 import { join as $g, dirname as G24, basename as zs9 } from "path";
@@ -89018,7 +89018,7 @@ import {
   lstat as Hs9,
 } from "fs/promises";
 function QI() {
-  return X1(process.env.CLAUDE_CODE_PLUGIN_USE_ZIP_CACHE);
+  return isTruthy(process.env.CLAUDE_CODE_PLUGIN_USE_ZIP_CACHE);
 }
 function BF6() {
   if (!QI()) return;
@@ -89048,7 +89048,7 @@ async function N24() {
       return (
         await mF6(q, { recursive: !0 }),
         (q96 = q),
-        y(`Created session plugin cache at ${q}`),
+        writeDebugLog(`Created session plugin cache at ${q}`),
         q
       );
     })();
@@ -89058,9 +89058,9 @@ async function V24() {
   if (!q96) return;
   try {
     (await VT8(q96, { recursive: !0, force: !0 }),
-      y(`Cleaned up session plugin cache at ${q96}`));
+      writeDebugLog(`Cleaned up session plugin cache at ${q96}`));
   } catch (A) {
-    y(`Failed to clean up session plugin cache: ${A}`);
+    writeDebugLog(`Failed to clean up session plugin cache: ${A}`);
   } finally {
     ((q96 = null), (fX1 = null));
   }
@@ -89086,7 +89086,7 @@ async function js9(A) {
   await v24(A, "", q, new Set());
   let Y = Tq4(q, { level: 6 });
   return (
-    y(
+    writeDebugLog(
       `Created ZIP from ${A}: ${Object.keys(q).length} files, ${Y.length} bytes`,
     ),
     Y
@@ -89104,7 +89104,7 @@ async function v24(A, q, K, Y) {
     let _ = await W24(z),
       $ = `${_.dev}:${_.ino}`;
     if (Y.has($)) {
-      y(`Skipping symlink cycle at ${z}`);
+      writeDebugLog(`Skipping symlink cycle at ${z}`);
       return;
     }
     Y.add($);
@@ -89135,7 +89135,7 @@ async function v24(A, q, K, Y) {
         let j = await $s9($);
         K[O] = new Uint8Array(j);
       } catch (j) {
-        y(`Failed to read file for zip: ${O}: ${j}`);
+        writeDebugLog(`Failed to read file for zip: ${O}: ${j}`);
       }
   }
 }
@@ -89150,7 +89150,7 @@ async function k24(A, q) {
     let w = $g(q, Y);
     (await mF6(G24(w), { recursive: !0 }), await NT8(w, z));
   }
-  y(`Extracted ZIP to ${q}: ${Object.keys(K).length} entries`);
+  writeDebugLog(`Extracted ZIP to ${q}: ${Object.keys(K).length} entries`);
 }
 async function NX1(A, q) {
   let K = await js9(A);
@@ -89187,7 +89187,7 @@ function Ms9(A) {
     A.type === "prompt" &&
     A.source === "plugin"
   )
-    y(
+    writeDebugLog(
       `Skill prompt: showing "${A.name}" (userFacingName="${A.userFacingName()}")`,
     );
   return `- ${A.name}: ${kT8(A)}`;
@@ -89842,25 +89842,25 @@ var hT8 = "\\",
   bT8 = async (A) => {
     let q = A.includes("zsh") ? "zsh" : A.includes("bash") ? "bash" : "sh";
     return (
-      y(`Creating shell snapshot for ${q} (${A})`),
+      writeDebugLog(`Creating shell snapshot for ${q} (${A})`),
       new Promise(async (K) => {
         try {
           let Y = xT8(A);
-          y(`Looking for shell config file: ${Y}`);
+          writeDebugLog(`Looking for shell config file: ${Y}`);
           let z = await pq(Y);
           if (!z)
-            y(
+            writeDebugLog(
               `Shell config file not found: ${Y}, creating snapshot with Claude Code defaults only`,
             );
           let w = Date.now(),
             _ = Math.random().toString(36).substring(2, 8),
             $ = IT8(_A(), "shell-snapshots");
-          y(`Snapshots directory: ${$}`);
+          writeDebugLog(`Snapshots directory: ${$}`);
           let O = IT8($, `snapshot-${q}-${w}-${_}.sh`);
           await ms9($, { recursive: !0 });
           let H = await Us9(A, O, z);
-          (y(`Creating snapshot at: ${O}`),
-            y(`Execution timeout: ${Q24}ms`),
+          (writeDebugLog(`Creating snapshot at: ${O}`),
+            writeDebugLog(`Execution timeout: ${Q24}ms`),
             gs9(
               A,
               ["-c", "-l", H],
@@ -89881,28 +89881,28 @@ var hT8 = "\\",
                 if (j) {
                   let X = j;
                   if (
-                    (y(`Shell snapshot creation failed: ${j.message}`),
-                    y("Error details:"),
-                    y(`  - Error code: ${X?.code}`),
-                    y(`  - Error signal: ${X?.signal}`),
-                    y(`  - Error killed: ${X?.killed}`),
-                    y(`  - Shell path: ${A}`),
-                    y(`  - Config file: ${xT8(A)}`),
-                    y(`  - Config file exists: ${z}`),
-                    y(`  - Working directory: ${y1()}`),
-                    y(`  - Claude home: ${_A()}`),
-                    y(`Full snapshot script:
+                    (writeDebugLog(`Shell snapshot creation failed: ${j.message}`),
+                    writeDebugLog("Error details:"),
+                    writeDebugLog(`  - Error code: ${X?.code}`),
+                    writeDebugLog(`  - Error signal: ${X?.signal}`),
+                    writeDebugLog(`  - Error killed: ${X?.killed}`),
+                    writeDebugLog(`  - Shell path: ${A}`),
+                    writeDebugLog(`  - Config file: ${xT8(A)}`),
+                    writeDebugLog(`  - Config file exists: ${z}`),
+                    writeDebugLog(`  - Working directory: ${y1()}`),
+                    writeDebugLog(`  - Claude home: ${_A()}`),
+                    writeDebugLog(`Full snapshot script:
 ${H}`),
                     J)
                   )
-                    y(`stdout output (${J.length} chars):
+                    writeDebugLog(`stdout output (${J.length} chars):
 ${J}`);
-                  else y("No stdout output captured");
-                  if (D) y(`stderr output (${D.length} chars): ${D}`);
-                  else y("No stderr output captured");
-                  $6(Error(`Failed to create shell snapshot: ${j.message}`));
+                  else writeDebugLog("No stdout output captured");
+                  if (D) writeDebugLog(`stderr output (${D.length} chars): ${D}`);
+                  else writeDebugLog("No stderr output captured");
+                  sendError(Error(`Failed to create shell snapshot: ${j.message}`));
                   let M = X?.signal ? kX1.constants.signals[X.signal] : void 0;
-                  (n("tengu_shell_snapshot_failed", {
+                  (emitEvent("tengu_shell_snapshot_failed", {
                     stderr_length: D?.length || 0,
                     has_error_code: !!X?.code,
                     error_signal_number: M,
@@ -89915,40 +89915,40 @@ ${J}`);
                     X = (await Bs9(O)).size;
                   } catch {}
                   if (X !== void 0)
-                    (y(`Shell snapshot created successfully (${X} bytes)`),
+                    (writeDebugLog(`Shell snapshot created successfully (${X} bytes)`),
                       Xq(async () => {
                         try {
                           (await P1().unlink(O),
-                            y(`Cleaned up session snapshot: ${O}`));
+                            writeDebugLog(`Cleaned up session snapshot: ${O}`));
                         } catch (M) {
-                          y(`Error cleaning up session snapshot: ${M}`);
+                          writeDebugLog(`Error cleaning up session snapshot: ${M}`);
                         }
                       }),
                       K(O));
                   else {
-                    (y(`Shell snapshot file not found after creation: ${O}`),
-                      y(`Checking if parent directory still exists: ${$}`));
+                    (writeDebugLog(`Shell snapshot file not found after creation: ${O}`),
+                      writeDebugLog(`Checking if parent directory still exists: ${$}`));
                     try {
                       let M = await P1().readdir($);
-                      y(`Directory contains ${M.length} files`);
+                      writeDebugLog(`Directory contains ${M.length} files`);
                     } catch {
-                      y(
+                      writeDebugLog(
                         `Parent directory does not exist or is not accessible: ${$}`,
                       );
                     }
-                    (n("tengu_shell_unknown_error", {}), K(void 0));
+                    (emitEvent("tengu_shell_unknown_error", {}), K(void 0));
                   }
                 }
               },
             ));
         } catch (Y) {
           if (
-            (y(`Unexpected error during snapshot creation: ${Y}`),
+            (writeDebugLog(`Unexpected error during snapshot creation: ${Y}`),
             Y instanceof Error)
           )
-            y(`Error stack trace: ${Y.stack}`);
-          ($6(Y instanceof Error ? Y : Error(String(Y))),
-            n("tengu_shell_snapshot_error", {}),
+            writeDebugLog(`Error stack trace: ${Y.stack}`);
+          (sendError(Y instanceof Error ? Y : Error(String(Y))),
+            emitEvent("tengu_shell_snapshot_error", {}),
             K(void 0));
         }
       })
@@ -90004,7 +90004,7 @@ async function o24(A, q) {
     Y = q?.skipSnapshot
       ? Promise.resolve(void 0)
       : bT8(A).catch((w) => {
-          y(`Failed to create shell snapshot: ${w}`);
+          writeDebugLog(`Failed to create shell snapshot: ${w}`);
           return;
         }),
     z;
@@ -90018,9 +90018,9 @@ async function o24(A, q) {
         try {
           await cs9($);
         } catch {
-          (y(`Snapshot file missing, recreating: ${$}`),
+          (writeDebugLog(`Snapshot file missing, recreating: ${$}`),
             (Y = bT8(A).catch((f) => {
-              y(`Failed to recreate shell snapshot: ${f}`);
+              writeDebugLog(`Failed to recreate shell snapshot: ${f}`);
               return;
             })),
             ($ = await Y));
@@ -90054,7 +90054,7 @@ async function o24(A, q) {
     },
     getSpawnArgs(w) {
       let _ = z !== void 0;
-      if (_) y("Spawning shell without login (-l flag skipped)");
+      if (_) writeDebugLog("Spawning shell without login (-l flag skipped)");
       return ["-c", ...(_ ? [] : ["-l"]), w];
     },
     async getEnvironmentOverrides(w) {
@@ -90154,9 +90154,9 @@ async function Ot9() {
   let A = process.env.CLAUDE_CODE_SHELL;
   if (A)
     if ((A.includes("bash") || A.includes("zsh")) && mT8(A))
-      return (y(`Using shell override: ${A}`), A);
+      return (writeDebugLog(`Using shell override: ${A}`), A);
     else
-      y(
+      writeDebugLog(
         `CLAUDE_CODE_SHELL="${A}" is not a valid bash/zsh path, falling back to detection`,
       );
   let q = process.env.SHELL,
@@ -90179,7 +90179,7 @@ async function Ot9() {
   if (!H) {
     let j =
       "No suitable shell found. Claude CLI requires a Posix shell environment. Please ensure you have a valid shell installed and the SHELL environment variable set.";
-    throw ($6(Error(j)), Error(j));
+    throw (sendError(Error(j)), Error(j));
   }
   return H;
 }
@@ -90205,7 +90205,7 @@ async function LX1(A, q, K, Y, z, w, _, $) {
     qw4(P);
   } catch {
     let L = HA();
-    y(`Shell CWD "${P}" no longer exists, recovering to "${L}"`);
+    writeDebugLog(`Shell CWD "${P}" no longer exists, recovering to "${L}"`);
     try {
       (qw4(L), As6(L), (P = L));
     } catch {
@@ -90221,7 +90221,7 @@ async function LX1(A, q, K, Y, z, w, _, $) {
     try {
       P1().mkdirSync(J, { mode: 448 });
     } catch (L) {
-      y(`Failed to create ${J} directory: ${L}`);
+      writeDebugLog(`Failed to create ${J} directory: ${L}`);
     }
   }
   let G = H.getSpawnArgs(M),
@@ -90262,7 +90262,7 @@ async function LX1(A, q, K, Y, z, w, _, $) {
             if (i8() === "windows") h = ly6(h);
             MH(h, P);
           } catch {
-            n("tengu_shell_set_cwd", { success: !1 });
+            emitEvent("tengu_shell_set_cwd", { success: !1 });
           }
         try {
           ts9(I);
@@ -90276,7 +90276,7 @@ async function LX1(A, q, K, Y, z, w, _, $) {
     } catch {}
     return (
       N.clear(),
-      y(`Shell exec error: ${L instanceof Error ? L.message : String(L)}`),
+      writeDebugLog(`Shell exec error: ${L instanceof Error ? L.message : String(L)}`),
       b38(void 0, {
         code: 126,
         stderr: L instanceof Error ? L.message : String(L),
@@ -90290,7 +90290,7 @@ function MH(A, q) {
   let Y = P1().realpathSync(K);
   As6(Y);
   try {
-    n("tengu_shell_set_cwd", { success: !0 });
+    emitEvent("tengu_shell_set_cwd", { success: !0 });
   } catch (z) {}
 }
 var $t9 = 1800000,
@@ -90367,7 +90367,7 @@ function zw4(A) {
 function RX1(A) {
   if (tI1() || !dI(y1(), A)) {
     if ((MH(HA()), !tI1()))
-      return (n("tengu_bash_tool_reset_to_original_dir", {}), !0);
+      return (emitEvent("tengu_bash_tool_reset_to_original_dir", {}), !0);
   }
   return !1;
 }
@@ -90433,7 +90433,7 @@ function ww4(A, q, K, Y) {
   if (A.cell_type === "code") w.language = K;
   if (A.cell_type === "code" && A.outputs?.length) {
     let _ = A.outputs.map(Mt9);
-    if (!Y && p6(_).length > 1e4)
+    if (!Y && trySafeStringify(_).length > 1e4)
       w.outputs = [
         {
           output_type: "stream",
@@ -90479,7 +90479,7 @@ function Gt9(A) {
   return [q, ...(K ?? [])];
 }
 async function _w4(A, q) {
-  let K = Q4(A),
+  let K = resolveFilePath(A),
     z = (await P1().readFileBytes(K)).toString("utf-8"),
     w = w8(z),
     _ = w.metadata.language_info?.name ?? "python";
@@ -90706,7 +90706,7 @@ var QT8 = E(() => {
   cq();
 });
 function jg() {
-  let A = w6(1),
+  let A = reactMemoCache(1),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = Hg.createElement(
@@ -90726,7 +90726,7 @@ var MW6 = E(() => {
   Hg = Y6(W6(), 1);
 });
 function j9() {
-  let A = w6(1),
+  let A = reactMemoCache(1),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = cF6.createElement(ScrollableContent, { height: 1 }, cF6.createElement(jg, null))),
@@ -90745,7 +90745,7 @@ function Qq(A) {
   return A;
 }
 function X8(A) {
-  let q = w6(9),
+  let q = reactMemoCache(9),
     { shortcut: K, action: Y, parens: z, bold: w } = A,
     _ = z === void 0 ? !1 : z,
     $ = w === void 0 ? !1 : w,
@@ -91307,7 +91307,7 @@ function Uk() {
 function Gw4(A) {
   let q = new Date().toISOString().slice(0, 10);
   if (Mw4 === q) return;
-  ((Mw4 = q), n("tengu_custom_keybindings_loaded", { user_binding_count: A }));
+  ((Mw4 = q), emitEvent("tengu_custom_keybindings_loaded", { user_binding_count: A }));
 }
 function dt9(A) {
   return (
@@ -91346,7 +91346,7 @@ async function lt9() {
     if (typeof Y === "object" && Y !== null && "bindings" in Y) z = Y.bindings;
     else
       return (
-        y(
+        writeDebugLog(
           '[keybindings] Invalid keybindings.json: keybindings.json must have a "bindings" array',
         ),
         {
@@ -91369,7 +91369,7 @@ async function lt9() {
           ? 'Set "bindings" to an array of keybinding blocks'
           : 'Each block must have "context" (string) and "bindings" (object)';
       return (
-        y(`[keybindings] Invalid keybindings.json: ${H}`),
+        writeDebugLog(`[keybindings] Invalid keybindings.json: ${H}`),
         {
           bindings: A,
           warnings: [
@@ -91384,16 +91384,16 @@ async function lt9() {
       );
     }
     let w = i21(z);
-    y(`[keybindings] Loaded ${w.length} user bindings from ${q}`);
+    writeDebugLog(`[keybindings] Loaded ${w.length} user bindings from ${q}`);
     let _ = [...A, ...w];
     Gw4(w.length);
     let O = [...cT8(K), ...lT8(z, _)];
-    if (O.length > 0) y(`[keybindings] Found ${O.length} validation issue(s)`);
+    if (O.length > 0) writeDebugLog(`[keybindings] Found ${O.length} validation issue(s)`);
     return { bindings: _, warnings: O };
   } catch (K) {
     if (dt9(K) && K.code === "ENOENT") return { bindings: A, warnings: [] };
     return (
-      y(
+      writeDebugLog(
         `[keybindings] Error loading ${q}: ${K instanceof Error ? K.message : String(K)}`,
       ),
       {
@@ -91453,13 +91453,13 @@ function nF6() {
     }
     let w = i21(z);
     if (
-      (y(`[keybindings] Loaded ${w.length} user bindings from ${q}`),
+      (writeDebugLog(`[keybindings] Loaded ${w.length} user bindings from ${q}`),
       (NP = [...A, ...w]),
       Gw4(w.length),
       (yG = [...cT8(K), ...lT8(z, NP)]),
       yG.length > 0)
     )
-      y(`[keybindings] Found ${yG.length} validation issue(s)`);
+      writeDebugLog(`[keybindings] Found ${yG.length} validation issue(s)`);
     return { bindings: NP, warnings: yG };
   } catch {
     return ((NP = A), (yG = []), { bindings: NP, warnings: yG });
@@ -91468,22 +91468,22 @@ function nF6() {
 async function Tw4() {
   if (Xw4 || Ww4) return;
   if (!Uk()) {
-    y("[keybindings] Skipping file watcher - user customization disabled");
+    writeDebugLog("[keybindings] Skipping file watcher - user customization disabled");
     return;
   }
   let A = z96(),
     q = pt9(A);
   try {
     if (!(await Bt9(q)).isDirectory()) {
-      y(`[keybindings] Not watching: ${q} is not a directory`);
+      writeDebugLog(`[keybindings] Not watching: ${q} is not a directory`);
       return;
     }
   } catch {
-    y(`[keybindings] Not watching: ${q} does not exist`);
+    writeDebugLog(`[keybindings] Not watching: ${q} does not exist`);
     return;
   }
   ((Xw4 = !0),
-    y(`[keybindings] Watching for changes to ${A}`),
+    writeDebugLog(`[keybindings] Watching for changes to ${A}`),
     (Y96 = zD6.watch(A, {
       persistent: !0,
       ignoreInitial: !0,
@@ -91510,18 +91510,18 @@ function Nw4(A) {
   );
 }
 async function Pw4(A) {
-  y(`[keybindings] Detected change to ${A}`);
+  writeDebugLog(`[keybindings] Detected change to ${A}`);
   try {
     let q = await lt9();
     ((NP = q.bindings), (yG = q.warnings), iF6.forEach((K) => K(q)));
   } catch (q) {
-    y(
+    writeDebugLog(
       `[keybindings] Error reloading: ${q instanceof Error ? q.message : String(q)}`,
     );
   }
 }
 function nt9(A) {
-  y(`[keybindings] Detected deletion of ${A}`);
+  writeDebugLog(`[keybindings] Detected deletion of ${A}`);
   let q = iT8();
   ((NP = q), (yG = []), iF6.forEach((K) => K({ bindings: q, warnings: [] })));
 }
@@ -91559,7 +91559,7 @@ function MK(A, q, K) {
     uX1.useEffect(() => {
       if (w && !$.current)
         (($.current = !0),
-          n("tengu_keybinding_fallback_used", {
+          emitEvent("tengu_keybinding_fallback_used", {
             action: A,
             context: q,
             fallback: K,
@@ -91576,7 +91576,7 @@ function VP(A, q, K) {
     let w = `${A}:${q}`;
     if (!vw4.has(w))
       (vw4.add(w),
-        n("tengu_keybinding_fallback_used", {
+        emitEvent("tengu_keybinding_fallback_used", {
           action: A,
           context: q,
           fallback: K,
@@ -91596,7 +91596,7 @@ var i_ = E(() => {
   vw4 = new Set();
 });
 function rF6(A) {
-  let q = w6(2),
+  let q = reactMemoCache(2),
     { children: K } = A,
     Y;
   if (q[0] !== K)
@@ -91607,7 +91607,7 @@ function rF6(A) {
   return Y;
 }
 function zV() {
-  let A = w6(2),
+  let A = reactMemoCache(2),
     q = w96.useContext(kw4),
     K = MK("app:toggleTranscript", "Global", "ctrl+o");
   if (q) return null;
@@ -91685,7 +91685,7 @@ async function Lw4(A) {
     )
       return Y.title;
   } catch (q) {
-    $6(q);
+    sendError(q);
   }
   return null;
 }
@@ -91751,7 +91751,7 @@ var nT8 = E(() => {
   e3();
 });
 function Sw4(A) {
-  let q = w6(2),
+  let q = reactMemoCache(2),
     { children: K } = A,
     Y;
   if (q[0] !== K)
@@ -91784,11 +91784,11 @@ var oT8 = E(() => {
 function at9(A) {
   try {
     let q = w8(A),
-      K = p6(q),
+      K = trySafeStringify(q),
       Y = A.replace(/\\\//g, "/").replace(/\s+/g, ""),
       z = K.replace(/\s+/g, "");
     if (Y !== z) return A;
-    return p6(q, null, 2);
+    return trySafeStringify(q, null, 2);
   } catch {
     return A;
   }
@@ -91805,7 +91805,7 @@ function bw4(A) {
   return A.replace(et9, (q) => WW6(q));
 }
 function Jg(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { content: K, verbose: Y, isError: z, isWarning: w, linkifyUrls: _ } = A,
     { columns: $ } = zA(),
     O = hw4(),
@@ -91863,7 +91863,7 @@ function BX1(A) {
   return A.replace(/<sandbox_violations>[\s\S]*?<\/sandbox_violations>/g, "");
 }
 function j5(A) {
-  let q = w6(16),
+  let q = reactMemoCache(16),
     { result: K, verbose: Y } = A,
     z = MK("app:toggleTranscript", "Global", "ctrl+o"),
     w,
@@ -91960,7 +91960,7 @@ var PH = E(() => {
 });
 import { pathToFileURL as Ae9 } from "url";
 function dk(A) {
-  let q = w6(5),
+  let q = reactMemoCache(5),
     { filePath: K, children: Y } = A,
     z;
   if (q[0] !== K) ((z = Ae9(K)), (q[0] = K), (q[1] = z));
@@ -92752,7 +92752,7 @@ import { randomUUID as _e9 } from "crypto";
 import { join as fW6, resolve as $e9, sep as Oe9 } from "path";
 import { writeFile as He9 } from "fs/promises";
 function Sc(A) {
-  let q = A ?? d1(),
+  let q = A ?? getSessionId(),
     K = BA6(),
     Y = K.get(q);
   if (!Y) {
@@ -92779,7 +92779,7 @@ function kP() {
     let Y = y1(),
       z = $e9(Y, q);
     if (!z.startsWith(Y + Oe9) && z !== Y)
-      ($6(Error(`plansDirectory must be within project root: ${q}`)),
+      (sendError(Error(`plansDirectory must be within project root: ${q}`)),
         (K = fW6(_A(), "plans")));
     else K = z;
   } else K = fW6(_A(), "plans");
@@ -92787,12 +92787,12 @@ function kP() {
     try {
       P1().mkdirSync(K);
     } catch (Y) {
-      $6(Y instanceof Error ? Y : Error(String(Y)));
+      sendError(Y instanceof Error ? Y : Error(String(Y)));
     }
   return K;
 }
 function EP(A) {
-  let q = Sc(d1());
+  let q = Sc(getSessionId());
   if (!A) return fW6(kP(), `${q}.md`);
   return fW6(kP(), `${q}-agent-${A}.md`);
 }
@@ -92802,39 +92802,39 @@ function TD(A) {
   try {
     return P1().readFileSync(q, { encoding: "utf-8" });
   } catch (K) {
-    return ($6(K instanceof Error ? K : Error(String(K))), null);
+    return (sendError(K instanceof Error ? K : Error(String(K))), null);
   }
 }
 async function pX1(A, q) {
   let K = A.messages.find((w) => w.slug)?.slug;
   if (!K) return !1;
-  let Y = q ?? d1();
+  let Y = q ?? getSessionId();
   AN8(Y, K);
   let z = fW6(kP(), `${K}.md`);
   try {
     return (await P1().readFile(z, { encoding: "utf-8" }), !0);
   } catch {
     if (gX1() === null) return !1;
-    y(`Plan file missing during resume: ${z}. Attempting recovery.`);
+    writeDebugLog(`Plan file missing during resume: ${z}. Attempting recovery.`);
     let w = De9(A.messages, "plan"),
       _ = null;
     if (w && w.content.length > 0)
       ((_ = w.content),
-        y(`Plan recovered from file snapshot, ${_.length} chars`, {
+        writeDebugLog(`Plan recovered from file snapshot, ${_.length} chars`, {
           level: "info",
         }));
     else if (((_ = Je9(A)), _))
-      y(`Plan recovered from message history, ${_.length} chars`, {
+      writeDebugLog(`Plan recovered from message history, ${_.length} chars`, {
         level: "info",
       });
     if (_)
       try {
         return (await He9(z, _, { encoding: "utf-8" }), !0);
       } catch ($) {
-        return ($6($ instanceof Error ? $ : Error(String($))), !1);
+        return (sendError($ instanceof Error ? $ : Error(String($))), !1);
       }
     return (
-      y(
+      writeDebugLog(
         "Plan file recovery failed: no file snapshot or plan content found in message history",
       ),
       !1
@@ -92903,7 +92903,7 @@ async function Bw4() {
       { recordTranscript: Y } = await Promise.resolve().then(() => (Vq(), qN8));
     await Y([K]);
   } catch (A) {
-    $6(
+    sendError(
       A instanceof Error ? A : Error(`File snapshot persistence failed: ${A}`),
     );
   }
@@ -93093,7 +93093,7 @@ function cI(A) {
   if (A.content !== void 0 && A.content.length <= Pe9)
     q.contentHash = Me9(A.content);
   if (A.type !== void 0) q.type = A.type;
-  n("tengu_file_operation", q);
+  emitEvent("tengu_file_operation", q);
 }
 var Pe9 = 102400;
 var UX1 = E(() => {
@@ -93145,7 +93145,7 @@ function sw4(A, q) {
   if (!A.hooks) return;
   let K = Zy().safeParse(A.hooks);
   if (!K.success) {
-    y(`Invalid hooks in skill '${q}': ${K.error.message}`);
+    writeDebugLog(`Invalid hooks in skill '${q}': ${K.error.message}`);
     return;
   }
   return K.data;
@@ -93222,7 +93222,7 @@ ${z}`
         : z;
       return (
         (L = OW6(L, V, !0, $)),
-        (L = L.replace(/\$\{CLAUDE_SESSION_ID\}/g, d1())),
+        (L = L.replace(/\$\{CLAUDE_SESSION_ID\}/g, getSessionId())),
         (L = await nB(
           L,
           {
@@ -93308,12 +93308,12 @@ async function sF6(A, q) {
           } catch {}
         }
       } catch (_) {
-        $6(_ instanceof Error ? _ : Error(String(_)));
+        sendError(_ instanceof Error ? _ : Error(String(_)));
       }
   } catch (z) {
     let w = z.code;
     if (w !== "ENOENT" && w !== "EACCES" && w !== "EPERM")
-      $6(z instanceof Error ? z : Error(String(z)));
+      sendError(z instanceof Error ? z : Error(String(z)));
   }
   return Y;
 }
@@ -93333,7 +93333,7 @@ function Ne9(A) {
     if (w.length > 0) {
       let _ = w[0];
       if (w.length > 1)
-        y(`Multiple skill files found in ${Y}, using ${cX1(_.filePath)}`);
+        writeDebugLog(`Multiple skill files found in ${Y}, using ${cX1(_.filePath)}`);
       K.push(_);
     } else K.push(...z);
   }
@@ -93424,11 +93424,11 @@ async function Ee9(A) {
           filePath: w,
         });
       } catch (H) {
-        $6(H instanceof Error ? H : Error(String(H)));
+        sendError(H instanceof Error ? H : Error(String(H)));
       }
     return Y;
   } catch (q) {
-    return ($6(q instanceof Error ? q : Error(String(q))), []);
+    return (sendError(q instanceof Error ? q : Error(String(q))), []);
   }
 }
 function lX1() {
@@ -93467,12 +93467,12 @@ async function vW6(A) {
   if (Y > 0) {
     let z = [...ke.keys()].filter((w) => !q.has(w));
     if (
-      (y(
+      (writeDebugLog(
         `[skills] Dynamically discovered ${Y} skills from ${A.length} directories`,
       ),
       z.length > 0)
     )
-      n("tengu_dynamic_skills_changed", {
+      emitEvent("tengu_dynamic_skills_changed", {
         source: "file_operation",
         previousCount: q.size,
         newCount: ke.size,
@@ -93484,7 +93484,7 @@ async function vW6(A) {
     try {
       z();
     } catch (w) {
-      $6(w instanceof Error ? w : Error(String(w)));
+      sendError(w instanceof Error ? w : Error(String(w)));
     }
 }
 function K_4() {
@@ -93503,7 +93503,7 @@ function kW6(A, q) {
           tF6.delete(Y),
           wN8.add(Y),
           K.push(Y),
-          y(
+          writeDebugLog(
             `[skills] Activated conditional skill '${Y}' (matched path: ${$})`,
           ));
         break;
@@ -93511,7 +93511,7 @@ function kW6(A, q) {
     }
   }
   if (K.length > 0) {
-    n("tengu_dynamic_skills_changed", {
+    emitEvent("tengu_dynamic_skills_changed", {
       source: "conditional_paths",
       previousCount: ke.size - K.length,
       newCount: ke.size,
@@ -93522,7 +93522,7 @@ function kW6(A, q) {
       try {
         Y();
       } catch (z) {
-        $6(z instanceof Error ? z : Error(String(z)));
+        sendError(z instanceof Error ? z : Error(String(z)));
       }
   }
   return K;
@@ -93552,7 +93552,7 @@ var ye = E(() => {
     let q = Ee(_A(), "skills"),
       K = Ee(oW(), ".claude", "skills"),
       Y = $N8("skills", A);
-    y(
+    writeDebugLog(
       `Loading skills from: managed=${K}, user=${q}, project=[${Y.join(", ")}]`,
     );
     let [z, w, _] = await Promise.all([
@@ -93581,7 +93581,7 @@ var ye = E(() => {
       }
       let f = J.get(Z);
       if (f !== void 0) {
-        y(
+        writeDebugLog(
           `Skipping duplicate skill '${W.name}' from ${W.source} (same file already loaded from ${f})`,
         );
         continue;
@@ -93589,7 +93589,7 @@ var ye = E(() => {
       (J.set(Z, W.source), D.push(W));
     }
     let X = j.length - D.length;
-    if (X > 0) y(`Deduplicated ${X} skills (same file)`);
+    if (X > 0) writeDebugLog(`Deduplicated ${X} skills (same file)`);
     let M = [],
       P = [];
     for (let W of D)
@@ -93603,11 +93603,11 @@ var ye = E(() => {
       else M.push(W);
     for (let W of P) tF6.set(W.name, W);
     if (P.length > 0)
-      y(
+      writeDebugLog(
         `[skills] ${P.length} conditional skills stored (activated when matching files are touched)`,
       );
     return (
-      y(
+      writeDebugLog(
         `Loaded ${D.length} unique skills (${M.length} unconditional, ${P.length} conditional, managed: ${z.length}, user: ${w.length}, project: ${_.flat().length}, additional: ${O.flat().length}, legacy commands: ${H.length})`,
       ),
       M
@@ -93686,7 +93686,7 @@ function iX1(A, q, K, Y) {
 async function z_4(A, q, K, Y, z, w, _, $, O, H, j) {
   if (Y === "ipynb") {
     let N = await _w4(K),
-      V = p6(N),
+      V = trySafeStringify(N),
       v = Buffer.byteLength(V);
     if (v > $)
       throw Error(`Notebook content (${v3(v)}) exceeds maximum allowed size (${v3($)}). Use ${BASH_TOOL_NAME} with jq to read specific portions:
@@ -93729,7 +93729,7 @@ async function z_4(A, q, K, Y, z, w, _, $, O, H, j) {
       let B = iz8(_),
         h = await pT8(K, B ?? void 0);
       if (!h.success) throw Error(h.error.message);
-      (n("tengu_pdf_page_extraction", {
+      (emitEvent("tengu_pdf_page_extraction", {
         success: !0,
         pageCount: h.data.file.count,
         fileSize: h.data.file.originalSize,
@@ -93773,13 +93773,13 @@ async function z_4(A, q, K, Y, z, w, _, $, O, H, j) {
     if (!Ab6() || v.size > Uk7) {
       let B = await pT8(K);
       if (B.success)
-        n("tengu_pdf_page_extraction", {
+        emitEvent("tengu_pdf_page_extraction", {
           success: !0,
           pageCount: B.data.file.count,
           fileSize: B.data.file.originalSize,
         });
       else
-        n("tengu_pdf_page_extraction", {
+        emitEvent("tengu_pdf_page_extraction", {
           success: !1,
           available: B.error.reason !== "unavailable",
           fileSize: v.size,
@@ -93839,7 +93839,7 @@ async function z_4(A, q, K, Y, z, w, _, $, O, H, j) {
   cI({ operation: "read", tool: "FileReadTool", filePath: q, content: D });
   let f = Fe9(q);
   return (
-    n("tengu_session_file_read", {
+    emitEvent("tengu_session_file_read", {
       totalLines: M,
       readLines: X,
       totalBytes: P,
@@ -93861,7 +93861,7 @@ async function HN8(A, q = ON8(), K) {
     let H = await om(Y, z, _);
     $ = iX1(H.buffer, H.mediaType, z, H.dimensions);
   } catch (H) {
-    ($6(H), ($ = iX1(Y, _, z)));
+    (sendError(H), ($ = iX1(Y, _, z)));
   }
   if (Math.ceil($.file.base64.length * 0.125) > q)
     try {
@@ -93871,7 +93871,7 @@ async function HN8(A, q = ON8(), K) {
         file: { base64: H.base64, type: H.mediaType, originalSize: z },
       };
     } catch (H) {
-      $6(H);
+      sendError(H);
       try {
         let j = await Promise.resolve().then(() => Y6(W_8(), 1)),
           D = await (j.default || j)(Y)
@@ -93880,7 +93880,7 @@ async function HN8(A, q = ON8(), K) {
             .toBuffer();
         return iX1(D, "jpeg", z);
       } catch (j) {
-        return ($6(j), iX1(Y, _, z));
+        return (sendError(j), iX1(Y, _, z));
       }
     }
   return $;
@@ -94212,7 +94212,7 @@ var lI = E(() => {
               errorCode: 8,
             };
         }
-        let Y = Q4(A),
+        let Y = resolveFilePath(A),
           z = await K.getAppState();
         if (IM(Y, z.toolPermissionContext, "read", "deny") !== null)
           return {
@@ -94245,9 +94245,9 @@ var lI = E(() => {
           $ = _?.maxSizeBytes ?? jN8,
           O = _?.maxTokens ?? ON8(),
           H = O96.extname(A).toLowerCase().slice(1),
-          j = Q4(A),
+          j = resolveFilePath(A),
           J = y1();
-        if (!X1(process.env.CLAUDE_CODE_SIMPLE)) {
+        if (!isTruthy(process.env.CLAUDE_CODE_SIMPLE)) {
           let D = await VW6([j], J);
           if (D.length > 0) {
             for (let X of D) z.dynamicSkillDirTriggers?.add(X);
@@ -96866,15 +96866,15 @@ function L6Y(A, q, K) {
 function GM1(A, q, K) {
   try {
     (A.setRequestHandler(OQ, async (Y, z) => {
-      _8(q, `Received elicitation request: ${p6(Y)}`);
+      _8(q, `Received elicitation request: ${trySafeStringify(Y)}`);
       let w = E6Y(Y.params);
-      n("tengu_mcp_elicitation_shown", { mode: w });
+      emitEvent("tengu_mcp_elicitation_shown", { mode: w });
       try {
         let _ = await zp6(q, Y.params, z.signal);
         if (_)
           return (
-            _8(q, `Elicitation resolved by hook: ${p6(_)}`),
-            n("tengu_mcp_elicitation_response", { mode: w, action: _.action }),
+            _8(q, `Elicitation resolved by hook: ${trySafeStringify(_)}`),
+            emitEvent("tengu_mcp_elicitation_response", { mode: w, action: _.action }),
             _
           );
         let $ =
@@ -96903,7 +96903,7 @@ function GM1(A, q, K) {
                     waitingState: X,
                     respond: (P) => {
                       (z.signal.removeEventListener("abort", D),
-                        n("tengu_mcp_elicitation_response", {
+                        emitEvent("tengu_mcp_elicitation_response", {
                           mode: w,
                           action: P.action,
                         }),
@@ -96916,7 +96916,7 @@ function GM1(A, q, K) {
               z.signal.addEventListener("abort", D));
           });
         return (
-          _8(q, `Elicitation response: ${p6(H)}`),
+          _8(q, `Elicitation response: ${trySafeStringify(H)}`),
           await wp6(q, H, z.signal, w, $)
         );
       } catch (_) {
@@ -97125,7 +97125,7 @@ async function pN8(A) {
     );
     return !!(Y && Y > fM1());
   } catch (K) {
-    return ($6(K instanceof Error ? K : Error(String(K))), !1);
+    return (sendError(K instanceof Error ? K : Error(String(K))), !1);
   }
 }
 async function x6Y(A) {
@@ -97262,7 +97262,7 @@ async function B6Y() {
         try {
           return (
             await g_4(Y),
-            y(`[Claude in Chrome] Detected browser: ${K.name}`),
+            writeDebugLog(`[Claude in Chrome] Detected browser: ${K.name}`),
             q
           );
         } catch {}
@@ -97271,7 +97271,7 @@ async function B6Y() {
       case "linux": {
         for (let Y of K.linux.binaries)
           if (await C0(Y).catch(() => null))
-            return (y(`[Claude in Chrome] Detected browser: ${K.name}`), q);
+            return (writeDebugLog(`[Claude in Chrome] Detected browser: ${K.name}`), q);
         break;
       }
       case "windows": {
@@ -97284,7 +97284,7 @@ async function B6Y() {
           try {
             return (
               await g_4(w),
-              y(`[Claude in Chrome] Detected browser: ${K.name}`),
+              writeDebugLog(`[Claude in Chrome] Detected browser: ${K.name}`),
               q
             );
           } catch {}
@@ -97305,7 +97305,7 @@ function d_4(A) {
 async function VM1(A) {
   let q = i8(),
     K = await B6Y();
-  if (!K) return (y("[Claude in Chrome] No compatible browser found"), !1);
+  if (!K) return (writeDebugLog("[Claude in Chrome] No compatible browser found"), !1);
   let Y = $p6[K];
   switch (q) {
     case "macos": {
@@ -97567,37 +97567,37 @@ var lN8 = E(() => {
   yP();
   Hp6 = T8(async () => {
     try {
-      y("[claudeai-mcp] Checking gate (cached)...");
+      writeDebugLog("[claudeai-mcp] Checking gate (cached)...");
       let A = Jw(F6Y);
-      if ((y(`[claudeai-mcp] Gate returned: ${A}`), !A))
+      if ((writeDebugLog(`[claudeai-mcp] Gate returned: ${A}`), !A))
         return (
-          y("[claudeai-mcp] Disabled via gate"),
-          n("tengu_claudeai_mcp_eligibility", { state: "disabled_gate" }),
+          writeDebugLog("[claudeai-mcp] Disabled via gate"),
+          emitEvent("tengu_claudeai_mcp_eligibility", { state: "disabled_gate" }),
           {}
         );
       if (Qw(process.env.ENABLE_CLAUDEAI_MCP_SERVERS))
         return (
-          y("[claudeai-mcp] Disabled via env var"),
-          n("tengu_claudeai_mcp_eligibility", { state: "disabled_env_var" }),
+          writeDebugLog("[claudeai-mcp] Disabled via env var"),
+          emitEvent("tengu_claudeai_mcp_eligibility", { state: "disabled_env_var" }),
           {}
         );
       let q = z4();
       if (!q?.accessToken)
         return (
-          y("[claudeai-mcp] No access token"),
-          n("tengu_claudeai_mcp_eligibility", { state: "no_oauth_token" }),
+          writeDebugLog("[claudeai-mcp] No access token"),
+          emitEvent("tengu_claudeai_mcp_eligibility", { state: "no_oauth_token" }),
           {}
         );
       if (!q.scopes?.includes("user:mcp_servers"))
         return (
-          y(
+          writeDebugLog(
             `[claudeai-mcp] Missing user:mcp_servers scope (scopes=${q.scopes?.join(",") || "none"})`,
           ),
-          n("tengu_claudeai_mcp_eligibility", { state: "missing_scope" }),
+          emitEvent("tengu_claudeai_mcp_eligibility", { state: "missing_scope" }),
           {}
         );
       let Y = `${r7().BASE_API_URL}/v1/mcp_servers?limit=1000`;
-      y(`[claudeai-mcp] Fetching from ${Y}`);
+      writeDebugLog(`[claudeai-mcp] Fetching from ${Y}`);
       let z = await g8.get(Y, {
           headers: {
             Authorization: `Bearer ${q.accessToken}`,
@@ -97624,12 +97624,12 @@ var lN8 = E(() => {
           }));
       }
       return (
-        y(`[claudeai-mcp] Fetched ${Object.keys(w).length} servers`),
-        n("tengu_claudeai_mcp_eligibility", { state: "eligible" }),
+        writeDebugLog(`[claudeai-mcp] Fetched ${Object.keys(w).length} servers`),
+        emitEvent("tengu_claudeai_mcp_eligibility", { state: "eligible" }),
         w
       );
     } catch {
-      return (y("[claudeai-mcp] Fetch failed"), {});
+      return (writeDebugLog("[claudeai-mcp] Fetch failed"), {});
     }
   });
 });
@@ -97661,7 +97661,7 @@ async function r_4(A) {
   let Y = `${q}.tmp.${process.pid}.${Date.now()}`,
     z = await c6Y(Y, "w", K ?? 420);
   try {
-    (await z.writeFile(p6(A, null, 2), { encoding: "utf8" }),
+    (await z.writeFile(trySafeStringify(A, null, 2), { encoding: "utf8" }),
       await z.datasync());
   } finally {
     await z.close();
@@ -98049,10 +98049,10 @@ async function pW6() {
         j.type === "mcpb-invalid-manifest"
       ) {
         let J = `Plugin MCP loading error - ${j.type}: ${bf(j)}`;
-        $6(Error(J));
+        sendError(Error(J));
       } else {
         let J = j.type;
-        y(`Plugin not available for MCP: ${j.source} - error type: ${J}`);
+        writeDebugLog(`Plugin not available for MCP: ${j.source} - error type: ${J}`);
       }
   for (let j of w.enabled) {
     let J = await O24(j, _);
@@ -98061,7 +98061,7 @@ async function pW6() {
   if (_.length > 0)
     for (let j of _) {
       let J = `Plugin MCP server error - ${j.type}: ${bf(j)}`;
-      $6(Error(J));
+      sendError(Error(J));
     }
   let $ = {};
   for (let [j, J] of Object.entries(K)) if (LM1(j) === "approved") $[j] = J;
@@ -98613,7 +98613,7 @@ class CM1 {
         $8("error", "mcp_websocket_send_not_opened"),
         Error("WebSocket is not open. Cannot send message.")
       );
-    let q = p6(A);
+    let q = trySafeStringify(A);
     try {
       if (this.isBun) this.ws.send(q);
       else
@@ -98668,7 +98668,7 @@ var AJ = () => {};
 var $$4 = "",
   O$4 = "";
 function Pp6(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     { ratio: K, width: Y, fillColor: z, emptyColor: w } = A,
     _ = Math.min(1, Math.max(0, K)),
     $ = Math.floor(_ * Y),
@@ -98712,7 +98712,7 @@ function J$4(A, { verbose: q }) {
   if (Object.keys(A).length === 0) return "";
   return Object.entries(A)
     .map(([K, Y]) => {
-      let z = p6(Y);
+      let z = trySafeStringify(Y);
       return `${K}: ${z}`;
     })
     .join(", ");
@@ -98768,7 +98768,7 @@ function SM1(A, q, { verbose: K }) {
     z = FN8(Y),
     _ =
       z > J1Y
-        ? `${a6.warning} Large MCP response (~${Y3(z)} tokens), this can fill up context quickly`
+        ? `${figures.warning} Large MCP response (~${Y3(z)} tokens), this can fill up context quickly`
         : null,
     $;
   if (Array.isArray(Y)) {
@@ -98932,7 +98932,7 @@ function v$4(A, q, { verbose: K }) {
       { height: 1 },
       oI.createElement(T, { dimColor: !0 }, "(No resources found)"),
     );
-  let Y = p6(A, null, 2);
+  let Y = trySafeStringify(A, null, 2);
   return oI.createElement(Jg, { content: Y, verbose: K });
 }
 var oI;
@@ -99041,7 +99041,7 @@ var hM1 = E(() => {
             content:
               "No resources found. MCP servers may still provide tools even if they have no resources.",
           };
-        return { tool_use_id: q, type: "tool_result", content: p6(A) };
+        return { tool_use_id: q, type: "tool_result", content: trySafeStringify(A) };
       },
     }));
 });
@@ -99087,7 +99087,7 @@ function I$4(A, q, { verbose: K }) {
         lk.createElement(T, { dimColor: !0 }, "(No content)"),
       ),
     );
-  let Y = p6(A, null, 2);
+  let Y = trySafeStringify(A, null, 2);
   return lk.createElement(Jg, { content: Y, verbose: K });
 }
 var lk;
@@ -99185,7 +99185,7 @@ var IM1 = E(() => {
       renderToolUseProgressMessage: h$4,
       renderToolResultMessage: I$4,
       mapToolResultToToolResultBlockParam(A, q) {
-        return { tool_use_id: q, type: "tool_result", content: p6(A) };
+        return { tool_use_id: q, type: "tool_result", content: trySafeStringify(A) };
       },
     }));
 });
@@ -99300,7 +99300,7 @@ var M96 = E(() => {
       try {
         let q = mc("-credentials"),
           K = lW6(),
-          Y = p6(A),
+          Y = trySafeStringify(A),
           z = Buffer.from(Y, "utf-8").toString("hex"),
           w = `add-generic-password -U -a "${K}" -s "${q}" -X "${z}"
 `;
@@ -99371,7 +99371,7 @@ var B$4 = E(() => {
           if (Y.code !== "EEXIST") throw Y;
         }
         return (
-          Nz(K, p6(A), { encoding: "utf8", flush: !1 }),
+          Nz(K, trySafeStringify(A), { encoding: "utf8", flush: !1 }),
           N1Y(K, 384),
           { success: !0, warning: "Warning: Storing credentials in plaintext." }
         );
@@ -100610,7 +100610,7 @@ async function e8Y() {
   }
 }
 function RP(A, q) {
-  let K = p6({ type: q.type, url: q.url, headers: q.headers || {} }),
+  let K = trySafeStringify({ type: q.type, url: q.url, headers: q.headers || {} }),
     Y = c8Y("sha256").update(K).digest("hex").substring(0, 16);
   return `${A}|${Y}`;
 }
@@ -100738,7 +100738,7 @@ async function rW6(A, q, K, Y, z) {
       _8(A, `Invalid cached resourceMetadataUrl: ${H}`);
     }
   let J = { scope: O, resourceMetadataUrl: j };
-  n("tengu_mcp_oauth_flow_start", {
+  emitEvent("tengu_mcp_oauth_flow_start", {
     isOAuthFlow: !0,
     transportType: q.type,
     ...(VD(q) ? { mcpServerBaseUrl: VD(q) } : {}),
@@ -100883,7 +100883,7 @@ async function rW6(A, q, K, Y, z) {
       if ((_8(A, `Tokens after auth: ${L ? "Present" : "Missing"}`), L))
         (_8(A, `Token access_token length: ${L.access_token?.length}`),
           _8(A, `Token expires_in: ${L.expires_in}`));
-      n("tengu_mcp_oauth_flow_success", {
+      emitEvent("tengu_mcp_oauth_flow_success", {
         transportType: q.type,
         ...(VD(q) ? { mcpServerBaseUrl: VD(q) } : {}),
       });
@@ -100906,7 +100906,7 @@ async function rW6(A, q, K, Y, z) {
         }
       } catch {}
     throw (
-      n("tengu_mcp_oauth_flow_error", {
+      emitEvent("tengu_mcp_oauth_flow_error", {
         transportType: q.type,
         ...(VD(q) ? { mcpServerBaseUrl: VD(q) } : {}),
       }),
@@ -101505,7 +101505,7 @@ async function qAY(A, q) {
       );
       return (
         GL("MCP headersHelper invoked before trust check", Y),
-        n("tengu_mcp_headersHelper_missing_trust", {}),
+        emitEvent("tengu_mcp_headersHelper_missing_trust", {}),
         null
       );
     }
@@ -101541,7 +101541,7 @@ async function qAY(A, q) {
         A,
         `Error getting headers from headersHelper: ${K instanceof Error ? K.message : String(K)}`,
       ),
-      $6(
+      sendError(
         Error(
           `Error getting MCP headers from headersHelper for server '${A}': ${K instanceof Error ? K.message : String(K)}`,
         ),
@@ -101847,7 +101847,7 @@ function fV8(A) {
       let q = await IO4();
       q[A] = { timestamp: Date.now() };
       let K = kV8();
-      (await XAY(PAY(K), { recursive: !0 }), await JAY(K, p6(q)));
+      (await XAY(PAY(K), { recursive: !0 }), await JAY(K, trySafeStringify(q)));
     })
     .catch(() => {});
 }
@@ -101901,7 +101901,7 @@ function NAY(A) {
   return !A.name.startsWith("mcp__ide__") || TAY.includes(A.name);
 }
 function NV8(A, q) {
-  return `${A}-${p6(q)}`;
+  return `${A}-${trySafeStringify(q)}`;
 }
 async function ik(A, q) {
   let K = NV8(A, q);
@@ -101928,7 +101928,7 @@ function bO4(A, q) {
   if (A.type !== q.type) return !1;
   let { scope: K, ...Y } = A,
     { scope: z, ...w } = q;
-  return p6(Y) === p6(w);
+  return trySafeStringify(Y) === trySafeStringify(w);
 }
 async function tI(A, q, K) {
   return (await mO4({ client: K, tool: A, args: q, signal: G3().signal }))
@@ -102099,7 +102099,7 @@ function sM1(A) {
             (j.argumentHint ?? "").length;
           return H + J;
         }, 0);
-        (n("tengu_mcp_tools_commands_loaded", {
+        (emitEvent("tengu_mcp_tools_commands_loaded", {
           tools_count: w.length,
           commands_count: _.length,
           commands_metadata_length: O,
@@ -102197,7 +102197,7 @@ async function VAY(A, q, K) {
       return { content: String(A.toolResult), type: "toolResult" };
     if ("structuredContent" in A && A.structuredContent !== void 0)
       return {
-        content: p6(A.structuredContent),
+        content: trySafeStringify(A.structuredContent),
         type: "structuredContent",
         schema: rM1(A.structuredContent),
       };
@@ -102222,7 +102222,7 @@ async function kAY(A, q, K) {
   if (vAY(Y)) return await QN8(Y);
   let _ = Date.now(),
     $ = `mcp-${tO(K)}-${tO(q)}-${_}`,
-    O = typeof Y === "string" ? Y : p6(Y, null, 2),
+    O = typeof Y === "string" ? Y : trySafeStringify(Y, null, 2),
     H = await lg6(O, $);
   if (ig6(H))
     return `Error: result (${O.length.toLocaleString()} characters) exceeds maximum allowed tokens. Failed to save output to file: ${H.error}. If this MCP server provides pagination or filtering tools, use them to retrieve specific portions of the data.`;
@@ -102291,7 +102291,7 @@ async function EAY({
           f = await zp6(W, G, w);
         if (f) {
           if (
-            (_8(W, `URL elicitation ${Z} resolved by hook: ${p6(f)}`),
+            (_8(W, `URL elicitation ${Z} resolved by hook: ${trySafeStringify(f)}`),
             f.action !== "accept")
           )
             return {
@@ -102422,7 +102422,7 @@ async function mO4({
     _8(q, `Tool '${Y}' completed successfully in ${P}`);
     let W = w$4(q);
     if (W)
-      n("tengu_code_indexing_tool_used", {
+      emitEvent("tengu_code_indexing_tool_used", {
         tool: W,
         source: "mcp",
         success: !0,
@@ -102441,7 +102441,7 @@ async function mO4({
       if (("code" in j ? j.code : void 0) === 401 || j instanceof xM)
         throw (
           _8(q, "Tool call returned 401 Unauthorized - token may have expired"),
-          n("tengu_mcp_tool_call_auth_error", {}),
+          emitEvent("tengu_mcp_tool_call_auth_error", {}),
           new oM1(
             q,
             `MCP server "${q}" requires re-authorization (token expired)`,
@@ -102459,7 +102459,7 @@ async function mO4({
             q,
             `MCP session expired during tool call (${X ? "404/-32001" : "connection closed"}), clearing connection cache for re-initialization`,
           ),
-          n("tengu_mcp_session_expired", {}),
+          emitEvent("tengu_mcp_session_expired", {}),
           await ik(q, K),
           new vV8(q)
         );
@@ -102703,7 +102703,7 @@ var yP = E(() => {
           );
         _8(
           A,
-          `WebSocket transport options: ${p6({ url: q.url, headers: u, hasSessionAuth: !!_ })}`,
+          `WebSocket transport options: ${trySafeStringify({ url: q.url, headers: u, hasSessionAuth: !!_ })}`,
         );
         let U;
         if (typeof Bun < "u")
@@ -102724,7 +102724,7 @@ var yP = E(() => {
           ),
           _8(
             A,
-            `Environment: ${p6({ NODE_OPTIONS: process.env.NODE_OPTIONS || "not set", UV_THREADPOOL_SIZE: process.env.UV_THREADPOOL_SIZE || "default", HTTP_PROXY: process.env.HTTP_PROXY || "not set", HTTPS_PROXY: process.env.HTTPS_PROXY || "not set", NO_PROXY: process.env.NO_PROXY || "not set" })}`,
+            `Environment: ${trySafeStringify({ NODE_OPTIONS: process.env.NODE_OPTIONS || "not set", UV_THREADPOOL_SIZE: process.env.UV_THREADPOOL_SIZE || "default", HTTP_PROXY: process.env.HTTP_PROXY || "not set", HTTPS_PROXY: process.env.HTTPS_PROXY || "not set", NO_PROXY: process.env.NO_PROXY || "not set" })}`,
           ));
         let h = new P96(A, q),
           F = await iM1(A, q),
@@ -102756,7 +102756,7 @@ var yP = E(() => {
             : void 0;
         (_8(
           A,
-          `HTTP transport options: ${p6({ url: q.url, headers: U, hasAuthProvider: !!h, timeoutMs: xO4 })}`,
+          `HTTP transport options: ${trySafeStringify({ url: q.url, headers: U, hasAuthProvider: !!h, timeoutMs: xO4 })}`,
         ),
           (w = new PM1(new URL(q.url), u)),
           _8(A, "HTTP transport created successfully"));
@@ -102786,7 +102786,7 @@ var yP = E(() => {
             fetch: TV8(u),
             requestInit: {
               ...U,
-              headers: { "User-Agent": Us(), "X-Mcp-Client-Session-Id": d1() },
+              headers: { "User-Agent": Us(), "X-Mcp-Client-Session-Id": getSessionId() },
             },
           };
         ((w = new PM1(new URL(g), c)),
@@ -102925,13 +102925,13 @@ var yP = E(() => {
           if (
             (_8(
               A,
-              `SSE Connection failed after ${F}ms: ${p6({ url: q.url, error: h.message, errorType: h.constructor.name, stack: h.stack })}`,
+              `SSE Connection failed after ${F}ms: ${trySafeStringify({ url: q.url, error: h.message, errorType: h.constructor.name, stack: h.stack })}`,
             ),
             mY(A, h),
             h instanceof xM)
           )
             return (
-              n("tengu_mcp_server_needs_auth", {
+              emitEvent("tengu_mcp_server_needs_auth", {
                 transportType: "sse",
                 ...(VD(q) ? { mcpServerBaseUrl: VD(q) } : {}),
               }),
@@ -102950,7 +102950,7 @@ var yP = E(() => {
             h instanceof xM)
           )
             return (
-              n("tengu_mcp_server_needs_auth", {
+              emitEvent("tengu_mcp_server_needs_auth", {
                 transportType: "http",
                 ...(VD(q) ? { mcpServerBaseUrl: VD(q) } : {}),
               }),
@@ -102968,7 +102968,7 @@ var yP = E(() => {
             h.code === 401)
           )
             return (
-              n("tengu_mcp_server_needs_auth", {
+              emitEvent("tengu_mcp_server_needs_auth", {
                 transportType: "claudeai-proxy",
                 ...(VD(q) ? { mcpServerBaseUrl: VD(q) } : {}),
               }),
@@ -102977,7 +102977,7 @@ var yP = E(() => {
               { name: A, type: "needs-auth", config: q }
             );
         } else if (q.type === "sse-ide" || q.type === "ws-ide")
-          n("tengu_mcp_ide_server_connection_failed", {
+          emitEvent("tengu_mcp_ide_server_connection_failed", {
             connectionDurationMs: F,
           });
         if (z) z.close().catch(() => {});
@@ -102990,9 +102990,9 @@ var yP = E(() => {
       if (
         (_8(
           A,
-          `Connection established with capabilities: ${p6({ hasTools: !!X?.tools, hasPrompts: !!X?.prompts, hasResources: !!X?.resources, hasResourceSubscribe: !!X?.resources?.subscribe, serverVersion: M || "unknown" })}`,
+          `Connection established with capabilities: ${trySafeStringify({ hasTools: !!X?.tools, hasPrompts: !!X?.prompts, hasResources: !!X?.resources, hasResourceSubscribe: !!X?.resources?.subscribe, serverVersion: M || "unknown" })}`,
         ),
-        y(
+        writeDebugLog(
           `[MCP] Server "${A}" connected with subscribe=${!!X?.resources?.subscribe}`,
         ),
         H)
@@ -103001,14 +103001,14 @@ var yP = E(() => {
           return (
             _8(
               A,
-              `Elicitation request received during initialization: ${p6(h)}`,
+              `Elicitation request received during initialization: ${trySafeStringify(h)}`,
             ),
             { action: "cancel" }
           );
         });
       if (q.type === "sse-ide" || q.type === "ws-ide") {
         let h = Date.now() - Y;
-        n("tengu_mcp_ide_server_connection_succeeded", {
+        emitEvent("tengu_mcp_ide_server_connection_succeeded", {
           connectionDurationMs: h,
           serverVersion: M,
         });
@@ -103212,7 +103212,7 @@ var yP = E(() => {
         },
         B = Date.now() - Y;
       return (
-        n("tengu_mcp_server_connection_succeeded", {
+        emitEvent("tengu_mcp_server_connection_succeeded", {
           connectionDurationMs: B,
           transportType: q.type ?? "stdio",
           totalServers: K?.totalServers,
@@ -103237,7 +103237,7 @@ var yP = E(() => {
     } catch (w) {
       let _ = Date.now() - Y;
       if (
-        (n("tengu_mcp_server_connection_failed", {
+        (emitEvent("tengu_mcp_server_connection_failed", {
           connectionDurationMs: _,
           totalServers: K?.totalServers || 1,
           stdioCount: K?.stdioCount || (q.type === "stdio" ? 1 : 0),
@@ -103276,7 +103276,7 @@ var yP = E(() => {
           K = Ie(q.tools),
           Y =
             A.config.type === "sdk" &&
-            X1(process.env.CLAUDE_AGENT_SDK_MCP_NO_PREFIX);
+            isTruthy(process.env.CLAUDE_AGENT_SDK_MCP_NO_PREFIX);
         return K.map((z) => {
           let w = bK8(A.name, z.name);
           return {
@@ -103637,7 +103637,7 @@ var hV8 = E(() => {
   ((SV8 = new Map()), (CV8 = new Map()));
 });
 function IAY(A) {
-  let q = w6(15),
+  let q = reactMemoCache(15),
     {
       orientation: K,
       width: Y,
@@ -103727,7 +103727,7 @@ function IAY(A) {
   return M;
 }
 function xAY(A) {
-  let q = w6(21),
+  let q = reactMemoCache(21),
     {
       orientation: K,
       title: Y,
@@ -103830,7 +103830,7 @@ var SP = E(() => {
   r9 = xAY;
 });
 function k8(A) {
-  let q = w6(5),
+  let q = reactMemoCache(5),
     {
       action: K,
       context: Y,
@@ -103864,7 +103864,7 @@ var pK = E(() => {
   IV8 = Y6(W6(), 1);
 });
 function t8(A) {
-  let q = w6(5),
+  let q = reactMemoCache(5),
     { children: K } = A,
     Y,
     z;
@@ -103904,7 +103904,7 @@ var zK = E(() => {
   Gg = Y6(W6(), 1);
 });
 function YA(A) {
-  let q = w6(11),
+  let q = reactMemoCache(11),
     {
       title: K,
       subtitle: Y,
@@ -103960,7 +103960,7 @@ function YA(A) {
   return D;
 }
 function uAY(A) {
-  let q = w6(33),
+  let q = reactMemoCache(33),
     {
       title: K,
       subtitle: Y,
@@ -104099,7 +104099,7 @@ var yq = E(() => {
   hG = Y6(W6(), 1);
 });
 function UO4(A) {
-  let q = w6(23),
+  let q = reactMemoCache(23),
     { onDone: K, installationStatus: Y } = A;
   mAY();
   let z;
@@ -104358,7 +104358,7 @@ async function K01() {
             }
             return w;
           } catch (Y) {
-            return ($6(Y), []);
+            return (sendError(Y), []);
           }
         }),
       )
@@ -104367,7 +104367,7 @@ async function K01() {
       .sort((K, Y) => Y.mtime.getTime() - K.mtime.getTime())
       .map((K) => K.path);
   } catch (A) {
-    return ($6(A), []);
+    return (sendError(A), []);
   }
 }
 async function aO4(A) {
@@ -104408,7 +104408,7 @@ async function aO4(A) {
       authToken: $,
     };
   } catch (q) {
-    return ($6(q), null);
+    return (sendError(q), null);
   }
 }
 async function BV8(A, q, K = 500) {
@@ -104444,7 +104444,7 @@ async function pAY() {
       let w = rT("powershell.exe -Command '$env:USERPROFILE'");
       if (w) z = w.trim();
     } catch {
-      y(
+      writeDebugLog(
         "Unable to get Windows USERPROFILE via PowerShell - IDE detection may be incomplete",
       );
     }
@@ -104473,10 +104473,10 @@ async function pAY() {
   } catch (w) {
     let _ = w.code;
     if (_ === "ENOENT" || _ === "EACCES" || _ === "EPERM")
-      y(
+      writeDebugLog(
         `WSL IDE lockfile path detection failed (${_}): ${w instanceof Error ? w.message : String(w)}`,
       );
-    else $6(w instanceof Error ? w : Error(String(w)));
+    else sendError(w instanceof Error ? w : Error(String(w)));
   }
   return A;
 }
@@ -104489,7 +104489,7 @@ async function QAY() {
         try {
           await P1().unlink(q);
         } catch (w) {
-          $6(w);
+          sendError(w);
         }
         continue;
       }
@@ -104505,24 +104505,24 @@ async function QAY() {
         try {
           await P1().unlink(q);
         } catch (w) {
-          $6(w);
+          sendError(w);
         }
     }
   } catch (A) {
-    $6(A);
+    sendError(A);
   }
 }
 async function UAY(A) {
   try {
     let q = await cAY(A);
-    if ((n("tengu_ext_installed", {}), !getSettings().diffTool))
+    if ((emitEvent("tengu_ext_installed", {}), !getSettings().diffTool))
       updateSettings((Y) => ({ ...Y, diffTool: "auto" }));
     return { installed: !0, error: null, installedVersion: q, ideType: A };
   } catch (q) {
-    n("tengu_ext_install_error", {});
+    emitEvent("tengu_ext_install_error", {});
     let K = q instanceof Error ? q.message : String(q);
     return (
-      $6(q),
+      sendError(q),
       { installed: !1, error: K, installedVersion: null, ideType: A }
     );
   }
@@ -104602,7 +104602,7 @@ async function eW6(A) {
       if (_.length === 1) return _;
     }
   } catch (K) {
-    $6(K);
+    sendError(K);
   }
   return q;
 }
@@ -104796,7 +104796,7 @@ async function nAY() {
           }
     }
   } catch (q) {
-    $6(q);
+    sendError(q);
   }
   return A;
 }
@@ -105161,7 +105161,7 @@ class Ax {
         this.mcpClient,
       );
     } catch (q) {
-      $6(q);
+      sendError(q);
     }
   }
   async beforeFileEdited(A) {
@@ -105181,7 +105181,7 @@ class Ax {
         Y = this.parseDiagnosticResult(K)[0];
       if (Y) {
         if (!HH4(this.normalizeFileUri(A), this.normalizeFileUri(Y.uri))) {
-          $6(
+          sendError(
             new OH4(
               `Diagnostics file path mismatch: expected ${A}, got ${Y.uri})`,
             ),
@@ -105288,9 +105288,9 @@ ${w}`;
   }
   static getSeveritySymbol(A) {
     return (
-      { Error: a6.cross, Warning: a6.warning, Info: a6.info, Hint: a6.star }[
+      { Error: figures.cross, Warning: figures.warning, Info: figures.info, Hint: figures.star }[
         A
-      ] || a6.bullet
+      ] || figures.bullet
     );
   }
 }
@@ -105998,7 +105998,7 @@ function Rp6(A, q) {
   (Ks6(K, Y),
     zs6()?.add(K, { type: "added" }),
     zs6()?.add(Y, { type: "removed" }),
-    n("tengu_file_changed", { lines_added: K, lines_removed: Y }));
+    emitEvent("tengu_file_changed", { lines_added: K, lines_removed: Y }));
 }
 function xH4({
   filePath: A,
@@ -106246,7 +106246,7 @@ function H7Y(A) {
 function BH4({ file_path: A, edits: q }) {
   if (q.length === 0) return { file_path: A, edits: q };
   try {
-    let K = Q4(A);
+    let K = resolveFilePath(A);
     if (!P1().existsSync(K)) return { file_path: A, edits: q };
     let Y = tV8(K);
     return {
@@ -106266,7 +106266,7 @@ function BH4({ file_path: A, edits: q }) {
       }),
     };
   } catch (K) {
-    $6(K);
+    sendError(K);
   }
   return { file_path: A, edits: q };
 }
@@ -106369,7 +106369,7 @@ function FH4(A, q) {
   return K;
 }
 function V96(A, q) {
-  let K = d1(),
+  let K = getSessionId(),
     Y = {
       type: "queue-operation",
       operation: A,
@@ -106542,7 +106542,7 @@ function f01(A) {
 }
 function T01() {
   if (Sp6.length === 0) return [];
-  return Sp6.splice(0).map((q) => ({ ...q, uuid: M7Y(), session_id: d1() }));
+  return Sp6.splice(0).map((q) => ({ ...q, uuid: M7Y(), session_id: getSessionId() }));
 }
 var P7Y = 1000,
   Sp6;
@@ -106635,12 +106635,12 @@ function wv8(A, q, K) {
 }
 function G7Y(A) {
   if (!V01(A.hookEvent)) return;
-  if (!X1(process.env.CLAUDE_CODE_REMOTE)) return;
+  if (!isTruthy(process.env.CLAUDE_CODE_REMOTE)) return;
   zv8({ type: "progress", ...A });
 }
 function v01(A) {
   if (!V01(A.hookEvent)) return () => {};
-  if (!X1(process.env.CLAUDE_CODE_REMOTE)) return () => {};
+  if (!isTruthy(process.env.CLAUDE_CODE_REMOTE)) return () => {};
   let q = "",
     K = setInterval(() => {
       A.getOutput().then(({ stdout: Y, stderr: z, output: w }) => {
@@ -106661,7 +106661,7 @@ function v01(A) {
 function bG(A) {
   let q = A.stdout || A.stderr || A.output;
   if (q)
-    y(`Hook ${A.hookName} (${A.hookEvent}) ${A.outcome}:
+    writeDebugLog(`Hook ${A.hookName} (${A.hookEvent}) ${A.outcome}:
 ${q}`);
   if (!V01(A.hookEvent)) return;
   zv8({ type: "response", ...A });
@@ -106685,7 +106685,7 @@ function aH4({
   toolName: $,
 }) {
   let O = K.asyncTimeout || 15000;
-  y(`Hooks: Registering async hook ${A} (${Y}) with timeout ${O}ms`);
+  writeDebugLog(`Hooks: Registering async hook ${A} (${Y}) with timeout ${O}ms`);
   let H = v01({
     hookId: q,
     hookName: Y,
@@ -106732,18 +106732,18 @@ async function _v8(A, q, K) {
 async function sH4() {
   let A = [],
     q = fg.size;
-  y(`Hooks: Found ${q} total hooks in registry`);
+  writeDebugLog(`Hooks: Found ${q} total hooks in registry`);
   let K = [];
   for (let Y of fg.values()) {
     let z = (await Y.shellCommand?.taskOutput.getStdout()) ?? "",
       w = Y.shellCommand?.taskOutput.getStderr() ?? "";
     if (
-      (y(
+      (writeDebugLog(
         `Hooks: Checking hook ${Y.processId} (${Y.hookName}) - attachmentSent: ${Y.responseAttachmentSent}, stdout length: ${z.length}`,
       ),
       !Y.shellCommand)
     ) {
-      (y(
+      (writeDebugLog(
         `Hooks: Hook ${Y.processId} has no shell command, removing from registry`,
       ),
         Y.stopProgressInterval(),
@@ -106751,10 +106751,10 @@ async function sH4() {
       continue;
     }
     if (
-      (y(`Hooks: Hook shell status ${Y.shellCommand.status}`),
+      (writeDebugLog(`Hooks: Hook shell status ${Y.shellCommand.status}`),
       Y.shellCommand.status === "killed")
     ) {
-      (y(
+      (writeDebugLog(
         `Hooks: Hook ${Y.processId} is ${Y.shellCommand.status}, removing from registry`,
       ),
         Y.stopProgressInterval(),
@@ -106764,7 +106764,7 @@ async function sH4() {
     }
     if (Y.shellCommand.status !== "completed") continue;
     if (Y.responseAttachmentSent || !z.trim()) {
-      (y(
+      (writeDebugLog(
         `Hooks: Skipping hook ${Y.processId} - already delivered/sent or no stdout`,
       ),
         Y.stopProgressInterval(),
@@ -106773,21 +106773,21 @@ async function sH4() {
     }
     let _ = z.split(`
 `);
-    y(`Hooks: Processing ${_.length} lines of stdout for ${Y.processId}`);
+    writeDebugLog(`Hooks: Processing ${_.length} lines of stdout for ${Y.processId}`);
     let O = (await Y.shellCommand.result).code,
       H = {};
     for (let j of _)
       if (j.trim().startsWith("{")) {
-        y(`Hooks: Found JSON line: ${j.trim().substring(0, 100)}...`);
+        writeDebugLog(`Hooks: Found JSON line: ${j.trim().substring(0, 100)}...`);
         try {
           let J = w8(j.trim());
           if (!("async" in J)) {
-            (y(`Hooks: Found sync response from ${Y.processId}: ${p6(J)}`),
+            (writeDebugLog(`Hooks: Found sync response from ${Y.processId}: ${trySafeStringify(J)}`),
               (H = J));
             break;
           }
         } catch {
-          y(`Hooks: Failed to parse JSON from ${Y.processId}: ${j.trim()}`);
+          writeDebugLog(`Hooks: Failed to parse JSON from ${Y.processId}: ${j.trim()}`);
         }
       }
     if (
@@ -106806,19 +106806,19 @@ async function sH4() {
       fg.delete(Y.processId),
       Y.hookEvent === "SessionStart")
     )
-      (y(
+      (writeDebugLog(
         `Invalidating session env cache after SessionStart hook ${Y.processId} completed`,
       ),
         AH7());
   }
   for (let Y of K) fg.delete(Y);
-  return (y(`Hooks: checkForNewResponses returning ${A.length} responses`), A);
+  return (writeDebugLog(`Hooks: checkForNewResponses returning ${A.length} responses`), A);
 }
 function tH4(A) {
   for (let q of A) {
     let K = fg.get(q);
     if (K && K.responseAttachmentSent)
-      (y(`Hooks: Removing delivered hook ${q}`),
+      (writeDebugLog(`Hooks: Removing delivered hook ${q}`),
         K.stopProgressInterval(),
         fg.delete(q));
   }
@@ -106846,7 +106846,7 @@ var E01 = E(() => {
 import { randomUUID as Z7Y } from "crypto";
 function qj4({ serverName: A, files: q }) {
   let K = Z7Y();
-  (y(
+  (writeDebugLog(
     `LSP Diagnostics: Registering ${q.length} diagnostic file(s) from ${A} (ID: ${K})`,
   ),
     k96.set(K, {
@@ -106871,7 +106871,7 @@ function Aj4(A) {
   }
 }
 function Kj4(A) {
-  return p6({
+  return trySafeStringify({
     message: A.message,
     severity: A.severity,
     range: A.range,
@@ -106896,7 +106896,7 @@ function T7Y(A) {
       } catch (O) {
         let H = O instanceof Error ? O : Error(String(O)),
           j = $.message?.substring(0, 100) || "<no message>";
-        ($6(
+        (sendError(
           Error(
             `Failed to deduplicate diagnostic in ${Y.uri}: ${H.message}. Diagnostic message: ${j}`,
           ),
@@ -106907,7 +106907,7 @@ function T7Y(A) {
   return K.filter((Y) => Y.diagnostics.length > 0);
 }
 function Yj4() {
-  y(`LSP Diagnostics: Checking registry - ${k96.size} pending`);
+  writeDebugLog(`LSP Diagnostics: Checking registry - ${k96.size} pending`);
   let A = [],
     q = new Set(),
     K = [];
@@ -106919,14 +106919,14 @@ function Yj4() {
     Y = T7Y(A);
   } catch (H) {
     let j = H instanceof Error ? H : Error(String(H));
-    ($6(Error(`Failed to deduplicate LSP diagnostics: ${j.message}`)), (Y = A));
+    (sendError(Error(`Failed to deduplicate LSP diagnostics: ${j.message}`)), (Y = A));
   }
   for (let H of K) H.attachmentSent = !0;
   for (let [H, j] of k96) if (j.attachmentSent) k96.delete(H);
   let z = A.reduce((H, j) => H + j.diagnostics.length, 0),
     w = Y.reduce((H, j) => H + j.diagnostics.length, 0);
   if (z > w)
-    y(
+    writeDebugLog(
       `LSP Diagnostics: Deduplication removed ${z - w} duplicate diagnostic(s)`,
     );
   let _ = 0,
@@ -106945,7 +106945,7 @@ function Yj4() {
     _ += H.diagnostics.length;
   }
   if (((Y = Y.filter((H) => H.diagnostics.length > 0)), $ > 0))
-    y(
+    writeDebugLog(
       `LSP Diagnostics: Volume limiting removed ${$} diagnostic(s) (max ${L01}/file, ${eH4} total)`,
     );
   for (let H of Y) {
@@ -106957,7 +106957,7 @@ function Yj4() {
       } catch (D) {
         let X = D instanceof Error ? D : Error(String(D)),
           M = J.message?.substring(0, 100) || "<no message>";
-        $6(
+        sendError(
           Error(
             `Failed to track delivered diagnostic in ${H.uri}: ${X.message}. Diagnostic message: ${M}`,
           ),
@@ -106967,25 +106967,25 @@ function Yj4() {
   let O = Y.reduce((H, j) => H + j.diagnostics.length, 0);
   if (O === 0)
     return (
-      y(
+      writeDebugLog(
         "LSP Diagnostics: No new diagnostics to deliver (all filtered by deduplication)",
       ),
       []
     );
   return (
-    y(
+    writeDebugLog(
       `LSP Diagnostics: Delivering ${Y.length} file(s) with ${O} diagnostic(s) from ${q.size} server(s)`,
     ),
     [{ serverName: Array.from(q).join(", "), files: Y }]
   );
 }
 function zj4() {
-  (y(`LSP Diagnostics: Clearing ${k96.size} pending diagnostic(s)`),
+  (writeDebugLog(`LSP Diagnostics: Clearing ${k96.size} pending diagnostic(s)`),
     k96.clear());
 }
 function y01(A) {
   if ($G6.has(A))
-    (y(`LSP Diagnostics: Clearing delivered diagnostics for ${A}`),
+    (writeDebugLog(`LSP Diagnostics: Clearing delivered diagnostics for ${A}`),
       $G6.delete(A));
 }
 var L01 = 10,
@@ -108729,7 +108729,7 @@ function y96(A, q) {
     w = Xv8(CZ(), Y, "inboxes"),
     _ = Xv8(w, `${z}.json`);
   return (
-    y(`[TeammateMailbox] getInboxPath: agent=${A}, team=${K}, fullPath=${_}`),
+    writeDebugLog(`[TeammateMailbox] getInboxPath: agent=${A}, team=${K}, fullPath=${_}`),
     _
   );
 }
@@ -108738,21 +108738,21 @@ async function wqY(A) {
     K = LP6(q),
     Y = Xv8(CZ(), K, "inboxes");
   (await zqY(Y, { recursive: !0 }),
-    y(`[TeammateMailbox] Ensured inbox directory: ${Y}`));
+    writeDebugLog(`[TeammateMailbox] Ensured inbox directory: ${Y}`));
 }
 async function lc(A, q) {
   let K = y96(A, q);
-  y(`[TeammateMailbox] readMailbox: path=${K}`);
+  writeDebugLog(`[TeammateMailbox] readMailbox: path=${K}`);
   try {
     let Y = await Ej4(K, "utf-8"),
       z = w8(Y);
-    return (y(`[TeammateMailbox] readMailbox: read ${z.length} message(s)`), z);
+    return (writeDebugLog(`[TeammateMailbox] readMailbox: read ${z.length} message(s)`), z);
   } catch (Y) {
     if (Y.code === "ENOENT")
-      return (y("[TeammateMailbox] readMailbox: file does not exist"), []);
+      return (writeDebugLog("[TeammateMailbox] readMailbox: file does not exist"), []);
     return (
-      y(`Failed to read inbox for ${A}: ${Y}`),
-      $6(Y instanceof Error ? Y : Error(String(Y))),
+      writeDebugLog(`Failed to read inbox for ${A}: ${Y}`),
+      sendError(Y instanceof Error ? Y : Error(String(Y))),
       []
     );
   }
@@ -108761,7 +108761,7 @@ async function R96(A, q) {
   let K = await lc(A, q),
     Y = K.filter((z) => !z.read);
   return (
-    y(
+    writeDebugLog(
       `[TeammateMailbox] readUnreadMessages: ${Y.length} unread of ${K.length} total`,
     ),
     Y
@@ -108771,16 +108771,16 @@ async function e5(A, q, K) {
   await wqY(K);
   let Y = y96(A, K),
     z = `${Y}.lock`;
-  y(
+  writeDebugLog(
     `[TeammateMailbox] writeToMailbox: recipient=${A}, from=${q.from}, path=${Y}`,
   );
   try {
     (await PG6(Y, "[]", { encoding: "utf-8", flag: "wx" }),
-      y("[TeammateMailbox] writeToMailbox: created new inbox file"));
+      writeDebugLog("[TeammateMailbox] writeToMailbox: created new inbox file"));
   } catch (_) {
     if (_.code !== "EEXIST") {
-      (y(`[TeammateMailbox] writeToMailbox: failed to create inbox file: ${_}`),
-        $6(_ instanceof Error ? _ : Error(String(_))));
+      (writeDebugLog(`[TeammateMailbox] writeToMailbox: failed to create inbox file: ${_}`),
+        sendError(_ instanceof Error ? _ : Error(String(_))));
       return;
     }
   }
@@ -108790,119 +108790,119 @@ async function e5(A, q, K) {
     let _ = await lc(A, K),
       $ = { ...q, read: !1 };
     (_.push($),
-      await PG6(Y, p6(_, null, 2), "utf-8"),
-      y(`[TeammateMailbox] Wrote message to ${A}'s inbox from ${q.from}`));
+      await PG6(Y, trySafeStringify(_, null, 2), "utf-8"),
+      writeDebugLog(`[TeammateMailbox] Wrote message to ${A}'s inbox from ${q.from}`));
   } catch (_) {
-    (y(`Failed to write to inbox for ${A}: ${_}`),
-      $6(_ instanceof Error ? _ : Error(String(_))));
+    (writeDebugLog(`Failed to write to inbox for ${A}: ${_}`),
+      sendError(_ instanceof Error ? _ : Error(String(_))));
   } finally {
     if (w) await w();
   }
 }
 async function mp6(A, q, K) {
   let Y = y96(A, q);
-  y(
+  writeDebugLog(
     `[TeammateMailbox] markMessageAsReadByIndex called: agentName=${A}, teamName=${q}, index=${K}, path=${Y}`,
   );
   let z = `${Y}.lock`,
     w;
   try {
-    (y("[TeammateMailbox] markMessageAsReadByIndex: acquiring lock..."),
+    (writeDebugLog("[TeammateMailbox] markMessageAsReadByIndex: acquiring lock..."),
       (w = await up6.lock(Y, { lockfilePath: z, ...S01 })),
-      y("[TeammateMailbox] markMessageAsReadByIndex: lock acquired"));
+      writeDebugLog("[TeammateMailbox] markMessageAsReadByIndex: lock acquired"));
     let _ = await lc(A, q);
     if (
-      (y(
+      (writeDebugLog(
         `[TeammateMailbox] markMessageAsReadByIndex: read ${_.length} messages after lock`,
       ),
       K < 0 || K >= _.length)
     ) {
-      y(
+      writeDebugLog(
         `[TeammateMailbox] markMessageAsReadByIndex: index ${K} out of bounds (${_.length} messages)`,
       );
       return;
     }
     let $ = _[K];
     if (!$ || $.read) {
-      y(
+      writeDebugLog(
         "[TeammateMailbox] markMessageAsReadByIndex: message already read or missing",
       );
       return;
     }
     ((_[K] = { ...$, read: !0 }),
-      await PG6(Y, p6(_, null, 2), "utf-8"),
-      y(
+      await PG6(Y, trySafeStringify(_, null, 2), "utf-8"),
+      writeDebugLog(
         `[TeammateMailbox] markMessageAsReadByIndex: marked message at index ${K} as read`,
       ));
   } catch (_) {
     if (_.code === "ENOENT") {
-      y(
+      writeDebugLog(
         `[TeammateMailbox] markMessageAsReadByIndex: file does not exist at ${Y}`,
       );
       return;
     }
-    (y(`[TeammateMailbox] markMessageAsReadByIndex FAILED for ${A}: ${_}`),
-      $6(_ instanceof Error ? _ : Error(String(_))));
+    (writeDebugLog(`[TeammateMailbox] markMessageAsReadByIndex FAILED for ${A}: ${_}`),
+      sendError(_ instanceof Error ? _ : Error(String(_))));
   } finally {
     if (w)
       (await w(),
-        y("[TeammateMailbox] markMessageAsReadByIndex: lock released"));
+        writeDebugLog("[TeammateMailbox] markMessageAsReadByIndex: lock released"));
   }
 }
 async function Bp6(A, q) {
   let K = y96(A, q);
-  y(
+  writeDebugLog(
     `[TeammateMailbox] markMessagesAsRead called: agentName=${A}, teamName=${q}, path=${K}`,
   );
   let Y = `${K}.lock`,
     z;
   try {
-    (y("[TeammateMailbox] markMessagesAsRead: acquiring lock..."),
+    (writeDebugLog("[TeammateMailbox] markMessagesAsRead: acquiring lock..."),
       (z = await up6.lock(K, { lockfilePath: Y, ...S01 })),
-      y("[TeammateMailbox] markMessagesAsRead: lock acquired"));
+      writeDebugLog("[TeammateMailbox] markMessagesAsRead: lock acquired"));
     let w = await lc(A, q);
     if (
-      (y(
+      (writeDebugLog(
         `[TeammateMailbox] markMessagesAsRead: read ${w.length} messages after lock`,
       ),
       w.length === 0)
     ) {
-      y("[TeammateMailbox] markMessagesAsRead: no messages to mark");
+      writeDebugLog("[TeammateMailbox] markMessagesAsRead: no messages to mark");
       return;
     }
     let _ = w.filter((J) => !J.read).length;
-    y(`[TeammateMailbox] markMessagesAsRead: ${_} unread of ${w.length} total`);
+    writeDebugLog(`[TeammateMailbox] markMessagesAsRead: ${_} unread of ${w.length} total`);
     let $ = w.map((J) => ({ ...J, read: !0 }));
-    (await PG6(K, p6($, null, 2), "utf-8"),
-      y(
+    (await PG6(K, trySafeStringify($, null, 2), "utf-8"),
+      writeDebugLog(
         `[TeammateMailbox] markMessagesAsRead: WROTE ${_} message(s) as read to ${K}`,
       ));
     let O = await Ej4(K, "utf-8"),
       j = w8(O).filter((J) => !J.read).length;
-    y(
+    writeDebugLog(
       `[TeammateMailbox] markMessagesAsRead: VERIFY - ${j} still unread after write`,
     );
   } catch (w) {
     if (w.code === "ENOENT") {
-      y(`[TeammateMailbox] markMessagesAsRead: file does not exist at ${K}`);
+      writeDebugLog(`[TeammateMailbox] markMessagesAsRead: file does not exist at ${K}`);
       return;
     }
-    (y(`[TeammateMailbox] markMessagesAsRead FAILED for ${A}: ${w}`),
-      $6(w instanceof Error ? w : Error(String(w))));
+    (writeDebugLog(`[TeammateMailbox] markMessagesAsRead FAILED for ${A}: ${w}`),
+      sendError(w instanceof Error ? w : Error(String(w))));
   } finally {
     if (z)
-      (await z(), y("[TeammateMailbox] markMessagesAsRead: lock released"));
+      (await z(), writeDebugLog("[TeammateMailbox] markMessagesAsRead: lock released"));
   }
 }
 async function _qY(A, q) {
   let K = y96(A, q);
   try {
     (await PG6(K, "[]", { encoding: "utf-8", flag: "r+" }),
-      y(`[TeammateMailbox] Cleared inbox for ${A}`));
+      writeDebugLog(`[TeammateMailbox] Cleared inbox for ${A}`));
   } catch (Y) {
     if (Y.code === "ENOENT") return;
-    (y(`Failed to clear inbox for ${A}: ${Y}`),
-      $6(Y instanceof Error ? Y : Error(String(Y))));
+    (writeDebugLog(`Failed to clear inbox for ${A}: ${Y}`),
+      sendError(Y instanceof Error ? Y : Error(String(Y))));
   }
 }
 function $qY(A) {
@@ -109051,7 +109051,7 @@ async function I01(A, q, K) {
       A,
       {
         from: z,
-        text: p6(_),
+        text: trySafeStringify(_),
         timestamp: new Date().toISOString(),
         color: fO(),
       },
@@ -109149,10 +109149,10 @@ async function Tv8(A, q, K) {
     let _ = await lc(A, K);
     if (_.length === 0) return;
     let $ = _.map((O) => (!O.read && q(O) ? { ...O, read: !0 } : O));
-    await PG6(Y, p6($, null, 2), "utf-8");
+    await PG6(Y, trySafeStringify($, null, 2), "utf-8");
   } catch (_) {
     if (_.code === "ENOENT") return;
-    $6(_ instanceof Error ? _ : Error(String(_)));
+    sendError(_ instanceof Error ? _ : Error(String(_)));
   } finally {
     if (w)
       try {
@@ -109285,7 +109285,7 @@ function ED(A) {
   } catch (K) {
     if (K.code === "ENOENT") return null;
     return (
-      y(
+      writeDebugLog(
         `[TeammateTool] Failed to read team file for ${A}: ${K instanceof Error ? K.message : String(K)}`,
       ),
       null
@@ -109296,19 +109296,19 @@ function dp6(A, q) {
   let K = F01(A);
   OqY(K, { recursive: !0 });
   let Y = h96(K, "config.json");
-  jqY(Y, p6(q, null, 2));
+  jqY(Y, trySafeStringify(q, null, 2));
 }
 function ZG6(A, q) {
   let K = q.agentId || q.name;
   if (!K)
     return (
-      y("[TeammateTool] removeTeammateFromTeamFile called with no identifier"),
+      writeDebugLog("[TeammateTool] removeTeammateFromTeamFile called with no identifier"),
       !1
     );
   let Y = ED(A);
   if (!Y)
     return (
-      y(
+      writeDebugLog(
         `[TeammateTool] Cannot remove teammate ${K}: failed to read team file for "${A}"`,
       ),
       !1
@@ -109323,12 +109323,12 @@ function ZG6(A, q) {
     Y.members.length === z)
   )
     return (
-      y(`[TeammateTool] Teammate ${K} not found in team file for "${A}"`),
+      writeDebugLog(`[TeammateTool] Teammate ${K} not found in team file for "${A}"`),
       !1
     );
   return (
     dp6(A, Y),
-    y(`[TeammateTool] Removed teammate from team file: ${K}`),
+    writeDebugLog(`[TeammateTool] Removed teammate from team file: ${K}`),
     !0
   );
 }
@@ -109349,7 +109349,7 @@ function mj4(A, q) {
   }
   return (
     dp6(A, K),
-    y(`[TeammateTool] Removed member with pane ${q} from team ${A}`),
+    writeDebugLog(`[TeammateTool] Removed member with pane ${q} from team ${A}`),
     !0
   );
 }
@@ -109361,7 +109361,7 @@ function Bj4(A, q) {
   return (
     K.members.splice(Y, 1),
     dp6(A, K),
-    y(`[TeammateTool] Removed member ${q} from team ${A}`),
+    writeDebugLog(`[TeammateTool] Removed member ${q} from team ${A}`),
     !0
   );
 }
@@ -109371,7 +109371,7 @@ function cp6(A, q, K) {
   let z = Y.members.find((_) => _.name === q);
   if (!z)
     return (
-      y(
+      writeDebugLog(
         `[TeammateTool] Cannot set member mode: member ${q} not found in team ${A}`,
       ),
       !1
@@ -109380,7 +109380,7 @@ function cp6(A, q, K) {
   let w = Y.members.map((_) => (_.name === q ? { ..._, mode: K } : _));
   return (
     dp6(A, { ...Y, members: w }),
-    y(`[TeammateTool] Set member ${q} in team ${A} to mode: ${K}`),
+    writeDebugLog(`[TeammateTool] Set member ${q} in team ${A} to mode: ${K}`),
     !0
   );
 }
@@ -109402,7 +109402,7 @@ function Fj4(A, q) {
     });
   if (z)
     (dp6(A, { ...K, members: w }),
-      y(`[TeammateTool] Set ${q.length} member modes in team ${A}`));
+      writeDebugLog(`[TeammateTool] Set ${q.length} member modes in team ${A}`));
   return !0;
 }
 async function p01(A, q, K) {
@@ -109413,12 +109413,12 @@ async function p01(A, q, K) {
     let $ = await xj4(z, "utf-8");
     w = w8($);
   } catch {
-    y(`[TeammateTool] Cannot set member active: team ${A} not found`);
+    writeDebugLog(`[TeammateTool] Cannot set member active: team ${A} not found`);
     return;
   }
   let _ = w.members.find(($) => $.name === q);
   if (!_) {
-    y(
+    writeDebugLog(
       `[TeammateTool] Cannot set member active: member ${q} not found in team ${A}`,
     );
     return;
@@ -109426,8 +109426,8 @@ async function p01(A, q, K) {
   if (_.isActive === K) return;
   ((_.isActive = K),
     await DqY(Y, { recursive: !0 }),
-    await JqY(z, p6(w, null, 2)),
-    y(
+    await JqY(z, trySafeStringify(w, null, 2)),
+    writeDebugLog(
       `[TeammateTool] Set member ${q} in team ${A} to ${K ? "active" : "idle"}`,
     ));
 }
@@ -109445,22 +109445,22 @@ async function MqY(A) {
   if (K) {
     let Y = await Z7(eA(), ["worktree", "remove", "--force", A], { cwd: K });
     if (Y.code === 0) {
-      y(`[TeammateTool] Removed worktree via git: ${A}`);
+      writeDebugLog(`[TeammateTool] Removed worktree via git: ${A}`);
       return;
     }
     if (Y.stderr?.includes("not a working tree")) {
-      y(`[TeammateTool] Worktree already removed: ${A}`);
+      writeDebugLog(`[TeammateTool] Worktree already removed: ${A}`);
       return;
     }
-    y(
+    writeDebugLog(
       `[TeammateTool] git worktree remove failed, falling back to rm: ${Y.stderr}`,
     );
   }
   try {
     (await Nv8(A, { recursive: !0, force: !0 }),
-      y(`[TeammateTool] Removed worktree directory manually: ${A}`));
+      writeDebugLog(`[TeammateTool] Removed worktree directory manually: ${A}`));
   } catch (Y) {
-    y(
+    writeDebugLog(
       `[TeammateTool] Failed to remove worktree ${A}: ${Y instanceof Error ? Y.message : String(Y)}`,
     );
   }
@@ -109476,19 +109476,19 @@ async function pj4(A) {
   let z = F01(A);
   try {
     (await Nv8(z, { recursive: !0, force: !0 }),
-      y(`[TeammateTool] Cleaned up team directory: ${z}`));
+      writeDebugLog(`[TeammateTool] Cleaned up team directory: ${z}`));
   } catch (_) {
-    y(
+    writeDebugLog(
       `[TeammateTool] Failed to clean up team directory ${z}: ${_ instanceof Error ? _.message : String(_)}`,
     );
   }
   let w = TR(q);
   try {
     (await Nv8(w, { recursive: !0, force: !0 }),
-      y(`[TeammateTool] Cleaned up tasks directory: ${w}`),
+      writeDebugLog(`[TeammateTool] Cleaned up tasks directory: ${w}`),
       Ft());
   } catch (_) {
-    y(
+    writeDebugLog(
       `[TeammateTool] Failed to clean up tasks directory ${w}: ${_ instanceof Error ? _.message : String(_)}`,
     );
   }
@@ -109538,8 +109538,8 @@ import { randomUUID as PqY } from "node:crypto";
 import { readFile as WqY } from "fs/promises";
 async function fqY(A, q, K, Y, z, w) {
   if (
-    X1(process.env.CLAUDE_CODE_DISABLE_ATTACHMENTS) ||
-    X1(process.env.CLAUDE_CODE_SIMPLE)
+    isTruthy(process.env.CLAUDE_CODE_DISABLE_ATTACHMENTS) ||
+    isTruthy(process.env.CLAUDE_CODE_SIMPLE)
   )
     return [];
   let _ = G3();
@@ -109607,10 +109607,10 @@ async function r_(A, q) {
     let Y = await q(),
       z = Date.now() - K,
       w = Y.reduce((_, $) => {
-        return _ + p6($).length;
+        return _ + trySafeStringify($).length;
       }, 0);
     if (Math.random() < 0.05)
-      n("tengu_attachment_compute_duration", {
+      emitEvent("tengu_attachment_compute_duration", {
         label: A,
         duration_ms: z,
         attachment_size_bytes: w,
@@ -109620,12 +109620,12 @@ async function r_(A, q) {
   } catch (Y) {
     let z = Date.now() - K;
     if (Math.random() < 0.05)
-      n("tengu_attachment_compute_duration", {
+      emitEvent("tengu_attachment_compute_duration", {
         label: A,
         duration_ms: z,
         error: !0,
       });
-    return ($6(Y), GL(`Attachment error in ${A}`, Y), []);
+    return (sendError(Y), GL(`Attachment error in ${A}`, Y), []);
   }
 }
 async function NqY(A) {
@@ -109827,7 +109827,7 @@ function lj4(A, q, K) {
       Y.push(...vv8(j, q));
     }
   } catch (z) {
-    $6(z);
+    sendError(z);
   }
   return Y;
 }
@@ -109848,7 +109848,7 @@ async function uqY(A, q) {
       K.map(async (w) => {
         try {
           let { filename: _, lineStart: $, lineEnd: O } = iqY(w),
-            H = Q4(_);
+            H = resolveFilePath(_);
           if (fG6(H, Y.toolPermissionContext)) return null;
           try {
             if ((await dj4(H)).isDirectory())
@@ -109861,7 +109861,7 @@ async function uqY(A, q) {
                 let P = M.join(`
 `);
                 return (
-                  n("tengu_at_mention_extracting_directory_success", {}),
+                  emitEvent("tengu_at_mention_extracting_directory_success", {}),
                   {
                     type: "directory",
                     path: H,
@@ -109882,7 +109882,7 @@ async function uqY(A, q) {
             { offset: $, limit: O && $ ? O - $ + 1 : void 0 },
           );
         } catch {
-          n("tengu_at_mention_extracting_filename_error", {});
+          emitEvent("tengu_at_mention_extracting_filename_error", {});
         }
       }),
     )
@@ -109894,9 +109894,9 @@ function mqY(A, q) {
   return K.map((z) => {
     let w = z.replace("agent-", ""),
       _ = q.find(($) => $.agentType === w);
-    if (!_) return (n("tengu_at_mention_agent_not_found", {}), null);
+    if (!_) return (emitEvent("tengu_at_mention_agent_not_found", {}), null);
     return (
-      n("tengu_at_mention_agent_success", {}),
+      emitEvent("tengu_at_mention_agent_success", {}),
       { type: "agent_mention", agentType: _.agentType }
     );
   }).filter((z) => z !== null);
@@ -109912,16 +109912,16 @@ async function BqY(A, q) {
           let [_, ...$] = w.split(":"),
             O = $.join(":");
           if (!_ || !O)
-            return (n("tengu_at_mention_mcp_resource_error", {}), null);
+            return (emitEvent("tengu_at_mention_mcp_resource_error", {}), null);
           let H = Y.find((D) => D.name === _);
           if (!H || H.type !== "connected")
-            return (n("tengu_at_mention_mcp_resource_error", {}), null);
+            return (emitEvent("tengu_at_mention_mcp_resource_error", {}), null);
           let J = (q.options.mcpResources?.[_] || []).find((D) => D.uri === O);
-          if (!J) return (n("tengu_at_mention_mcp_resource_error", {}), null);
+          if (!J) return (emitEvent("tengu_at_mention_mcp_resource_error", {}), null);
           try {
             let D = await H.client.readResource({ uri: O });
             return (
-              n("tengu_at_mention_mcp_resource_success", {}),
+              emitEvent("tengu_at_mention_mcp_resource_success", {}),
               {
                 type: "mcp_resource",
                 server: _,
@@ -109932,10 +109932,10 @@ async function BqY(A, q) {
               }
             );
           } catch (D) {
-            return (n("tengu_at_mention_mcp_resource_error", {}), $6(D), null);
+            return (emitEvent("tengu_at_mention_mcp_resource_error", {}), sendError(D), null);
           }
         } catch {
-          return (n("tengu_at_mention_mcp_resource_error", {}), null);
+          return (emitEvent("tengu_at_mention_mcp_resource_error", {}), null);
         }
       }),
     )
@@ -109949,7 +109949,7 @@ async function gqY(A) {
         let z = A.readFileState.get(Y);
         if (!z) return null;
         if (z.offset !== void 0 || z.limit !== void 0) return null;
-        let w = Q4(Y);
+        let w = resolveFilePath(Y);
         if (fG6(w, q.toolPermissionContext)) return null;
         try {
           if (QR(w) <= z.timestamp) return null;
@@ -109970,8 +109970,8 @@ async function gqY(A) {
               return { type: "edited_image_file", filename: w, content: H };
             } catch (H) {
               return (
-                $6(H),
-                n("tengu_watched_file_compression_failed", { file: w }),
+                sendError(H),
+                emitEvent("tengu_watched_file_compression_failed", { file: w }),
                 null
               );
             }
@@ -110050,7 +110050,7 @@ function ij4(A, q) {
   if (!Y || !/\s/.test(Y.trim())) return;
   return pqY(Y, q.options.agentDefinitions.activeAgents, q.readFileState).catch(
     (z) => {
-      return ($6(z), []);
+      return (sendError(z), []);
     },
   );
 }
@@ -110113,7 +110113,7 @@ async function dqY(A) {
   if (Y.length === 0) return [];
   let z = lp6.size === 0;
   for (let $ of Y) lp6.add($.name);
-  y(
+  writeDebugLog(
     `Sending ${Y.length} skills via attachment (${z ? "initial" : "dynamic"}, ${lp6.size} total sent)`,
   );
   let w = fX(A.options.mainLoopModel, iH());
@@ -110192,11 +110192,11 @@ async function oqY(A) {
 }
 async function aqY(A) {
   if (!A.options.tools.some((q) => B5(q, BASH_TOOL_NAME))) return [];
-  y("LSP Diagnostics: getLSPDiagnosticAttachments called");
+  writeDebugLog("LSP Diagnostics: getLSPDiagnosticAttachments called");
   try {
     let q = Yj4();
     if (q.length === 0) return [];
-    y(`LSP Diagnostics: Found ${q.length} pending diagnostic set(s)`);
+    writeDebugLog(`LSP Diagnostics: Found ${q.length} pending diagnostic set(s)`);
     let K = q.map(({ files: Y }) => ({
       type: "diagnostics",
       files: Y,
@@ -110204,17 +110204,17 @@ async function aqY(A) {
     }));
     if (q.length > 0)
       (zj4(),
-        y(
+        writeDebugLog(
           `LSP Diagnostics: Cleared ${q.length} delivered diagnostic(s) from registry`,
         ));
     return (
-      y(`LSP Diagnostics: Returning ${K.length} diagnostic attachment(s)`),
+      writeDebugLog(`LSP Diagnostics: Returning ${K.length} diagnostic attachment(s)`),
       K
     );
   } catch (q) {
     let K = q instanceof Error ? q : Error(String(q));
     return (
-      $6(Error(`Failed to get LSP diagnostic attachments: ${K.message}`)),
+      sendError(Error(`Failed to get LSP diagnostic attachments: ${K.message}`)),
       []
     );
   }
@@ -110222,7 +110222,7 @@ async function aqY(A) {
 async function* TG6(A, q, K, Y, z, w) {
   let _ = await fqY(A, q, K, Y, z, w);
   if (_.length === 0) return;
-  n("tengu_attachments", { attachment_types: _.map(($) => $.type) });
+  emitEvent("tengu_attachments", { attachment_types: _.map(($) => $.type) });
   for (let $ of _) yield wq($);
 }
 async function sqY(A) {
@@ -110234,7 +110234,7 @@ async function sqY(A) {
       z = Y ?? Math.ceil(K.size / 102400);
     if (z > bw1)
       return (
-        n("tengu_pdf_reference_attachment", {
+        emitEvent("tengu_pdf_reference_attachment", {
           pageCount: z,
           fileSize: K.size,
           hadPdfinfo: Y !== null,
@@ -110260,7 +110260,7 @@ async function kv8(A, q, K, Y, z, w) {
       try {
         let J = await P1().stat(A);
         return (
-          n("tengu_attachment_file_too_large", { size_bytes: J.size, mode: z }),
+          emitEvent("tengu_attachment_file_too_large", { size_bytes: J.size, mode: z }),
           null
         );
       } catch {}
@@ -110275,7 +110275,7 @@ async function kv8(A, q, K, Y, z, w) {
       let j = QR(A);
       if (H.timestamp <= j && j === H.timestamp)
         return (
-          n(K, {}),
+          emitEvent(K, {}),
           {
             type: "already_read_file",
             filename: A,
@@ -110310,7 +110310,7 @@ async function kv8(A, q, K, Y, z, w) {
         let M = { file_path: A, offset: _ ?? 1, limit: qb6 },
           P = await readTool.call(M, q);
         return (
-          n(K, {}),
+          emitEvent(K, {}),
           {
             type: "file",
             filename: A,
@@ -110320,14 +110320,14 @@ async function kv8(A, q, K, Y, z, w) {
           }
         );
       } catch {
-        return (n(Y, {}), null);
+        return (emitEvent(Y, {}), null);
       }
     }
     if (!(await readTool.validateInput(j, q)).result) return null;
     try {
       let X = await readTool.call(j, q);
       return (
-        n(K, {}),
+        emitEvent(K, {}),
         { type: "file", filename: A, content: X.data, displayPath: ic(y1(), A) }
       );
     } catch (X) {
@@ -110335,7 +110335,7 @@ async function kv8(A, q, K, Y, z, w) {
       throw X;
     }
   } catch {
-    return (n(Y, {}), null);
+    return (emitEvent(Y, {}), null);
   }
 }
 function wq(A) {
@@ -110381,7 +110381,7 @@ async function eqY(A, q) {
   if (!A || A.length === 0) return [];
   let { turnsSinceLastTodoWrite: K, turnsSinceLastReminder: Y } = tqY(A);
   if (K >= d01.TURNS_SINCE_WRITE && Y >= d01.TURNS_BETWEEN_REMINDERS) {
-    let z = q.agentId ?? d1(),
+    let z = q.agentId ?? getSessionId(),
       _ = (await q.getAppState()).todos[z] ?? [];
     return [{ type: "todo_reminder", content: _, itemCount: _.length }];
   }
@@ -110449,7 +110449,7 @@ async function KKY(A) {
 async function YKY() {
   let A = await sH4();
   if (A.length === 0) return [];
-  y(`Hooks: getAsyncHookResponseAttachments found ${A.length} responses`);
+  writeDebugLog(`Hooks: getAsyncHookResponseAttachments found ${A.length} responses`);
   let q = A.map(
     ({
       processId: K,
@@ -110462,7 +110462,7 @@ async function YKY() {
       exitCode: H,
     }) => {
       return (
-        y(`Hooks: Creating attachment for ${K} (${z}): ${p6(Y)}`),
+        writeDebugLog(`Hooks: Creating attachment for ${K} (${z}): ${trySafeStringify(Y)}`),
         {
           type: "async_hook_response",
           processId: K,
@@ -110479,10 +110479,10 @@ async function YKY() {
   );
   if (A.length > 0) {
     let K = A.map((Y) => Y.processId);
-    (tH4(K), y(`Hooks: Removed ${K.length} delivered hooks from registry`));
+    (tH4(K), writeDebugLog(`Hooks: Removed ${K.length} delivered hooks from registry`));
   }
   return (
-    y(`Hooks: getAsyncHookResponseAttachments found ${q.length} attachments`),
+    writeDebugLog(`Hooks: getAsyncHookResponseAttachments found ${q.length} attachments`),
     q
   );
 }
@@ -110511,7 +110511,7 @@ function wKY(A) {
   ];
 }
 function _KY(A, q) {
-  if (!X1(process.env.CLAUDE_CODE_ENABLE_TOKEN_USAGE_ATTACHMENT)) return [];
+  if (!isTruthy(process.env.CLAUDE_CODE_ENABLE_TOKEN_USAGE_ATTACHMENT)) return [];
   let K = I96(q),
     Y = lf(A);
   return [{ type: "token_usage", used: Y, total: K, remaining: K - Y }];
@@ -110624,7 +110624,7 @@ async function NG6(A) {
   try {
     await XKY(yv8(A), `${Date.now()}`, "utf-8");
   } catch (q) {
-    y(`Failed to write .orphaned_at: ${A}: ${q}`);
+    writeDebugLog(`Failed to write .orphaned_at: ${A}: ${q}`);
   }
 }
 async function Lv8() {
@@ -110649,7 +110649,7 @@ async function Lv8() {
       await aj4(z);
     }
   } catch (A) {
-    y(`Plugin cache cleanup failed: ${A}`);
+    writeDebugLog(`Plugin cache cleanup failed: ${A}`);
   }
 }
 function yv8(A) {
@@ -110661,7 +110661,7 @@ async function GKY(A) {
     await DKY(q);
   } catch (K) {
     if (K.code === "ENOENT") return;
-    y(`Failed to remove .orphaned_at: ${A}: ${K}`);
+    writeDebugLog(`Failed to remove .orphaned_at: ${A}: ${K}`);
   }
 }
 function ZKY() {
@@ -110672,7 +110672,7 @@ function ZKY() {
       for (let Y of K) A.add(Y.installPath);
     return A;
   } catch (A) {
-    return (y(`Failed to load installed plugins: ${A}`), null);
+    return (writeDebugLog(`Failed to load installed plugins: ${A}`), null);
   }
 }
 async function fKY(A, q) {
@@ -110685,14 +110685,14 @@ async function fKY(A, q) {
       await NG6(A);
       return;
     }
-    y(`Failed to stat orphaned marker: ${A}: ${z}`);
+    writeDebugLog(`Failed to stat orphaned marker: ${A}: ${z}`);
     return;
   }
   if (q - Y > PKY)
     try {
       await sj4(A, { recursive: !0, force: !0 });
     } catch (z) {
-      y(`Failed to delete orphaned version: ${A}: ${z}`);
+      writeDebugLog(`Failed to delete orphaned version: ${A}: ${z}`);
     }
 }
 async function aj4(A) {
@@ -110700,7 +110700,7 @@ async function aj4(A) {
     try {
       await sj4(A, { recursive: !0, force: !0 });
     } catch (q) {
-      y(`Failed to remove empty dir: ${A}: ${q}`);
+      writeDebugLog(`Failed to remove empty dir: ${A}: ${q}`);
     }
 }
 async function i01(A) {
@@ -110766,14 +110766,14 @@ async function k3() {
       z = aJ6().safeParse(Y);
     if (!z.success) {
       let w = `Marketplace configuration file is corrupted: ${z.error.issues.map((_) => `${_.path.join(".")}: ${_.message}`).join(", ")}`;
-      throw (y(w, { level: "error" }), new QZ(w, q, Y));
+      throw (writeDebugLog(w, { level: "error" }), new QZ(w, q, Y));
     }
     return z.data;
   } catch (K) {
     if (K.code === "ENOENT") return {};
     if (K instanceof QZ) throw K;
     let Y = `Failed to load marketplace configuration: ${K instanceof Error ? K.message : String(K)}`;
-    throw (y(Y, { level: "error" }), Error(Y));
+    throw (writeDebugLog(Y, { level: "error" }), Error(Y));
   }
 }
 async function x96(A) {
@@ -110784,7 +110784,7 @@ async function x96(A) {
   let Y = P1(),
     z = IP(K, "..");
   (await Y.mkdir(z),
-    Nz(K, p6(q.data, null, 2), { encoding: "utf-8", flush: !0 }));
+    Nz(K, trySafeStringify(q.data, null, 2), { encoding: "utf-8", flush: !0 }));
 }
 async function s01() {
   let A = cB();
@@ -110796,7 +110796,7 @@ async function s01() {
       _ = aJ6().safeParse(w8(w));
     if (!_.success)
       return (
-        y(`Seed known_marketplaces.json invalid: ${_.error.message}`, {
+        writeDebugLog(`Seed known_marketplaces.json invalid: ${_.error.message}`, {
           level: "warn",
         }),
         !1
@@ -110804,7 +110804,7 @@ async function s01() {
     K = _.data;
   } catch (w) {
     if (w.code !== "ENOENT")
-      y(`Failed to read seed known_marketplaces.json: ${w}`, { level: "warn" });
+      writeDebugLog(`Failed to read seed known_marketplaces.json: ${w}`, { level: "warn" });
     return !1;
   }
   let Y = await k3(),
@@ -110812,7 +110812,7 @@ async function s01() {
   for (let [w, _] of Object.entries(K)) {
     let $ = await kKY(A, w);
     if (!$) {
-      y(
+      writeDebugLog(
         `Seed marketplace '${w}' not found under ${A}/marketplaces/, skipping`,
         { level: "warn" },
       );
@@ -110828,7 +110828,7 @@ async function s01() {
     ((Y[w] = O), z++);
   }
   if (z > 0)
-    return (await x96(Y), y(`Synced ${z} marketplace(s) from seed dir`), !0);
+    return (await x96(Y), writeDebugLog(`Synced ${z} marketplace(s) from seed dir`), !0);
   return !1;
 }
 async function kKY(A, q) {
@@ -110854,7 +110854,7 @@ function pe() {
   return EKY;
 }
 async function LKY(A, q, K) {
-  y(`git pull: cwd=${A} ref=${q ?? "default"}`);
+  writeDebugLog(`git pull: cwd=${A} ref=${q ?? "default"}`);
   let Y = { ...process.env, ...np6 },
     z = K?.disableCredentialHelper ? ["-c", "credential.helper="] : [];
   if (q) {
@@ -110956,10 +110956,10 @@ async function KJ4() {
         A.code === 1 &&
         (A.stderr?.includes("successfully authenticated") ||
           A.stdout?.includes("successfully authenticated"));
-    return (y(`SSH config check: code=${A.code} configured=${q}`), q);
+    return (writeDebugLog(`SSH config check: code=${A.code} configured=${q}`), q);
   } catch (A) {
     return (
-      y(
+      writeDebugLog(
         `SSH configuration check failed: ${A instanceof Error ? A.message : String(A)}`,
         { level: "warn" },
       ),
@@ -110993,7 +110993,7 @@ async function RKY(A, q, K, Y) {
   if (K) w.push("--branch", K);
   w.push(A, q);
   let _ = pe();
-  y(`git clone: url=${A} ref=${K ?? "default"} timeout=${_}ms`);
+  writeDebugLog(`git clone: url=${A} ref=${K ?? "default"} timeout=${_}ms`);
   let $ = await Z7(eA(), w, {
     timeout: _,
     stdin: "ignore",
@@ -111024,10 +111024,10 @@ async function RKY(A, q, K, Y) {
           stderr: `git checkout after sparse-checkout failed: ${H.stderr}`,
         };
     }
-    return (y(`git clone succeeded: ${A}`), $);
+    return (writeDebugLog(`git clone succeeded: ${A}`), $);
   }
   if (
-    (y(
+    (writeDebugLog(
       `git clone failed: url=${A} code=${$.code} error=${$.error ?? "none"} stderr=${$.stderr}`,
       { level: "warn" },
     ),
@@ -111101,7 +111101,7 @@ function dR(A, q) {
   try {
     A(q);
   } catch (K) {
-    y(
+    writeDebugLog(
       `Progress callback error: ${K instanceof Error ? K.message : String(K)}`,
       { level: "warn" },
     );
@@ -111139,11 +111139,11 @@ async function rc(A, q, K, Y, z, w) {
       disableCredentialHelper: w?.disableCredentialHelper,
     });
     if (J.code === 0) return;
-    y(`git pull failed, will re-clone: ${J.stderr}`, { level: "warn" });
-  } else y(`sparse-checkout reconcile requires re-clone: ${O.stderr}`);
+    writeDebugLog(`git pull failed, will re-clone: ${J.stderr}`, { level: "warn" });
+  } else writeDebugLog(`sparse-checkout reconcile requires re-clone: ${O.stderr}`);
   try {
     (await _.rm(q, { recursive: !0 }),
-      y(
+      writeDebugLog(
         `Found stale marketplace directory at ${q}, cleaning up to allow re-clone`,
         { level: "warn" },
       ),
@@ -111176,10 +111176,10 @@ async function YJ4(A, q, K, Y) {
   let z = P1();
   if (
     (dR(Y, `Downloading marketplace from ${A}`),
-    y(`Downloading marketplace from URL: ${A}`),
+    writeDebugLog(`Downloading marketplace from URL: ${A}`),
     K && Object.keys(K).length > 0)
   )
-    y(`Using custom headers: ${p6(SKY(K))}`);
+    writeDebugLog(`Using custom headers: ${trySafeStringify(SKY(K))}`);
   let w = { ...K, "User-Agent": "Claude-Code-Plugin-Manager" },
     _;
   try {
@@ -111214,7 +111214,7 @@ Technical details: ${H.message}`);
   dR(Y, "Saving marketplace to cache");
   let O = IP(q, "..");
   (await z.mkdir(O),
-    Nz(q, p6($.data, null, 2), { encoding: "utf-8", flush: !0 }));
+    Nz(q, trySafeStringify($.data, null, 2), { encoding: "utf-8", flush: !0 }));
 }
 function hKY(A) {
   return A.source === "github"
@@ -111276,9 +111276,9 @@ async function Sv8(A, q) {
             await rc(J, z, A.ref, A.sparsePaths, q);
           } catch (P) {
             ((X = P instanceof Error ? P : Error(String(P))),
-              $6(X),
+              sendError(X),
               dR(q, `SSH clone failed, retrying with HTTPS: ${D}`),
-              y(
+              writeDebugLog(
                 `SSH clone failed for ${A.repo} despite SSH being configured, falling back to HTTPS`,
                 { level: "info" },
               ),
@@ -111286,21 +111286,21 @@ async function Sv8(A, q) {
             try {
               (await rc(D, z, A.ref, A.sparsePaths, q), (X = null));
             } catch (W) {
-              ((X = W instanceof Error ? W : Error(String(W))), $6(X));
+              ((X = W instanceof Error ? W : Error(String(W))), sendError(X));
             }
           }
         } else {
           (dR(q, `SSH not configured, cloning via HTTPS: ${D}`),
-            y(`SSH not configured for GitHub, using HTTPS for ${A.repo}`, {
+            writeDebugLog(`SSH not configured for GitHub, using HTTPS for ${A.repo}`, {
               level: "info",
             }));
           try {
             await rc(D, z, A.ref, A.sparsePaths, q);
           } catch (P) {
             ((X = P instanceof Error ? P : Error(String(P))),
-              $6(X),
+              sendError(X),
               dR(q, `HTTPS clone failed, retrying with SSH: ${J}`),
-              y(
+              writeDebugLog(
                 `HTTPS clone failed for ${A.repo} (${X.message}), falling back to SSH`,
                 { level: "info" },
               ),
@@ -111308,7 +111308,7 @@ async function Sv8(A, q) {
             try {
               (await rc(J, z, A.ref, A.sparsePaths, q), (X = null));
             } catch (W) {
-              ((X = W instanceof Error ? W : Error(String(W))), $6(X));
+              ((X = W instanceof Error ? W : Error(String(W))), sendError(X));
             }
           }
         }
@@ -111338,7 +111338,7 @@ async function Sv8(A, q) {
       default:
         throw Error("Unsupported marketplace source type");
     }
-    y(`Reading marketplace from ${w}`);
+    writeDebugLog(`Reading marketplace from ${w}`);
     let O;
     try {
       O = await Rv8(w, Na());
@@ -111356,7 +111356,7 @@ async function Sv8(A, q) {
         try {
           q?.("Cleaning up old marketplace cache…");
         } catch (J) {
-          y(
+          writeDebugLog(
             `Progress callback error: ${J instanceof Error ? J.message : String(J)}`,
             { level: "warn" },
           );
@@ -111377,7 +111377,7 @@ Technical details: ${D}`);
       try {
         await K.rm(z, { recursive: !0, force: !0 });
       } catch (H) {
-        y(
+        writeDebugLog(
           `Warning: Failed to clean up temporary marketplace cache at ${z}: ${H instanceof Error ? H.message : String(H)}`,
           { level: "warn" },
         );
@@ -111413,7 +111413,7 @@ Tip: The shorthand "${K.repo}" assumes github.com. For internal GitHub Enterpris
   for (let [H, j] of Object.entries(Y))
     if (oT(j.source, K))
       return (
-        y(`Source already materialized as '${H}', skipping clone`),
+        writeDebugLog(`Source already materialized as '${H}', skipping clone`),
         { name: H, alreadyMaterialized: !0, resolvedSource: K }
       );
   let { marketplace: z, cachePath: w } = await Sv8(K, q),
@@ -111427,7 +111427,7 @@ Tip: The shorthand "${K.repo}" assumes github.com. For internal GitHub Enterpris
         `Marketplace '${z.name}' is seed-managed (${cB()}). To use a different source, ask your admin to update the seed, or use a different marketplace name.`,
       );
     if (
-      (y(`Marketplace '${z.name}' exists with different source — overwriting`),
+      (writeDebugLog(`Marketplace '${z.name}' exists with different source — overwriting`),
       O.source.source !== "directory" && O.source.source !== "file")
     )
       await P1().rm(O.installLocation, { recursive: !0, force: !0 });
@@ -111439,7 +111439,7 @@ Tip: The shorthand "${K.repo}" assumes github.com. For internal GitHub Enterpris
       lastUpdated: new Date().toISOString(),
     }),
     await x96($),
-    y(`Added marketplace source: ${z.name}`),
+    writeDebugLog(`Added marketplace source: ${z.name}`),
     { name: z.name, alreadyMaterialized: !1, resolvedSource: K }
   );
 }
@@ -111480,16 +111480,16 @@ async function t01(A) {
     if (J) {
       let X = iA(H, D);
       if (X.error)
-        ($6(X.error),
-          y(
+        (sendError(X.error),
+          writeDebugLog(
             `Failed to clean up marketplace '${A}' from ${H} settings: ${X.error.message}`,
           ));
-      else y(`Cleaned up marketplace '${A}' from ${H} settings`);
+      else writeDebugLog(`Cleaned up marketplace '${A}' from ${H} settings`);
     }
   }
   let O = Aq4(A);
   for (let H of O) await NG6(H);
-  y(`Removed marketplace source: ${A}`);
+  writeDebugLog(`Removed marketplace source: ${A}`);
 }
 async function rp6(A) {
   let q = IP(A, ".claude-plugin", "marketplace.json");
@@ -111513,7 +111513,7 @@ async function IKY(A) {
   } catch (Y) {
     if (Y.code === "ENOENT") return null;
     return (
-      y(
+      writeDebugLog(
         `Failed to read cached marketplace ${A}: ${Y instanceof Error ? Y.message : String(Y)}`,
         { level: "warn" },
       ),
@@ -111556,7 +111556,7 @@ async function kM(A) {
     return { entry: O, marketplaceInstallLocation: _.installLocation };
   } catch (w) {
     return (
-      y(
+      writeDebugLog(
         `Could not find plugin ${A}: ${w instanceof Error ? w.message : String(w)}`,
         { level: "debug" },
       ),
@@ -111568,7 +111568,7 @@ async function zJ4() {
   let A = await k3();
   for (let [q, K] of Object.entries(A)) {
     if (op6(K.installLocation)) {
-      y(`Skipping seed-managed marketplace '${q}' in bulk refresh`);
+      writeDebugLog(`Skipping seed-managed marketplace '${q}' in bulk refresh`);
       continue;
     }
     try {
@@ -111576,7 +111576,7 @@ async function zJ4() {
       ((A[q].lastUpdated = new Date().toISOString()),
         (A[q].installLocation = Y));
     } catch (Y) {
-      y(
+      writeDebugLog(
         `Failed to refresh marketplace ${q}: ${Y instanceof Error ? Y.message : String(Y)}`,
         { level: "error" },
       );
@@ -111604,7 +111604,7 @@ async function Ue(A, q, K) {
       if (_.source === "github") {
         let $ = `git@github.com:${_.repo}.git`,
           O = `https://github.com/${_.repo}.git`;
-        if (X1(process.env.CLAUDE_CODE_REMOTE))
+        if (isTruthy(process.env.CLAUDE_CODE_REMOTE))
           await rc(O, w, _.ref, _.sparsePaths, q, K);
         else {
           let H = await KJ4(),
@@ -111613,7 +111613,7 @@ async function Ue(A, q, K) {
           try {
             await rc(j, w, _.ref, _.sparsePaths, q, K);
           } catch {
-            (y(
+            (writeDebugLog(
               `Marketplace refresh failed with ${H ? "SSH" : "HTTPS"} for ${_.repo}, falling back to ${H ? "HTTPS" : "SSH"}`,
               { level: "info" },
             ),
@@ -111638,11 +111638,11 @@ You can remove this marketplace with: claude plugin marketplace remove "${A}"`);
     else throw Error("Unsupported marketplace source type for refresh");
     ((Y[A].lastUpdated = new Date().toISOString()),
       await x96(Y),
-      y(`Successfully refreshed marketplace: ${A}`));
+      writeDebugLog(`Successfully refreshed marketplace: ${A}`));
   } catch (w) {
     let _ = w instanceof Error ? w.message : String(w);
     throw (
-      y(`Failed to refresh marketplace ${A}: ${_}`, { level: "error" }),
+      writeDebugLog(`Failed to refresh marketplace ${A}: ${_}`, { level: "error" }),
       Error(`Failed to refresh marketplace '${A}': ${_}`)
     );
   }
@@ -111665,7 +111665,7 @@ async function wJ4(A, q) {
     let w = getConfigValue(z)?.extraKnownMarketplaces?.[A];
     if (w) Cv8(A, { source: w.source, autoUpdate: q }, z);
   }
-  y(`Set autoUpdate=${q} for marketplace: ${A}`);
+  writeDebugLog(`Set autoUpdate=${q} for marketplace: ${A}`);
 }
 var np6,
   EKY = 120000,
@@ -111701,7 +111701,7 @@ var K_ = E(() => {
     try {
       return await rp6(K.installLocation);
     } catch (z) {
-      y(
+      writeDebugLog(
         `Cache corrupted or missing for marketplace ${A}, re-fetching from source: ${z instanceof Error ? z.message : String(z)}`,
         { level: "warn" },
       );
@@ -111719,16 +111719,16 @@ var K_ = E(() => {
 });
 async function ac(A, q, K, Y, z) {
   if (K?.version)
-    return (y(`Using manifest version for ${A}: ${K.version}`), K.version);
-  if (z) return (y(`Using provided version for ${A}: ${z}`), z);
+    return (writeDebugLog(`Using manifest version for ${A}: ${K.version}`), K.version);
+  if (z) return (writeDebugLog(`Using provided version for ${A}: ${z}`), z);
   if (Y) {
     let w = await xKY(Y);
     if (w) {
       let _ = w.substring(0, 12);
-      return (y(`Using git SHA for ${A}: ${_}`), _);
+      return (writeDebugLog(`Using git SHA for ${A}: ${_}`), _);
     }
   }
-  return (y(`No version found for ${A}, using 'unknown'`), "unknown");
+  return (writeDebugLog(`No version found for ${A}, using 'unknown'`), "unknown");
 }
 function xKY(A) {
   return j51(A);
@@ -111829,7 +111829,7 @@ async function ap6({
     let H = { ...getConfigValue(z)?.enabledPlugins, [A]: !0 };
     return (
       iA(z, { enabledPlugins: H }),
-      n("tengu_plugin_installed", { plugin_id: A, marketplace_name: K }),
+      emitEvent("tengu_plugin_installed", { plugin_id: A, marketplace_name: K }),
       Lw(),
       {
         success: !0,
@@ -111839,7 +111839,7 @@ async function ap6({
   } catch (z) {
     let w = z instanceof Error ? z.message : String(z);
     return (
-      $6(
+      sendError(
         z instanceof Error
           ? z
           : Error(`Failed to install plugin: ${String(z)}`),
@@ -111961,28 +111961,28 @@ async function qP1(A, q, K, Y, z) {
     $ = VG6(q, K);
   if (w) {
     if (await pq($))
-      return (y(`Plugin ${q} version ${K} already cached at ${$}`), $);
+      return (writeDebugLog(`Plugin ${q} version ${K} already cached at ${$}`), $);
   } else if (await pq(_)) {
     if ((await vG6(_)).length > 0)
-      return (y(`Plugin ${q} version ${K} already cached at ${_}`), _);
-    (y(`Removing empty cache directory for ${q} at ${_}`), await pKY(_));
+      return (writeDebugLog(`Plugin ${q} version ${K} already cached at ${_}`), _);
+    (writeDebugLog(`Removing empty cache directory for ${q} at ${_}`), await pKY(_));
   }
   let O = await MJ4(q, K);
-  if (O) return (y(`Using seed cache for ${q}@${K} at ${O}`), O);
+  if (O) return (writeDebugLog(`Using seed cache for ${q}@${K} at ${O}`), O);
   if (
     (await KP1(gv8(_), { recursive: !0 }),
     Y && typeof Y.source === "string" && z)
   ) {
     let J = mv8(z, Y.source);
     if (await pq(J))
-      (y(`Copying source directory ${Y.source} for plugin ${q}`),
+      (writeDebugLog(`Copying source directory ${Y.source} for plugin ${q}`),
         await tp6(J, _));
     else
       throw Error(
         `Plugin source directory not found: ${J} (from entry.source: ${Y.source})`,
       );
   } else
-    (y(`Copying plugin ${q} to versioned cache (fallback to full copy)`),
+    (writeDebugLog(`Copying plugin ${q} to versioned cache (fallback to full copy)`),
       await tp6(A, _));
   let H = E3(_, ".git");
   if ((await kG6(H, { recursive: !0, force: !0 }), (await vG6(_)).length === 0))
@@ -111992,10 +111992,10 @@ async function qP1(A, q, K, Y, z) {
   if (w)
     return (
       await NX1(_, $),
-      y(`Successfully cached plugin ${q} as ZIP at ${$}`),
+      writeDebugLog(`Successfully cached plugin ${q} as ZIP at ${$}`),
       $
     );
-  return (y(`Successfully cached plugin ${q} at ${_}`), _);
+  return (writeDebugLog(`Successfully cached plugin ${q} at ${_}`), _);
 }
 function lKY(A) {
   try {
@@ -112018,13 +112018,13 @@ async function iKY(A, q, K = {}) {
   let z = K.version ? `${A}@${K.version}` : A,
     w = E3(Y, "node_modules", A);
   if (!(await pq(w))) {
-    y(`Installing npm package ${z} to cache`);
+    writeDebugLog(`Installing npm package ${z} to cache`);
     let $ = ["install", z, "--prefix", Y];
     if (K.registry) $.push("--registry", K.registry);
     let O = await M8("npm", $, { useCwd: !1 });
     if (O.code !== 0) throw Error(`Failed to install npm package: ${O.stderr}`);
   }
-  (await tp6(w, q), y(`Copied npm package ${A} from cache to ${q}`));
+  (await tp6(w, q), writeDebugLog(`Copied npm package ${A} from cache to ${q}`));
 }
 async function nKY(A, q, K, Y) {
   let z = [
@@ -112044,7 +112044,7 @@ async function nKY(A, q, K, Y) {
       (await Z7(eA(), ["fetch", "--depth", "1", "origin", Y], { cwd: q }))
         .code !== 0
     ) {
-      y(`Shallow fetch of SHA ${Y} failed, falling back to unshallow fetch`);
+      writeDebugLog(`Shallow fetch of SHA ${Y} failed, falling back to unshallow fetch`);
       let O = await Z7(eA(), ["fetch", "--unshallow"], { cwd: q });
       if (O.code !== 0) throw Error(`Failed to fetch commit ${Y}: ${O.stderr}`);
     }
@@ -112057,14 +112057,14 @@ async function PJ4(A, q, K, Y) {
   let z = lKY(A);
   await nKY(z, q, K, Y);
   let w = K ? ` (ref: ${K})` : "";
-  y(`Cloned repository from ${z}${w} to ${q}`);
+  writeDebugLog(`Cloned repository from ${z}${w} to ${q}`);
 }
 async function rKY(A, q, K, Y) {
   if (!/^[a-zA-Z0-9-_.]+\/[a-zA-Z0-9-_.]+$/.test(A))
     throw Error(
       `Invalid GitHub repository format: ${A}. Expected format: owner/repo`,
     );
-  let z = X1(process.env.CLAUDE_CODE_REMOTE)
+  let z = isTruthy(process.env.CLAUDE_CODE_REMOTE)
     ? `https://github.com/${A}.git`
     : `git@github.com:${A}.git`;
   return PJ4(z, q, K, Y);
@@ -112107,7 +112107,7 @@ async function b96(A, q) {
     w = !1;
   try {
     if (
-      (y(`Caching plugin from source: ${p6(A)} to temporary path ${z}`),
+      (writeDebugLog(`Caching plugin from source: ${trySafeStringify(A)} to temporary path ${z}`),
       (w = !0),
       typeof A === "string")
     )
@@ -112130,11 +112130,11 @@ async function b96(A, q) {
       }
   } catch (J) {
     if (w && (await pq(z))) {
-      y(`Cleaning up failed installation at ${z}`);
+      writeDebugLog(`Cleaning up failed installation at ${z}`);
       try {
         await kG6(z, { recursive: !0, force: !0 });
       } catch (D) {
-        y(`Failed to clean up installation: ${D}`, { level: "error" });
+        writeDebugLog(`Failed to clean up installation: ${D}`, { level: "error" });
       }
     }
     throw J;
@@ -112153,7 +112153,7 @@ async function b96(A, q) {
           .map((P) => `${P.path.join(".")}: ${P.message}`)
           .join(", ");
         throw (
-          y(`Invalid manifest at ${_}: ${M}`, { level: "error" }),
+          writeDebugLog(`Invalid manifest at ${_}: ${M}`, { level: "error" }),
           Error(
             `Plugin has an invalid manifest file at ${_}. Validation errors: ${M}`,
           )
@@ -112164,7 +112164,7 @@ async function b96(A, q) {
         throw J;
       let D = J instanceof Error ? J.message : String(J);
       throw (
-        y(`Failed to parse manifest at ${_}: ${D}`, { level: "error" }),
+        writeDebugLog(`Failed to parse manifest at ${_}: ${D}`, { level: "error" }),
         Error(
           `Plugin has a corrupt manifest file at ${_}. JSON parse error: ${D}`,
         )
@@ -112181,7 +112181,7 @@ async function b96(A, q) {
           .map((P) => `${P.path.join(".")}: ${P.message}`)
           .join(", ");
         throw (
-          y(`Invalid legacy manifest at ${$}: ${M}`, { level: "error" }),
+          writeDebugLog(`Invalid legacy manifest at ${$}: ${M}`, { level: "error" }),
           Error(
             `Plugin has an invalid manifest file at ${$}. Validation errors: ${M}`,
           )
@@ -112192,7 +112192,7 @@ async function b96(A, q) {
         throw J;
       let D = J instanceof Error ? J.message : String(J);
       throw (
-        y(`Failed to parse legacy manifest at ${$}: ${D}`, { level: "error" }),
+        writeDebugLog(`Failed to parse legacy manifest at ${$}: ${D}`, { level: "error" }),
         Error(
           `Plugin has a corrupt manifest file at ${$}. JSON parse error: ${D}`,
         )
@@ -112206,11 +112206,11 @@ async function b96(A, q) {
   let H = O.name.replace(/[^a-zA-Z0-9-_]/g, "-"),
     j = E3(K, H);
   if (await pq(j))
-    (y(`Removing old cached version at ${j}`),
+    (writeDebugLog(`Removing old cached version at ${j}`),
       await kG6(j, { recursive: !0, force: !0 }));
   return (
     await FKY(z, j),
-    y(`Successfully cached plugin ${O.name} to ${j}`),
+    writeDebugLog(`Successfully cached plugin ${O.name} to ${j}`),
     { path: j, manifest: O }
   );
 }
@@ -112225,7 +112225,7 @@ async function YP1(A, q, K) {
       .map(($) => `${$.path.join(".")}: ${$.message}`)
       .join(", ");
     throw (
-      y(
+      writeDebugLog(
         `Plugin ${q} has an invalid manifest file at ${A}. Validation errors: ${_}`,
         { level: "error" },
       ),
@@ -112240,7 +112240,7 @@ Please fix the manifest or remove it. The plugin cannot load with an invalid man
       throw Y;
     let z = Y instanceof Error ? Y.message : String(Y);
     throw (
-      y(`Plugin ${q} has a corrupt manifest file at ${A}. Parse error: ${z}`, {
+      writeDebugLog(`Plugin ${q} has a corrupt manifest file at ${A}. Parse error: ${z}`, {
         level: "error",
       }),
       Error(`Plugin ${q} has a corrupt manifest file at ${A}.
@@ -112297,11 +112297,11 @@ async function WJ4(A, q, K, Y, z = !0) {
           let B = E3(A, I.source);
           if (await pq(B)) (L.push(B), (v[S] = I));
           else
-            (y(
+            (writeDebugLog(
               `Command ${S} path ${I.source} specified in manifest but not found at ${B} for ${$.name}`,
               { level: "warn" },
             ),
-              $6(Error(`Plugin component file not found: ${B} for ${$.name}`)),
+              sendError(Error(`Plugin component file not found: ${B} for ${$.name}`)),
               w.push({
                 type: "path-not-found",
                 source: q,
@@ -112318,7 +112318,7 @@ async function WJ4(A, q, K, Y, z = !0) {
         L = [];
       for (let S of v) {
         if (typeof S !== "string") {
-          y(`Unexpected command format in manifest for ${$.name}`, {
+          writeDebugLog(`Unexpected command format in manifest for ${$.name}`, {
             level: "error",
           });
           continue;
@@ -112326,11 +112326,11 @@ async function WJ4(A, q, K, Y, z = !0) {
         let I = E3(A, S);
         if (await pq(I)) L.push(I);
         else
-          (y(
+          (writeDebugLog(
             `Command path ${S} specified in manifest but not found at ${I} for ${$.name}`,
             { level: "warn" },
           ),
-            $6(Error(`Plugin component file not found: ${I} for ${$.name}`)),
+            sendError(Error(`Plugin component file not found: ${I} for ${$.name}`)),
             w.push({
               type: "path-not-found",
               source: q,
@@ -112351,11 +112351,11 @@ async function WJ4(A, q, K, Y, z = !0) {
       let S = E3(A, L);
       if (await pq(S)) v.push(S);
       else
-        (y(
+        (writeDebugLog(
           `Agent path ${L} specified in manifest but not found at ${S} for ${$.name}`,
           { level: "warn" },
         ),
-          $6(Error(`Plugin component file not found: ${S} for ${$.name}`)),
+          sendError(Error(`Plugin component file not found: ${S} for ${$.name}`)),
           w.push({
             type: "path-not-found",
             source: q,
@@ -112375,11 +112375,11 @@ async function WJ4(A, q, K, Y, z = !0) {
       let S = E3(A, L);
       if (await pq(S)) v.push(S);
       else
-        (y(
+        (writeDebugLog(
           `Skill path ${L} specified in manifest but not found at ${S} for ${$.name}`,
           { level: "warn" },
         ),
-          $6(Error(`Plugin component file not found: ${S} for ${$.name}`)),
+          sendError(Error(`Plugin component file not found: ${S} for ${$.name}`)),
           w.push({
             type: "path-not-found",
             source: q,
@@ -112399,11 +112399,11 @@ async function WJ4(A, q, K, Y, z = !0) {
       let S = E3(A, L);
       if (await pq(S)) v.push(S);
       else
-        (y(
+        (writeDebugLog(
           `Output style path ${L} specified in manifest but not found at ${S} for ${$.name}`,
           { level: "warn" },
         ),
-          $6(Error(`Plugin component file not found: ${S} for ${$.name}`)),
+          sendError(Error(`Plugin component file not found: ${S} for ${$.name}`)),
           w.push({
             type: "path-not-found",
             source: q,
@@ -112425,11 +112425,11 @@ async function WJ4(A, q, K, Y, z = !0) {
       } catch {
         Z.add(f);
       }
-      y(`Loaded hooks from standard location for plugin ${$.name}: ${f}`);
+      writeDebugLog(`Loaded hooks from standard location for plugin ${$.name}: ${f}`);
     } catch (V) {
       let v = V instanceof Error ? V.message : String(V);
-      (y(`Failed to load hooks for ${$.name}: ${v}`, { level: "error" }),
-        $6(V instanceof Error ? V : Error(v)),
+      (writeDebugLog(`Failed to load hooks for ${$.name}: ${v}`, { level: "error" }),
+        sendError(V instanceof Error ? V : Error(v)),
         w.push({
           type: "hook-load-failed",
           source: q,
@@ -112444,11 +112444,11 @@ async function WJ4(A, q, K, Y, z = !0) {
       if (typeof v === "string") {
         let L = E3(A, v);
         if (!(await pq(L))) {
-          (y(
+          (writeDebugLog(
             `Hooks file ${v} specified in manifest but not found at ${L} for ${$.name}`,
             { level: "error" },
           ),
-            $6(Error(`Plugin component file not found: ${L} for ${$.name}`)),
+            sendError(Error(`Plugin component file not found: ${L} for ${$.name}`)),
             w.push({
               type: "path-not-found",
               source: q,
@@ -112466,13 +112466,13 @@ async function WJ4(A, q, K, Y, z = !0) {
         }
         if (Z.has(S)) {
           if (
-            (y(
+            (writeDebugLog(
               `Skipping duplicate hooks file for plugin ${$.name}: ${v} (resolves to already-loaded file: ${S})`,
             ),
             z)
           ) {
             let I = `Duplicate hooks file detected: ${v} resolves to already-loaded file ${S}. The standard hooks/hooks.json is loaded automatically, so manifest.hooks should only reference additional hook files.`;
-            ($6(Error(I)),
+            (sendError(Error(I)),
               w.push({
                 type: "hook-load-failed",
                 source: q,
@@ -112488,15 +112488,15 @@ async function WJ4(A, q, K, Y, z = !0) {
           try {
             ((G = XJ4(G, I)),
               Z.add(S),
-              y(
+              writeDebugLog(
                 `Loaded and merged hooks from manifest for plugin ${$.name}: ${v}`,
               ));
           } catch (B) {
             let h = B instanceof Error ? B.message : String(B);
-            (y(`Failed to merge hooks from ${v} for ${$.name}: ${h}`, {
+            (writeDebugLog(`Failed to merge hooks from ${v} for ${$.name}: ${h}`, {
               level: "error",
             }),
-              $6(B instanceof Error ? B : Error(h)),
+              sendError(B instanceof Error ? B : Error(h)),
               w.push({
                 type: "hook-load-failed",
                 source: q,
@@ -112507,10 +112507,10 @@ async function WJ4(A, q, K, Y, z = !0) {
           }
         } catch (I) {
           let B = I instanceof Error ? I.message : String(I);
-          (y(`Failed to load hooks from ${v} for ${$.name}: ${B}`, {
+          (writeDebugLog(`Failed to load hooks from ${v} for ${$.name}: ${B}`, {
             level: "error",
           }),
-            $6(I instanceof Error ? I : Error(B)),
+            sendError(I instanceof Error ? I : Error(B)),
             w.push({
               type: "hook-load-failed",
               source: q,
@@ -112542,20 +112542,20 @@ async function tKY(A, q) {
       let w = DJ4(z);
       if (w)
         return (
-          y(`Loaded settings from settings.json for plugin ${q.name}`),
+          writeDebugLog(`Loaded settings from settings.json for plugin ${q.name}`),
           w
         );
     }
   } catch (Y) {
     let z = Y.code;
     if (z !== "ENOENT" && z !== "EACCES" && z !== "EPERM")
-      y(`Failed to parse settings.json for plugin ${q.name}: ${Y}`, {
+      writeDebugLog(`Failed to parse settings.json for plugin ${q.name}: ${Y}`, {
         level: "warn",
       });
   }
   if (q.settings) {
     let Y = DJ4(q.settings);
-    if (Y) return (y(`Loaded settings from manifest for plugin ${q.name}`), Y);
+    if (Y) return (writeDebugLog(`Loaded settings from manifest for plugin ${q.name}`), Y);
   }
   return;
 }
@@ -112615,7 +112615,7 @@ async function eKY() {
     if (O.status === "fulfilled" && O.value) K.push(O.value);
     else if (O.status === "rejected") {
       let H = O.reason instanceof Error ? O.reason : Error(String(O.reason));
-      ($6(H),
+      (sendError(H),
         Y.push({
           type: "generic-error",
           source: "marketplace-plugin",
@@ -112625,7 +112625,7 @@ async function eKY() {
   return { plugins: K, errors: Y };
 }
 async function A3Y(A, q, K, Y, z, w) {
-  y(`Loading plugin ${A.name} from source: ${p6(A.source)}`);
+  writeDebugLog(`Loading plugin ${A.name} from source: ${trySafeStringify(A.source)}`);
   let _ = [],
     $;
   if (typeof A.source === "string") {
@@ -112634,8 +112634,8 @@ async function A3Y(A, q, K, Y, z, w) {
     if (!(await pq(X))) {
       let M = Error(`Plugin path not found: ${X}`);
       return (
-        y(`Plugin path not found: ${X}`, { level: "error" }),
-        $6(M),
+        writeDebugLog(`Plugin path not found: ${X}`, { level: "error" }),
+        sendError(M),
         z.push({
           type: "generic-error",
           source: K,
@@ -112652,10 +112652,10 @@ async function A3Y(A, q, K, Y, z, w) {
       } catch {}
       let W = await ac(K, A.source, P, D, A.version);
       (($ = await qP1(X, K, W, A, D)),
-        y(`Resolved local plugin ${A.name} to versioned cache: ${$}`));
+        writeDebugLog(`Resolved local plugin ${A.name} to versioned cache: ${$}`));
     } catch (M) {
       let P = M instanceof Error ? M.message : String(M);
-      (y(
+      (writeDebugLog(
         `Failed to copy plugin ${A.name} to versioned cache: ${P}. Using marketplace path.`,
         { level: "warn" },
       ),
@@ -112667,14 +112667,14 @@ async function A3Y(A, q, K, Y, z, w) {
         X = CI(K, D),
         M = VG6(K, D);
       if (QI() && (await pq(M)))
-        (y(`Using versioned cached plugin ZIP ${A.name} from ${M}`), ($ = M));
+        (writeDebugLog(`Using versioned cached plugin ZIP ${A.name} from ${M}`), ($ = M));
       else if (await pq(X))
-        (y(`Using versioned cached plugin ${A.name} from ${X}`), ($ = X));
+        (writeDebugLog(`Using versioned cached plugin ${A.name} from ${X}`), ($ = X));
       else {
         let P = (await MJ4(K, D)) ?? (D === "unknown" ? await cKY(K) : null);
         if (P)
           (($ = P),
-            y(`Using seed cache for external plugin ${A.name} at ${P}`));
+            writeDebugLog(`Using seed cache for external plugin ${A.name} at ${P}`));
         else {
           let W = await b96(A.source, { manifest: { name: A.name } }),
             G = await ac(K, A.source, W.manifest, W.path, w ?? A.version);
@@ -112685,8 +112685,8 @@ async function A3Y(A, q, K, Y, z, w) {
     } catch (D) {
       let X = D instanceof Error ? D.message : String(D);
       return (
-        y(`Failed to cache plugin ${A.name}: ${X}`, { level: "error" }),
-        $6(D instanceof Error ? D : Error(X)),
+        writeDebugLog(`Failed to cache plugin ${A.name}: ${X}`, { level: "error" }),
+        sendError(D instanceof Error ? D : Error(X)),
         z.push({
           type: "generic-error",
           source: K,
@@ -112700,11 +112700,11 @@ async function A3Y(A, q, K, Y, z, w) {
       X = E3(D, K.replace(/[^a-zA-Z0-9@\-_]/g, "-"));
     try {
       (await k24($, X),
-        y(`Extracted plugin ZIP to session dir: ${X}`),
+        writeDebugLog(`Extracted plugin ZIP to session dir: ${X}`),
         ($ = X));
     } catch (M) {
       throw (
-        y(`Failed to extract plugin ZIP ${$}, deleting corrupt file: ${M}`),
+        writeDebugLog(`Failed to extract plugin ZIP ${$}, deleting corrupt file: ${M}`),
         await kG6($, { force: !0 }).catch(() => {}),
         M
       );
@@ -112739,11 +112739,11 @@ async function A3Y(A, q, K, Y, z, w) {
           let G = E3($, W.source);
           if (await pq(G)) (M.push(G), (X[P] = W));
           else
-            (y(
+            (writeDebugLog(
               `Command ${P} path ${W.source} from marketplace entry not found at ${G} for ${A.name}`,
               { level: "warn" },
             ),
-              $6(Error(`Plugin component file not found: ${G} for ${A.name}`)),
+              sendError(Error(`Plugin component file not found: ${G} for ${A.name}`)),
               _.push({
                 type: "path-not-found",
                 source: K,
@@ -112758,7 +112758,7 @@ async function A3Y(A, q, K, Y, z, w) {
           M = [];
         for (let P of X) {
           if (typeof P !== "string") {
-            y(`Unexpected command format in marketplace entry for ${A.name}`, {
+            writeDebugLog(`Unexpected command format in marketplace entry for ${A.name}`, {
               level: "error",
             });
             continue;
@@ -112766,11 +112766,11 @@ async function A3Y(A, q, K, Y, z, w) {
           let W = E3($, P);
           if (await pq(W)) M.push(W);
           else
-            (y(
+            (writeDebugLog(
               `Command path ${P} from marketplace entry not found at ${W} for ${A.name}`,
               { level: "warn" },
             ),
-              $6(Error(`Plugin component file not found: ${W} for ${A.name}`)),
+              sendError(Error(`Plugin component file not found: ${W} for ${A.name}`)),
               _.push({
                 type: "path-not-found",
                 source: K,
@@ -112789,11 +112789,11 @@ async function A3Y(A, q, K, Y, z, w) {
         let P = E3($, M);
         if (await pq(P)) X.push(P);
         else
-          (y(
+          (writeDebugLog(
             `Agent path ${M} from marketplace entry not found at ${P} for ${A.name}`,
             { level: "warn" },
           ),
-            $6(Error(`Plugin component file not found: ${P} for ${A.name}`)),
+            sendError(Error(`Plugin component file not found: ${P} for ${A.name}`)),
             _.push({
               type: "path-not-found",
               source: K,
@@ -112805,7 +112805,7 @@ async function A3Y(A, q, K, Y, z, w) {
       if (X.length > 0) j.agentsPaths = X;
     }
     if (A.skills) {
-      y(
+      writeDebugLog(
         `Processing ${Array.isArray(A.skills) ? A.skills.length : 1} skill paths for plugin ${A.name}`,
       );
       let D = Array.isArray(A.skills) ? A.skills : [A.skills],
@@ -112813,16 +112813,16 @@ async function A3Y(A, q, K, Y, z, w) {
       for (let M of D) {
         let P = E3($, M);
         if (
-          (y(`Checking skill path: ${M} -> ${P} (exists: ${await pq(P)})`),
+          (writeDebugLog(`Checking skill path: ${M} -> ${P} (exists: ${await pq(P)})`),
           await pq(P))
         )
           X.push(P);
         else
-          (y(
+          (writeDebugLog(
             `Skill path ${M} from marketplace entry not found at ${P} for ${A.name}`,
             { level: "warn" },
           ),
-            $6(Error(`Plugin component file not found: ${P} for ${A.name}`)),
+            sendError(Error(`Plugin component file not found: ${P} for ${A.name}`)),
             _.push({
               type: "path-not-found",
               source: K,
@@ -112832,13 +112832,13 @@ async function A3Y(A, q, K, Y, z, w) {
             }));
       }
       if (
-        (y(
+        (writeDebugLog(
           `Found ${X.length} valid skill paths for plugin ${A.name}, setting skillsPaths`,
         ),
         X.length > 0)
       )
         j.skillsPaths = X;
-    } else y(`Plugin ${A.name} has no entry.skills defined`);
+    } else writeDebugLog(`Plugin ${A.name} has no entry.skills defined`);
     if (A.outputStyles) {
       let D = Array.isArray(A.outputStyles) ? A.outputStyles : [A.outputStyles],
         X = [];
@@ -112846,11 +112846,11 @@ async function A3Y(A, q, K, Y, z, w) {
         let P = E3($, M);
         if (await pq(P)) X.push(P);
         else
-          (y(
+          (writeDebugLog(
             `Output style path ${M} from marketplace entry not found at ${P} for ${A.name}`,
             { level: "warn" },
           ),
-            $6(Error(`Plugin component file not found: ${P} for ${A.name}`)),
+            sendError(Error(`Plugin component file not found: ${P} for ${A.name}`)),
             _.push({
               type: "path-not-found",
               source: K,
@@ -112871,11 +112871,11 @@ async function A3Y(A, q, K, Y, z, w) {
       `Plugin ${A.name} has both plugin.json and marketplace manifest entries for commands/agents/skills/hooks/outputStyles. This is a conflict.`,
     );
     return (
-      y(
+      writeDebugLog(
         `Plugin ${A.name} has both plugin.json and marketplace manifest entries for commands/agents/skills/hooks/outputStyles. This is a conflict.`,
         { level: "error" },
       ),
-      $6(D),
+      sendError(D),
       z.push({
         type: "generic-error",
         source: K,
@@ -112900,11 +112900,11 @@ async function A3Y(A, q, K, Y, z, w) {
           let G = E3($, W.source);
           if (await pq(G)) (M.push(G), (X[P] = W));
           else
-            (y(
+            (writeDebugLog(
               `Command ${P} path ${W.source} from marketplace entry not found at ${G} for ${A.name}`,
               { level: "warn" },
             ),
-              $6(Error(`Plugin component file not found: ${G} for ${A.name}`)),
+              sendError(Error(`Plugin component file not found: ${G} for ${A.name}`)),
               _.push({
                 type: "path-not-found",
                 source: K,
@@ -112921,7 +112921,7 @@ async function A3Y(A, q, K, Y, z, w) {
           M = [];
         for (let P of X) {
           if (typeof P !== "string") {
-            y(`Unexpected command format in marketplace entry for ${A.name}`, {
+            writeDebugLog(`Unexpected command format in marketplace entry for ${A.name}`, {
               level: "error",
             });
             continue;
@@ -112929,11 +112929,11 @@ async function A3Y(A, q, K, Y, z, w) {
           let W = E3($, P);
           if (await pq(W)) M.push(W);
           else
-            (y(
+            (writeDebugLog(
               `Command path ${P} from marketplace entry not found at ${W} for ${A.name}`,
               { level: "warn" },
             ),
-              $6(Error(`Plugin component file not found: ${W} for ${A.name}`)),
+              sendError(Error(`Plugin component file not found: ${W} for ${A.name}`)),
               _.push({
                 type: "path-not-found",
                 source: K,
@@ -112952,11 +112952,11 @@ async function A3Y(A, q, K, Y, z, w) {
         let P = E3($, M);
         if (await pq(P)) X.push(P);
         else
-          (y(
+          (writeDebugLog(
             `Agent path ${M} from marketplace entry not found at ${P} for ${A.name}`,
             { level: "warn" },
           ),
-            $6(Error(`Plugin component file not found: ${P} for ${A.name}`)),
+            sendError(Error(`Plugin component file not found: ${P} for ${A.name}`)),
             _.push({
               type: "path-not-found",
               source: K,
@@ -112974,11 +112974,11 @@ async function A3Y(A, q, K, Y, z, w) {
         let P = E3($, M);
         if (await pq(P)) X.push(P);
         else
-          (y(
+          (writeDebugLog(
             `Skill path ${M} from marketplace entry not found at ${P} for ${A.name}`,
             { level: "warn" },
           ),
-            $6(Error(`Plugin component file not found: ${P} for ${A.name}`)),
+            sendError(Error(`Plugin component file not found: ${P} for ${A.name}`)),
             _.push({
               type: "path-not-found",
               source: K,
@@ -112996,11 +112996,11 @@ async function A3Y(A, q, K, Y, z, w) {
         let P = E3($, M);
         if (await pq(P)) X.push(P);
         else
-          (y(
+          (writeDebugLog(
             `Output style path ${M} from marketplace entry not found at ${P} for ${A.name}`,
             { level: "warn" },
           ),
-            $6(Error(`Plugin component file not found: ${P} for ${A.name}`)),
+            sendError(Error(`Plugin component file not found: ${P} for ${A.name}`)),
             _.push({
               type: "path-not-found",
               source: K,
@@ -113024,7 +113024,7 @@ async function q3Y(A) {
     try {
       let w = UKY(z);
       if (!(await pq(w))) {
-        (y(`Plugin path does not exist: ${w}, skipping`, { level: "warn" }),
+        (writeDebugLog(`Plugin path does not exist: ${w}, skipping`, { level: "warn" }),
           K.push({
             type: "path-not-found",
             source: `inline[${Y}]`,
@@ -113039,10 +113039,10 @@ async function q3Y(A) {
         ($.repository = `${$.name}@inline`),
         q.push($),
         K.push(...O),
-        y(`Loaded inline plugin from path: ${$.name}`));
+        writeDebugLog(`Loaded inline plugin from path: ${$.name}`));
     } catch (w) {
       let _ = w instanceof Error ? w.message : String(w);
-      (y(`Failed to load session plugin from ${z}: ${_}`, { level: "warn" }),
+      (writeDebugLog(`Failed to load session plugin from ${z}: ${_}`, { level: "warn" }),
         K.push({
           type: "generic-error",
           source: `inline[${Y}]`,
@@ -113050,7 +113050,7 @@ async function q3Y(A) {
         }));
     }
   if (q.length > 0)
-    y(`Loaded ${q.length} session-only plugins from --plugin-dir`);
+    writeDebugLog(`Loaded ${q.length} session-only plugins from --plugin-dir`);
   return { plugins: q, errors: K };
 }
 function LG() {
@@ -113063,7 +113063,7 @@ function K3Y(A) {
     if (!q) q = {};
     for (let [Y, z] of Object.entries(K.settings)) {
       if (Y in q)
-        y(
+        writeDebugLog(
           `Plugin "${K.name}" overrides setting "${Y}" (previously set by another plugin)`,
         );
       q[Y] = z;
@@ -113074,7 +113074,7 @@ function K3Y(A) {
 function Y3Y(A) {
   let q = K3Y(A);
   if ((ls8(q), M$(), q))
-    y(`Cached plugin settings with keys: ${Object.keys(q).join(", ")}`);
+    writeDebugLog(`Cached plugin settings with keys: ${Object.keys(q).join(", ")}`);
 }
 function z3Y(A) {
   return typeof A === "object" && A !== null && !Array.isArray(A);
@@ -113111,7 +113111,7 @@ var $j = E(() => {
       let w = await q3Y(Y);
       (q.push(...w.plugins), K.push(...w.errors));
     }
-    y(
+    writeDebugLog(
       `Found ${q.length} plugins (${q.filter((w) => w.enabled).length} enabled, ${q.filter((w) => !w.enabled).length} disabled)`,
     );
     let z = q.filter((w) => w.enabled);
@@ -113139,7 +113139,7 @@ async function ZJ4(A, q, K, Y) {
         }),
       );
     } catch (H) {
-      y(`Failed to scan agents directory ${$}: ${H}`, { level: "error" });
+      writeDebugLog(`Failed to scan agents directory ${$}: ${H}`, { level: "error" });
     }
   }
   return (await _(A), z);
@@ -113169,7 +113169,7 @@ async function fJ4(A, q, K, Y, z) {
     if (V !== void 0)
       if (GJ4.includes(V)) v = V;
       else
-        y(
+        writeDebugLog(
           `Plugin agent file ${A} has invalid memory value '${V}'. Valid options: ${GJ4.join(", ")}`,
         );
     let S = $.isolation === "worktree" ? "worktree" : void 0;
@@ -113207,7 +113207,7 @@ async function fJ4(A, q, K, Y, z) {
     };
   } catch (_) {
     return (
-      y(`Failed to load agent from ${A}: ${_}`, { level: "error" }),
+      writeDebugLog(`Failed to load agent from ${A}: ${_}`, { level: "error" }),
       null
     );
   }
@@ -113233,18 +113233,18 @@ var ip6 = E(() => {
     let { enabled: A, errors: q } = await jz(),
       K = [];
     if (q.length > 0)
-      y(`Plugin loading errors: ${q.map((Y) => bf(Y)).join(", ")}`);
+      writeDebugLog(`Plugin loading errors: ${q.map((Y) => bf(Y)).join(", ")}`);
     for (let Y of A) {
       let z = new Set();
       if (Y.agentsPath)
         try {
           let w = await ZJ4(Y.agentsPath, Y.name, Y.source, z);
           if ((K.push(...w), w.length > 0))
-            y(
+            writeDebugLog(
               `Loaded ${w.length} agents from plugin ${Y.name} default directory`,
             );
         } catch (w) {
-          y(
+          writeDebugLog(
             `Failed to load agents from plugin ${Y.name} default directory: ${w}`,
             { level: "error" },
           );
@@ -113256,23 +113256,23 @@ var ip6 = E(() => {
             if ($.isDirectory()) {
               let O = await ZJ4(w, Y.name, Y.source, z);
               if ((K.push(...O), O.length > 0))
-                y(
+                writeDebugLog(
                   `Loaded ${O.length} agents from plugin ${Y.name} custom path: ${w}`,
                 );
             } else if ($.isFile() && w.endsWith(".md")) {
               let O = await fJ4(w, Y.name, [], Y.source, z);
               if (O)
                 (K.push(O),
-                  y(`Loaded agent from plugin ${Y.name} custom file: ${w}`));
+                  writeDebugLog(`Loaded agent from plugin ${Y.name} custom file: ${w}`));
             }
           } catch (_) {
-            y(
+            writeDebugLog(
               `Failed to load agents from plugin ${Y.name} custom path ${w}: ${_}`,
               { level: "error" },
             );
           }
     }
-    return (y(`Total plugin agents loaded: ${K.length}`), K);
+    return (writeDebugLog(`Total plugin agents loaded: ${K.length}`), K);
   });
 });
 var TJ4 = E(() => {
@@ -113329,7 +113329,7 @@ function j3Y(A, q) {
   if (!A.hooks) return;
   let K = Zy().safeParse(A.hooks);
   if (!K.success) {
-    y(`Invalid hooks in agent '${q}': ${K.error.message}`);
+    writeDebugLog(`Invalid hooks in agent '${q}': ${K.error.message}`);
     return;
   }
   return K.data;
@@ -113377,8 +113377,8 @@ function J3Y(A, q, K = "flagSettings") {
   } catch (Y) {
     let z = Y instanceof Error ? Y.message : String(Y);
     return (
-      y(`Error parsing agent '${A}' from JSON: ${z}`),
-      $6(Y instanceof Error ? Y : Error(String(Y))),
+      writeDebugLog(`Error parsing agent '${A}' from JSON: ${z}`),
+      sendError(Y instanceof Error ? Y : Error(String(Y))),
       null
     );
   }
@@ -113392,8 +113392,8 @@ function _P1(A, q = "flagSettings") {
   } catch (K) {
     let Y = K instanceof Error ? K.message : String(K);
     return (
-      y(`Error parsing agents from JSON: ${Y}`),
-      $6(K instanceof Error ? K : Error(String(K))),
+      writeDebugLog(`Error parsing agents from JSON: ${Y}`),
+      sendError(K instanceof Error ? K : Error(String(K))),
       []
     );
   }
@@ -113404,7 +113404,7 @@ function D3Y(A, q, K, Y, z) {
     if (!w || typeof w !== "string") return null;
     if (!_ || typeof _ !== "string")
       return (
-        y(`Agent file ${A} is missing required 'description' in frontmatter`),
+        writeDebugLog(`Agent file ${A} is missing required 'description' in frontmatter`),
         null
       );
     _ = _.replace(
@@ -113415,12 +113415,12 @@ function D3Y(A, q, K, Y, z) {
     let { color: $, model: O, forkContext: H } = K;
     if (H !== void 0 && H !== "true" && H !== "false") {
       let j6 = `Agent file ${A} has invalid forkContext value '${H}'. Must be 'true', 'false', or omitted.`;
-      y(j6);
+      writeDebugLog(j6);
     }
     let j = H === "true",
       J = K.background;
     if (J !== void 0 && J !== "true" && J !== "false" && J !== !0 && J !== !1)
-      y(
+      writeDebugLog(
         `Agent file ${A} has invalid background value '${J}'. Must be 'true', 'false', or omitted.`,
       );
     let D = J === "true" || J === !0 ? !0 : void 0,
@@ -113430,7 +113430,7 @@ function D3Y(A, q, K, Y, z) {
     if (M !== void 0)
       if (X.includes(M)) P = M;
       else
-        y(
+        writeDebugLog(
           `Agent file ${A} has invalid memory value '${M}'. Valid options: ${X.join(", ")}`,
         );
     let W = ["worktree"],
@@ -113439,34 +113439,34 @@ function D3Y(A, q, K, Y, z) {
     if (G !== void 0)
       if (W.includes(G)) Z = G;
       else
-        y(
+        writeDebugLog(
           `Agent file ${A} has invalid isolation value '${G}'. Valid options: ${W.join(", ")}`,
         );
     if (j && O !== "inherit") {
       let j6 = `Agent file ${A} has forkContext: true but model is not 'inherit'. Overriding to 'inherit'. Agents with forkContext must use model: inherit to avoid context length mismatch.`;
-      (y(j6), (O = "inherit"));
+      (writeDebugLog(j6), (O = "inherit"));
     }
     let f = O && typeof O === "string" && hP6.includes(O);
     if (O && typeof O === "string" && !f) {
       let j6 = `Agent file ${A} has invalid model '${O}'. Valid options: ${hP6.join(", ")}`;
-      y(j6);
+      writeDebugLog(j6);
     }
     let N = K.effort,
       V = N !== void 0 ? VK6(N) : void 0;
     if (N !== void 0 && V === void 0)
-      y(
+      writeDebugLog(
         `Agent file ${A} has invalid effort '${N}'. Valid options: ${xX6.join(", ")} or an integer`,
       );
     let v = K.permissionMode,
       L = v && Wy.includes(v);
     if (v && !L) {
       let j6 = `Agent file ${A} has invalid permissionMode '${v}'. Valid options: ${Wy.join(", ")}`;
-      y(j6);
+      writeDebugLog(j6);
     }
     let S = K.maxTurns,
       I = xN7(S);
     if (S !== void 0 && I === void 0)
-      y(
+      writeDebugLog(
         `Agent file ${A} has invalid maxTurns '${S}'. Must be a positive integer.`,
       );
     let B = $3Y(A, ".md"),
@@ -113485,8 +113485,8 @@ function D3Y(A, q, K, Y, z) {
         let P6 = NJ4().safeParse(j6);
         if (P6.success) return P6.data;
         return (
-          y(
-            `Agent file ${A} has invalid mcpServers item: ${p6(j6)}. Error: ${P6.error.message}`,
+          writeDebugLog(
+            `Agent file ${A} has invalid mcpServers item: ${trySafeStringify(j6)}. Error: ${P6.error.message}`,
           ),
           null
         );
@@ -113530,8 +113530,8 @@ function D3Y(A, q, K, Y, z) {
   } catch (w) {
     let _ = w instanceof Error ? w.message : String(w);
     return (
-      y(`Error parsing agent from ${A}: ${_}`),
-      $6(w instanceof Error ? w : Error(String(w))),
+      writeDebugLog(`Error parsing agent from ${A}: ${_}`),
+      sendError(w instanceof Error ? w : Error(String(w))),
       null
     );
   }
@@ -113581,7 +113581,7 @@ var nf = E(() => {
     )),
     (O3Y = lazyOnce(() => x.record(x.string(), VJ4()))));
   Eg = T8(async (A) => {
-    if (X1(process.env.CLAUDE_CODE_SIMPLE)) {
+    if (isTruthy(process.env.CLAUDE_CODE_SIMPLE)) {
       let q = sJ1();
       return { activeAgents: q, allAgents: q };
     }
@@ -113603,8 +113603,8 @@ var nf = E(() => {
                 let M = H3Y(j);
                 return (
                   K.push({ path: O, error: M }),
-                  y(`Failed to parse agent from ${O}: ${M}`),
-                  n("tengu_agent_parse_error", { error: M, location: D }),
+                  writeDebugLog(`Failed to parse agent from ${O}: ${M}`),
+                  emitEvent("tengu_agent_parse_error", { error: M, location: D }),
                   null
                 );
               }
@@ -113623,8 +113623,8 @@ var nf = E(() => {
       };
     } catch (q) {
       let K = q instanceof Error ? q.message : String(q);
-      (y(`Error loading agent definitions: ${K}`),
-        $6(q instanceof Error ? q : Error(String(q))));
+      (writeDebugLog(`Error loading agent definitions: ${K}`),
+        sendError(q instanceof Error ? q : Error(String(q))));
       let Y = sJ1();
       return {
         activeAgents: Y,
@@ -113649,7 +113649,7 @@ function de({
       : A.getSystemPrompt()
     : void 0;
   if (A?.memory)
-    n("tengu_agent_memory_loaded", {
+    emitEvent("tengu_agent_memory_loaded", {
       ...{},
       scope: A.memory,
       source: "main-thread",
@@ -113766,17 +113766,17 @@ function qQ6(A) {
       if (Y.type === "text") q += Jz(Y.text);
       else if (Y.type === "tool_result") q += bJ4(Y);
       else if (Y.type === "image" || Y.type === "document") q += dv8;
-      else q += Jz(p6(Y));
+      else q += Jz(trySafeStringify(Y));
   }
   return Math.ceil(q * 1.3333333333333333);
 }
 async function Lg(A, q, K) {
   if (
     (yJ4(),
-    X1(process.env.DISABLE_MICROCOMPACT) || jA("tengu_cache_plum_violet", !1))
+    isTruthy(process.env.DISABLE_MICROCOMPACT) || jA("tengu_cache_plum_violet", !1))
   )
     return { messages: A };
-  X1(process.env.USE_API_CONTEXT_MANAGEMENT);
+  isTruthy(process.env.USE_API_CONTEXT_MANAGEMENT);
   let Y = Z3Y,
     z = [],
     w = new Map();
@@ -113939,7 +113939,7 @@ Use ${READ_TOOL_NAME} to view${KZ8}`;
   for (let Z of H) B96.add(Z);
   let G = O + X;
   if (H.size > 0 || D.size > 0) {
-    (n("tengu_microcompact", {
+    (emitEvent("tengu_microcompact", {
       toolsCompacted: H.size,
       totalUncompactedTokens: $,
       tokensAfterCompaction: $ - G,
@@ -113994,28 +113994,28 @@ async function KQ6(A, q) {
   try {
     let K = await _p6(A, q);
     if (K !== null) return K;
-    y(
+    writeDebugLog(
       `countTokensWithFallback: API returned null, trying haiku fallback (${q.length} tools)`,
     );
   } catch (K) {
-    (y(
+    (writeDebugLog(
       `countTokensWithFallback: API failed: ${K instanceof Error ? K.message : String(K)}`,
     ),
-      $6(K instanceof Error ? K : Error(String(K))));
+      sendError(K instanceof Error ? K : Error(String(K))));
   }
   try {
     let K = await BJ4(A, q);
     if (K === null)
-      y(
+      writeDebugLog(
         `countTokensWithFallback: haiku fallback also returned null (${q.length} tools)`,
       );
     return K;
   } catch (K) {
     return (
-      y(
+      writeDebugLog(
         `countTokensWithFallback: haiku fallback failed: ${K instanceof Error ? K.message : String(K)}`,
       ),
-      $6(K instanceof Error ? K : Error(String(K))),
+      sendError(K instanceof Error ? K : Error(String(K))),
       null
     );
   }
@@ -114034,7 +114034,7 @@ async function ie(A, q, K, Y) {
     w = await KQ6([], z);
   if (w === null || w === 0) {
     let _ = A.map(($) => $.name).join(", ");
-    y(
+    writeDebugLog(
       `countToolDefinitionTokens returned ${w} for ${A.length} tools: ${_.slice(0, 100)}${_.length > 100 ? "..." : ""}`,
     );
   }
@@ -114072,7 +114072,7 @@ async function k3Y(A) {
   };
 }
 async function E3Y() {
-  if (X1(process.env.CLAUDE_CODE_SIMPLE))
+  if (isTruthy(process.env.CLAUDE_CODE_SIMPLE))
     return { memoryFileDetails: [], claudeMdTokens: 0 };
   let A = sj(),
     q = [],
@@ -114193,7 +114193,7 @@ async function R3Y(A, q, K) {
     };
   } catch (Y) {
     return (
-      $6(Y instanceof Error ? Y : Error("Failed to count skill tokens")),
+      sendError(Y instanceof Error ? Y : Error("Failed to count skill tokens")),
       {
         skillTokens: 0,
         skillInfo: { totalSkills: 0, includedSkills: 0, skillFrontmatter: [] },
@@ -114206,7 +114206,7 @@ async function nv8(A, q, K, Y, z) {
     _ = [],
     $ = await ie(w, q, K, Y),
     O = Math.max(0, ($ || 0) - DP1),
-    H = w.map((G) => Jz(p6(G.inputSchema ?? {}))),
+    H = w.map((G) => Jz(trySafeStringify(G.inputSchema ?? {}))),
     j = H.reduce((G, Z) => G + Z, 0) || 1,
     J = H.map((G) => Math.round((G / j) * O)),
     { isToolSearchEnabled: D } = await Promise.resolve().then(
@@ -114511,7 +114511,7 @@ function ev8(A) {
     K = parseInt(q, 10);
   if (isNaN(K))
     return (
-      y(
+      writeDebugLog(
         `Invalid ENABLE_TOOL_SEARCH value "${A}": expected auto:N where N is a number.`,
       ),
       null
@@ -114545,7 +114545,7 @@ function x3Y() {
   if (q === 0) return "tst";
   if (q === 100) return "standard";
   if (FJ4(A)) return "tst-auto";
-  if (X1(A)) return "tst";
+  if (isTruthy(A)) return "tst";
   if (Qw(process.env.ENABLE_TOOL_SEARCH)) return "standard";
   return "tst";
 }
@@ -114555,7 +114555,7 @@ function Ak8() {
   if (q === 0) return "tst";
   if (q === 100) return "standard";
   if (FJ4(A)) return "tst-auto";
-  if (X1(A)) return "tst";
+  if (isTruthy(A)) return "tst";
   if (Qw(A)) return "standard";
   if (!b0())
     try {
@@ -114581,7 +114581,7 @@ function Gc() {
     q = A === "tst" || A === "tst-auto";
   if (!gJ4)
     ((gJ4 = !0),
-      y(
+      writeDebugLog(
         `[ToolSearch:optimistic] mode=${A}, ENABLE_TOOL_SEARCH=${process.env.ENABLE_TOOL_SEARCH}, result=${q}`,
       ));
   switch (A) {
@@ -114607,9 +114607,9 @@ async function m3Y(A, q, K) {
             agents: K,
           }),
           $ = w.inputJSONSchema
-            ? p6(w.inputJSONSchema)
+            ? trySafeStringify(w.inputJSONSchema)
             : w.inputSchema
-              ? p6(Od(w.inputSchema))
+              ? trySafeStringify(Od(w.inputSchema))
               : "";
         return w.name.length + _.length + $.length;
       }),
@@ -114619,7 +114619,7 @@ async function m3Y(A, q, K) {
 async function zQ6(A, q, K, Y, z) {
   let w = q.filter((O) => O.isMcp).length;
   function _(O, H, j, J) {
-    n("tengu_tool_search_mode_decision", {
+    emitEvent("tengu_tool_search_mode_decision", {
       enabled: O,
       mode: H,
       reason: j,
@@ -114631,7 +114631,7 @@ async function zQ6(A, q, K, Y, z) {
   }
   if (!UJ4(A))
     return (
-      y(
+      writeDebugLog(
         `Tool search disabled for model '${A}': model does not support tool_reference blocks. This feature is only available on Claude Sonnet 4+, Opus 4+, and newer models.`,
       ),
       _(!1, "standard", "model_unsupported"),
@@ -114639,7 +114639,7 @@ async function zQ6(A, q, K, Y, z) {
     );
   if (!dJ4(q))
     return (
-      y(
+      writeDebugLog(
         "Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).",
       ),
       _(!1, "standard", "mcp_search_unavailable"),
@@ -114657,7 +114657,7 @@ async function zQ6(A, q, K, Y, z) {
       } = await F3Y(q, K, Y, A);
       if (O)
         return (
-          y(`Auto tool search enabled: ${H}` + (z ? ` [source: ${z}]` : "")),
+          writeDebugLog(`Auto tool search enabled: ${H}` + (z ? ` [source: ${z}]` : "")),
           _(!0, $, "auto_above_threshold", j),
           !0
         );
@@ -114665,7 +114665,7 @@ async function zQ6(A, q, K, Y, z) {
         try {
           let J = jA("tengu_tst_kx7", !1);
           return (
-            y(
+            writeDebugLog(
               `Tool search ${J ? "enabled" : "disabled"} via experiment (tengu_tst_kx7): below threshold, deferred tools present` +
                 (z ? ` [source: ${z}]` : ""),
             ),
@@ -114673,10 +114673,10 @@ async function zQ6(A, q, K, Y, z) {
             J
           );
         } catch (J) {
-          y(`tengu_tst_kx7: GrowthBook not ready, skipping: ${J}`);
+          writeDebugLog(`tengu_tst_kx7: GrowthBook not ready, skipping: ${J}`);
         }
       return (
-        y(`Auto tool search disabled: ${H}` + (z ? ` [source: ${z}]` : "")),
+        writeDebugLog(`Auto tool search disabled: ${H}` + (z ? ` [source: ${z}]` : "")),
         _(!1, $, "auto_below_threshold", j),
         !1
       );
@@ -114718,7 +114718,7 @@ function qk8(A) {
       }
   }
   if (q.size > 0)
-    y(
+    writeDebugLog(
       `Dynamic tool loading: found ${q.size} discovered tools in message history`,
     );
   return q;
@@ -114847,7 +114847,7 @@ async function _p6(A, q) {
       if (typeof $.input_tokens !== "number") return null;
       return $.input_tokens;
     } catch (K) {
-      return ($6(K), null);
+      return (sendError(K), null);
     }
   });
 }
@@ -114869,9 +114869,9 @@ function __4(A, q) {
 }
 async function BJ4(A, q) {
   let K = lJ4(A),
-    Y = X1(process.env.CLAUDE_CODE_USE_VERTEX) && Rs6(PO()) === "global",
-    z = X1(process.env.CLAUDE_CODE_USE_BEDROCK) && K,
-    w = X1(process.env.CLAUDE_CODE_USE_VERTEX) && K,
+    Y = isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) && Rs6(PO()) === "global",
+    z = isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) && K,
+    w = isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) && K,
     _ = Y || z || w ? df() : PO(),
     $ = await fI({ maxRetries: 1, model: _ }),
     O = p3Y(A),
@@ -114949,11 +114949,11 @@ async function d3Y({
       ),
       H = {
         modelId: _,
-        input: { invokeModel: { body: new TextEncoder().encode(p6($)) } },
+        input: { invokeModel: { body: new TextEncoder().encode(trySafeStringify($)) } },
       };
     return (await w.send(new O(H))).inputTokens ?? null;
   } catch (w) {
-    return ($6(w), null);
+    return (sendError(w), null);
   }
 }
 var Yk8 = 1024,
@@ -115039,7 +115039,7 @@ function ZP1(A) {
     if (K.type === "text") q += K.text.length;
     else if (K.type === "thinking") q += K.thinking.length;
     else if (K.type === "redacted_thinking") q += K.data.length;
-    else if (K.type === "tool_use") q += p6(K.input).length;
+    else if (K.type === "tool_use") q += trySafeStringify(K.input).length;
   return q;
 }
 function countMessageTokens(A) {
@@ -115350,7 +115350,7 @@ function n3Y(A) {
 function r3Y(A) {
   let q = n3Y(A);
   if (KD4 !== q)
-    (y("ToolSearchTool: cache invalidated - deferred tools changed"),
+    (writeDebugLog("ToolSearchTool: cache invalidated - deferred tools changed"),
       _k8.cache.clear?.(),
       (KD4 = q));
 }
@@ -115541,7 +115541,7 @@ var $k8 = E(() => {
         });
       }
       function H(D, X) {
-        n("tengu_tool_search_outcome", {
+        emitEvent("tengu_tool_search_outcome", {
           query: z,
           queryType: X,
           matchCount: D.length,
@@ -115555,13 +115555,13 @@ var $k8 = E(() => {
         let D = j[1].trim(),
           X = q5(_, D);
         if (!X) {
-          (y(`ToolSearchTool: select failed - tool not found: ${D}`),
+          (writeDebugLog(`ToolSearchTool: select failed - tool not found: ${D}`),
             H([], "select"));
           let M = await $();
           return fP1([], z, _.length, M);
         }
         return (
-          y(`ToolSearchTool: selected "${D}"`),
+          writeDebugLog(`ToolSearchTool: selected "${D}"`),
           H([X.name], "select"),
           O([X.name]),
           fP1([X.name], z, _.length)
@@ -115569,7 +115569,7 @@ var $k8 = E(() => {
       }
       let J = await o3Y(z, _, q, w);
       if (
-        (y(
+        (writeDebugLog(
           `ToolSearchTool: keyword search for "${z}", found ${J.length} matches`,
         ),
         H(J, "keyword"),
@@ -115685,7 +115685,7 @@ function OD4(A) {
   );
 }
 function e3Y(A, q, K, Y, z, w) {
-  let _ = Jz(p6(A));
+  let _ = Jz(trySafeStringify(A));
   switch (((K.total += _), A.type)) {
     case "text":
       if (
@@ -115804,7 +115804,7 @@ function DD4() {
     (Kl = setInterval(() => {
       if (
         ($8("debug", "session_keepalive_heartbeat", { refcount: F96 }),
-        X1(process.env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES))
+        isTruthy(process.env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES))
       )
         p96?.();
     }, JD4)));
@@ -115826,7 +115826,7 @@ function RG6() {
   Jk8();
 }
 function XD4() {
-  if (X1(process.env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES)) p96?.();
+  if (isTruthy(process.env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES)) p96?.();
 }
 function MD4() {
   return p96 !== null;
@@ -115853,7 +115853,7 @@ async function xP(
 ) {
   let w = [],
     _ = [];
-  if (zx()) y("Skipping plugin hooks - allowManagedHooksOnly is enabled");
+  if (zx()) writeDebugLog("Skipping plugin hooks - allowManagedHooksOnly is enabled");
   else
     try {
       await _g();
@@ -115863,7 +115863,7 @@ async function xP(
           ? Error(`Failed to load plugin hooks during ${A}: ${O.message}`)
           : Error(`Failed to load plugin hooks during ${A}: ${String(O)}`);
       if (O instanceof Error && O.stack) H.stack = O.stack;
-      $6(H);
+      sendError(H);
       let j = O instanceof Error ? O.message : String(O),
         J = "";
       if (
@@ -115892,7 +115892,7 @@ async function xP(
       else
         J =
           "Please fix the plugin configuration or remove problematic plugins from your settings.";
-      y(
+      writeDebugLog(
         `Warning: Failed to load plugin hooks. SessionStart hooks from plugins will not execute. Error: ${j}. ${J}`,
         { level: "warn" },
       );
@@ -115918,13 +115918,13 @@ async function xP(
 async function EP1(A, { forceSyncExecution: q } = {}) {
   let K = [],
     Y = [];
-  if (zx()) y("Skipping plugin hooks - allowManagedHooksOnly is enabled");
+  if (zx()) writeDebugLog("Skipping plugin hooks - allowManagedHooksOnly is enabled");
   else
     try {
       await _g();
     } catch (z) {
       let w = z instanceof Error ? z.message : String(z);
-      y(
+      writeDebugLog(
         `Warning: Failed to load plugin hooks. Setup hooks from plugins will not execute. Error: ${w}`,
         { level: "warn" },
       );
@@ -116001,7 +116001,7 @@ async function SG6(A, q, K, Y, z, w = !1) {
     try {
       O = HD4($);
     } catch (u) {
-      $6(u);
+      sendError(u);
     }
     let H = await q.getAppState();
     (NP1(H.toolPermissionContext, "summary"),
@@ -116035,10 +116035,10 @@ ${j.newCustomInstructions}`
       W = RP1(P);
     if (!W)
       throw (
-        y(`Compact failed: no summary text in response. Response: ${p6(P)}`, {
+        writeDebugLog(`Compact failed: no summary text in response. Response: ${trySafeStringify(P)}`, {
           level: "error",
         }),
-        n("tengu_compact_failed", {
+        emitEvent("tengu_compact_failed", {
           reason: "no_summary",
           preCompactTokenCount: _,
           promptCacheSharingEnabled: D,
@@ -116049,7 +116049,7 @@ ${j.newCustomInstructions}`
       );
     else if (W.startsWith(WO))
       throw (
-        n("tengu_compact_failed", {
+        emitEvent("tengu_compact_failed", {
           reason: "api_error",
           preCompactTokenCount: _,
           promptCacheSharingEnabled: D,
@@ -116058,7 +116058,7 @@ ${j.newCustomInstructions}`
       );
     else if (W.startsWith(Oc))
       throw (
-        n("tengu_compact_failed", {
+        emitEvent("tengu_compact_failed", {
           reason: "prompt_too_long",
           preCompactTokenCount: _,
           promptCacheSharingEnabled: D,
@@ -116079,7 +116079,7 @@ ${j.newCustomInstructions}`
     let S = await xP("compact", { model: q.options.mainLoopModel }),
       I = lf([P]),
       B = Al(P);
-    n("tengu_compact", {
+    emitEvent("tengu_compact", {
       preCompactTokenCount: _,
       postCompactTokenCount: I,
       compactionInputTokens: B?.input_tokens,
@@ -116096,7 +116096,7 @@ ${j.newCustomInstructions}`
       ...O,
     });
     let h = jQ6(w ? "auto" : "manual", _ ?? 0, A[A.length - 1]?.uuid),
-      F = g$(d1()),
+      F = g$(getSessionId()),
       g = [
         K8({
           content: $Q6(W, Y, F),
@@ -116163,7 +116163,7 @@ User context: ${z}`;
       X = RP1(D);
     if (!X)
       throw (
-        n("tengu_partial_compact_failed", {
+        emitEvent("tengu_partial_compact_failed", {
           reason: "no_summary",
           preCompactTokenCount: $,
         }),
@@ -116173,7 +116173,7 @@ User context: ${z}`;
       );
     else if (X.startsWith(WO))
       throw (
-        n("tengu_partial_compact_failed", {
+        emitEvent("tengu_partial_compact_failed", {
           reason: "api_error",
           preCompactTokenCount: $,
         }),
@@ -116181,7 +116181,7 @@ User context: ${z}`;
       );
     else if (X.startsWith(Oc))
       throw (
-        n("tengu_partial_compact_failed", {
+        emitEvent("tengu_partial_compact_failed", {
           reason: "prompt_too_long",
           preCompactTokenCount: $,
         }),
@@ -116201,7 +116201,7 @@ User context: ${z}`;
     let V = await xP("compact", { model: K.options.mainLoopModel }),
       v = lf([D]),
       L = Al(D);
-    n("tengu_partial_compact", {
+    emitEvent("tengu_partial_compact", {
       preCompactTokenCount: $,
       postCompactTokenCount: v,
       messagesKept: _.length,
@@ -116213,7 +116213,7 @@ User context: ${z}`;
       compactionCacheCreationTokens: L?.cache_creation_input_tokens ?? 0,
     });
     let S = jQ6("manual", $ ?? 0, _[_.length - 1]?.uuid, z, w.length),
-      I = g$(d1()),
+      I = g$(getSessionId()),
       B = [
         K8({
           content: $Q6(X, !1, I),
@@ -116297,7 +116297,7 @@ async function TD4({
           J = XV(j.messages);
         if (J && RP1(J))
           return (
-            n("tengu_compact_cache_sharing_success", {
+            emitEvent("tengu_compact_cache_sharing_success", {
               preCompactTokenCount: z,
               outputTokens: j.totalUsage.output_tokens,
               cacheReadInputTokens: j.totalUsage.cache_read_input_tokens,
@@ -116313,17 +116313,17 @@ async function TD4({
             }),
             J
           );
-        (y(
-          `Compact cache sharing: no text in response, falling back. Response: ${p6(J)}`,
+        (writeDebugLog(
+          `Compact cache sharing: no text in response, falling back. Response: ${trySafeStringify(J)}`,
           { level: "warn" },
         ),
-          n("tengu_compact_cache_sharing_fallback", {
+          emitEvent("tengu_compact_cache_sharing_fallback", {
             reason: "no_text_response",
             preCompactTokenCount: z,
           }));
       } catch (j) {
-        ($6(j instanceof Error ? j : Error(String(j))),
-          n("tengu_compact_cache_sharing_fallback", {
+        (sendError(j instanceof Error ? j : Error(String(j))),
+          emitEvent("tengu_compact_cache_sharing_fallback", {
             reason: "error",
             preCompactTokenCount: z,
           }));
@@ -116389,7 +116389,7 @@ async function TD4({
       }
       if (D) return D;
       if (j < H) {
-        (n("tengu_compact_streaming_retry", {
+        (emitEvent("tengu_compact_streaming_retry", {
           attempt: j,
           preCompactTokenCount: z,
           hasStartedStreaming: J,
@@ -116398,11 +116398,11 @@ async function TD4({
         continue;
       }
       throw (
-        y(
+        writeDebugLog(
           `Compact streaming failed after ${j} attempts. hasStartedStreaming=${J}`,
           { level: "error" },
         ),
-        n("tengu_compact_failed", {
+        emitEvent("tengu_compact_failed", {
           reason: "no_streaming_response",
           preCompactTokenCount: z,
           hasStartedStreaming: J,
@@ -116439,7 +116439,7 @@ async function ND4(A, q, K) {
     w = 0;
   return z.filter((_) => {
     if (_ === null) return !1;
-    let $ = Jz(p6(_));
+    let $ = Jz(trySafeStringify(_));
     if (w + $ <= K5Y) return ((w += $), !0);
     return !1;
   });
@@ -116493,13 +116493,13 @@ async function kD4(A) {
     });
 }
 function $5Y(A, q) {
-  let K = Q4(A);
+  let K = resolveFilePath(A);
   try {
-    let Y = Q4(EP(q));
+    let Y = resolveFilePath(EP(q));
     if (K === Y) return !0;
   } catch {}
   try {
-    if (new Set(_D4.map((z) => Q4(LI(z)))).has(K)) return !0;
+    if (new Set(_D4.map((z) => resolveFilePath(LI(z)))).has(K)) return !0;
   } catch {}
   return !1;
 }
@@ -116573,7 +116573,7 @@ async function hP1() {
     q = bG6();
   try {
     let K = await A.readFile(q, { encoding: "utf-8" });
-    return (n("tengu_session_memory_loaded", { content_length: K.length }), K);
+    return (emitEvent("tengu_session_memory_loaded", { content_length: K.length }), K);
   } catch (K) {
     let Y = K.code;
     if (Y === "ENOENT" || Y === "EACCES" || Y === "EPERM") return null;
@@ -116671,7 +116671,7 @@ async function Mk8() {
   } catch (q) {
     if (q.code === "ENOENT") return QD4;
     return (
-      $6(
+      sendError(
         q instanceof Error
           ? q
           : Error(`Failed to load custom session memory template: ${q}`),
@@ -116687,7 +116687,7 @@ async function j5Y() {
   } catch (q) {
     if (q.code === "ENOENT") return UD4();
     return (
-      $6(
+      sendError(
         q instanceof Error
           ? q
           : Error(`Failed to load custom session memory prompt: ${q}`),
@@ -116946,8 +116946,8 @@ function f5Y(A, q) {
   return Wk8(A, Y);
 }
 function bP1() {
-  if (X1(process.env.ENABLE_CLAUDE_CODE_SM_COMPACT)) return !0;
-  if (X1(process.env.DISABLE_CLAUDE_CODE_SM_COMPACT)) return !1;
+  if (isTruthy(process.env.ENABLE_CLAUDE_CODE_SM_COMPACT)) return !0;
+  if (isTruthy(process.env.DISABLE_CLAUDE_CODE_SM_COMPACT)) return !1;
   let A = jA("tengu_session_memory", !1),
     q = jA("tengu_sm_compact", !1);
   return A && q;
@@ -116982,24 +116982,24 @@ async function uP1(A, q, K) {
   (await W5Y(), await hD4());
   let Y = RD4(),
     z = await hP1();
-  if (!z) return (n("tengu_sm_compact_no_session_memory", {}), null);
-  if (await iD4(z)) return (n("tengu_sm_compact_empty_template", {}), null);
+  if (!z) return (emitEvent("tengu_sm_compact_no_session_memory", {}), null);
+  if (await iD4(z)) return (emitEvent("tengu_sm_compact_empty_template", {}), null);
   try {
     let w;
     if (Y) {
       if (((w = A.findIndex((X) => X.uuid === Y)), w === -1))
-        return (n("tengu_sm_compact_summarized_id_not_found", {}), null);
-    } else ((w = A.length - 1), n("tengu_sm_compact_resumed_session", {}));
+        return (emitEvent("tengu_sm_compact_summarized_id_not_found", {}), null);
+    } else ((w = A.length - 1), emitEvent("tengu_sm_compact_resumed_session", {}));
     let _ = f5Y(A, w),
       $ = A.slice(_).filter((X) => !iR(X)),
       O = await xP("compact", { model: c3() }),
-      H = g$(d1()),
+      H = g$(getSessionId()),
       j = T5Y(A, z, $, O, H, q),
       J = re(j),
       D = qQ6(J);
     if (K !== void 0 && D >= K)
       return (
-        n("tengu_sm_compact_threshold_exceeded", {
+        emitEvent("tengu_sm_compact_threshold_exceeded", {
           postCompactTokenCount: D,
           autoCompactThreshold: K,
         }),
@@ -117007,7 +117007,7 @@ async function uP1(A, q, K) {
       );
     return { ...j, postCompactTokenCount: D };
   } catch (w) {
-    return (n("tengu_sm_compact_error", {}), null);
+    return (emitEvent("tengu_sm_compact_error", {}), null);
   }
 }
 var xP1,
@@ -117071,11 +117071,11 @@ function Tk8(A) {
   let q = V5Y[A],
     K = process.env[A];
   if (K === void 0) return q;
-  return X1(K);
+  return isTruthy(K);
 }
 function uG6() {
   let A = hL(),
-    q = d1(),
+    q = getSessionId(),
     K = { "user.id": A };
   if (Tk8("OTEL_METRICS_INCLUDE_SESSION_ID")) K["session.id"] = q;
   if (Tk8("OTEL_METRICS_INCLUDE_VERSION"))
@@ -117113,7 +117113,7 @@ var FP1 = E(() => {
   };
 });
 function k5Y() {
-  return X1(process.env.OTEL_LOG_USER_PROMPTS);
+  return isTruthy(process.env.OTEL_LOG_USER_PROMPTS);
 }
 function pP1(A) {
   return k5Y() ? A : "<REDACTED>";
@@ -117123,7 +117123,7 @@ async function EX(A, q = {}) {
   if (!K) {
     if (!zX4)
       ((zX4 = !0),
-        y(`[3P telemetry] Event dropped (no event logger initialized): ${A}`, {
+        writeDebugLog(`[3P telemetry] Event dropped (no event logger initialized): ${A}`, {
           level: "warn",
         }));
     return;
@@ -117154,7 +117154,7 @@ function _X4() {
 function yD() {
   if (
     !(
-      X1(process.env.ENABLE_BETA_TRACING_DETAILED) &&
+      isTruthy(process.env.ENABLE_BETA_TRACING_DETAILED) &&
       Boolean(process.env.BETA_TRACING_ENDPOINT)
     )
   )
@@ -117179,7 +117179,7 @@ function y5Y(A) {
   return `sp_${vk8(A)}`;
 }
 function wX4(A) {
-  let q = p6(A.message.content);
+  let q = trySafeStringify(A.message.content);
   return `msg_${vk8(q)}`;
 }
 function Nk8(A) {
@@ -117206,7 +117206,7 @@ ${z}`);
             q.push(`[USER]
 ${w.text}`);
         } else if (w.type === "tool_result") {
-          let _ = typeof w.content === "string" ? w.content : p6(w.content),
+          let _ = typeof w.content === "string" ? w.content : trySafeStringify(w.content),
             $ = Nk8(_);
           if ($) K.push($);
           else
@@ -117253,7 +117253,7 @@ function OX4(A, q, K) {
   if (q?.tools)
     try {
       let z = w8(q.tools).map((w) => {
-        let _ = p6(w),
+        let _ = trySafeStringify(w),
           $ = vk8(_);
         return {
           name: typeof w.name === "string" ? w.name : "unknown",
@@ -117263,7 +117263,7 @@ function OX4(A, q, K) {
       });
       (A.setAttribute(
         "tools",
-        p6(z.map(({ name: w, hash: _ }) => ({ name: w, hash: _ }))),
+        trySafeStringify(z.map(({ name: w, hash: _ }) => ({ name: w, hash: _ }))),
       ),
         A.setAttribute("tools_count", z.length));
       for (let { name: w, hash: _, json: $ } of z)
@@ -117415,8 +117415,8 @@ function tc(A, q) {
   };
 }
 function Vg() {
-  if (X1(process.env.DISABLE_COMPACT)) return !1;
-  if (X1(process.env.DISABLE_AUTO_COMPACT)) return !1;
+  if (isTruthy(process.env.DISABLE_COMPACT)) return !1;
+  if (isTruthy(process.env.DISABLE_AUTO_COMPACT)) return !1;
   return getSettings().autoCompactEnabled;
 }
 async function x5Y(A, q, K) {
@@ -117425,12 +117425,12 @@ async function x5Y(A, q, K) {
   let Y = countMessageTokens(A),
     z = PQ6(q),
     w = I96(q);
-  y(`autocompact: tokens=${Y} threshold=${z} effectiveWindow=${w}`);
+  writeDebugLog(`autocompact: tokens=${Y} threshold=${z} effectiveWindow=${w}`);
   let { isAboveAutoCompactThreshold: _ } = tc(Y, q);
   return _;
 }
 async function JX4(A, q, K, Y) {
-  if (X1(process.env.DISABLE_COMPACT)) return { wasCompacted: !1 };
+  if (isTruthy(process.env.DISABLE_COMPACT)) return { wasCompacted: !1 };
   let z = q.options.mainLoopModel;
   if (!(await x5Y(A, z, Y))) return { wasCompacted: !1 };
   let _ = await uP1(A, q.agentId, PQ6(z));
@@ -117439,7 +117439,7 @@ async function JX4(A, q, K, Y) {
     let $ = await SG6(A, q, K, !0, void 0, !0);
     return (d96(void 0), se(), { wasCompacted: !0, compactionResult: $ });
   } catch ($) {
-    if (!ay6($, U96)) $6($ instanceof Error ? $ : Error(String($)));
+    if (!ay6($, U96)) sendError($ instanceof Error ? $ : Error(String($)));
     return { wasCompacted: !1 };
   }
 }
@@ -117513,12 +117513,12 @@ Provide a brief summary of what was accomplished:`,
     );
   } catch (z) {
     let w = z instanceof Error ? z : Error(String(z));
-    return ((w.cause = { errorId: DX4 }), $6(w), null);
+    return ((w.cause = { errorId: DX4 }), sendError(w), null);
   }
 }
 function XX4(A, q) {
   try {
-    let K = p6(A);
+    let K = trySafeStringify(A);
     if (K.length <= q) return K;
     return K.slice(0, q - 3) + "...";
   } catch {
@@ -117559,14 +117559,14 @@ function Rk8() {
   if (!C7()) return;
   if (!yk8) return;
   if ((WQ6++, m5Y(), cP1().mark(`${GQ6}turn_start`), dP1))
-    y(`[headlessProfiler] Started turn ${WQ6}`);
+    writeDebugLog(`[headlessProfiler] Started turn ${WQ6}`);
 }
 function c96(A) {
   if (!C7()) return;
   if (!yk8) return;
   let q = cP1();
   if ((q.mark(`${GQ6}${A}`), dP1))
-    y(`[headlessProfiler] Checkpoint: ${A} at ${q.now().toFixed(1)}ms`);
+    writeDebugLog(`[headlessProfiler] Checkpoint: ${A} at ${q.now().toFixed(1)}ms`);
 }
 function Ck8() {
   if (!C7()) return;
@@ -117593,8 +117593,8 @@ function Ck8() {
   if ($ !== void 0 && H !== void 0) w.query_overhead_ms = Math.round(H - $);
   if (((w.checkpoint_count = K.length), process.env.CLAUDE_CODE_ENTRYPOINT))
     w.entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT;
-  if (WX4) n("tengu_headless_latency", w);
-  if (dP1) y(`[headlessProfiler] Turn ${WQ6} metrics: ${p6(w)}`);
+  if (WX4) emitEvent("tengu_headless_latency", w);
+  if (dP1) writeDebugLog(`[headlessProfiler] Turn ${WQ6} metrics: ${trySafeStringify(w)}`);
 }
 var dP1,
   u5Y = 0.05,
@@ -117628,7 +117628,7 @@ async function ZX4(A, q, K, Y, z, w) {
     try {
       await $(_);
     } catch (O) {
-      $6(O instanceof Error ? O : Error(`Post-sampling hook failed: ${O}`));
+      sendError(O instanceof Error ? O : Error(`Post-sampling hook failed: ${O}`));
     }
 }
 var GX4;
@@ -117647,7 +117647,7 @@ function F5Y(A) {
   return;
 }
 function p5Y(A) {
-  return B5Y(_A(), "dump-prompts", `${A ?? d1()}.jsonl`);
+  return B5Y(_A(), "dump-prompts", `${A ?? getSessionId()}.jsonl`);
 }
 function TX4(A) {
   let q = p5Y(A);
@@ -117718,12 +117718,12 @@ function fQ6(A, q, K) {
 }
 function d5Y(A, q, K, Y) {
   if (K === "config") {
-    n("tengu_tool_use_granted_in_config", fQ6(q, A.name, void 0));
+    emitEvent("tengu_tool_use_granted_in_config", fQ6(q, A.name, void 0));
     return;
   }
   switch (K.type) {
     case "user":
-      n(
+      emitEvent(
         K.permanent
           ? "tengu_tool_use_granted_in_prompt_permanent"
           : "tengu_tool_use_granted_in_prompt_temporary",
@@ -117731,7 +117731,7 @@ function d5Y(A, q, K, Y) {
       );
       break;
     case "hook":
-      n("tengu_tool_use_granted_by_permission_hook", {
+      emitEvent("tengu_tool_use_granted_by_permission_hook", {
         ...fQ6(q, A.name, Y),
         permanent: K.permanent ?? !1,
       });
@@ -117742,10 +117742,10 @@ function d5Y(A, q, K, Y) {
 }
 function c5Y(A, q, K, Y) {
   if (K === "config") {
-    n("tengu_tool_use_denied_in_config", fQ6(q, A.name, void 0));
+    emitEvent("tengu_tool_use_denied_in_config", fQ6(q, A.name, void 0));
     return;
   }
-  n("tengu_tool_use_rejected_in_prompt", {
+  emitEvent("tengu_tool_use_rejected_in_prompt", {
     ...fQ6(q, A.name, Y),
     ...(K.type === "hook"
       ? { isHook: !0 }
@@ -117791,7 +117791,7 @@ function vX4(A) {
   return (bk8++, uk8.set(A, bk8), bk8);
 }
 function sP1() {
-  let A = JP() ?? d1(),
+  let A = JP() ?? getSessionId(),
     q = H9() ?? "main",
     K = gt(),
     Y = aP1.get(A);
@@ -117800,7 +117800,7 @@ function sP1() {
     agentId: A,
     agentName: q,
     parentAgentId: K,
-    processId: A === d1() ? 1 : vX4(A),
+    processId: A === getSessionId() ? 1 : vX4(A),
     threadId: VX4(q),
   };
   return (aP1.set(A, z), NX4++, z);
@@ -117813,7 +117813,7 @@ function tP1() {
 }
 function kX4() {
   let A = process.env.CLAUDE_CODE_PERFETTO_TRACE;
-  y(`[Perfetto] initializePerfettoTracing called, env value: ${A}`);
+  writeDebugLog(`[Perfetto] initializePerfettoTracing called, env value: ${A}`);
 }
 function n5Y(A) {
   if (!nR) return;
@@ -118216,7 +118216,7 @@ function mk8() {
     let A =
       process.env.CLAUDE_CODE_ENHANCED_TELEMETRY_BETA ??
       process.env.ENABLE_ENHANCED_TELEMETRY_BETA;
-    if (X1(A)) return !0;
+    if (isTruthy(A)) return !0;
     if (Qw(A)) return !1;
     return jA("enhanced_telemetry_beta", !1);
   }
@@ -118249,7 +118249,7 @@ function mX4(A) {
     return Rw.trace.getActiveSpan() || gG().startSpan("dummy");
   }
   let K = gG(),
-    z = X1(process.env.OTEL_LOG_USER_PROMPTS) ? A : "<REDACTED>";
+    z = isTruthy(process.env.OTEL_LOG_USER_PROMPTS) ? A : "<REDACTED>";
   xX4++;
   let w = gG6("interaction", {
       user_prompt: z,
@@ -118490,7 +118490,7 @@ function AW1(A, q) {
   (yw.delete(w), $l.enterWith(void 0));
 }
 function a5Y() {
-  return X1(process.env.OTEL_LOG_TOOL_CONTENT);
+  return isTruthy(process.env.OTEL_LOG_TOOL_CONTENT);
 }
 function QX4(A, q) {
   if (!_x() || !a5Y()) return;
@@ -118606,7 +118606,7 @@ Usage notes:
       : ""
   }
 - When the agent is done, it will return a single message back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result.${
-    !X1(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS) && !jP()
+    !isTruthy(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS) && !jP()
       ? `
 - You can optionally run agents in the background using the run_in_background parameter. When an agent runs in the background, you will be automatically notified when it completes — do NOT sleep, poll, or proactively check on its progress. Continue with other work or respond to the user instead.
 - **Foreground vs background**: Use foreground (default) when you need the agent's results before you can proceed — e.g., research agents whose findings inform your next steps. Use background when you have genuinely independent work to do in parallel.`
@@ -118758,7 +118758,7 @@ var Rg = E(() => {
     renderToolUseMessage(A) {
       let q = Object.keys(A);
       if (q.length === 0) return null;
-      if (q.length <= 3) return q.map((K) => `${K}: ${p6(A[K])}`).join(", ");
+      if (q.length <= 3) return q.map((K) => `${K}: ${trySafeStringify(A[K])}`).join(", ");
       return `${q.length} fields: ${q.slice(0, 3).join(", ")}…`;
     },
     userFacingName: () => yX,
@@ -118889,7 +118889,7 @@ function aX4(A, q) {
     });
   if (!Y)
     return (
-      y(
+      writeDebugLog(
         `Could not find matching AgentTool tool use for prompt: ${A.slice(0, 50)}...`,
         { level: "error" },
       ),
@@ -118974,7 +118974,7 @@ function tX4(A, q, K, Y, z, w, _) {
     let D = { ...O.hooks, [K]: J };
     return { ...$, sessionHooks: { ...$.sessionHooks, [q]: { hooks: D } } };
   }),
-    y(`Added session hook for event ${K} in session ${q}`));
+    writeDebugLog(`Added session hook for event ${K} in session ${q}`));
 }
 function eX4(A, q, K, Y) {
   (A((z) => {
@@ -118993,7 +118993,7 @@ function eX4(A, q, K, Y) {
       sessionHooks: { ...z.sessionHooks, [q]: { ...w, hooks: O } },
     };
   }),
-    y(`Removed session hook for event ${K} in session ${q}`));
+    writeDebugLog(`Removed session hook for event ${K} in session ${q}`));
 }
 function sX4(A) {
   return A.map((q) => ({
@@ -119061,7 +119061,7 @@ function cG6(A, q) {
     let Y = { ...K.sessionHooks };
     return (delete Y[q], { ...K, sessionHooks: Y });
   }),
-    y(`Cleared all session hooks for session ${q}`));
+    writeDebugLog(`Cleared all session hooks for session ${q}`));
 }
 var Hl = E(() => {
   iJ6();
@@ -119077,7 +119077,7 @@ function KM4(A, q, K, Y, z = !1) {
     let O = _;
     if (z && _ === "Stop")
       ((O = "SubagentStop"),
-        y(
+        writeDebugLog(
           `Converting Stop hook to SubagentStop for ${Y} (subagents trigger SubagentStop)`,
         ));
     for (let H of $) {
@@ -119088,7 +119088,7 @@ function KM4(A, q, K, Y, z = !1) {
     }
   }
   if (w > 0)
-    y(`Registered ${w} frontmatter hook(s) from ${Y} for session ${q}`);
+    writeDebugLog(`Registered ${w} frontmatter hook(s) from ${Y} for session ${q}`);
 }
 var YM4 = E(() => {
   iJ6();
@@ -155378,7 +155378,7 @@ function gM(A, q, K = 0, Y = null, z = null, w = !1) {
       if (A.lang)
         if (Vv4?.(A.lang)) _ = A.lang;
         else
-          y(
+          writeDebugLog(
             `Language not supported while highlighting code, falling back to plaintext: ${A.lang}`,
           );
       return rE8(A.text, { language: _ }) + mP;
@@ -155681,7 +155681,7 @@ function pQ6(A, q, K) {
   return w.length > 0 ? w : [""];
 }
 function kv4({ token: A, syntaxHighlightingDisabled: q = !1, forceWidth: K }) {
-  let [Y] = E7(),
+  let [Y] = useTheme(),
     { columns: z } = zA(),
     w = K ?? z;
   function _(h) {
@@ -155872,9 +155872,9 @@ var Ev4 = E(() => {
   UW1 = Y6(W6(), 1);
 });
 function GH(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { children: K, dimColor: Y } = A,
-    [z] = E7(),
+    [z] = useTheme(),
     _ = _H().syntaxHighlightingDisabled ?? !1;
   oE8();
   let $;
@@ -155948,7 +155948,7 @@ var tR = E(() => {
   Ml = Y6(W6(), 1);
 });
 function yv4() {
-  let A = w6(1),
+  let A = reactMemoCache(1),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = QQ6.createElement(ScrollableContent, { height: 1 }, QQ6.createElement(jg, null))),
@@ -155964,7 +155964,7 @@ var Rv4 = E(() => {
   QQ6 = Y6(W6(), 1);
 });
 function dW1(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     { plan: K } = A,
     Y;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -156011,7 +156011,7 @@ var sE8 = E(() => {
   jx = Y6(W6(), 1);
 });
 function Cv4(A) {
-  let q = w6(2),
+  let q = reactMemoCache(2),
     { feedback: K } = A,
     Y;
   if (q[0] !== K)
@@ -156038,7 +156038,7 @@ var Sv4 = E(() => {
   UQ6 = Y6(W6(), 1);
 });
 function hv4(A) {
-  let q = w6(20),
+  let q = reactMemoCache(20),
     {
       progressMessagesForMessage: K,
       tool: Y,
@@ -156127,7 +156127,7 @@ var Iv4 = E(() => {
   Jx = Y6(W6(), 1);
 });
 function xv4(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     {
       input: K,
       progressMessagesForMessage: Y,
@@ -156138,7 +156138,7 @@ function xv4(A) {
       isTranscriptMode: O,
     } = A,
     { columns: H } = zA(),
-    [j] = E7();
+    [j] = useTheme();
   if (!w) {
     let M;
     if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -156206,7 +156206,7 @@ var bv4 = E(() => {
   cQ6 = Y6(W6(), 1);
 });
 function cW1(A) {
-  let q = w6(22),
+  let q = reactMemoCache(22),
     { hookEvent: K, lookups: Y, toolUseID: z, isTranscriptMode: w } = A,
     _;
   if (q[0] !== K || q[1] !== Y.inProgressHookCounts || q[2] !== z)
@@ -156310,7 +156310,7 @@ var lW1 = E(() => {
   };
 });
 function mv4(A) {
-  let q = w6(33),
+  let q = reactMemoCache(33),
     {
       message: K,
       lookups: Y,
@@ -156323,7 +156323,7 @@ function mv4(A) {
       width: j,
       isTranscriptMode: J,
     } = A,
-    [D] = E7(),
+    [D] = useTheme(),
     X;
   if (q[0] !== z) ((X = () => tD4(z)), (q[0] = z), (q[1] = X));
   else X = q[1];
@@ -156428,7 +156428,7 @@ var Bv4 = E(() => {
   GV = Y6(W6(), 1);
 });
 function gv4(A, q, K) {
-  let Y = w6(7),
+  let Y = reactMemoCache(7),
     z;
   if (Y[0] !== K.toolUseByToolUseID || Y[1] !== A || Y[2] !== q) {
     A: {
@@ -156456,7 +156456,7 @@ var Fv4 = E(() => {
   e6();
 });
 function pv4(A) {
-  let q = w6(28),
+  let q = reactMemoCache(28),
     {
       param: K,
       message: Y,
@@ -156617,7 +156617,7 @@ var lv4 = E(() => {
   Q6();
 });
 function wY6(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { isError: K, isUnresolved: Y, shouldAnimate: z } = A,
     [w, _] = cv4(z),
     $ = Y ? void 0 : K ? "error" : "success",
@@ -156648,7 +156648,7 @@ var rW1 = E(() => {
   AL8 = Y6(W6(), 1);
 });
 function iv4(A) {
-  let q = w6(56),
+  let q = reactMemoCache(56),
     {
       param: K,
       addMargin: Y,
@@ -156664,12 +156664,12 @@ function iv4(A) {
       isTranscriptMode: X,
     } = A,
     M = zA(),
-    [P] = E7(),
+    [P] = useTheme(),
     W = rv4(rDY),
     G = qX4(K.id),
     Z = !1;
   if (!z)
-    return ($6(Error(`Tools array is undefined for tool ${K.name}`)), null);
+    return (sendError(Error(`Tools array is undefined for tool ${K.name}`)), null);
   let f, N, V, v, L, S, I, B, h, F, g;
   if (
     q[0] !== Y ||
@@ -156695,7 +156695,7 @@ function iv4(A) {
     A: {
       let c = q5(z, K.name);
       if (!c) {
-        ($6(Error(`Tool ${K.name} not found`)), (g = null));
+        (sendError(Error(`Tool ${K.name} not found`)), (g = null));
         break A;
       }
       let d;
@@ -156911,7 +156911,7 @@ function oDY(A, q, { theme: K, verbose: Y, commands: z }) {
     });
   } catch (w) {
     return (
-      $6(Error(`Error rendering tool use message for ${A.name}: ${w}`)),
+      sendError(Error(`Error rendering tool use message for ${A.name}: ${w}`)),
       ""
     );
   }
@@ -156952,7 +156952,7 @@ function aDY(
     );
   } catch (j) {
     return (
-      $6(
+      sendError(
         Error(`Error rendering tool use progress message for ${A.name}: ${j}`),
       ),
       null
@@ -156964,7 +156964,7 @@ function sDY(A) {
     return A.renderToolUseQueuedMessage?.();
   } catch (q) {
     return (
-      $6(Error(`Error rendering tool use queued message for ${A.name}: ${q}`)),
+      sendError(Error(`Error rendering tool use queued message for ${A.name}: ${q}`)),
       null
     );
   }
@@ -157120,7 +157120,7 @@ async function YXY(A) {
     return (process.stdout.write(Y, ($) => ($ ? _($) : w())), await z, !0);
   } catch (q) {
     return (
-      $6(Error(`Failed to copy via OSC52: ${q}`)),
+      sendError(Error(`Failed to copy via OSC52: ${q}`)),
       (Dx = sW1 ? "native" : "none"),
       !1
     );
@@ -157131,7 +157131,7 @@ async function zXY(A, q) {
     return (await $Y(q, { input: A, shell: !0, reject: !0 }), !0);
   } catch (K) {
     return (
-      $6(Error(`Failed to execute clipboard command "${q}": ${K}`)),
+      sendError(Error(`Failed to execute clipboard command "${q}": ${K}`)),
       (Dx = (await av4()) ? "osc52" : "none"),
       !1
     );
@@ -157145,7 +157145,7 @@ async function FG(A) {
       if (sW1) return zXY(A, sW1);
       return !1;
     case "none":
-      return ($6(Error("No clipboard method available")), !1);
+      return (sendError(Error("No clipboard method available")), !1);
   }
 }
 function $Y6() {
@@ -157221,14 +157221,14 @@ class qL8 {
     if (q) {
       (q(this.pendingResponse, A),
         (this.pendingResponse = null),
-        n("tengu_oauth_automatic_redirect", { custom_handler: !0 }));
+        emitEvent("tengu_oauth_automatic_redirect", { custom_handler: !0 }));
       return;
     }
     let K = qB(A) ? r7().CLAUDEAI_SUCCESS_URL : r7().CONSOLE_SUCCESS_URL;
     (this.pendingResponse.writeHead(302, { Location: K }),
       this.pendingResponse.end(),
       (this.pendingResponse = null),
-      n("tengu_oauth_automatic_redirect", {}));
+      emitEvent("tengu_oauth_automatic_redirect", {}));
   }
   handleErrorRedirect() {
     if (!this.pendingResponse) return;
@@ -157236,7 +157236,7 @@ class qL8 {
     (this.pendingResponse.writeHead(302, { Location: A }),
       this.pendingResponse.end(),
       (this.pendingResponse = null),
-      n("tengu_oauth_automatic_redirect_error", {}));
+      emitEvent("tengu_oauth_automatic_redirect_error", {}));
   }
   startLocalListener(A) {
     (this.localServer.on("request", this.handleRedirect.bind(this)),
@@ -157269,7 +157269,7 @@ class qL8 {
     ((this.pendingResponse = K), this.resolve(A));
   }
   handleError(A) {
-    ($6(A), this.close(), this.reject(A));
+    (sendError(A), this.close(), this.reject(A));
   }
   resolve(A) {
     if (this.promiseResolver)
@@ -157342,7 +157342,7 @@ class OY6 {
         (await A(w), await n9(_));
       }),
       O = this.authCodeListener?.hasPendingResponse() ?? !1;
-    n("tengu_oauth_auth_code_received", { automatic: O });
+    emitEvent("tengu_oauth_auth_code_received", { automatic: O });
     try {
       let H = await g$8($, Y, this.codeVerifier, this.port, !O, q?.expiresIn),
         j = await Z_1(H.access_token);
@@ -157414,9 +157414,9 @@ var tW1 = E(() => {
 async function _XY() {
   try {
     if (
-      X1(process.env.CLAUDE_CODE_USE_BEDROCK) ||
-      X1(process.env.CLAUDE_CODE_USE_VERTEX) ||
-      X1(process.env.CLAUDE_CODE_USE_FOUNDRY)
+      isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
+      isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
+      isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
     )
       return !0;
     return (
@@ -158210,8 +158210,8 @@ function tQ6(A, q) {
   return A.id.localeCompare(q.id);
 }
 function _G1({ tasks: A, isStandalone: q = !1 }) {
-  let K = T1((S) => S.teamContext),
-    Y = T1((S) => S.tasks),
+  let K = useAppState((S) => S.teamContext),
+    Y = useAppState((S) => S.tasks),
     [, z] = eq.useState(0),
     { rows: w, columns: _ } = zA(),
     $ = eq.useRef(new Map()),
@@ -158347,15 +158347,15 @@ function _G1({ tasks: A, isStandalone: q = !1 }) {
 function vXY(A) {
   switch (A) {
     case "completed":
-      return { icon: a6.tick, color: "success" };
+      return { icon: figures.tick, color: "success" };
     case "in_progress":
-      return { icon: a6.squareSmallFilled, color: "claude" };
+      return { icon: figures.squareSmallFilled, color: "claude" };
     case "pending":
-      return { icon: a6.squareSmall, color: void 0 };
+      return { icon: figures.squareSmall, color: void 0 };
   }
 }
 function kXY(A) {
-  let q = w6(37),
+  let q = reactMemoCache(37),
     {
       task: K,
       ownerColor: Y,
@@ -158434,7 +158434,7 @@ function kXY(A) {
         T,
         { dimColor: !0 },
         " ",
-        a6.pointerSmall,
+        figures.pointerSmall,
         " blocked by",
         " ",
         [...z].sort(LXY).map(EXY).join(", "),
@@ -158460,7 +158460,7 @@ function kXY(A) {
       eq.createElement(
         m,
         null,
-        eq.createElement(T, { dimColor: !0 }, "  ", L, a6.ellipsis),
+        eq.createElement(T, { dimColor: !0 }, "  ", L, figures.ellipsis),
       )),
       (q[31] = L),
       (q[32] = M),
@@ -158579,7 +158579,7 @@ function IXY() {
   return (hXY ??= new Dk4());
 }
 function eQ6() {
-  let A = T1((Y) => Y.teamContext),
+  let A = useAppState((Y) => Y.teamContext),
     K = jH() && (!A || NG(A)) ? IXY() : null;
   return $G1.useSyncExternalStore(
     K ? K.subscribe : bXY,
@@ -158656,7 +158656,7 @@ var Pk4 = E(() => {
   mXY = Y6(W6(), 1);
 });
 function PL8(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     {
       char: K,
       index: Y,
@@ -158683,7 +158683,7 @@ var HG1 = E(() => {
   ML8 = Y6(W6(), 1);
 });
 function WL8(A) {
-  let q = w6(70),
+  let q = reactMemoCache(70),
     {
       message: K,
       mode: Y,
@@ -158695,7 +158695,7 @@ function WL8(A) {
       stalledIntensity: H,
     } = A,
     j = H === void 0 ? 0 : H,
-    [J] = E7(),
+    [J] = useTheme(),
     D;
   if (
     q[0] !== $ ||
@@ -158933,7 +158933,7 @@ var Wk4 = E(() => {
   ((nq = Y6(W6(), 1)), (BXY = { r: 171, g: 43, b: 63 }));
 });
 function qU6(A) {
-  let q = w6(12),
+  let q = reactMemoCache(12),
     {
       frame: K,
       messageColor: Y,
@@ -158945,7 +158945,7 @@ function qU6(A) {
     O = z === void 0 ? 0 : z,
     H = _ === void 0 ? !1 : _,
     j = $ === void 0 ? 0 : $,
-    [J] = E7(),
+    [J] = useTheme(),
     D = aW(J);
   if (H) {
     let P = Math.floor(j / (FXY / 2)) % 2 === 1,
@@ -159116,10 +159116,10 @@ async function jZ6(A, q) {
     { setAppState: O } = q,
     H = ok(K, Y),
     j = Ok("in_process_teammate");
-  y(`[spawnInProcessTeammate] Spawning ${H} (taskId: ${j})`);
+  writeDebugLog(`[spawnInProcessTeammate] Spawning ${H} (taskId: ${j})`);
   try {
     let J = G3(),
-      D = d1(),
+      D = getSessionId(),
       X = {
         agentId: H,
         agentName: K,
@@ -159168,12 +159168,12 @@ async function jZ6(A, q) {
         localTaskId: W,
       },
       Z = Xq(async () => {
-        (y(`[spawnInProcessTeammate] Cleanup called for ${H}`), J.abort());
+        (writeDebugLog(`[spawnInProcessTeammate] Cleanup called for ${H}`), J.abort());
       });
     return (
       (G.unregisterCleanup = Z),
       Uf(G, O),
-      y(`[spawnInProcessTeammate] Registered ${H} in AppState`),
+      writeDebugLog(`[spawnInProcessTeammate] Registered ${H} in AppState`),
       {
         success: !0,
         agentId: H,
@@ -159185,7 +159185,7 @@ async function jZ6(A, q) {
   } catch (J) {
     let D = J instanceof Error ? J.message : "Unknown error during spawn";
     return (
-      y(`[spawnInProcessTeammate] Failed to spawn ${H}: ${D}`),
+      writeDebugLog(`[spawnInProcessTeammate] Failed to spawn ${H}: ${D}`),
       { success: !1, agentId: H, error: D }
     );
   }
@@ -159286,7 +159286,7 @@ function TL8(A, q, K) {
       Y.status === "failed"
     )
       return (
-        y(
+        writeDebugLog(
           `Dropping message for teammate task ${A}: task status is "${Y.status}"`,
         ),
         Y
@@ -159399,7 +159399,7 @@ var Nl = E(() => {
   DP();
 });
 function vk4(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { text: K } = A,
     [Y, z] = PM(50),
     w = (z - Vk4) / 1000,
@@ -159589,7 +159589,7 @@ function Ek4({
       o9.createElement(
         T,
         { color: K ? "suggestion" : void 0, bold: K },
-        K ? a6.pointer : " ",
+        K ? figures.pointer : " ",
       ),
       o9.createElement(T, { dimColor: !K }, H, " "),
       g &&
@@ -159653,9 +159653,9 @@ function NL8({
   leaderTokenCount: z,
   leaderIdleText: w,
 }) {
-  let _ = T1((G) => G.tasks),
-    $ = T1((G) => G.viewingAgentTaskId),
-    O = T1((G) => G.showTeammateMessagePreview),
+  let _ = useAppState((G) => G.tasks),
+    $ = useAppState((G) => G.viewingAgentTaskId),
+    O = useAppState((G) => G.showTeammateMessagePreview),
     H = void 0,
     j = qC(_)
       .filter((G) => G.status === "running")
@@ -159676,7 +159676,7 @@ function NL8({
         yY.createElement(
           T,
           { color: D ? "suggestion" : void 0, bold: X },
-          D ? a6.pointer : " ",
+          D ? figures.pointer : " ",
         ),
         yY.createElement(T, { dimColor: !X, bold: X }, X ? "╒═" : "┌─", " "),
         yY.createElement(
@@ -159707,10 +159707,10 @@ function NL8({
   );
 }
 function iXY(A) {
-  let q = w6(18),
+  let q = reactMemoCache(18),
     { isSelected: K } = A,
     Y = K ? "suggestion" : void 0,
-    z = K ? a6.pointer : " ",
+    z = K ? figures.pointer : " ",
     w;
   if (q[0] !== K || q[1] !== Y || q[2] !== z)
     ((w = yY.createElement(T, { color: Y, bold: K }, z)),
@@ -159785,13 +159785,13 @@ function Ck4({
       Y.current !== null
         ? Y.current - q.current - K.current
         : Date.now() - q.current - K.current,
-    G = T1((GA) => GA.tasks),
-    Z = T1((GA) => GA.viewingAgentTaskId),
-    f = T1((GA) => GA.expandedView),
+    G = useAppState((GA) => GA.tasks),
+    Z = useAppState((GA) => GA.viewingAgentTaskId),
+    f = useAppState((GA) => GA.expandedView),
     N = f === "tasks",
     V = f === "teammates",
-    v = T1((GA) => GA.selectedIPAgentIndex),
-    L = T1((GA) => GA.viewSelectionMode),
+    v = useAppState((GA) => GA.selectedIPAgentIndex),
+    L = useAppState((GA) => GA.viewSelectionMode),
     S = Z ? FR({ viewingAgentTaskId: Z, tasks: G }) : void 0,
     { isConnected: I } = YL8(),
     { columns: B } = zA(),
@@ -159898,7 +159898,7 @@ function Ck4({
     d6 = h8(C6),
     o6 = S && !S.isIdle ? (S.progress?.tokenCount ?? 0) : O6 + h6,
     K1 = Y3(o6),
-    x6 = E6 ? `${K1} tokens` : `${a6.arrowDown} ${K1} tokens`,
+    x6 = E6 ? `${K1} tokens` : `${figures.arrowDown} ${K1} tokens`,
     t6 = h8(x6),
     D1 = O6,
     j1 = h8(" · "),
@@ -160060,7 +160060,7 @@ function Ck4({
   );
 }
 function rXY(A) {
-  let q = w6(2),
+  let q = reactMemoCache(2),
     { mode: K } = A;
   switch (K) {
     case "tool-input":
@@ -160072,7 +160072,7 @@ function rXY(A) {
         ((Y = v7.createElement(
           m,
           { width: 2 },
-          v7.createElement(T, { dimColor: !0 }, a6.arrowDown),
+          v7.createElement(T, { dimColor: !0 }, figures.arrowDown),
         )),
           (q[0] = Y));
       else Y = q[0];
@@ -160084,7 +160084,7 @@ function rXY(A) {
         ((Y = v7.createElement(
           m,
           { width: 2 },
-          v7.createElement(T, { dimColor: !0 }, a6.arrowUp),
+          v7.createElement(T, { dimColor: !0 }, figures.arrowUp),
         )),
           (q[1] = Y));
       else Y = q[1];
@@ -160093,7 +160093,7 @@ function rXY(A) {
   }
 }
 function e4() {
-  let A = w6(11),
+  let A = reactMemoCache(11),
     K = _H().prefersReducedMotion ?? !1,
     [Y, z] = PM(K ? null : 120),
     { isConnected: w } = YL8(),
@@ -165894,7 +165894,7 @@ var qE = C((EL4, LL4) => {
             e(V, v, L) {
               return this.element(V, v, L);
             }
-            n(V, v, L) {
+            emitEvent(V, v, L) {
               return this.node(V, v, L);
             }
             t(V) {
@@ -167580,7 +167580,7 @@ var FL4 = C((BL4, gL4) => {
           e(I, B, h) {
             return this.element(I, B, h);
           }
-          n(I, B, h) {
+          emitEvent(I, B, h) {
             return this.node(I, B, h);
           }
           t(I) {
@@ -167917,7 +167917,7 @@ async function Bg(A, q) {
   let Y = getSettings().preferredNotifChannel;
   await Mg(A);
   let z = await H0Y(Y, A, q);
-  n("tengu_notification_method_used", {
+  emitEvent("tengu_notification_method_used", {
     configured_channel: Y,
     method_used: z,
     term: s8.terminal,
@@ -167982,7 +167982,7 @@ async function J0Y() {
     if (!w) return !1;
     return w.Bell === !1;
   } catch (A) {
-    return ($6(A instanceof Error ? A : Error(String(A))), !1);
+    return (sendError(A instanceof Error ? A : Error(String(A))), !1);
   }
 }
 var sL4,
@@ -168001,7 +168001,7 @@ async function pG1(A) {
     return await A();
   } catch (q) {
     if (g8.isAxiosError(q) && q.response?.status === 401) {
-      n("tengu_grove_oauth_401_received", {});
+      emitEvent("tengu_grove_oauth_401_received", {});
       let K = z4()?.accessToken;
       if (K) return (await xk(K), await A());
     }
@@ -168023,7 +168023,7 @@ async function VZ6() {
       ).data,
     };
   } catch (A) {
-    return ($6(A), { success: !1 });
+    return (sendError(A), { success: !1 });
   }
 }
 async function iL8() {
@@ -168038,7 +168038,7 @@ async function iL8() {
       );
     });
   } catch (A) {
-    $6(A);
+    sendError(A);
   }
 }
 async function QG1(A) {
@@ -168053,7 +168053,7 @@ async function QG1(A) {
       );
     });
   } catch (q) {
-    $6(q);
+    sendError(q);
   }
 }
 async function vZ6() {
@@ -168064,7 +168064,7 @@ async function vZ6() {
     Y = Date.now();
   if (!K)
     return (
-      y(
+      writeDebugLog(
         "Grove: No cache, fetching config in background (dialog skipped this session)",
       ),
       Ay4(A),
@@ -168072,13 +168072,13 @@ async function vZ6() {
     );
   if (Y - K.timestamp > D0Y)
     return (
-      y(
+      writeDebugLog(
         "Grove: Cache stale, returning cached data and refreshing in background",
       ),
       Ay4(A),
       K.grove_enabled
     );
-  return (y("Grove: Using fresh cached config"), K.grove_enabled);
+  return (writeDebugLog("Grove: Using fresh cached config"), K.grove_enabled);
 }
 async function Ay4(A) {
   try {
@@ -168093,7 +168093,7 @@ async function Ay4(A) {
       },
     }));
   } catch (q) {
-    y(`Grove: Failed to fetch and store config: ${q}`);
+    writeDebugLog(`Grove: Failed to fetch and store config: ${q}`);
   }
 }
 var D0Y = 86400000,
@@ -168134,7 +168134,7 @@ var kZ6 = E(() => {
         },
       };
     } catch (A) {
-      return (y(`Failed to fetch Grove notice config: ${A}`), { success: !1 });
+      return (writeDebugLog(`Failed to fetch Grove notice config: ${A}`), { success: !1 });
     }
   });
 });
@@ -168152,7 +168152,7 @@ var Ky4 = E(() => {
 import { join as UG1 } from "path";
 import { open as X0Y, mkdir as M0Y } from "fs/promises";
 function zy4() {
-  return UG1(_A(), Yy4, d1());
+  return UG1(_A(), Yy4, getSessionId());
 }
 async function W0Y() {
   let A = zy4();
@@ -168179,9 +168179,9 @@ async function PY6(A) {
     } finally {
       await K.close();
     }
-    return (Oy4(), MY6.set(A.id, q), y(`Stored image ${A.id} to ${q}`), q);
+    return (Oy4(), MY6.set(A.id, q), writeDebugLog(`Stored image ${A.id} to ${q}`), q);
   } catch (q) {
-    return (y(`Failed to store image: ${q}`), null);
+    return (writeDebugLog(`Failed to store image: ${q}`), null);
   }
 }
 async function _y4(A) {
@@ -168209,7 +168209,7 @@ function Oy4() {
 async function Hy4() {
   let A = P1(),
     q = UG1(_A(), Yy4),
-    K = d1();
+    K = getSessionId();
   try {
     let Y;
     try {
@@ -168222,7 +168222,7 @@ async function Hy4() {
       let w = UG1(q, z.name);
       try {
         (await A.rm(w, { recursive: !0, force: !0 }),
-          y(`Cleaned up old image cache: ${w}`));
+          writeDebugLog(`Cleaned up old image cache: ${w}`));
       } catch {}
     }
     try {
@@ -168242,7 +168242,7 @@ var Ll = E(() => {
 });
 import { pathToFileURL as G0Y } from "url";
 function cG1(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     { imageId: K, backgroundColor: Y, isSelected: z } = A,
     w = z === void 0 ? !1 : z,
     _ = dG1(K),
@@ -168294,7 +168294,7 @@ var nL8 = E(() => {
   yl = Y6(W6(), 1);
 });
 function LZ6(A) {
-  let q = w6(100),
+  let q = reactMemoCache(100),
     {
       option: K,
       isFocused: Y,
@@ -168932,7 +168932,7 @@ var Jy4 = E(() => {
   WY6 = Y6(W6(), 1);
 });
 function Dy4(A) {
-  let q = w6(43),
+  let q = reactMemoCache(43),
     {
       isDisabled: K,
       visibleOptionCount: Y,
@@ -169069,7 +169069,7 @@ function Dy4(A) {
                 T,
                 { color: q6 ? "success" : void 0 },
                 "[",
-                q6 ? a6.tick : " ",
+                q6 ? figures.tick : " ",
                 "]",
                 " ",
               ),
@@ -169094,7 +169094,7 @@ function Dy4(A) {
               T,
               { color: !S && q6 ? "success" : void 0 },
               "[",
-              q6 ? a6.tick : " ",
+              q6 ? figures.tick : " ",
               "]",
             ),
             QG.default.createElement(
@@ -169137,7 +169137,7 @@ function Dy4(A) {
         m,
         { marginTop: 0, gap: 1 },
         B.isSubmitFocused
-          ? QG.default.createElement(T, { color: "suggestion" }, a6.pointer)
+          ? QG.default.createElement(T, { color: "suggestion" }, figures.pointer)
           : QG.default.createElement(T, null, " "),
         QG.default.createElement(
           m,
@@ -169181,7 +169181,7 @@ var a9 = E(() => {
   Xy4();
 });
 function G66(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     { title: K, subtitle: Y, color: z, workerBadge: w } = A,
     _ = z === void 0 ? "permission" : z,
     $;
@@ -169230,7 +169230,7 @@ var NU6 = E(() => {
   Wx = Y6(W6(), 1);
 });
 function qw(A) {
-  let q = w6(15),
+  let q = reactMemoCache(15),
     {
       title: K,
       subtitle: Y,
@@ -169422,12 +169422,12 @@ function Py4(A, q) {
     Y = RZ6(q);
   if (!iG1(Y)) return !1;
   if (!iG1(K)) return !0;
-  let z = p6({
+  let z = trySafeStringify({
       shellSettings: K.shellSettings,
       envVars: K.envVars,
       hooks: K.hooks,
     }),
-    w = p6({
+    w = trySafeStringify({
       shellSettings: Y.shellSettings,
       envVars: Y.envVars,
       hooks: Y.hooks,
@@ -169446,7 +169446,7 @@ var oL8 = E(() => {
   r1();
 });
 function Gy4(A) {
-  let q = w6(26),
+  let q = reactMemoCache(26),
     { settings: K, onAccept: Y, onReject: z } = A,
     w = RZ6(K),
     _ = Wy4(w),
@@ -169619,7 +169619,7 @@ function v0Y() {
     Rl = void 0;
     return;
   }
-  if (X1(!1)) {
+  if (isTruthy(!1)) {
     Rl = void 0;
     return;
   }
@@ -169636,7 +169636,7 @@ function v0Y() {
       q = new V0Y(A);
     return ((q.isTTY = !0), (Rl = q), Rl);
   } catch (A) {
-    ($6(A), (Rl = void 0));
+    (sendError(A), (Rl = void 0));
     return;
   }
 }
@@ -169652,7 +169652,7 @@ var nG1 = E(() => {
   h1();
 });
 function E0Y(A, q) {
-  let K = w6(9),
+  let K = reactMemoCache(9),
     { addNotification: Y, removeNotification: z } = Nq(),
     w;
   if (K[0] !== Y || K[1] !== z || K[2] !== A)
@@ -169703,7 +169703,7 @@ function hD({ children: A }) {
   let [{ bindings: q, warnings: K }, Y] = SD.useState(() => {
       let W = nF6();
       return (
-        y(
+        writeDebugLog(
           `[keybindings] KeybindingSetup initialized with ${W.bindings.length} bindings, ${W.warnings.length} warnings`,
         ),
         W
@@ -169729,7 +169729,7 @@ function hD({ children: A }) {
       (W) => {
         if ((M(), W !== null))
           H.current = setTimeout(() => {
-            (y("[keybindings] Chord timeout - cancelling"),
+            (writeDebugLog("[keybindings] Chord timeout - cancelling"),
               (_.current = null),
               O(null));
           }, k0Y);
@@ -169743,7 +169743,7 @@ function hD({ children: A }) {
       let W = Nw4((G) => {
         (w(!0),
           Y(G),
-          y(
+          writeDebugLog(
             `[keybindings] Reloaded: ${G.bindings.length} bindings, ${G.warnings.length} warnings`,
           ));
       });
@@ -169775,7 +169775,7 @@ function hD({ children: A }) {
   );
 }
 function R0Y(A) {
-  let q = w6(6),
+  let q = reactMemoCache(6),
     {
       bindings: K,
       pendingChordRef: Y,
@@ -169850,7 +169850,7 @@ async function fy4(A, q) {
   if (!Py4(A, q)) return "no_check_needed";
   if (!Tv()) return "no_check_needed";
   return (
-    n("tengu_managed_settings_security_dialog_shown", {}),
+    emitEvent("tengu_managed_settings_security_dialog_shown", {}),
     new Promise((K) => {
       (async () => {
         let { unmount: Y } = await yy(
@@ -169863,12 +169863,12 @@ async function fy4(A, q) {
               rG1.default.createElement(Gy4, {
                 settings: q,
                 onAccept: () => {
-                  (n("tengu_managed_settings_security_dialog_accepted", {}),
+                  (emitEvent("tengu_managed_settings_security_dialog_accepted", {}),
                     Y(),
                     K("approved"));
                 },
                 onReject: () => {
-                  (n("tengu_managed_settings_security_dialog_rejected", {}),
+                  (emitEvent("tengu_managed_settings_security_dialog_rejected", {}),
                     Y(),
                     K("rejected"));
                 },
@@ -169962,7 +169962,7 @@ function ky4() {
       ((Sl = A),
         setTimeout(() => {
           if (Sl)
-            (y("Remote settings: Loading promise timed out, resolving anyway"),
+            (writeDebugLog("Remote settings: Loading promise timed out, resolving anyway"),
               Sl(),
               (Sl = null));
         }, u0Y));
@@ -169982,7 +169982,7 @@ function Ay8(A) {
 }
 function B0Y(A) {
   let q = Ay8(A),
-    K = p6(q);
+    K = trySafeStringify(q);
   return `sha256:${h0Y("sha256").update(K).digest("hex")}`;
 }
 function qy8() {
@@ -170013,7 +170013,7 @@ async function F0Y(A) {
     if (q.skipRetry) return q;
     if (K > eL8) return q;
     let Y = Hc(K);
-    (y(`Remote settings: Retry ${K}/${eL8} after ${Y}ms`), await VI(Y));
+    (writeDebugLog(`Remote settings: Retry ${K}/${eL8} after ${Y}ms`), await VI(Y));
   }
   return q;
 }
@@ -170037,28 +170037,28 @@ async function p0Y(A) {
     });
     if (z.status === 304)
       return (
-        y("Remote settings: Using cached settings (304)"),
+        writeDebugLog("Remote settings: Using cached settings (304)"),
         { success: !0, settings: null, checksum: A }
       );
     if (z.status === 204 || z.status === 404)
       return (
-        y(`Remote settings: No settings found (${z.status})`),
+        writeDebugLog(`Remote settings: No settings found (${z.status})`),
         { success: !0, settings: {}, checksum: void 0 }
       );
     let w = qy4().safeParse(z.data);
     if (!w.success)
       return (
-        y(`Remote settings: Invalid response format - ${w.error.message}`),
+        writeDebugLog(`Remote settings: Invalid response format - ${w.error.message}`),
         { success: !1, error: "Invalid remote settings format" }
       );
     let _ = DM().safeParse(w.data.settings);
     if (!_.success)
       return (
-        y(`Remote settings: Settings validation failed - ${_.error.message}`),
+        writeDebugLog(`Remote settings: Settings validation failed - ${_.error.message}`),
         { success: !1, error: "Invalid settings structure" }
       );
     return (
-      y("Remote settings: Fetched successfully"),
+      writeDebugLog("Remote settings: Fetched successfully"),
       { success: !0, settings: _.data, checksum: w.data.checksum }
     );
   } catch (q) {
@@ -170088,14 +170088,14 @@ async function Q0Y(A) {
     let q = VU6(),
       K = await I0Y(q, "w", 384);
     try {
-      (await K.writeFile(p6(A, null, 2), { encoding: "utf-8" }),
+      (await K.writeFile(trySafeStringify(A, null, 2), { encoding: "utf-8" }),
         await K.datasync());
     } finally {
       await K.close();
     }
-    y(`Remote settings: Saved to ${q}`);
+    writeDebugLog(`Remote settings: Saved to ${q}`);
   } catch (q) {
-    y(
+    writeDebugLog(
       `Remote settings: Failed to save - ${q instanceof Error ? q.message : "unknown error"}`,
     );
   }
@@ -170116,7 +170116,7 @@ async function Yy8() {
     if (!K.success) {
       if (A)
         return (
-          y("Remote settings: Using stale cache after fetch failure"),
+          writeDebugLog("Remote settings: Using stale cache after fetch failure"),
           SZ6(A),
           A
         );
@@ -170124,7 +170124,7 @@ async function Yy8() {
     }
     if (K.settings === null && A)
       return (
-        y("Remote settings: Cache still valid (304 Not Modified)"),
+        writeDebugLog("Remote settings: Cache still valid (304 Not Modified)"),
         SZ6(A),
         A
       );
@@ -170133,7 +170133,7 @@ async function Yy8() {
       let w = await fy4(A, Y);
       if (!Ty4(w))
         return (
-          y(
+          writeDebugLog(
             "Remote settings: User rejected new settings, using cached settings",
           ),
           A
@@ -170141,24 +170141,24 @@ async function Yy8() {
       return (
         SZ6(Y),
         await Q0Y(Y),
-        y("Remote settings: Applied new settings successfully"),
+        writeDebugLog("Remote settings: Applied new settings successfully"),
         Y
       );
     }
     SZ6(Y);
     try {
       let w = VU6();
-      (await vy4(w), y("Remote settings: Deleted cached file (404 response)"));
+      (await vy4(w), writeDebugLog("Remote settings: Deleted cached file (404 response)"));
     } catch (w) {
       if (w.code !== "ENOENT")
-        y(
+        writeDebugLog(
           `Remote settings: Failed to delete cached file - ${w instanceof Error ? w.message : "unknown error"}`,
         );
     }
     return Y;
   } catch {
     if (A)
-      return (y("Remote settings: Using stale cache after error"), SZ6(A), A);
+      return (writeDebugLog("Remote settings: Using stale cache after error"), SZ6(A), A);
     return null;
   }
 }
@@ -170181,19 +170181,19 @@ async function sG1() {
     return;
   }
   (await Yy8(),
-    y("Remote settings: Refreshed after auth change"),
+    writeDebugLog("Remote settings: Refreshed after auth change"),
     M$(),
     qH.notifyChange("policySettings"));
 }
 async function U0Y() {
   if (!gg()) return;
   let A = aL8(),
-    q = A ? p6(A) : null;
+    q = A ? trySafeStringify(A) : null;
   try {
     await Yy8();
     let K = aL8();
-    if ((K ? p6(K) : null) !== q)
-      (y("Remote settings: Changed during background poll"),
+    if ((K ? trySafeStringify(K) : null) !== q)
+      (writeDebugLog("Remote settings: Changed during background poll"),
         M$(),
         qH.notifyChange("policySettings"));
   } catch {}
@@ -170268,7 +170268,7 @@ function $y8() {
       ((hl = A),
         setTimeout(() => {
           if (hl)
-            (y("Policy limits: Loading promise timed out, resolving anyway"),
+            (writeDebugLog("Policy limits: Loading promise timed out, resolving anyway"),
               hl(),
               (hl = null));
         }, t0Y));
@@ -170292,7 +170292,7 @@ function _y8(A) {
 }
 function APY(A) {
   let q = _y8(A),
-    K = p6(q);
+    K = trySafeStringify(q);
   return `sha256:${l0Y("sha256").update(K).digest("hex")}`;
 }
 function Zx() {
@@ -170333,7 +170333,7 @@ async function KPY(A) {
     if (q.skipRetry) return q;
     if (K > wy8) return q;
     let Y = Hc(K);
-    (y(`Policy limits: Retry ${K}/${wy8} after ${Y}ms`), await VI(Y));
+    (writeDebugLog(`Policy limits: Retry ${K}/${wy8} after ${Y}ms`), await VI(Y));
   }
   return q;
 }
@@ -170357,22 +170357,22 @@ async function YPY(A) {
     });
     if (z.status === 304)
       return (
-        y("Policy limits: Using cached restrictions (304)"),
+        writeDebugLog("Policy limits: Using cached restrictions (304)"),
         { success: !0, restrictions: null, etag: A }
       );
     if (z.status === 404)
       return (
-        y("Policy limits: No restrictions found (404)"),
+        writeDebugLog("Policy limits: No restrictions found (404)"),
         { success: !0, restrictions: {}, etag: void 0 }
       );
     let w = zy8().safeParse(z.data);
     if (!w.success)
       return (
-        y(`Policy limits: Invalid response format - ${w.error.message}`),
+        writeDebugLog(`Policy limits: Invalid response format - ${w.error.message}`),
         { success: !1, error: "Invalid policy limits format" }
       );
     return (
-      y("Policy limits: Fetched successfully"),
+      writeDebugLog("Policy limits: Fetched successfully"),
       { success: !0, restrictions: w.data.restrictions }
     );
   } catch (q) {
@@ -170408,13 +170408,13 @@ function Sy4() {
 async function zPY(A) {
   try {
     let q = tG1();
-    (await n0Y(q, p6({ restrictions: A }, null, 2), {
+    (await n0Y(q, trySafeStringify({ restrictions: A }, null, 2), {
       encoding: "utf-8",
       mode: 384,
     }),
-      y(`Policy limits: Saved to ${q}`));
+      writeDebugLog(`Policy limits: Saved to ${q}`));
   } catch (q) {
-    y(
+    writeDebugLog(
       `Policy limits: Failed to save - ${q instanceof Error ? q.message : "unknown error"}`,
     );
   }
@@ -170428,7 +170428,7 @@ async function Oy8() {
     if (!K.success) {
       if (A)
         return (
-          y("Policy limits: Using stale cache after fetch failure"),
+          writeDebugLog("Policy limits: Using stale cache after fetch failure"),
           (YE = A),
           A
         );
@@ -170436,7 +170436,7 @@ async function Oy8() {
     }
     if (K.restrictions === null && A)
       return (
-        y("Policy limits: Cache still valid (304 Not Modified)"),
+        writeDebugLog("Policy limits: Cache still valid (304 Not Modified)"),
         (YE = A),
         A
       );
@@ -170445,21 +170445,21 @@ async function Oy8() {
       return (
         (YE = Y),
         await zPY(Y),
-        y("Policy limits: Applied new restrictions successfully"),
+        writeDebugLog("Policy limits: Applied new restrictions successfully"),
         Y
       );
     YE = Y;
     try {
       (await Cy4(tG1()),
-        y("Policy limits: Deleted cached file (404 response)"));
+        writeDebugLog("Policy limits: Deleted cached file (404 response)"));
     } catch (w) {
       if (r0Y(w) && w.code !== "ENOENT")
-        y(`Policy limits: Failed to delete cached file - ${w.message}`);
+        writeDebugLog(`Policy limits: Failed to delete cached file - ${w.message}`);
     }
     return Y;
   } catch {
     if (A)
-      return (y("Policy limits: Using stale cache after error"), (YE = A), A);
+      return (writeDebugLog("Policy limits: Using stale cache after error"), (YE = A), A);
     return null;
   }
 }
@@ -170490,7 +170490,7 @@ async function Hy8() {
 }
 async function kU6() {
   if ((await eG1(), !Zx())) return;
-  (await Oy8(), y("Policy limits: Refreshed after auth change"));
+  (await Oy8(), writeDebugLog("Policy limits: Refreshed after auth change"));
 }
 async function eG1() {
   (jy8(), (YE = null), (ZY6 = null), (hl = null));
@@ -170500,10 +170500,10 @@ async function eG1() {
 }
 async function _PY() {
   if (!Zx()) return;
-  let A = YE ? p6(YE) : null;
+  let A = YE ? trySafeStringify(YE) : null;
   try {
-    if ((await Oy8(), (YE ? p6(YE) : null) !== A))
-      y("Policy limits: Changed during background poll");
+    if ((await Oy8(), (YE ? trySafeStringify(YE) : null) !== A))
+      writeDebugLog("Policy limits: Changed during background poll");
   } catch {}
 }
 function hy4() {
@@ -211216,11 +211216,11 @@ var dl4 = C((mh8) => {
 });
 class Bh8 {
   error(A, ...q) {
-    ($6(Error(A)),
-      y(`[3P telemetry] OTEL diag error: ${A}`, { level: "error" }));
+    (sendError(Error(A)),
+      writeDebugLog(`[3P telemetry] OTEL diag error: ${A}`, { level: "error" }));
   }
   warn(A, ...q) {
-    ($6(Error(A)), y(`[3P telemetry] OTEL diag warn: ${A}`, { level: "warn" }));
+    (sendError(Error(A)), writeDebugLog(`[3P telemetry] OTEL diag warn: ${A}`, { level: "warn" }));
   }
   info(A, ...q) {
     return;
@@ -211267,7 +211267,7 @@ async function jmY() {
       } else throw q;
     }
     return (
-      y(
+      writeDebugLog(
         `Metrics opt-out API response: enabled=${A.metrics_logging_enabled}, vcsLinking=${A.vcs_account_linking_enabled}`,
       ),
       {
@@ -211278,10 +211278,10 @@ async function jmY() {
     );
   } catch (A) {
     return (
-      y(
+      writeDebugLog(
         `Failed to check metrics opt-out status: ${A instanceof Error ? A.message : String(A)}`,
       ),
-      $6(A),
+      sendError(A),
       { enabled: !1, vcsAccountLinkingEnabled: !1, hasError: !0 }
     );
   }
@@ -211291,7 +211291,7 @@ async function GT1() {
     return await JmY();
   } catch (A) {
     return (
-      y("Metrics check failed, defaulting to disabled"),
+      writeDebugLog("Metrics check failed, defaulting to disabled"),
       { enabled: !1, vcsAccountLinkingEnabled: !1, hasError: !0 }
     );
   }
@@ -211334,19 +211334,19 @@ class ph8 {
   async doExport(A, q) {
     try {
       if (!(Ew() || C7())) {
-        (y("BigQuery metrics export: trust not established, skipping"),
+        (writeDebugLog("BigQuery metrics export: trust not established, skipping"),
           q({ code: lY6.ExportResultCode.SUCCESS }));
         return;
       }
       if (!(await GT1()).enabled) {
-        (y("Metrics export disabled by organization setting"),
+        (writeDebugLog("Metrics export disabled by organization setting"),
           q({ code: lY6.ExportResultCode.SUCCESS }));
         return;
       }
       let z = this.transformMetricsForInternal(A),
         w = u_();
       if (w.error) {
-        (y(`Metrics export failed: ${w.error}`),
+        (writeDebugLog(`Metrics export failed: ${w.error}`),
           q({ code: lY6.ExportResultCode.FAILED, error: Error(w.error) }));
         return;
       }
@@ -211359,14 +211359,14 @@ class ph8 {
           timeout: this.timeout,
           headers: _,
         });
-      (y("BigQuery metrics exported successfully"),
-        y(`BigQuery API Response: ${p6($.data, null, 2)}`),
+      (writeDebugLog("BigQuery metrics exported successfully"),
+        writeDebugLog(`BigQuery API Response: ${trySafeStringify($.data, null, 2)}`),
         q({ code: lY6.ExportResultCode.SUCCESS }));
     } catch (K) {
-      (y(
+      (writeDebugLog(
         `BigQuery metrics export failed: ${K instanceof Error ? K.message : String(K)}`,
       ),
-        $6(K),
+        sendError(K),
         q({
           code: lY6.ExportResultCode.FAILED,
           error: K instanceof Error ? K : Error("Unknown export error"),
@@ -211419,11 +211419,11 @@ class ph8 {
   async shutdown() {
     ((this.isShutdown = !0),
       await this.forceFlush(),
-      y("BigQuery metrics exporter shutdown complete"));
+      writeDebugLog("BigQuery metrics exporter shutdown complete"));
   }
   async forceFlush() {
     (await Promise.all(this.pendingExports),
-      y("BigQuery metrics exporter flush complete"));
+      writeDebugLog("BigQuery metrics exporter flush complete"));
   }
   convertAttributes(A) {
     let q = {};
@@ -211478,10 +211478,10 @@ function XmY() {
         w = z.export.bind(z);
       ((z.export = (_, $) => {
         if (_.resource && _.resource.attributes)
-          (y(`
+          (writeDebugLog(`
 === Resource Attributes ===`),
-            y(p6(_.resource.attributes)),
-            y(`===========================
+            writeDebugLog(trySafeStringify(_.resource.attributes)),
+            writeDebugLog(`===========================
 `));
         return w(_, $);
       }),
@@ -211529,8 +211529,8 @@ function MmY() {
       process.env.OTEL_EXPORTER_OTLP_LOGS_PROTOCOL?.trim() ||
       process.env.OTEL_EXPORTER_OTLP_PROTOCOL?.trim(),
     K = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-  y(
-    `[3P telemetry] getOtlpLogExporters: types=${p6(A)}, protocol=${q}, endpoint=${K}`,
+  writeDebugLog(
+    `[3P telemetry] getOtlpLogExporters: types=${trySafeStringify(A)}, protocol=${q}, endpoint=${K}`,
   );
   let Y = [];
   for (let z of A)
@@ -211593,7 +211593,7 @@ function PmY() {
   return q;
 }
 function zi4() {
-  return X1(process.env.CLAUDE_CODE_ENABLE_TELEMETRY);
+  return isTruthy(process.env.CLAUDE_CODE_ENABLE_TELEMETRY);
 }
 function WmY() {
   let A = new ph8();
@@ -211652,7 +211652,7 @@ function fmY() {
   let A = [],
     q = zi4();
   if (
-    (y(
+    (writeDebugLog(
       `[3P telemetry] isTelemetryEnabled=${q} (CLAUDE_CODE_ENABLE_TELEMETRY=${process.env.CLAUDE_CODE_ENABLE_TELEMETRY})`,
     ),
     q)
@@ -211731,7 +211731,7 @@ function fmY() {
   if (($s6(J), q)) {
     let X = MmY();
     if (
-      (y(`[3P telemetry] Created ${X.length} log exporter(s)`), X.length > 0)
+      (writeDebugLog(`[3P telemetry] Created ${X.length} log exporter(s)`), X.length > 0)
     ) {
       let M = new U66.LoggerProvider({
         resource: j,
@@ -211758,7 +211758,7 @@ function fmY() {
         }.VERSION,
       );
       (_s6(P),
-        y("[3P telemetry] Event logger set successfully"),
+        writeDebugLog("[3P telemetry] Event logger set successfully"),
         process.on("beforeExit", async () => {
           (await M?.forceFlush(), await SA6()?.forceFlush());
         }),
@@ -211802,7 +211802,7 @@ function fmY() {
         ]);
       } catch (M) {
         if (M instanceof Error && M.message.includes("timeout"))
-          y(
+          writeDebugLog(
             `
 OpenTelemetry telemetry flush timed out after ${X}ms
 
@@ -211848,15 +211848,15 @@ async function TmY() {
         setTimeout(() => _(Error("OpenTelemetry flush timeout")), q),
       ),
     ]),
-      y("Telemetry flushed successfully"));
+      writeDebugLog("Telemetry flushed successfully"));
   } catch (K) {
     if (K instanceof Error && K.message.includes("timeout"))
-      y(
+      writeDebugLog(
         `Telemetry flush timed out after ${q}ms. Some metrics may not be exported.`,
         { level: "warn" },
       );
     else
-      y(
+      writeDebugLog(
         `Telemetry flush failed: ${K instanceof Error ? K.message : String(K)}`,
         { level: "error" },
       );
@@ -212059,7 +212059,7 @@ async function kmY() {
     if (!P1().existsSync(Hi4))
       Nz(
         Hi4,
-        p6({ name: "claude-local", version: "0.0.1", private: !0 }, null, 2),
+        trySafeStringify({ name: "claude-local", version: "0.0.1", private: !0 }, null, 2),
         { encoding: "utf8", flush: !1 },
       );
     let A = Ud6(c66, "claude");
@@ -212070,7 +212070,7 @@ exec "${c66}/node_modules/.bin/claude" "$@"`;
     }
     return !0;
   } catch (A) {
-    return ($6(A instanceof Error ? A : Error(String(A))), !1);
+    return (sendError(A instanceof Error ? A : Error(String(A))), !1);
   }
 }
 async function dd6(A, q) {
@@ -212087,11 +212087,11 @@ async function dd6(A, q) {
       );
     if (Y.code !== 0) {
       let z = Error(`Failed to install Claude CLI package: ${Y.stderr}`);
-      return ($6(z), Y.code === 190 ? "in_progress" : "install_failed");
+      return (sendError(z), Y.code === 190 ? "in_progress" : "install_failed");
     }
     return (updateSettings((z) => ({ ...z, installMethod: "local" })), "success");
   } catch (K) {
-    return ($6(K instanceof Error ? K : Error(String(K))), "install_failed");
+    return (sendError(K instanceof Error ? K : Error(String(K))), "install_failed");
   }
 }
 function l66() {
@@ -212230,7 +212230,7 @@ This will ensure you have access to the latest features and improvements.
 `),
         _3(1));
   } catch (A) {
-    $6(A);
+    sendError(A);
   }
 }
 async function n66() {
@@ -212243,14 +212243,14 @@ async function Gi4() {
   try {
     return await yg("tengu_max_version_config", {});
   } catch (A) {
-    return ($6(A), {});
+    return (sendError(A), {});
   }
 }
 function Rf6(A) {
   let K = U7()?.minimumVersion;
   if (!K) return !1;
   let Y = !_X(A, K);
-  if (Y) y(`Skipping update to ${A} - below minimumVersion ${K}`);
+  if (Y) writeDebugLog(`Skipping update to ${A} - below minimumVersion ${K}`);
   return Y;
 }
 function rY6() {
@@ -212265,12 +212265,12 @@ function xmY() {
       try {
         P1().unlinkSync(rY6());
       } catch (K) {
-        return ($6(K), !1);
+        return (sendError(K), !1);
       }
     }
     return (Nz(rY6(), `${process.pid}`, { encoding: "utf8" }), !0);
   } catch (A) {
-    return ($6(A), !1);
+    return (sendError(A), !1);
   }
 }
 function bmY() {
@@ -212280,7 +212280,7 @@ function bmY() {
         P1().unlinkSync(rY6());
     }
   } catch (A) {
-    $6(A);
+    sendError(A);
   }
 }
 async function umY() {
@@ -212290,7 +212290,7 @@ async function umY() {
   else q = await Z7("npm", ["-g", "config", "get", "prefix"], { cwd: ld6() });
   if (q.code !== 0)
     return (
-      $6(Error(`Failed to check ${A ? "bun" : "npm"} permissions`)),
+      sendError(Error(`Failed to check ${A ? "bun" : "npm"} permissions`)),
       null
     );
   return q.stdout.trim();
@@ -212307,11 +212307,11 @@ async function KI8() {
     }
     if (q) return { hasPermissions: !0, npmPrefix: A };
     return (
-      $6(new ET1("Insufficient permissions for global npm install.")),
+      sendError(new ET1("Insufficient permissions for global npm install.")),
       { hasPermissions: !1, npmPrefix: A }
     );
   } catch (A) {
-    return ($6(A), { hasPermissions: !1, npmPrefix: null });
+    return (sendError(A), { hasPermissions: !1, npmPrefix: null });
   }
 }
 async function oY6(A) {
@@ -212327,10 +212327,10 @@ async function oY6(A) {
       { abortSignal: AbortSignal.timeout(5000), cwd: ld6() },
     );
   if (K.code !== 0) {
-    if ((y(`npm view failed with code ${K.code}`), K.stderr))
-      y(`npm stderr: ${K.stderr.trim()}`);
-    else y("npm stderr: (empty)");
-    if (K.stdout) y(`npm stdout: ${K.stdout.trim()}`);
+    if ((writeDebugLog(`npm view failed with code ${K.code}`), K.stderr))
+      writeDebugLog(`npm stderr: ${K.stderr.trim()}`);
+    else writeDebugLog("npm stderr: (empty)");
+    if (K.stdout) writeDebugLog(`npm stdout: ${K.stdout.trim()}`);
     return null;
   }
   return K.stdout.trim();
@@ -212357,7 +212357,7 @@ async function Zi4() {
   );
   if (A.code !== 0)
     return (
-      y(`npm view dist-tags failed with code ${A.code}`),
+      writeDebugLog(`npm view dist-tags failed with code ${A.code}`),
       { latest: null, stable: null }
     );
   try {
@@ -212368,7 +212368,7 @@ async function Zi4() {
     };
   } catch (q) {
     return (
-      y(`Failed to parse dist-tags: ${q}`),
+      writeDebugLog(`Failed to parse dist-tags: ${q}`),
       { latest: null, stable: null }
     );
   }
@@ -212379,7 +212379,7 @@ async function LT1(A) {
       await g8.get(`${hmY}/${A}`, { timeout: 5000, responseType: "text" })
     ).data.trim();
   } catch (q) {
-    return (y(`Failed to fetch ${A} from GCS: ${q}`), null);
+    return (writeDebugLog(`Failed to fetch ${A} from GCS: ${q}`), null);
   }
 }
 async function fi4() {
@@ -212389,8 +212389,8 @@ async function fi4() {
 async function id6(A) {
   if (!xmY())
     return (
-      $6(new ET1("Another process is currently installing an update")),
-      n("tengu_auto_updater_lock_contention", {
+      sendError(new ET1("Another process is currently installing an update")),
+      emitEvent("tengu_auto_updater_lock_contention", {
         pid: process.pid,
         currentVersion: {
           ISSUES_EXPLAINER:
@@ -212407,8 +212407,8 @@ async function id6(A) {
   try {
     if ((await mmY(), !s8.isRunningWithBun() && s8.isNpmFromWindowsPath()))
       return (
-        $6(Error("Windows NPM detected in WSL environment")),
-        n("tengu_auto_updater_windows_npm_in_wsl", {
+        sendError(Error("Windows NPM detected in WSL environment")),
+        emitEvent("tengu_auto_updater_windows_npm_in_wsl", {
           currentVersion: {
             ISSUES_EXPLAINER:
               "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -212453,7 +212453,7 @@ To fix this issue:
       let w = new ET1(
         `Failed to install new version of claude: ${z.stdout} ${z.stderr}`,
       );
-      return ($6(w), "install_failed");
+      return (sendError(w), "install_failed");
     }
     return (updateSettings((w) => ({ ...w, installMethod: "global" })), "success");
   } finally {
@@ -212467,9 +212467,9 @@ async function mmY() {
       let K = await cd6(q);
       if (!K) continue;
       let { filtered: Y, hadAlias: z } = VT1(K);
-      if (z) (await vT1(q, Y), y(`Removed claude alias from ${q}`));
+      if (z) (await vT1(q, Y), writeDebugLog(`Removed claude alias from ${q}`));
     } catch (K) {
-      y(`Failed to remove alias from ${q}: ${K}`, { level: "error" });
+      writeDebugLog(`Failed to remove alias from ${q}: ${K}`, { level: "error" });
     }
 }
 var hmY =
@@ -212507,19 +212507,19 @@ async function pmY(A = "latest", q, K) {
         ...K,
       }),
       w = Date.now() - Y;
-    return (n("tengu_version_check_success", { latency_ms: w }), z.data.trim());
+    return (emitEvent("tengu_version_check_success", { latency_ms: w }), z.data.trim());
   } catch (z) {
     let w = Date.now() - Y,
       _ = z instanceof Error ? z.message : String(z),
       $;
     if (g8.isAxiosError(z) && z.response) $ = z.response.status;
-    n("tengu_version_check_failure", {
+    emitEvent("tengu_version_check_failure", {
       latency_ms: w,
       http_status: $,
       is_timeout: _.includes("timeout"),
     });
     let O = Error(`Failed to fetch version from ${q}/${A}: ${_}`);
-    throw ($6(O), O);
+    throw (sendError(O), O);
   }
 }
 async function zI8(A) {
@@ -212568,7 +212568,7 @@ async function UmY(A, q, K, Y = {}) {
       if (J) z = new Ni4();
       else z = j instanceof Error ? j : Error(String(j));
       if (J && w < YI8) {
-        (y(`Download stalled on attempt ${w}/${YI8}, retrying...`),
+        (writeDebugLog(`Download stalled on attempt ${w}/${YI8}, retrying...`),
           await new Promise((D) => setTimeout(D, 1000)));
         continue;
       }
@@ -212582,7 +212582,7 @@ async function dmY(A, q, K, Y) {
   if (z.existsSync(q)) z.rmSync(q, { recursive: !0, force: !0 });
   let w = il(),
     _ = Date.now();
-  n("tengu_binary_download_attempt", {});
+  emitEvent("tengu_binary_download_attempt", {});
   let $;
   try {
     $ = (
@@ -212598,19 +212598,19 @@ async function dmY(A, q, K, Y) {
       W;
     if (g8.isAxiosError(X) && X.response) W = X.response.status;
     throw (
-      n("tengu_binary_manifest_fetch_failure", {
+      emitEvent("tengu_binary_manifest_fetch_failure", {
         latency_ms: M,
         http_status: W,
         is_timeout: P.includes("timeout"),
       }),
-      $6(Error(`Failed to fetch manifest from ${K}/${A}/manifest.json: ${P}`)),
+      sendError(Error(`Failed to fetch manifest from ${K}/${A}/manifest.json: ${P}`)),
       X
     );
   }
   let O = $.platforms[w];
   if (!O)
     throw (
-      n("tengu_binary_platform_not_found", {}),
+      emitEvent("tengu_binary_platform_not_found", {}),
       Error(`Platform ${w} not found in manifest for version ${A}`)
     );
   let H = O.checksum,
@@ -212621,20 +212621,20 @@ async function dmY(A, q, K, Y) {
   try {
     await UmY(J, H, D, Y || {});
     let X = Date.now() - _;
-    n("tengu_binary_download_success", { latency_ms: X });
+    emitEvent("tengu_binary_download_success", { latency_ms: X });
   } catch (X) {
     let M = Date.now() - _,
       P = X instanceof Error ? X.message : String(X),
       W;
     if (g8.isAxiosError(X) && X.response) W = X.response.status;
     throw (
-      n("tengu_binary_download_failure", {
+      emitEvent("tengu_binary_download_failure", {
         latency_ms: M,
         http_status: W,
         is_timeout: P.includes("timeout"),
         is_checksum_mismatch: P.includes("Checksum mismatch"),
       }),
-      $6(Error(`Failed to download binary from ${J}: ${P}`)),
+      sendError(Error(`Failed to download binary from ${J}: ${P}`)),
       X
     );
   }
@@ -212671,13 +212671,13 @@ function CT1(A, q) {
 function _I8() {
   let A = process.execPath || process.argv[0] || "";
   if (/[/\\]mise[/\\]installs[/\\]/i.test(A))
-    return (y(`Detected mise installation: ${A}`), !0);
+    return (writeDebugLog(`Detected mise installation: ${A}`), !0);
   return !1;
 }
 function $I8() {
   let A = process.execPath || process.argv[0] || "";
   if (/[/\\]\.?asdf[/\\]installs[/\\]/i.test(A))
-    return (y(`Detected asdf installation: ${A}`), !0);
+    return (writeDebugLog(`Detected asdf installation: ${A}`), !0);
   return !1;
 }
 function ST1() {
@@ -212685,7 +212685,7 @@ function ST1() {
   if (A !== "macos" && A !== "linux" && A !== "wsl") return !1;
   let q = process.execPath || process.argv[0] || "";
   if (q.includes("/Caskroom/"))
-    return (y(`Detected Homebrew cask installation: ${q}`), !0);
+    return (writeDebugLog(`Detected Homebrew cask installation: ${q}`), !0);
   return !1;
 }
 function OI8() {
@@ -212696,7 +212696,7 @@ function OI8() {
       /Microsoft[/\\]WinGet[/\\]Links/i,
     ];
   for (let Y of K)
-    if (Y.test(q)) return (y(`Detected winget installation: ${q}`), !0);
+    if (Y.test(q)) return (writeDebugLog(`Detected winget installation: ${q}`), !0);
   return !1;
 }
 var RT1, HI8, jI8, JI8, DI8, Cf6;
@@ -212722,7 +212722,7 @@ var hT1 = E(() => {
     let K = process.execPath || process.argv[0] || "",
       Y = await M8("pacman", ["-Qo", K], { timeout: 5000, useCwd: !1 });
     if (Y.code === 0 && Y.stdout)
-      return (y(`Detected pacman installation: ${Y.stdout.trim()}`), !0);
+      return (writeDebugLog(`Detected pacman installation: ${Y.stdout.trim()}`), !0);
     return !1;
   })),
     (jI8 = T8(async () => {
@@ -212732,7 +212732,7 @@ var hT1 = E(() => {
       let K = process.execPath || process.argv[0] || "",
         Y = await M8("dpkg", ["-S", K], { timeout: 5000, useCwd: !1 });
       if (Y.code === 0 && Y.stdout)
-        return (y(`Detected deb installation: ${Y.stdout.trim()}`), !0);
+        return (writeDebugLog(`Detected deb installation: ${Y.stdout.trim()}`), !0);
       return !1;
     })),
     (JI8 = T8(async () => {
@@ -212742,7 +212742,7 @@ var hT1 = E(() => {
       let K = process.execPath || process.argv[0] || "",
         Y = await M8("rpm", ["-qf", K], { timeout: 5000, useCwd: !1 });
       if (Y.code === 0 && Y.stdout)
-        return (y(`Detected rpm installation: ${Y.stdout.trim()}`), !0);
+        return (writeDebugLog(`Detected rpm installation: ${Y.stdout.trim()}`), !0);
       return !1;
     })),
     (DI8 = T8(async () => {
@@ -212755,7 +212755,7 @@ var hT1 = E(() => {
           useCwd: !1,
         });
       if (Y.code === 0 && Y.stdout)
-        return (y(`Detected apk installation: ${Y.stdout.trim()}`), !0);
+        return (writeDebugLog(`Detected apk installation: ${Y.stdout.trim()}`), !0);
       return !1;
     })),
     (Cf6 = T8(async () => {
@@ -212955,7 +212955,7 @@ async function omY(A) {
         });
       }
   }
-  if (!X1(process.env.DISABLE_INSTALLATION_CHECKS)) {
+  if (!isTruthy(process.env.DISABLE_INSTALLATION_CHECKS)) {
     if (A === "npm-local" && K.installMethod !== "local")
       q.push({
         issue: `Running from local installation but config install method is '${K.installMethod}'`,
@@ -213130,7 +213130,7 @@ var $F = E(() => {
 });
 import { join as Ei4, basename as smY } from "path";
 function eY6() {
-  if (X1(void 0)) return !0;
+  if (isTruthy(void 0)) return !0;
   if (Qw(void 0)) return !1;
   return jA("tengu_pid_based_version_locking", !1);
 }
@@ -213175,7 +213175,7 @@ function xT1(A) {
   if (!IT1(K)) return !1;
   if (!emY(K, Y))
     return (
-      y(
+      writeDebugLog(
         `Lock PID ${K} is running but does not appear to be Claude - treating as stale`,
       ),
       !1
@@ -213193,7 +213193,7 @@ function ABY(A, q) {
   let K = P1(),
     Y = `${A}.tmp.${process.pid}.${Date.now()}`;
   try {
-    (Nz(Y, p6(q, null, 2), { encoding: "utf8", flush: !0 }),
+    (Nz(Y, trySafeStringify(q, null, 2), { encoding: "utf8", flush: !0 }),
       K.renameSync(Y, A));
   } catch (z) {
     try {
@@ -213207,7 +213207,7 @@ async function Li4(A, q) {
     Y = smY(A);
   if (xT1(q)) {
     let w = ad6(q);
-    return (y(`Cannot acquire lock for ${Y} - held by PID ${w?.pid}`), null);
+    return (writeDebugLog(`Cannot acquire lock for ${Y} - held by PID ${w?.pid}`), null);
   }
   let z = {
     pid: process.pid,
@@ -213218,18 +213218,18 @@ async function Li4(A, q) {
   try {
     if ((ABY(q, z), ad6(q)?.pid !== process.pid)) return null;
     return (
-      y(`Acquired PID lock for ${Y} (PID ${process.pid})`),
+      writeDebugLog(`Acquired PID lock for ${Y} (PID ${process.pid})`),
       () => {
         try {
           if (ad6(q)?.pid === process.pid)
-            (K.unlinkSync(q), y(`Released PID lock for ${Y}`));
+            (K.unlinkSync(q), writeDebugLog(`Released PID lock for ${Y}`));
         } catch (_) {
-          y(`Failed to release lock for ${Y}: ${_}`);
+          writeDebugLog(`Failed to release lock for ${Y}: ${_}`);
         }
       }
     );
   } catch (w) {
-    return (y(`Failed to acquire lock for ${Y}: ${w}`), null);
+    return (writeDebugLog(`Failed to acquire lock for ${Y}: ${w}`), null);
   }
 }
 async function yi4(A, q) {
@@ -213276,7 +213276,7 @@ function Ci4(A) {
         });
     }
   } catch (Y) {
-    $6(Y instanceof Error ? Y : Error(`Failed to get lock info: ${Y}`));
+    sendError(Y instanceof Error ? Y : Error(`Failed to get lock info: ${Y}`));
   }
   return K;
 }
@@ -213292,13 +213292,13 @@ function bT1(A) {
         if (q.lstatSync(w).isDirectory())
           (q.rmSync(w, { recursive: !0, force: !0 }),
             K++,
-            y(`Cleaned up legacy directory lock: ${z}`));
+            writeDebugLog(`Cleaned up legacy directory lock: ${z}`));
         else if (!xT1(w))
-          (q.unlinkSync(w), K++, y(`Cleaned up stale lock: ${z}`));
+          (q.unlinkSync(w), K++, writeDebugLog(`Cleaned up stale lock: ${z}`));
       } catch {}
     }
   } catch (Y) {
-    $6(Y instanceof Error ? Y : Error(`Failed to cleanup stale locks: ${Y}`));
+    sendError(Y instanceof Error ? Y : Error(`Failed to cleanup stale locks: ${Y}`));
   }
   return K;
 }
@@ -213350,7 +213350,7 @@ function il() {
   if (!q) {
     let K = Error(`Unsupported architecture: ${process.arch}`);
     throw (
-      y(`Native installer does not support architecture: ${process.arch}`, {
+      writeDebugLog(`Native installer does not support architecture: ${process.arch}`, {
         level: "error",
       }),
       K
@@ -213409,12 +213409,12 @@ async function JBY(A, q, K = 0) {
           try {
             await q();
           } catch (J) {
-            throw ($6(J instanceof Error ? J : Error(String(J))), J);
+            throw (sendError(J instanceof Error ? J : Error(String(J))), J);
           }
         })
       )
         return (
-          n("tengu_version_lock_acquired", {
+          emitEvent("tengu_version_lock_acquired", {
             is_pid_based: !0,
             is_lifetime_lock: !1,
             attempts: _ + 1,
@@ -213427,7 +213427,7 @@ async function JBY(A, q, K = 0) {
       }
     }
     return (
-      n("tengu_version_lock_failed", {
+      emitEvent("tengu_version_lock_failed", {
         is_pid_based: !0,
         is_lifetime_lock: !1,
         attempts: $,
@@ -213448,7 +213448,7 @@ async function JBY(A, q, K = 0) {
         },
         lockfilePath: z,
         onCompromised: (_) => {
-          y(
+          writeDebugLog(
             `NON-FATAL: Version lock was compromised during operation: ${_.message}`,
             { level: "info" },
           );
@@ -213456,7 +213456,7 @@ async function JBY(A, q, K = 0) {
       });
     } catch (_) {
       return (
-        n("tengu_version_lock_failed", {
+        emitEvent("tengu_version_lock_failed", {
           is_pid_based: !1,
           is_lifetime_lock: !1,
         }),
@@ -213467,14 +213467,14 @@ async function JBY(A, q, K = 0) {
     try {
       return (
         await q(),
-        n("tengu_version_lock_acquired", {
+        emitEvent("tengu_version_lock_acquired", {
           is_pid_based: !1,
           is_lifetime_lock: !1,
         }),
         !0
       );
     } catch (_) {
-      throw ($6(_ instanceof Error ? _ : Error(String(_))), _);
+      throw (sendError(_ instanceof Error ? _ : Error(String(_))), _);
     }
   } finally {
     if (w) await w();
@@ -213487,7 +213487,7 @@ async function xi4(A, q) {
     (await PI8(A, K),
       await wBY(K, 493),
       await uT1(K, q),
-      y(`Atomically installed binary to ${q}`));
+      writeDebugLog(`Atomically installed binary to ${q}`));
   } catch (Y) {
     try {
       await rl(K);
@@ -213501,7 +213501,7 @@ async function DBY(A, q) {
       z = (await Sf6(K)).find((_) => _.startsWith("claude-cli-native-"));
     if (!z)
       throw (
-        n("tengu_native_install_package_failure", {
+        emitEvent("tengu_native_install_package_failure", {
           stage_find_package: !0,
           error_package_not_found: !0,
         }),
@@ -213512,7 +213512,7 @@ async function DBY(A, q) {
       await cG(w);
     } catch {
       throw (
-        n("tengu_native_install_package_failure", {
+        emitEvent("tengu_native_install_package_failure", {
           stage_binary_exists: !0,
           error_binary_not_found: !0,
         }),
@@ -213521,18 +213521,18 @@ async function DBY(A, q) {
     }
     (await xi4(w, q),
       await gT1(A, { recursive: !0, force: !0 }),
-      n("tengu_native_install_package_success", {}));
+      emitEvent("tengu_native_install_package_success", {}));
   } catch (K) {
     let Y = K instanceof Error ? K.message : String(K);
     if (
       !Y.includes("Could not find platform-specific") &&
       !Y.includes("Native binary not found")
     )
-      n("tengu_native_install_package_failure", {
+      emitEvent("tengu_native_install_package_failure", {
         stage_atomic_move: !0,
         error_move_failed: !0,
       });
-    throw ($6(K instanceof Error ? K : Error(Y)), K);
+    throw (sendError(K instanceof Error ? K : Error(Y)), K);
   }
 }
 async function XBY(A, q) {
@@ -213544,7 +213544,7 @@ async function XBY(A, q) {
       await cG(z);
     } catch {
       throw (
-        n("tengu_native_install_binary_failure", {
+        emitEvent("tengu_native_install_binary_failure", {
           stage_binary_exists: !0,
           error_binary_not_found: !0,
         }),
@@ -213553,15 +213553,15 @@ async function XBY(A, q) {
     }
     (await xi4(z, q),
       await gT1(A, { recursive: !0, force: !0 }),
-      n("tengu_native_install_binary_success", {}));
+      emitEvent("tengu_native_install_binary_success", {}));
   } catch (K) {
     let Y = K instanceof Error ? K.message : String(K);
     if (!Y.includes("Staged binary not found"))
-      n("tengu_native_install_binary_failure", {
+      emitEvent("tengu_native_install_binary_failure", {
         stage_atomic_move: !0,
         error_move_failed: !0,
       });
-    throw ($6(K instanceof Error ? K : Error(Y)), K);
+    throw (sendError(K instanceof Error ? K : Error(Y)), K);
   }
 }
 async function MBY(A, q, K) {
@@ -213574,14 +213574,14 @@ async function PBY(A, q) {
     w = `${K}.${process.pid}.${Date.now()}`,
     _ = !(await bi4(A)) || q;
   if (_) {
-    y(
+    writeDebugLog(
       q
         ? `Force reinstalling native installer version ${A}`
         : `Downloading native installer version ${A}`,
     );
     let $ = await Vi4(A, w);
     await MBY(w, Y, $);
-  } else y(`Version ${A} already installed, updating symlink`);
+  } else writeDebugLog(`Version ${A} already installed, updating symlink`);
   if ((await GBY(z), await ZBY(z, Y), !(await r66(z)))) {
     let $ = !1;
     try {
@@ -213601,11 +213601,11 @@ async function WBY(A, q = !1) {
   let K = Date.now(),
     Y = await zI8(A),
     { executable: z } = o66();
-  if ((y(`Checking for native installer update to version ${Y}`), !q)) {
+  if ((writeDebugLog(`Checking for native installer update to version ${Y}`), !q)) {
     let $ = await n66();
     if ($ && zf(Y, $)) {
       if (
-        (y(
+        (writeDebugLog(
           `Native installer: maxVersion ${$} is set, capping update from ${Y} to ${$}`,
         ),
         _X(
@@ -213623,10 +213623,10 @@ async function WBY(A, q = !1) {
         ))
       )
         return (
-          y(
+          writeDebugLog(
             `Native installer: current version ${{ ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues", PACKAGE_URL: "klaudia", README_URL: "https://code.claude.com/docs/en/overview", VERSION: "2.1.66-klaudia", FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues", BUILD_TIME: "2026-03-04T00:18:36Z" }.VERSION} is already at or above maxVersion ${$}, skipping update`,
           ),
-          n("tengu_native_update_skipped_max_version", {
+          emitEvent("tengu_native_update_skipped_max_version", {
             latency_ms: Date.now() - K,
             max_version: $,
             available_version: Y,
@@ -213652,8 +213652,8 @@ async function WBY(A, q = !1) {
     (await r66(z))
   )
     return (
-      y(`Found ${Y} at ${z}, skipping install`),
-      n("tengu_native_update_complete", {
+      writeDebugLog(`Found ${Y} at ${z}, skipping install`),
+      emitEvent("tengu_native_update_complete", {
         latency_ms: Date.now() - K,
         was_new_install: !1,
         was_force_reinstall: !1,
@@ -213663,7 +213663,7 @@ async function WBY(A, q = !1) {
     );
   if (!q && Rf6(Y))
     return (
-      n("tengu_native_update_skipped_minimum_version", {
+      emitEvent("tengu_native_update_skipped_minimum_version", {
         latency_ms: Date.now() - K,
         target_version: Y,
       }),
@@ -213674,12 +213674,12 @@ async function WBY(A, q = !1) {
   return (
     (w = await PBY(Y, q)),
     (_ = Date.now() - K),
-    n("tengu_native_update_complete", {
+    emitEvent("tengu_native_update_complete", {
       latency_ms: _,
       was_new_install: w,
       was_force_reinstall: q,
     }),
-    y(`Successfully updated to version ${Y}`),
+    writeDebugLog(`Successfully updated to version ${Y}`),
     { success: !0 }
   );
 }
@@ -213687,10 +213687,10 @@ async function GBY(A) {
   try {
     if ((await cG(A)).isDirectory()) {
       if ((await Sf6(A)).length === 0)
-        (await HBY(A), y(`Removed empty directory at ${A}`));
+        (await HBY(A), writeDebugLog(`Removed empty directory at ${A}`));
     }
   } catch (q) {
-    y(`Could not remove empty directory at ${A}: ${q}`);
+    writeDebugLog(`Could not remove empty directory at ${A}: ${q}`);
   }
 }
 async function ZBY(A, q) {
@@ -213722,7 +213722,7 @@ async function ZBY(A, q) {
             let J = Error(`Failed to restore old executable: ${j}`, {
               cause: H,
             });
-            throw ($6(J), J);
+            throw (sendError(J), J);
           }
           throw H;
         }
@@ -213737,15 +213737,15 @@ async function ZBY(A, q) {
       return !0;
     } catch (_) {
       return (
-        $6(Error(`Failed to copy executable from ${q} to ${A}: ${_}`)),
+        sendError(Error(`Failed to copy executable from ${q} to ${A}: ${_}`)),
         !1
       );
     }
   let z = nl(A);
   try {
-    (await Az6(z, { recursive: !0 }), y(`Created directory ${z} for symlink`));
+    (await Az6(z, { recursive: !0 }), writeDebugLog(`Created directory ${z} for symlink`));
   } catch (_) {
-    return ($6(Error(`Failed to create directory ${z}: ${_}`)), !1);
+    return (sendError(Error(`Failed to create directory ${z}: ${_}`)), !1);
   }
   try {
     let _ = !1;
@@ -213762,25 +213762,25 @@ async function ZBY(A, q) {
       await rl(A);
     }
   } catch (_) {
-    $6(Error(`Failed to check/remove existing symlink: ${_}`));
+    sendError(Error(`Failed to check/remove existing symlink: ${_}`));
   }
   let w = `${A}.tmp.${process.pid}.${Date.now()}`;
   try {
     return (
       await _BY(q, w),
       await uT1(w, A),
-      y(`Atomically updated symlink ${A} -> ${q}`),
+      writeDebugLog(`Atomically updated symlink ${A} -> ${q}`),
       !0
     );
   } catch (_) {
     try {
       await rl(w);
     } catch {}
-    return ($6(Error(`Failed to create symlink from ${A} to ${q}: ${_}`)), !1);
+    return (sendError(Error(`Failed to create symlink from ${A} to ${q}: ${_}`)), !1);
   }
 }
 async function HF(A = !1) {
-  if (X1(process.env.DISABLE_INSTALLATION_CHECKS)) return [];
+  if (isTruthy(process.env.DISABLE_INSTALLATION_CHECKS)) return [];
   let q = await _F();
   if (q === "development") return [];
   let K = getSettings();
@@ -213882,7 +213882,7 @@ async function ol(A, q = !1) {
         autoUpdates: !1,
         autoUpdatesProtectedForNative: !0,
       })),
-        y(
+        writeDebugLog(
           'Native installer: Set installMethod to "native" and disabled legacy auto-updater for protection',
         ));
   }
@@ -213909,25 +213909,25 @@ async function fI8() {
     let q = OF(process.execPath),
       K = ZI8(A, q);
     if ((await Az6(A.locks, { recursive: !0 }), !HE(q))) {
-      y(`Cannot lock current version - file does not exist: ${q}`, {
+      writeDebugLog(`Cannot lock current version - file does not exist: ${q}`, {
         level: "info",
       });
       return;
     }
     if (eY6()) {
       if (!(await yi4(q, K))) {
-        (n("tengu_version_lock_failed", {
+        (emitEvent("tengu_version_lock_failed", {
           is_pid_based: !0,
           is_lifetime_lock: !0,
         }),
           mT1(q, Error("Lock already held by another process")));
         return;
       }
-      (n("tengu_version_lock_acquired", {
+      (emitEvent("tengu_version_lock_acquired", {
         is_pid_based: !0,
         is_lifetime_lock: !0,
       }),
-        y(`Acquired PID lock on running version: ${q}`));
+        writeDebugLog(`Acquired PID lock on running version: ${q}`));
     } else {
       let Y;
       try {
@@ -213936,24 +213936,24 @@ async function fI8() {
           retries: 0,
           lockfilePath: K,
           onCompromised: (z) => {
-            y(
+            writeDebugLog(
               `NON-FATAL: Lock on running version was compromised: ${z.message}`,
               { level: "info" },
             );
           },
         })),
-          n("tengu_version_lock_acquired", {
+          emitEvent("tengu_version_lock_acquired", {
             is_pid_based: !1,
             is_lifetime_lock: !0,
           }),
-          y(`Acquired mtime-based lock on running version: ${q}`),
+          writeDebugLog(`Acquired mtime-based lock on running version: ${q}`),
           Xq(async () => {
             try {
               await Y?.();
             } catch {}
           }));
       } catch (z) {
-        (n("tengu_version_lock_failed", {
+        (emitEvent("tengu_version_lock_failed", {
           is_pid_based: !1,
           is_lifetime_lock: !0,
         }),
@@ -213962,7 +213962,7 @@ async function fI8() {
       }
     }
   } catch (q) {
-    y(
+    writeDebugLog(
       `NON-FATAL: Failed to lock current version during execution ${q instanceof Error ? q.message : String(q)}`,
       { level: "info" },
     );
@@ -213971,7 +213971,7 @@ async function fI8() {
 function mT1(A, q) {
   let K = `NON-FATAL: Lock acquisition failed for ${A} (expected in multi-process scenarios)`,
     Y = q instanceof Error ? Error(K, { cause: q }) : Error(`${K}: ${q}`);
-  $6(Y);
+  sendError(Y);
 }
 async function sd6() {
   await Promise.resolve();
@@ -213991,10 +213991,10 @@ async function sd6() {
             let $ = DJ(K, _);
             (await rl($), w++);
           } catch {}
-        if (w > 0) y(`Cleaned up ${w} old Windows executables on startup`);
+        if (w > 0) writeDebugLog(`Cleaned up ${w} old Windows executables on startup`);
       }
     } catch (K) {
-      y(`Failed to clean up old Windows executables: ${K}`);
+      writeDebugLog(`Failed to clean up old Windows executables: ${K}`);
     }
   if (HE(A.staging))
     try {
@@ -214007,14 +214007,14 @@ async function sd6() {
           if ((await cG(_)).mtime.getTime() < Y)
             (await gT1(_, { recursive: !0, force: !0 }),
               z++,
-              y(`Cleaned up old staging directory: ${w}`));
+              writeDebugLog(`Cleaned up old staging directory: ${w}`));
         } catch {}
       }
       if (z > 0)
-        (y(`Cleaned up ${z} orphaned staging directories`),
-          n("tengu_native_staging_cleanup", { cleaned_count: z }));
+        (writeDebugLog(`Cleaned up ${z} orphaned staging directories`),
+          emitEvent("tengu_native_staging_cleanup", { cleaned_count: z }));
     } catch (K) {
-      y(`Failed to clean up staging directories: ${K}`);
+      writeDebugLog(`Failed to clean up staging directories: ${K}`);
     }
   if (HE(A.versions))
     try {
@@ -214028,20 +214028,20 @@ async function sd6() {
             if ((await cG(_)).mtime.getTime() < Y)
               (await rl(_),
                 z++,
-                y(`Cleaned up orphaned temp install file: ${w}`));
+                writeDebugLog(`Cleaned up orphaned temp install file: ${w}`));
           } catch {}
         }
       if (z > 0)
-        (y(`Cleaned up ${z} orphaned temp install files`),
-          n("tengu_native_temp_files_cleanup", { cleaned_count: z }));
+        (writeDebugLog(`Cleaned up ${z} orphaned temp install files`),
+          emitEvent("tengu_native_temp_files_cleanup", { cleaned_count: z }));
     } catch (K) {
-      y(`Failed to clean up temp install files: ${K}`);
+      writeDebugLog(`Failed to clean up temp install files: ${K}`);
     }
   if (eY6() && HE(A.locks)) {
     let K = bT1(A.locks);
     if (K > 0)
-      (y(`Cleaned up ${K} stale version locks`),
-        n("tengu_native_stale_locks_cleanup", { cleaned_count: K }));
+      (writeDebugLog(`Cleaned up ${K} stale version locks`),
+        emitEvent("tengu_native_stale_locks_cleanup", { cleaned_count: K }));
   }
   if (!HE(A.versions)) return;
   try {
@@ -214071,7 +214071,7 @@ async function sd6() {
         } catch {
           W = !1;
         }
-      if (W) (_.add(M), y(`Protecting locked version from cleanup: ${X}`));
+      if (W) (_.add(M), writeDebugLog(`Protecting locked version from cleanup: ${X}`));
     }
     let O = [];
     for (let X of Y) {
@@ -214085,7 +214085,7 @@ async function sd6() {
     O.sort((X, M) => M.mtime.getTime() - X.mtime.getTime());
     let H = O.slice(MI8);
     if (H.length === 0) {
-      n("tengu_native_version_cleanup", {
+      emitEvent("tengu_native_version_cleanup", {
         total_count: Y.length,
         deleted_count: 0,
         protected_count: _.size,
@@ -214109,13 +214109,13 @@ async function sd6() {
             j++;
           else
             (J++,
-              y(`Skipping deletion of ${X.name} - locked by another process`));
+              writeDebugLog(`Skipping deletion of ${X.name} - locked by another process`));
         } catch (M) {
-          (D++, $6(Error(`Failed to delete version ${X.name}: ${M}`)));
+          (D++, sendError(Error(`Failed to delete version ${X.name}: ${M}`)));
         }
       }),
     ),
-      n("tengu_native_version_cleanup", {
+      emitEvent("tengu_native_version_cleanup", {
         total_count: Y.length,
         deleted_count: j,
         protected_count: _.size,
@@ -214124,7 +214124,7 @@ async function sd6() {
         error_count: D,
       }));
   } catch (K) {
-    if (K.code !== "ENOENT") $6(Error(`Version cleanup failed: ${K}`));
+    if (K.code !== "ENOENT") sendError(Error(`Version cleanup failed: ${K}`));
   }
 }
 async function TBY(A) {
@@ -214137,13 +214137,13 @@ async function td6() {
   try {
     if (!HE(A.executable)) return;
     if (await TBY(A.executable)) {
-      y(`Skipping removal of ${A.executable} - appears to be npm-managed`);
+      writeDebugLog(`Skipping removal of ${A.executable} - appears to be npm-managed`);
       return;
     }
-    (await rl(A.executable), y(`Removed claude symlink at ${A.executable}`));
+    (await rl(A.executable), writeDebugLog(`Removed claude symlink at ${A.executable}`));
   } catch (q) {
     if (q.code === "ENOENT") return;
-    $6(Error(`Failed to remove claude symlink: ${q}`));
+    sendError(Error(`Failed to remove claude symlink: ${q}`));
   }
 }
 async function ed6() {
@@ -214161,9 +214161,9 @@ async function ed6() {
             userActionRequired: !0,
             type: "alias",
           }),
-          y(`Cleaned up claude alias from ${K} config`));
+          writeDebugLog(`Cleaned up claude alias from ${K} config`));
     } catch (z) {
-      ($6(z instanceof Error ? z : Error(String(z))),
+      (sendError(z instanceof Error ? z : Error(String(z))),
         A.push({
           message: `Failed to clean up ${Y}: ${z}`,
           userActionRequired: !1,
@@ -214181,7 +214181,7 @@ async function NBY(A) {
       Y = !1;
     async function z(w, _) {
       try {
-        return (await cG(w), await rl(w), y(`Manually removed ${_}: ${w}`), !0);
+        return (await cG(w), await rl(w), writeDebugLog(`Manually removed ${_}: ${w}`), !0);
       } catch {
         return !1;
       }
@@ -214198,7 +214198,7 @@ async function NBY(A) {
       if (await z(w, "bin symlink")) Y = !0;
     }
     if (Y) {
-      y(`Successfully removed ${A} manually`);
+      writeDebugLog(`Successfully removed ${A} manually`);
       let w =
         il() === "windows"
           ? DJ(K, "node_modules", A)
@@ -214210,7 +214210,7 @@ async function NBY(A) {
     } else return { success: !1 };
   } catch (q) {
     return (
-      y(`Manual removal failed: ${q}`, { level: "error" }),
+      writeDebugLog(`Manual removal failed: ${q}`, { level: "error" }),
       { success: !1, error: `Manual removal failed: ${q}` }
     );
   }
@@ -214220,13 +214220,13 @@ async function Si4(A) {
     cwd: process.cwd(),
   });
   if (q === 0)
-    return (y(`Removed global npm installation of ${A}`), { success: !0 });
+    return (writeDebugLog(`Removed global npm installation of ${A}`), { success: !0 });
   else if (K && !K.includes("npm ERR! code E404")) {
     if (K.includes("npm error code ENOTEMPTY")) {
-      (y(`Failed to uninstall global npm package ${A}: ${K}`, {
+      (writeDebugLog(`Failed to uninstall global npm package ${A}: ${K}`, {
         level: "error",
       }),
-        y("Attempting manual removal due to ENOTEMPTY error"));
+        writeDebugLog("Attempting manual removal due to ENOTEMPTY error"));
       let Y = await NBY(A);
       if (Y.success) return { success: !0, warning: Y.warning };
       else if (Y.error)
@@ -214236,7 +214236,7 @@ async function Si4(A) {
         };
     }
     return (
-      y(`Failed to uninstall global npm package ${A}: ${K}`, {
+      writeDebugLog(`Failed to uninstall global npm package ${A}: ${K}`, {
         level: "error",
       }),
       {
@@ -214295,10 +214295,10 @@ async function Ac6() {
     try {
       (await gT1(z, { recursive: !0, force: !0 }),
         K++,
-        y(`Removed local installation at ${z}`));
+        writeDebugLog(`Removed local installation at ${z}`));
     } catch (w) {
       (A.push(`Failed to remove ${z}: ${w}`),
-        y(`Failed to remove local installation: ${w}`, { level: "error" }));
+        writeDebugLog(`Failed to remove local installation: ${w}`, { level: "error" }));
     }
   return { removed: K, errors: A, warnings: q };
 }
@@ -214351,7 +214351,7 @@ function mi4(A, q = null, K) {
           value: Kz6.createElement(
             T,
             null,
-            bA("error", K)(a6.cross),
+            bA("error", K)(figures.cross),
             " Error installing ",
             z,
             " ",
@@ -214389,7 +214389,7 @@ function mi4(A, q = null, K) {
       return [
         {
           label: "IDE",
-          value: `${bA("error", K)(a6.cross)} Not connected to ${z}`,
+          value: `${bA("error", K)(figures.cross)} Not connected to ${z}`,
         },
       ];
   }
@@ -214411,12 +214411,12 @@ function Bi4(A = [], q) {
         },
         K.map((Y, z) => {
           let w = "";
-          if (Y.type === "connected") w = bA("success", q)(a6.tick);
-          else if (Y.type === "pending") w = bA("inactive", q)(a6.radioOff);
+          if (Y.type === "connected") w = bA("success", q)(figures.tick);
+          else if (Y.type === "pending") w = bA("inactive", q)(figures.radioOff);
           else if (Y.type === "needs-auth")
-            w = bA("warning", q)(a6.triangleUpOutline);
-          else if (Y.type === "failed") w = bA("error", q)(a6.cross);
-          else w = bA("error", q)(a6.cross);
+            w = bA("warning", q)(figures.triangleUpOutline);
+          else if (Y.type === "failed") w = bA("error", q)(figures.cross);
+          else w = bA("error", q)(figures.cross);
           let _ = z < K.length - 1 ? "," : "";
           return Kz6.createElement(T, { key: z }, Y.name, " ", w, _);
         }),
@@ -214527,7 +214527,7 @@ function pT1() {
     if (z) q.push({ label: "Bedrock base URL", value: z });
     if (
       (q.push({ label: "AWS region", value: dA6() }),
-      X1(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH))
+      isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH))
     )
       q.push({ value: "AWS auth skipped" });
   } else if (A === "vertex") {
@@ -214537,7 +214537,7 @@ function pT1() {
     if (w) q.push({ label: "GCP project", value: w });
     if (
       (q.push({ label: "Default region", value: ys6() }),
-      X1(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH))
+      isTruthy(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH))
     )
       q.push({ value: "GCP auth skipped" });
   } else if (A === "foundry") {
@@ -214545,7 +214545,7 @@ function pT1() {
     if (z) q.push({ label: "Microsoft Foundry base URL", value: z });
     let w = process.env.ANTHROPIC_FOUNDRY_RESOURCE;
     if (w) q.push({ label: "Microsoft Foundry resource", value: w });
-    if (X1(process.env.CLAUDE_CODE_SKIP_FOUNDRY_AUTH))
+    if (isTruthy(process.env.CLAUDE_CODE_SKIP_FOUNDRY_AUTH))
       q.push({ value: "Microsoft Foundry auth skipped" });
   }
   let K = Ph();
@@ -214607,7 +214607,7 @@ async function ci4() {
     if (getSettings().claudeCodeFirstTokenDate !== void 0) return;
     let q = u_();
     if (q.error) {
-      $6(Error(`Failed to get auth headers: ${q.error}`));
+      sendError(Error(`Failed to get auth headers: ${q.error}`));
       return;
     }
     let Y = `${r7().BASE_API_URL}/api/organization/claude_code_first_token_date`,
@@ -214617,13 +214617,13 @@ async function ci4() {
     if (w !== null) {
       let _ = new Date(w).getTime();
       if (isNaN(_)) {
-        $6(Error(`Received invalid first_token_date from API: ${w}`));
+        sendError(Error(`Received invalid first_token_date from API: ${w}`));
         return;
       }
     }
     updateSettings((_) => ({ ..._, claudeCodeFirstTokenDate: w }));
   } catch (A) {
-    $6(A instanceof Error ? A : Error(String(A)));
+    sendError(A instanceof Error ? A : Error(String(A)));
   }
 }
 var li4 = E(() => {
@@ -214662,12 +214662,12 @@ async function Yc6(A) {
     });
   let K = If6(A);
   if ((UT1(), K.warning))
-    n("tengu_oauth_storage_warning", { warning: K.warning });
+    emitEvent("tengu_oauth_storage_warning", { warning: K.warning });
   if (
-    (await F$8(A.accessToken).catch((Y) => y(String(Y), { level: "error" })),
+    (await F$8(A.accessToken).catch((Y) => writeDebugLog(String(Y), { level: "error" })),
     qB(A.scopes))
   )
-    await ci4().catch((Y) => y(String(Y), { level: "error" }));
+    await ci4().catch((Y) => writeDebugLog(String(Y), { level: "error" }));
   else if (!(await p$8(A.accessToken)))
     throw Error(
       "Unable to create API key. The server accepted the request but did not return a key.",
@@ -214687,19 +214687,19 @@ Set it to the space-separated scopes the refresh token was issued with
         process.exit(1));
     let _ = w.split(/\s+/).filter(Boolean);
     try {
-      n("tengu_login_from_refresh_token", {});
+      emitEvent("tengu_login_from_refresh_token", {});
       let $ = await $u6(K, { scopes: _ });
       (await Yc6($),
         updateSettings((O) => {
           if (O.hasCompletedOnboarding) return O;
           return { ...O, hasCompletedOnboarding: !0 };
         }),
-        n("tengu_oauth_success", { loginWithClaudeAi: !0 }),
+        emitEvent("tengu_oauth_success", { loginWithClaudeAi: !0 }),
         process.stdout.write(`Login successful.
 `),
         process.exit(0));
     } catch ($) {
-      ($6($ instanceof Error ? $ : Error(String($))),
+      (sendError($ instanceof Error ? $ : Error(String($))),
         process.stderr
           .write(`Login failed: ${$ instanceof Error ? $.message : String($)}
 `),
@@ -214709,7 +214709,7 @@ Set it to the space-separated scopes the refresh token was issued with
   let Y = q ? "sso" : void 0,
     z = new OY6();
   try {
-    n("tengu_oauth_flow_start", { loginWithClaudeAi: !0 });
+    emitEvent("tengu_oauth_flow_start", { loginWithClaudeAi: !0 });
     let w = await z.startOAuthFlow(
       async (_) => {
         (process.stdout.write(`Opening browser to sign in…
@@ -214720,12 +214720,12 @@ Set it to the space-separated scopes the refresh token was issued with
       { loginWithClaudeAi: !0, loginHint: A, loginMethod: Y },
     );
     (await Yc6(w),
-      n("tengu_oauth_success", { loginWithClaudeAi: !0 }),
+      emitEvent("tengu_oauth_success", { loginWithClaudeAi: !0 }),
       process.stdout.write(`Login successful.
 `),
       process.exit(0));
   } catch (w) {
-    ($6(w instanceof Error ? w : Error(String(w))),
+    (sendError(w instanceof Error ? w : Error(String(w))),
       process.stderr
         .write(`Login failed: ${w instanceof Error ? w.message : String(w)}
 `),
@@ -214785,7 +214785,7 @@ async function vBY(A) {
         (D.orgName = w?.organizationName ?? null),
         (D.subscriptionType = _ ?? null));
     process.stdout.write(
-      p6(D, null, 2) +
+      trySafeStringify(D, null, 2) +
         `
 `,
     );
@@ -214928,8 +214928,8 @@ function Yz6({
     [N, V] = G7.useState(!1),
     v = zA().columns - ai4.length - 1;
   (G7.useEffect(() => {
-    if (w === "claudeai") n("tengu_oauth_claudeai_forced", {});
-    else if (w === "console") n("tengu_oauth_console_forced", {});
+    if (w === "claudeai") emitEvent("tengu_oauth_claudeai_forced", {});
+    else if (w === "console") emitEvent("tengu_oauth_console_forced", {});
   }, [w]),
     G7.useEffect(() => {
       if (H.state === "about_to_retry")
@@ -214940,7 +214940,7 @@ function Yz6({
     D8(
       "confirm:yes",
       () => {
-        (n("tengu_oauth_success", { loginWithClaudeAi: W }), A());
+        (emitEvent("tengu_oauth_success", { loginWithClaudeAi: W }), A());
       },
       {
         context: "Confirmation",
@@ -214980,10 +214980,10 @@ function Yz6({
         });
         return;
       }
-      (n("tengu_oauth_manual_entry", {}),
+      (emitEvent("tengu_oauth_manual_entry", {}),
         P.handleManualAuthCodeInput({ authorizationCode: g, state: u }));
     } catch (g) {
-      ($6(g instanceof Error ? g : Error(String(g))),
+      (sendError(g instanceof Error ? g : Error(String(g))),
         j({
           state: "error",
           message: g.message,
@@ -214993,7 +214993,7 @@ function Yz6({
   }
   let S = G7.useCallback(async () => {
       try {
-        n("tengu_oauth_flow_start", { loginWithClaudeAi: W });
+        emitEvent("tengu_oauth_flow_start", { loginWithClaudeAi: W });
         let h = await P.startOAuthFlow(
           async (F) => {
             (j({ state: "waiting_for_login", url: F }),
@@ -215018,7 +215018,7 @@ function Yz6({
                   ? { state: "ready_to_start" }
                   : { state: "idle" },
             }),
-            n("tengu_oauth_token_exchange_error", { error: F.message }),
+            emitEvent("tengu_oauth_token_exchange_error", { error: F.message }),
             F
           );
         });
@@ -215041,7 +215041,7 @@ function Yz6({
           message: F,
           toRetry: { state: K === "setup-token" ? "ready_to_start" : "idle" },
         }),
-          n("tengu_oauth_error", { error: F }));
+          emitEvent("tengu_oauth_error", { error: F }));
       }
     }, [P, f, W, K, _]),
     I = G7.useRef(!1);
@@ -215055,7 +215055,7 @@ function Yz6({
     G7.useEffect(() => {
       if (K === "setup-token" && H.state === "success") {
         let h = setTimeout(async () => {
-          (n("tengu_oauth_success", { loginWithClaudeAi: W }), A());
+          (emitEvent("tengu_oauth_success", { loginWithClaudeAi: W }), A());
         }, 500);
         return () => clearTimeout(h);
       }
@@ -215136,11 +215136,11 @@ function Yz6({
               onCancel: () => {},
               onChange: (h) => {
                 if (h === "platform")
-                  (n("tengu_oauth_platform_selected", {}),
+                  (emitEvent("tengu_oauth_platform_selected", {}),
                     j({ state: "platform_setup" }));
                 else if ((j({ state: "ready_to_start" }), h === "claudeai"))
-                  (n("tengu_oauth_claudeai_selected", {}), G(!0));
-                else (n("tengu_oauth_console_selected", {}), G(!1));
+                  (emitEvent("tengu_oauth_claudeai_selected", {}), G(!0));
+                else (emitEvent("tengu_oauth_console_selected", {}), G(!1));
               },
             }),
           ),
@@ -215423,8 +215423,8 @@ var wc6 = E(() => {
   G7 = Y6(W6(), 1);
 });
 function a66() {
-  let A = T1((K) => K.mainLoopModel),
-    q = T1((K) => K.mainLoopModelForSession);
+  let A = useAppState((K) => K.mainLoopModel),
+    q = useAppState((K) => K.mainLoopModelForSession);
   return ti4.useMemo(() => {
     return O5(q ?? A ?? jF());
   }, [q, A]);
@@ -215436,7 +215436,7 @@ var _c6 = E(() => {
   ti4 = Y6(W6(), 1);
 });
 function ei4() {
-  let A = T1((K) => K.toolPermissionContext),
+  let A = useAppState((K) => K.toolPermissionContext),
     q = tA();
   NI8.useEffect(() => {
     if (Eq()) return;
@@ -215444,7 +215444,7 @@ function ei4() {
   }, []);
 }
 function An4() {
-  let A = T1((K) => K.toolPermissionContext),
+  let A = useAppState((K) => K.toolPermissionContext),
     q = tA();
   NI8.useEffect(() => {
     if (Eq()) return;
@@ -215494,7 +215494,7 @@ async function CBY(A, q) {
   });
 }
 function bf6(A) {
-  let q = w6(21),
+  let q = reactMemoCache(21),
     K = a66(),
     Y;
   if (q[0] !== K || q[1] !== A)
@@ -215614,7 +215614,7 @@ async function cT1() {
           value: "Please contact your admin to manage extra usage settings.",
         };
     } catch (w) {
-      $6(w);
+      sendError(w);
     }
     try {
       let w = await zn4("limit_increase", ["pending", "dismissed"]);
@@ -215625,7 +215625,7 @@ async function cT1() {
             "You have already submitted a request for extra usage to your admin.",
         };
     } catch (w) {
-      $6(w);
+      sendError(w);
     }
     try {
       return (
@@ -215638,7 +215638,7 @@ async function cT1() {
         }
       );
     } catch (w) {
-      $6(w);
+      sendError(w);
     }
     return {
       type: "message",
@@ -215653,7 +215653,7 @@ async function cT1() {
     return { type: "browser-opened", url: z, opened: w };
   } catch (w) {
     return (
-      $6(w),
+      sendError(w),
       {
         type: "message",
         value: `Failed to open browser. Please visit ${z} to manage extra usage.`,
@@ -215759,7 +215759,7 @@ function hBY({
   return "/upgrade or /extra-usage to finish what you’re working on.";
 }
 function Xn4(A) {
-  let q = w6(16),
+  let q = reactMemoCache(16),
     { text: K, onOpenRateLimitOptions: Y } = A,
     z;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -215858,7 +215858,7 @@ var Mn4 = E(() => {
   ((Oc6 = Y6(W6(), 1)), (lT1 = Y6(W6(), 1)));
 });
 function IBY() {
-  let A = w6(2),
+  let A = reactMemoCache(2),
     q;
   if (A[0] === Symbol.for("react.memo_cache_sentinel"))
     ((q = m$4()), (A[0] = q));
@@ -215886,7 +215886,7 @@ function IBY() {
   return Y;
 }
 function Pn4(A) {
-  let q = w6(25),
+  let q = reactMemoCache(25),
     { param: K, addMargin: Y, shouldShowDot: z, onOpenRateLimitOptions: w } = A,
     { text: _ } = K;
   if (iT1(_)) return null;
@@ -216130,7 +216130,7 @@ var Wn4 = E(() => {
   Xz = Y6(W6(), 1);
 });
 function nT1(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { param: K, addMargin: Y } = A,
     { text: z } = K,
     w;
@@ -216186,7 +216186,7 @@ var RI8 = E(() => {
   sl = Y6(W6(), 1);
 });
 function Gn4(A) {
-  let q = w6(19),
+  let q = reactMemoCache(19),
     { addMargin: K, param: Y } = A,
     { text: z } = Y,
     w;
@@ -216203,7 +216203,7 @@ function Gn4(A) {
     let W = K ? 1 : 0,
       G;
     if (q[4] === Symbol.for("react.memo_cache_sentinel"))
-      ((G = dP.createElement(T, { color: "subtle" }, a6.pointer, " ")),
+      ((G = dP.createElement(T, { color: "subtle" }, figures.pointer, " ")),
         (q[4] = G));
     else G = q[4];
     let Z;
@@ -216238,7 +216238,7 @@ function Gn4(A) {
     D = K ? 1 : 0,
     X;
   if (q[13] === Symbol.for("react.memo_cache_sentinel"))
-    ((X = dP.createElement(T, { color: "subtle" }, a6.pointer, " ")),
+    ((X = dP.createElement(T, { color: "subtle" }, figures.pointer, " ")),
       (q[13] = X));
   else X = q[13];
   let M;
@@ -216289,7 +216289,7 @@ var Tn4 = E(() => {
   e3();
 });
 function Vn4(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { text: K } = A,
     { columns: Y } = zA(),
     z = Y - 4,
@@ -216309,7 +216309,7 @@ function Vn4(A) {
   let $ = _,
     O;
   if (q[4] === Symbol.for("react.memo_cache_sentinel"))
-    ((O = zz6.createElement(T, { color: "subtle" }, a6.pointer, " ")),
+    ((O = zz6.createElement(T, { color: "subtle" }, figures.pointer, " ")),
       (q[4] = O));
   else O = q[4];
   let H;
@@ -216336,11 +216336,11 @@ var vn4 = E(() => {
   zz6 = Y6(W6(), 1);
 });
 function kn4(A) {
-  let q = w6(6),
+  let q = reactMemoCache(6),
     { addMargin: K, param: Y } = A,
     { text: z } = Y,
     { columns: w } = zA();
-  if (!z) return ($6(Error("No content found in user prompt message")), null);
+  if (!z) return (sendError(Error("No content found in user prompt message")), null);
   let _ = K ? 1 : 0,
     $ = w - 4,
     O;
@@ -216382,7 +216382,7 @@ function xBY() {
   return yn4.sample(["Got it.", "Good to know.", "Noted."]);
 }
 function Rn4(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { text: K, addMargin: Y } = A,
     z;
   if (q[0] !== K) ((z = zq(K, "user-memory-input")), (q[0] = K), (q[1] = z));
@@ -216453,7 +216453,7 @@ var Cn4 = E(() => {
   ((DE = Y6(W6(), 1)), (yn4 = Y6(Ln4(), 1)));
 });
 function Jc6(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { elapsedTimeSeconds: K, timeoutMs: Y } = A;
   if (K === void 0 && !Y) return null;
   let z;
@@ -216516,7 +216516,7 @@ function uBY(A) {
   return { cleanedStderr: A.replace(Sn4, "").trim(), cwdResetWarning: K };
 }
 function wz6(A) {
-  let q = w6(34),
+  let q = reactMemoCache(34),
     { content: K, verbose: Y, timeoutMs: z } = A,
     {
       stdout: w,
@@ -216692,7 +216692,7 @@ var oT1 = E(() => {
   ((qT = Y6(W6(), 1)), (Sn4 = /(?:^|\n)(Shell cwd was reset to .+)$/));
 });
 function hn4(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { content: K, verbose: Y } = A,
     z;
   if (q[0] !== K) ((z = zq(K, "bash-stdout") ?? ""), (q[0] = K), (q[1] = z));
@@ -216724,7 +216724,7 @@ var In4 = E(() => {
   hI8 = Y6(W6(), 1);
 });
 function bn4(A) {
-  let q = w6(4),
+  let q = reactMemoCache(4),
     { content: K } = A,
     Y,
     z;
@@ -216757,7 +216757,7 @@ function bn4(A) {
   return Y;
 }
 function xn4(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { children: K, isError: Y } = A,
     z = Y ? "error" : "text",
     w;
@@ -216793,7 +216793,7 @@ var un4 = E(() => {
   cP = Y6(W6(), 1);
 });
 function mBY(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { request: K } = A,
     Y;
   if (q[0] !== K.from)
@@ -216847,7 +216847,7 @@ function mBY(A) {
   return w;
 }
 function BBY(A) {
-  let q = w6(8),
+  let q = reactMemoCache(8),
     { response: K } = A,
     Y;
   if (q[0] !== K.from)
@@ -216941,7 +216941,7 @@ var II8 = E(() => {
   az = Y6(W6(), 1);
 });
 function gBY(A) {
-  let q = w6(11),
+  let q = reactMemoCache(11),
     { assignment: K } = A,
     Y;
   if (q[0] !== K.assignedBy || q[1] !== K.taskId)
@@ -217027,7 +217027,7 @@ var xI8 = E(() => {
   hX = Y6(W6(), 1);
 });
 function FBY(A) {
-  let q = w6(10),
+  let q = reactMemoCache(10),
     { request: K } = A,
     Y;
   if (q[0] !== K.from)
@@ -217094,7 +217094,7 @@ function FBY(A) {
   return _;
 }
 function pBY(A) {
-  let q = w6(13),
+  let q = reactMemoCache(13),
     { response: K, senderName: Y } = A;
   if (K.approved) {
     let O;
@@ -217319,7 +217319,7 @@ function Qn4({ addMargin: A, param: { text: q }, isTranscriptMode: K }) {
         return Q5.createElement(
           m,
           { key: w, flexDirection: "column", marginTop: 1 },
-          Q5.createElement(T, { color: _ }, `@${$}${a6.pointer}`),
+          Q5.createElement(T, { color: _ }, `@${$}${figures.pointer}`),
           Q5.createElement(
             ScrollableContent,
             null,
@@ -217348,7 +217348,7 @@ function Qn4({ addMargin: A, param: { text: q }, isTranscriptMode: K }) {
   );
 }
 function iBY(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     {
       displayName: K,
       inkColor: Y,
@@ -217356,7 +217356,7 @@ function iBY(A) {
       summary: w,
       isTranscriptMode: _,
     } = A,
-    $ = `@${K}${a6.pointer}`,
+    $ = `@${K}${figures.pointer}`,
     O;
   if (q[0] !== Y || q[1] !== $)
     ((O = Q5.createElement(T, { color: Y }, $)),
@@ -217426,7 +217426,7 @@ function nBY(A) {
   }
 }
 function dn4(A) {
-  let q = w6(12),
+  let q = reactMemoCache(12),
     { addMargin: K, param: Y } = A,
     { text: z } = Y,
     w;
@@ -217502,7 +217502,7 @@ function oBY(A) {
   return A;
 }
 function ln4(A) {
-  let q = w6(12),
+  let q = reactMemoCache(12),
     { addMargin: K, param: Y } = A,
     { text: z } = Y,
     w,
@@ -217568,7 +217568,7 @@ var in4 = E(() => {
   KT = Y6(W6(), 1);
 });
 function sT1(A) {
-  let q = w6(6),
+  let q = reactMemoCache(6),
     { addMargin: K, planContent: Y } = A,
     z = K ? 1 : 0,
     w;
@@ -217611,7 +217611,7 @@ var uI8 = E(() => {
   tl = Y6(W6(), 1);
 });
 function $z6(A) {
-  let q = w6(31),
+  let q = reactMemoCache(31),
     {
       addMargin: K,
       param: Y,
@@ -217762,7 +217762,7 @@ var tT1 = E(() => {
 });
 import { pathToFileURL as sBY } from "url";
 function eT1(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { imageId: K, addMargin: Y } = A,
     z = K ? `[Image #${K}]` : "[Image]",
     w;
@@ -217804,7 +217804,7 @@ var mI8 = E(() => {
   xx = Y6(W6(), 1);
 });
 function AN1(A) {
-  let q = w6(11),
+  let q = reactMemoCache(11),
     {
       param: K,
       addMargin: Y,
@@ -217880,7 +217880,7 @@ var BI8 = E(() => {
   Oz6 = Y6(W6(), 1);
 });
 function nn4(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     { addMargin: K } = A,
     z = (K === void 0 ? !1 : K) ? 1 : 0,
     w;
@@ -217908,7 +217908,7 @@ var rn4 = E(() => {
 });
 import { relative as tBY } from "path";
 function on4(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     { attachment: K, verbose: Y } = A,
     z = MK("app:toggleTranscript", "Global", "ctrl+o");
   if (K.files.length === 0) return null;
@@ -218052,7 +218052,7 @@ var bx = E(() => {
 });
 import { basename as KgY, sep as YgY } from "path";
 function sn4({ attachment: A, addMargin: q, verbose: K, isTranscriptMode: Y }) {
-  let z = T1((w) => w.tasks);
+  let z = useAppState((w) => w.tasks);
   if (D7() && A.type === "teammate_mailbox") {
     let w = A.messages.filter((_) => {
       if (cf(_.text)) return !1;
@@ -218435,7 +218435,7 @@ function sn4({ attachment: A, addMargin: q, verbose: K, isTranscriptMode: Y }) {
   }
 }
 function zgY(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     {
       displayName: K,
       inkColor: Y,
@@ -218443,7 +218443,7 @@ function zgY(A) {
       summary: w,
       isTranscriptMode: _,
     } = A,
-    $ = `@${K}${a6.pointer}`,
+    $ = `@${K}${figures.pointer}`,
     O;
   if (q[0] !== Y || q[1] !== $)
     ((O = d7.default.createElement(T, { color: Y }, $)),
@@ -218496,7 +218496,7 @@ function zgY(A) {
   return D;
 }
 function bD(A) {
-  let q = w6(4),
+  let q = reactMemoCache(4),
     { dimColor: K, children: Y, color: z } = A,
     w = K === void 0 ? !0 : K,
     _;
@@ -218535,7 +218535,7 @@ var tn4 = E(() => {
   d7 = Y6(W6(), 1);
 });
 function en4(A) {
-  let q = w6(18),
+  let q = reactMemoCache(18),
     { message: K } = A,
     { retryAttempt: Y, error: z, retryInMs: w, maxRetries: _ } = K,
     [$, O] = qN1.useState(0),
@@ -218618,7 +218618,7 @@ function lP(A) {
   return !0;
 }
 function qr4(A) {
-  let q = w6(23),
+  let q = reactMemoCache(23),
     { message: K, addMargin: Y, verbose: z, isTranscriptMode: w } = A;
   if (K.subtype === "turn_duration") {
     let D;
@@ -218726,7 +218726,7 @@ function qr4(A) {
   return J;
 }
 function _gY(A) {
-  let q = w6(46),
+  let q = reactMemoCache(46),
     { message: K, addMargin: Y, verbose: z, isTranscriptMode: w } = A,
     {
       hookCount: _,
@@ -218907,7 +218907,7 @@ function HgY(A, q) {
   return A + (q.durationMs ?? 0);
 }
 function jgY(A) {
-  let q = w6(17),
+  let q = reactMemoCache(17),
     { content: K, addMargin: Y, dot: z, color: w, dimColor: _ } = A,
     { columns: $ } = zA(),
     O = Y ? 1 : 0,
@@ -218960,7 +218960,7 @@ function jgY(A) {
   return M;
 }
 function JgY(A) {
-  let q = w6(14),
+  let q = reactMemoCache(14),
     { message: K, addMargin: Y } = A,
     [z] = FI8.useState(DgY),
     w = a_(),
@@ -219029,7 +219029,7 @@ function DgY() {
   return x0(HZ6) ?? "Worked";
 }
 function XgY(A) {
-  let q = w6(7),
+  let q = reactMemoCache(7),
     { message: K, addMargin: Y } = A,
     z = Y ? 1 : 0,
     w;
@@ -219090,7 +219090,7 @@ var Kr4 = E(() => {
   ((k7 = Y6(W6(), 1)), (FI8 = Y6(W6(), 1)));
 });
 function Yr4() {
-  let A = w6(2),
+  let A = reactMemoCache(2),
     q = MK("app:toggleTranscript", "Global", "ctrl+o"),
     K;
   if (A[0] !== q)
@@ -219148,7 +219148,7 @@ function wr4({
 }
 var _r4 = () => {};
 function PgY(A) {
-  let q = w6(23),
+  let q = reactMemoCache(23),
     {
       content: K,
       tools: Y,
@@ -219276,7 +219276,7 @@ function $r4({
       memoryWriteCount: D,
       messages: X,
     } = A,
-    [M] = E7(),
+    [M] = useTheme(),
     { columns: P } = zA(),
     W = $Z6(A).some((u) => w.erroredToolUseIDs.has(u)),
     G = j > 0 || J > 0 || D > 0,
@@ -219518,7 +219518,7 @@ var Or4 = E(() => {
   q9 = Y6(W6(), 1);
 });
 function Hr4(A) {
-  let q = w6(24),
+  let q = reactMemoCache(24),
     { message: K, screen: Y } = A,
     z = Y === "transcript",
     w;
@@ -219800,7 +219800,7 @@ function WgY({
   }
 }
 function GgY(A) {
-  let q = w6(19),
+  let q = reactMemoCache(19),
     {
       message: K,
       addMargin: Y,
@@ -219895,7 +219895,7 @@ function GgY(A) {
   }
 }
 function ZgY(A) {
-  let q = w6(27),
+  let q = reactMemoCache(27),
     {
       param: K,
       addMargin: Y,
@@ -220024,7 +220024,7 @@ function ZgY(A) {
       return N;
     }
     default:
-      return ($6(Error(`Unable to render message type: ${K.type}`)), null);
+      return (sendError(Error(`Unable to render message type: ${K.type}`)), null);
   }
 }
 function fgY(A, q) {
@@ -220061,7 +220061,7 @@ var uf6 = E(() => {
   HC = U5.memo(WgY, fgY);
 });
 function Jr4(A) {
-  let q = w6(33),
+  let q = reactMemoCache(33),
     {
       agentType: K,
       description: Y,
@@ -220238,7 +220238,7 @@ function TgY(A, q, K) {
   }
 }
 function Mc6(A) {
-  let q = w6(3),
+  let q = reactMemoCache(3),
     { prompt: K, dim: Y } = A,
     z;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -220259,7 +220259,7 @@ function Mc6(A) {
   return w;
 }
 function pI8(A) {
-  let q = w6(5),
+  let q = reactMemoCache(5),
     { content: K } = A,
     Y;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
@@ -220285,7 +220285,7 @@ function vgY(A, q) {
   );
 }
 function kgY(A) {
-  let q = w6(15),
+  let q = reactMemoCache(15),
     { progressMessages: K, tools: Y, verbose: z } = A,
     w;
   if (q[0] !== K) ((w = Pc6(K.filter(ygY).map(LgY))), (q[0] = K), (q[1] = w));
@@ -221014,14 +221014,14 @@ function wN1(A, q, K, Y, z) {
       for (let H of O.hooks) {
         let j = H.once
           ? () => {
-              (y(`Removing one-shot hook for event ${_} in skill '${Y}'`),
+              (writeDebugLog(`Removing one-shot hook for event ${_} in skill '${Y}'`),
                 eX4(A, q, _, H));
             }
           : void 0;
         (wW1(A, q, _, O.matcher || "", H, j, z), w++);
       }
   }
-  if (w > 0) y(`Registered ${w} hooks from skill '${Y}'`);
+  if (w > 0) writeDebugLog(`Registered ${w} hooks from skill '${Y}'`);
 }
 var lI8 = E(() => {
   iJ6();
@@ -221051,7 +221051,7 @@ var ON1 = E(() => {
 import { randomUUID as yr4 } from "crypto";
 async function xgY(A, q, K, Y, z, w) {
   let _ = oh();
-  n("tengu_slash_command_forked", { command_name: A.name });
+  emitEvent("tengu_slash_command_forked", { command_name: A.name });
   let {
       skillContent: $,
       modifiedGetAppState: O,
@@ -221059,7 +221059,7 @@ async function xgY(A, q, K, Y, z, w) {
       promptMessages: j,
     } = await jN1(A, q, K),
     J = [];
-  y(`Executing forked slash command /${A.name} with agent ${H.agentType}`);
+  writeDebugLog(`Executing forked slash command /${A.name} with agent ${H.agentType}`);
   let D = [],
     X = `forked-command-${A.name}`,
     M = 0,
@@ -221120,7 +221120,7 @@ async function xgY(A, q, K, Y, z, w) {
   }
   let G = JN1(J, "Command completed");
   return (
-    y(`Forked slash command /${A.name} completed with agent ${_}`),
+    writeDebugLog(`Forked slash command /${A.name} completed with agent ${_}`),
     {
       messages: [
         K8({
@@ -221147,7 +221147,7 @@ function bgY(A) {
 async function Rr4(A, q, K, Y, z, w, _, $, O) {
   let H = Vr4(A);
   if (!H) {
-    n("tengu_input_slash_missing", {});
+    emitEvent("tengu_input_slash_missing", {});
     let S = "Commands are in the form `/command [args]`";
     return {
       messages: [
@@ -221167,7 +221167,7 @@ async function Rr4(A, q, K, Y, z, w, _, $, O) {
       (await P1().stat(`/${j}`), (S = !0));
     } catch {}
     if (bgY(j) && !S) {
-      n("tengu_input_slash_invalid", { input: j });
+      emitEvent("tengu_input_slash_invalid", { input: j });
       let B = `Unknown skill: ${j}`;
       return {
         messages: [
@@ -221182,7 +221182,7 @@ async function Rr4(A, q, K, Y, z, w, _, $, O) {
     let I = yr4();
     return (
       Qk6(I),
-      n("tengu_input_prompt", {}),
+      emitEvent("tengu_input_prompt", {}),
       EX("user_prompt", {
         prompt_length: String(A.length),
         prompt: pP1(A),
@@ -221224,7 +221224,7 @@ async function Rr4(A, q, K, Y, z, w, _, $, O) {
         S.plugin_version = I.version;
     }
     return (
-      n("tengu_input_command", { ...S, ...{} }),
+      emitEvent("tengu_input_command", { ...S, ...{} }),
       {
         messages: [],
         shouldQuery: !1,
@@ -221247,7 +221247,7 @@ async function Rr4(A, q, K, Y, z, w, _, $, O) {
         A.startsWith("/private")
       )
     )
-      n("tengu_input_slash_invalid", { input: j });
+      emitEvent("tengu_input_slash_invalid", { input: j });
     return {
       messages: [ux(), ...M],
       shouldQuery: P,
@@ -221267,7 +221267,7 @@ async function Rr4(A, q, K, Y, z, w, _, $, O) {
     )
       v.plugin_version = S.version;
   }
-  n("tengu_input_command", { ...v, ...{} });
+  emitEvent("tengu_input_command", { ...v, ...{} });
   let L = M.length > 0 && M[0] && iR(M[0]);
   return {
     messages: P || M.every(nI8) || L ? M : [ux(), ...M],
@@ -221399,7 +221399,7 @@ async function ugY(A, q, K, Y, z, w, _, $, O) {
           };
         } catch (D) {
           return (
-            $6(D),
+            sendError(D),
             {
               messages: [
                 J,
@@ -221502,7 +221502,7 @@ async function Cr4(A, q, K, Y, z = []) {
 async function Sr4(A, q, K, Y = [], z = [], w) {
   let _ = await A.getPromptForCommand(q, K);
   if (A.hooks) {
-    let P = d1();
+    let P = getSessionId();
     wN1(
       K.setAppState,
       P,
@@ -221518,10 +221518,10 @@ async function Sr4(A, q, K, Y = [], z = [], w) {
 `);
   gA6(A.name, $, O, jz6()?.agentId ?? null);
   let H = mgY(A, q);
-  (y(`Metadata string for ${A.userFacingName()}:`),
-    y(`  ${H.substring(0, 200)}`));
+  (writeDebugLog(`Metadata string for ${A.userFacingName()}:`),
+    writeDebugLog(`  ${H.substring(0, 200)}`));
   let j = (H.match(/<command-message>/g) || []).length;
-  y(`  command-message tags in metadata: ${j}`);
+  writeDebugLog(`  command-message tags in metadata: ${j}`);
   let J = Ki(A.allowedTools ?? []),
     D = z.length > 0 || Y.length > 0 ? [...z, ...Y, ..._] : _,
     X = await zN1(
@@ -221543,7 +221543,7 @@ async function Sr4(A, q, K, Y = [], z = [], w) {
       wq({ type: "command_permissions", allowedTools: J, model: A.model }),
     ];
   return (
-    y(
+    writeDebugLog(
       `processPromptSlashCommand creating ${M.length} messages for ${A.userFacingName()}`,
     ),
     M.forEach((P, W) => {
@@ -221551,11 +221551,11 @@ async function Sr4(A, q, K, Y = [], z = [], w) {
         let G =
             typeof P.message.content === "string"
               ? P.message.content
-              : p6(P.message.content),
+              : trySafeStringify(P.message.content),
           Z = "isMeta" in P && P.isMeta ? " [META]" : "",
           f = G.substring(0, 200);
-        y(`  Message ${W + 1}${Z}: ${f}`);
-      } else if (P.type === "attachment") y(`  Message ${W + 1}: [ATTACHMENT]`);
+        writeDebugLog(`  Message ${W + 1}${Z}: ${f}`);
+      } else if (P.type === "attachment") writeDebugLog(`  Message ${W + 1}: [ATTACHMENT]`);
     }),
     {
       messages: M,
@@ -221611,7 +221611,7 @@ async function FgY(A, q) {
       H = !1;
     if (typeof _ === "string") {
       if (((O = _), ($ = $V(_)), !$)) {
-        y(`[Agent: ${A.agentType}] MCP server not found: ${_}`, {
+        writeDebugLog(`[Agent: ${A.agentType}] MCP server not found: ${_}`, {
           level: "warn",
         });
         continue;
@@ -221619,7 +221619,7 @@ async function FgY(A, q) {
     } else {
       let J = Object.entries(_);
       if (J.length !== 1) {
-        y(
+        writeDebugLog(
           `[Agent: ${A.agentType}] Invalid MCP server spec: expected exactly one key`,
           { level: "warn" },
         );
@@ -221633,11 +221633,11 @@ async function FgY(A, q) {
     if (j.type === "connected") {
       let J = await nk(j);
       (z.push(...J),
-        y(
+        writeDebugLog(
           `[Agent: ${A.agentType}] Connected to MCP server '${O}' with ${J.length} tools`,
         ));
     } else
-      y(
+      writeDebugLog(
         `[Agent: ${A.agentType}] Failed to connect to MCP server '${O}': ${j.type}`,
         { level: "warn" },
       );
@@ -221648,7 +221648,7 @@ async function FgY(A, q) {
         try {
           await _.cleanup();
         } catch ($) {
-          y(
+          writeDebugLog(
             `[Agent: ${A.agentType}] Error cleaning up MCP server '${_.name}': ${$}`,
             { level: "warn" },
           );
@@ -221686,7 +221686,7 @@ async function* jC({
     G = lJ1(A.model, K.options.mainLoopModel, H, W, A.agentType),
     Z = O?.agentId ? O.agentId : oh();
   if (_l()) {
-    let A6 = K.agentId ?? d1();
+    let A6 = K.agentId ?? getSessionId();
     eP1(Z, A.agentType, A6);
   }
   let N = [...(_ ? Zc6(_) : []), ...q],
@@ -221749,7 +221749,7 @@ async function* jC({
     for (let G6 of c) {
       let v6 = UgY(G6, A6, A);
       if (!v6) {
-        y(
+        writeDebugLog(
           `[Agent: ${A.agentType}] Warning: Skill '${G6}' specified in frontmatter was not found`,
           { level: "warn" },
         );
@@ -221757,7 +221757,7 @@ async function* jC({
       }
       let T6 = mx(v6, A6);
       if (T6.type !== "prompt") {
-        y(
+        writeDebugLog(
           `[Agent: ${A.agentType}] Warning: Skill '${G6}' is not a prompt-based skill`,
           { level: "warn" },
         );
@@ -221767,7 +221767,7 @@ async function* jC({
     }
     for (let { skillName: G6, skill: v6 } of D6) {
       let T6 = await v6.getPromptForCommand("", K);
-      y(`[Agent: ${A.agentType}] Preloaded skill '${G6}'`);
+      writeDebugLog(`[Agent: ${A.agentType}] Preloaded skill '${G6}'`);
       let z6 = iI8(G6, v6.progressMessage);
       N.push(K8({ content: [{ type: "text", text: z6 }, ...T6] }));
     }
@@ -221812,7 +221812,7 @@ async function* jC({
       forkContextMessages: N,
     });
   await Dz6(N, Z).catch((A6) =>
-    y(`Failed to record sidechain transcript: ${A6}`),
+    writeDebugLog(`Failed to record sidechain transcript: ${A6}`),
   );
   let q6 = N.length > 0 ? N[N.length - 1].uuid : null;
   try {
@@ -221836,7 +221836,7 @@ async function* jC({
       }
       if (A6.type === "attachment") {
         if (A6.attachment.type === "max_turns_reached") {
-          y(`[Agent
+          writeDebugLog(`[Agent
 : $
 {
   agentDefinition.agentType
@@ -221853,7 +221853,7 @@ async function* jC({
       }
       if (pgY(A6))
         (await Dz6([A6], Z, q6).catch((D6) =>
-          y(`Failed to record sidechain transcript: ${D6}`),
+          writeDebugLog(`Failed to record sidechain transcript: ${D6}`),
         ),
           (q6 = A6.uuid),
           yield A6);
@@ -222018,7 +222018,7 @@ function agY(A) {
     K = q.trim();
   if (/^\s*\t/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.INCOMPLETE_COMMANDS,
         subId: 1,
       }),
@@ -222030,7 +222030,7 @@ function agY(A) {
     );
   if (K.startsWith("-"))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.INCOMPLETE_COMMANDS,
         subId: 2,
       }),
@@ -222042,7 +222042,7 @@ function agY(A) {
     );
   if (/^\s*(&&|\|\||;|>>?|<)/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.INCOMPLETE_COMMANDS,
         subId: 3,
       }),
@@ -222160,7 +222160,7 @@ function egY(A) {
     let [, z, w, _] = Y;
     if (z === '"' && w && /\$\(|`|\$\{/.test(w))
       return (
-        n("tengu_bash_security_check_triggered", {
+        emitEvent("tengu_bash_security_check_triggered", {
           checkId: RY.GIT_COMMIT_SUBSTITUTION,
           subId: 1,
         }),
@@ -222176,7 +222176,7 @@ function egY(A) {
       };
     if (w && w.startsWith("-"))
       return (
-        n("tengu_bash_security_check_triggered", {
+        emitEvent("tengu_bash_security_check_triggered", {
           checkId: RY.OBFUSCATED_FLAGS,
           subId: 5,
         }),
@@ -222201,7 +222201,7 @@ function AFY(A) {
   if (K !== "jq") return { behavior: "passthrough", message: "Not jq" };
   if (/\bsystem\s*\(/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.JQ_SYSTEM_FUNCTION,
         subId: 1,
       }),
@@ -222218,7 +222218,7 @@ function AFY(A) {
     )
   )
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.JQ_FILE_ARGUMENTS,
         subId: 1,
       }),
@@ -222235,7 +222235,7 @@ function qFY(A) {
     K = "Command contains shell metacharacters (;, |, or &) in arguments";
   if (/(?:^|\s)["'][^"']*[;&][^"']*["'](?:\s|$)/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.SHELL_METACHARACTERS,
         subId: 1,
       }),
@@ -222253,7 +222253,7 @@ function qFY(A) {
     ].some((z) => z.test(q))
   )
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.SHELL_METACHARACTERS,
         subId: 2,
       }),
@@ -222265,7 +222265,7 @@ function qFY(A) {
     );
   if (/-regex\s+["'][^"']*[;&][^"']*["']/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.SHELL_METACHARACTERS,
         subId: 3,
       }),
@@ -222284,7 +222284,7 @@ function KFY(A) {
     /\$[A-Za-z_][A-Za-z0-9_]*\s*[|<>]/.test(q)
   )
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.DANGEROUS_VARIABLES,
         subId: 1,
       }),
@@ -222306,7 +222306,7 @@ function YFY(A) {
   for (let { pattern: K, message: Y } of cgY)
     if (K.test(q))
       return (
-        n("tengu_bash_security_check_triggered", {
+        emitEvent("tengu_bash_security_check_triggered", {
           checkId: RY.DANGEROUS_PATTERNS_COMMAND_SUBSTITUTION,
           subId: 1,
         }),
@@ -222318,7 +222318,7 @@ function hr4(A) {
   let { fullyUnquotedContent: q } = A;
   if (/</.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.DANGEROUS_PATTERNS_INPUT_REDIRECTION,
         subId: 1,
       }),
@@ -222330,7 +222330,7 @@ function hr4(A) {
     );
   if (/>/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.DANGEROUS_PATTERNS_OUTPUT_REDIRECTION,
         subId: 1,
       }),
@@ -222348,7 +222348,7 @@ function Ir4(A) {
     return { behavior: "passthrough", message: "No newlines" };
   if (/(?<![\s]\\)[\n\r]\s*\S/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.NEWLINES,
         subId: 1,
       }),
@@ -222367,7 +222367,7 @@ function zFY(A) {
   let { originalCommand: q } = A;
   if (/\$IFS|\$\{[^}]*IFS/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.IFS_INJECTION,
         subId: 1,
       }),
@@ -222383,7 +222383,7 @@ function wFY(A) {
   let { originalCommand: q } = A;
   if (/\/proc\/.*\/environ/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.PROC_ENVIRON_ACCESS,
         subId: 1,
       }),
@@ -222419,7 +222419,7 @@ function _FY(A) {
     return { behavior: "passthrough", message: "No command separators" };
   if (dgY(Y))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.MALFORMED_TOKEN_INJECTION,
         subId: 1,
       }),
@@ -222444,7 +222444,7 @@ function $FY(A) {
     };
   if (/\$'[^']*'/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.OBFUSCATED_FLAGS,
         subId: 5,
       }),
@@ -222455,7 +222455,7 @@ function $FY(A) {
     );
   if (/\$"[^"]*"/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.OBFUSCATED_FLAGS,
         subId: 6,
       }),
@@ -222466,7 +222466,7 @@ function $FY(A) {
     );
   if (/\$['"]{2}\s*-/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.OBFUSCATED_FLAGS,
         subId: 9,
       }),
@@ -222478,7 +222478,7 @@ function $FY(A) {
     );
   if (/(?:^|\s)(?:''|"")+\s*-/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.OBFUSCATED_FLAGS,
         subId: 7,
       }),
@@ -222517,7 +222517,7 @@ function $FY(A) {
       while (J < q.length && q[J] !== j) ((D += q[J]), J++);
       if (J < q.length && q[J] === j && D.startsWith("-"))
         return (
-          n("tengu_bash_security_check_triggered", {
+          emitEvent("tengu_bash_security_check_triggered", {
             checkId: RY.OBFUSCATED_FLAGS,
             subId: 4,
           }),
@@ -222545,7 +222545,7 @@ function $FY(A) {
       }
       if (J.includes('"') || J.includes("'"))
         return (
-          n("tengu_bash_security_check_triggered", {
+          emitEvent("tengu_bash_security_check_triggered", {
             checkId: RY.OBFUSCATED_FLAGS,
             subId: 1,
           }),
@@ -222558,7 +222558,7 @@ function $FY(A) {
   }
   if (/\s['"`]-/.test(A.fullyUnquotedContent))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.OBFUSCATED_FLAGS,
         subId: 2,
       }),
@@ -222569,7 +222569,7 @@ function $FY(A) {
     );
   if (/['"`]{2}-/.test(A.fullyUnquotedContent))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.OBFUSCATED_FLAGS,
         subId: 3,
       }),
@@ -222607,7 +222607,7 @@ function OFY(A) {
 function HFY(A) {
   if (OFY(A.originalCommand))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.BACKSLASH_ESCAPED_WHITESPACE,
       }),
       {
@@ -222644,7 +222644,7 @@ function JFY(A) {
 function DFY(A) {
   if (JFY(A.originalCommand))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.BACKSLASH_ESCAPED_OPERATORS,
       }),
       {
@@ -222687,7 +222687,7 @@ function XFY(A) {
       else if (w === 0) {
         if ($ === "," || ($ === "." && _ + 1 < z && q[_ + 1] === "."))
           return (
-            n("tengu_bash_security_check_triggered", {
+            emitEvent("tengu_bash_security_check_triggered", {
               checkId: RY.BRACE_EXPANSION,
               subId: 1,
             }),
@@ -222706,7 +222706,7 @@ function PFY(A) {
   let { originalCommand: q } = A;
   if (MFY.test(q))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.UNICODE_WHITESPACE,
       }),
       {
@@ -222721,7 +222721,7 @@ function WFY(A) {
   let { unquotedKeepQuoteChars: q } = A;
   if (/\S(?<!\$\{)#/.test(q))
     return (
-      n("tengu_bash_security_check_triggered", { checkId: RY.MID_WORD_HASH }),
+      emitEvent("tengu_bash_security_check_triggered", { checkId: RY.MID_WORD_HASH }),
       {
         behavior: "ask",
         message:
@@ -222770,7 +222770,7 @@ function GFY(A) {
         O = q.slice(w + 1, $ === -1 ? q.length : $);
       if (/['"]/.test(O))
         return (
-          n("tengu_bash_security_check_triggered", {
+          emitEvent("tengu_bash_security_check_triggered", {
             checkId: RY.COMMENT_QUOTE_DESYNC,
           }),
           {
@@ -222799,7 +222799,7 @@ function ZFY(A) {
   }
   if (lgY.has(w))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.ZSH_DANGEROUS_COMMANDS,
         subId: 1,
       }),
@@ -222810,7 +222810,7 @@ function ZFY(A) {
     );
   if (w === "fc" && /\s-\S*e/.test(Y))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.ZSH_DANGEROUS_COMMANDS,
         subId: 2,
       }),
@@ -222825,7 +222825,7 @@ function ZFY(A) {
 function Bx(A) {
   if (fFY.test(A))
     return (
-      n("tengu_bash_security_check_triggered", {
+      emitEvent("tengu_bash_security_check_triggered", {
         checkId: RY.CONTROL_CHARACTERS,
       }),
       {
@@ -226178,7 +226178,7 @@ function* Jx8(A) {
           type: "assistant",
           message: q.message,
           parent_tool_use_id: null,
-          session_id: d1(),
+          session_id: getSessionId(),
           uuid: q.uuid,
           error: q.error,
         };
@@ -226194,7 +226194,7 @@ function* Jx8(A) {
                 type: "assistant",
                 message: q.message,
                 parent_tool_use_id: A.parentToolUseID,
-                session_id: d1(),
+                session_id: getSessionId(),
                 uuid: q.uuid,
                 error: q.error,
               };
@@ -226204,7 +226204,7 @@ function* Jx8(A) {
                 type: "user",
                 message: q.message,
                 parent_tool_use_id: A.parentToolUseID,
-                session_id: d1(),
+                session_id: getSessionId(),
                 uuid: q.uuid,
                 isSynthetic: q.isMeta || q.isVisibleInTranscriptOnly,
                 tool_use_result: q.mcpMeta
@@ -226218,7 +226218,7 @@ function* Jx8(A) {
         A.data.type === "powershell_progress"
       ) {
         if (
-          !X1(process.env.CLAUDE_CODE_REMOTE) &&
+          !isTruthy(process.env.CLAUDE_CODE_REMOTE) &&
           !process.env.CLAUDE_CODE_CONTAINER_ID
         )
           break;
@@ -226239,7 +226239,7 @@ function* Jx8(A) {
               parent_tool_use_id: A.parentToolUseID,
               elapsed_time_seconds: A.data.elapsedTimeSeconds,
               task_id: A.data.taskId,
-              session_id: d1(),
+              session_id: getSessionId(),
               uuid: A.uuid,
             });
         }
@@ -226251,7 +226251,7 @@ function* Jx8(A) {
           type: "user",
           message: q.message,
           parent_tool_use_id: null,
-          session_id: d1(),
+          session_id: getSessionId(),
           uuid: q.uuid,
           isSynthetic: q.isMeta || q.isVisibleInTranscriptOnly,
           tool_use_result: q.mcpMeta
@@ -226283,7 +226283,7 @@ async function* qo4(A, q, K, Y) {
   if (w.behavior === "allow")
     if (w.updatedInput !== void 0) X = w.updatedInput;
     else
-      y(
+      writeDebugLog(
         `Orphaned permission for ${j}: updatedInput is undefined, falling back to original tool input`,
         { level: "warn" },
       );
@@ -226293,11 +226293,11 @@ async function* qo4(A, q, K, Y) {
       decisionReason: { type: "mode", mode: "default" },
     });
   if ((K.push(_), z)) await gx(K);
-  yield { ..._, session_id: d1(), parent_tool_use_id: null };
+  yield { ..._, session_id: getSessionId(), parent_tool_use_id: null };
   for await (let G of VN1([M], [_], P, Y))
     if (G.message) {
       if ((K.push(G.message), z)) await gx(K);
-      yield { ...G.message, session_id: d1(), parent_tool_use_id: null };
+      yield { ...G.message, session_id: getSessionId(), parent_tool_use_id: null };
     }
 }
 function Pz6(A, q, K = wpY) {
@@ -226310,13 +226310,13 @@ function Pz6(A, q, K = wpY) {
         if ($.type === "tool_use" && $.name === READ_TOOL_NAME) {
           let O = $.input;
           if (O?.file_path && O?.offset === void 0 && O?.limit === void 0) {
-            let H = Q4(O.file_path, q);
+            let H = resolveFilePath(O.file_path, q);
             z.set($.id, H);
           }
         } else if ($.type === "tool_use" && $.name === WRITE_TOOL_NAME) {
           let O = $.input;
           if (O?.file_path && O?.content) {
-            let H = Q4(O.file_path, q);
+            let H = resolveFilePath(O.file_path, q);
             w.set($.id, { filePath: H, content: O.content });
           }
         }
@@ -226397,22 +226397,22 @@ function LN1() {
   let A = process.env.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION;
   if (A === "false")
     return (
-      n("tengu_prompt_suggestion_init", { enabled: !1, source: "env" }),
+      emitEvent("tengu_prompt_suggestion_init", { enabled: !1, source: "env" }),
       !1
     );
   if (A === "1")
     return (
-      n("tengu_prompt_suggestion_init", { enabled: !0, source: "env" }),
+      emitEvent("tengu_prompt_suggestion_init", { enabled: !0, source: "env" }),
       !0
     );
   if (!jA("tengu_chomp_inflection", !0))
     return (
-      n("tengu_prompt_suggestion_init", { enabled: !1, source: "growthbook" }),
+      emitEvent("tengu_prompt_suggestion_init", { enabled: !1, source: "growthbook" }),
       !1
     );
   if (C7())
     return (
-      n("tengu_prompt_suggestion_init", {
+      emitEvent("tengu_prompt_suggestion_init", {
         enabled: !1,
         source: "non_interactive",
       }),
@@ -226420,7 +226420,7 @@ function LN1() {
     );
   if (D7() && T2())
     return (
-      n("tengu_prompt_suggestion_init", {
+      emitEvent("tengu_prompt_suggestion_init", {
         enabled: !1,
         source: "swarm_teammate",
       }),
@@ -226428,7 +226428,7 @@ function LN1() {
     );
   let q = U7()?.promptSuggestionEnabled !== !1;
   return (
-    n("tengu_prompt_suggestion_init", { enabled: q, source: "setting" }),
+    emitEvent("tengu_prompt_suggestion_init", { enabled: q, source: "setting" }),
     q
   );
 }
@@ -226492,7 +226492,7 @@ async function $o4(A) {
       nP("aborted", void 0, void 0, "cli");
       return;
     }
-    $6(Y instanceof Error ? Y : Error("Prompt suggestion generation failed"));
+    sendError(Y instanceof Error ? Y : Error("Prompt suggestion generation failed"));
   } finally {
     if (Wz6 === q) Wz6 = null;
   }
@@ -226610,7 +226610,7 @@ function Oo4(A, q, K, Y, z) {
   let w = Math.round((q.length / (A.length || 1)) * 100) / 100,
     _ = q === A,
     $ = Math.max(0, Date.now() - K);
-  n("tengu_prompt_suggestion", {
+  emitEvent("tengu_prompt_suggestion", {
     source: "sdk",
     outcome: _ ? "accepted" : "ignored",
     prompt_id: Y,
@@ -226623,7 +226623,7 @@ function Oo4(A, q, K, Y, z) {
 }
 function nP(A, q, K, Y) {
   let z = K ?? EN1();
-  n("tengu_prompt_suggestion", {
+  emitEvent("tengu_prompt_suggestion", {
     ...(Y && { source: Y }),
     outcome: "suppressed",
     reason: A,
@@ -226713,13 +226713,13 @@ async function TpY(A, q, K) {
     try {
       (await Zx8(jo4(_), { recursive: !0 }), await Ho4(w, _));
     } catch {
-      ((Y = !1), y(`[Speculation] Failed to copy ${z} to main`));
+      ((Y = !1), writeDebugLog(`[Speculation] Failed to copy ${z} to main`));
     }
   }
   return Y;
 }
 function CN1(A, q, K, Y, z, w, _) {
-  n("tengu_speculation", {
+  emitEvent("tengu_speculation", {
     speculation_id: A,
     outcome: q,
     duration_ms: Date.now() - K,
@@ -226822,7 +226822,7 @@ function fx8(A) {
   });
 }
 function Wx8() {
-  return (y("[Speculation] enabled=false"), !1);
+  return (writeDebugLog("[Speculation] enabled=false"), !1);
 }
 async function EpY(A, q, K, Y, z) {
   try {
@@ -226839,13 +226839,13 @@ async function EpY(A, q, K, Y, z) {
       { suggestion: j, generationRequestId: J } = await Mx8(O, H, Yi($));
     if (O.signal.aborted) return;
     if (Px8(j, H)) return;
-    (y(`[Speculation] Pipelined suggestion: "${j.slice(0, 50)}..."`),
+    (writeDebugLog(`[Speculation] Pipelined suggestion: "${j.slice(0, 50)}..."`),
       gf6(Y, () => ({
         pipelinedSuggestion: { text: j, promptId: H, generationRequestId: J },
       })));
   } catch (w) {
     if (w instanceof Error && w.name === "AbortError") return;
-    y(
+    writeDebugLog(
       `[Speculation] Pipelined suggestion failed: ${w instanceof Error ? w.message : String(w)}`,
     );
   }
@@ -226864,7 +226864,7 @@ async function Gx8(A, q, K, Y = !1, z) {
   try {
     await Zx8(j, { recursive: !0 });
   } catch {
-    y("[Speculation] Failed to create overlay directory");
+    writeDebugLog("[Speculation] Failed to create overlay directory");
     return;
   }
   let D = { current: q };
@@ -226884,7 +226884,7 @@ async function Gx8(A, q, K, Y = !1, z) {
       contextRef: D,
     },
   })),
-    y(`[Speculation] Starting speculation ${w}`));
+    writeDebugLog(`[Speculation] Starting speculation ${w}`));
   try {
     let X = await lR({
       promptMessages: [K8({ content: A })],
@@ -226904,7 +226904,7 @@ async function Gx8(A, q, K, Y = !1, z) {
               (N === "plan" && V)
             )
           ) {
-            y(`[Speculation] Stopping at file edit: ${M.name}`);
+            writeDebugLog(`[Speculation] Stopping at file edit: ${M.name}`);
             let L = "file_path" in P ? P.file_path : void 0;
             return (
               gf6(K, () => ({
@@ -226936,7 +226936,7 @@ async function Gx8(A, q, K, Y = !1, z) {
             if (MpY(V) || V.startsWith("..")) {
               if (W)
                 return (
-                  y(`[Speculation] Denied ${M.name}: path outside cwd: ${N}`),
+                  writeDebugLog(`[Speculation] Denied ${M.name}: path outside cwd: ${N}`),
                   yN1(
                     "Write outside cwd not allowed during speculation",
                     "speculation_write_outside_root",
@@ -226963,7 +226963,7 @@ async function Gx8(A, q, K, Y = !1, z) {
               P = { ...P, [f]: fz6(j, V) };
             } else if (H.current.has(V)) P = { ...P, [f]: fz6(j, V) };
             return (
-              y(`[Speculation] ${W ? "Write" : "Read"} ${N} -> ${P[f]}`),
+              writeDebugLog(`[Speculation] ${W ? "Write" : "Read"} ${N} -> ${P[f]}`),
               {
                 behavior: "allow",
                 updatedInput: P,
@@ -226989,7 +226989,7 @@ async function Gx8(A, q, K, Y = !1, z) {
             "command" in P && typeof P.command === "string" ? P.command : "";
           if (!f || TN1({ command: f }, SN1(f)).behavior !== "allow")
             return (
-              y(
+              writeDebugLog(
                 `[Speculation] Stopping at bash: ${f.slice(0, 50) || "missing command"}`,
               ),
               gf6(K, () => ({
@@ -227010,7 +227010,7 @@ async function Gx8(A, q, K, Y = !1, z) {
             },
           };
         }
-        y(`[Speculation] Stopping at denied tool: ${M.name}`);
+        writeDebugLog(`[Speculation] Stopping at denied tool: ${M.name}`);
         let Z = String(
           ("url" in P && P.url) ||
             ("file_path" in P && P.file_path) ||
@@ -227058,7 +227058,7 @@ async function Gx8(A, q, K, Y = !1, z) {
         outputTokens: X.totalUsage.output_tokens,
       },
     })),
-      y(`[Speculation] Complete: ${Tx8(O.current)} tools`),
+      writeDebugLog(`[Speculation] Complete: ${Tx8(O.current)} tools`),
       EpY(D.current, A, O.current, K, _));
   } catch (X) {
     if ((_.abort(), X instanceof Error && X.name === "AbortError")) {
@@ -227066,7 +227066,7 @@ async function Gx8(A, q, K, Y = !1, z) {
       return;
     }
     (Sc6(j),
-      $6(X instanceof Error ? X : Error("Speculation failed")),
+      sendError(X instanceof Error ? X : Error("Speculation failed")),
       CN1(w, "error", $, A.length, O.current, null, {
         error_type: X instanceof Error ? X.name : "Unknown",
         error_message: (X instanceof Error ? X.message : String(X)).slice(
@@ -227108,7 +227108,7 @@ async function LpY(A, q, K) {
         speculationSessionTimeSavedMs: P.speculationSessionTimeSavedMs + M,
       };
     }),
-    y(
+    writeDebugLog(
       X === null
         ? `[Speculation] Accept ${Y}: still running, using ${j.length} messages`
         : `[Speculation] Accept ${Y}: already complete`,
@@ -227127,12 +227127,12 @@ async function LpY(A, q, K) {
     };
     XpY(
       yO(),
-      p6(P) +
+      trySafeStringify(P) +
         `
 `,
       { mode: 384 },
     ).catch(() => {
-      y("[Speculation] Failed to write speculation-accept to transcript");
+      writeDebugLog("[Speculation] Failed to write speculation-accept to transcript");
     });
   }
   return { messages: j, boundary: X, timeSavedMs: M };
@@ -227150,7 +227150,7 @@ function Fx(A) {
       isPipelined: O,
     } = q.speculation;
     return (
-      y(`[Speculation] Aborting ${K}`),
+      writeDebugLog(`[Speculation] Aborting ${K}`),
       CN1(K, "aborted", z, _, $.current, w, {
         abort_reason: "user_typed",
         is_pipelined: O,
@@ -227198,7 +227198,7 @@ async function Jo4(A, q, K, Y, z) {
     let W = Pz6(H, $, k56);
     if (((_.current = vP6(_.current, W)), P)) w((G) => [...G, P]);
     if (
-      (y(
+      (writeDebugLog(
         `[Speculation] ${J?.boundary?.type ?? "incomplete"}, injected ${H.length} messages`,
       ),
       D && A.pipelinedSuggestion)
@@ -227208,7 +227208,7 @@ async function Jo4(A, q, K, Y, z) {
         promptId: Z,
         generationRequestId: f,
       } = A.pipelinedSuggestion;
-      (y(
+      (writeDebugLog(
         `[Speculation] Promoting pipelined suggestion: "${G.slice(0, 50)}..."`,
       ),
         K((V) => ({
@@ -227230,7 +227230,7 @@ async function Jo4(A, q, K, Y, z) {
     return { queryRequired: !D };
   } catch (w) {
     return (
-      $6(w instanceof Error ? w : Error("handleSpeculationAccept failed")),
+      sendError(w instanceof Error ? w : Error("handleSpeculationAccept failed")),
       CN1(
         A.id,
         "error",
@@ -227741,7 +227741,7 @@ var bN1 = E(() => {
   xN1 = Y6(W6(), 1);
 });
 function uN1(A) {
-  let q = w6(30),
+  let q = reactMemoCache(30),
     {
       output: K,
       fullOutput: Y,
@@ -228069,12 +228069,12 @@ function xpY(A, q, K, Y) {
       isBackgrounded: !0,
     };
   return (
-    y(`[LocalMainSessionTask] Registering task ${z} with description: ${A}`),
+    writeDebugLog(`[LocalMainSessionTask] Registering task ${z} with description: ${A}`),
     Uf(O, q),
     q((H) => {
       let j = z in H.tasks;
       return (
-        y(
+        writeDebugLog(
           `[LocalMainSessionTask] After registration, task ${z} exists in state: ${j}`,
         ),
         H
@@ -228197,7 +228197,7 @@ function ko4({
         }
         (w(O), Vo4(_, !0, Y));
       } catch (O) {
-        ($6(O instanceof Error ? O : Error(String(O))), Vo4(_, !1, Y));
+        (sendError(O instanceof Error ? O : Error(String(O))), Vo4(_, !1, Y));
       }
     })(),
     _
@@ -228268,11 +228268,11 @@ function Rx8(A, q) {
   (e2(A, q, (K) => {
     if (K.status !== "running" || !$i(K)) return K;
     try {
-      (y(`LocalBashTask ${A} kill requested`),
+      (writeDebugLog(`LocalBashTask ${A} kill requested`),
         K.shellCommand?.kill(),
         K.shellCommand?.cleanup());
     } catch (Y) {
-      $6(Y instanceof Error ? Y : Error(String(Y)));
+      sendError(Y instanceof Error ? Y : Error(String(Y)));
     }
     if ((K.unregisterCleanup?.(), K.cleanupTimeoutId))
       clearTimeout(K.cleanupTimeoutId);
@@ -228487,7 +228487,7 @@ var vz6 = E(() => {
   };
 });
 function gN1(A) {
-  let q = w6(9),
+  let q = reactMemoCache(9),
     K;
   if (q[0] !== A) ((K = A === void 0 ? {} : A), (q[0] = A), (q[1] = K));
   else K = q[1];
@@ -228512,7 +228512,7 @@ function gN1(A) {
   D8("task:background", $, O);
   let H = MK("task:background", "Task", "ctrl+b"),
     j = s8.terminal === "tmux" && H === "ctrl+b" ? "ctrl+b ctrl+b (twice)" : H;
-  if (X1(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS)) return null;
+  if (isTruthy(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS)) return null;
   let J;
   if (q[7] !== j)
     ((J = Q$.createElement(
@@ -228685,18 +228685,18 @@ function Fo4(A, q, K, Y) {
     $ = null;
   async function O() {
     if (_) return;
-    y(`[AgentSummary] Timer fired for agent ${q}`);
+    writeDebugLog(`[AgentSummary] Timer fired for agent ${q}`);
     try {
       let J = await cf6(q);
       if (!J || J.length < 3) {
-        y(
+        writeDebugLog(
           `[AgentSummary] Skipping summary for ${A}: not enough messages (${J?.length ?? 0})`,
         );
         return;
       }
       let D = Zc6(J),
         X = { ...K, forkContextMessages: D };
-      (y(`[AgentSummary] Forking for summary, ${D.length} messages in context`),
+      (writeDebugLog(`[AgentSummary] Forking for summary, ${D.length} messages in context`),
         (z = new AbortController()));
       let M = async () => ({
           behavior: "deny",
@@ -228716,20 +228716,20 @@ function Fo4(A, q, K, Y) {
       for (let W of P.messages) {
         if (W.type !== "assistant") continue;
         if (W.isApiErrorMessage) {
-          y(`[AgentSummary] Skipping API error message for ${A}`);
+          writeDebugLog(`[AgentSummary] Skipping API error message for ${A}`);
           continue;
         }
         let G = W.message.content.find((Z) => Z.type === "text");
         if (G?.type === "text" && G.text.trim()) {
           let Z = G.text.trim();
-          (y(`[AgentSummary] Summary result for ${A}: ${Z}`),
+          (writeDebugLog(`[AgentSummary] Summary result for ${A}: ${Z}`),
             ($ = Z),
             Mo4(A, Z, Y));
           break;
         }
       }
     } catch (J) {
-      if (!_ && J instanceof Error) $6(J);
+      if (!_ && J instanceof Error) sendError(J);
     } finally {
       if (((z = null), !_)) H();
     }
@@ -228739,7 +228739,7 @@ function Fo4(A, q, K, Y) {
     w = setTimeout(() => void O(), BpY);
   }
   function j() {
-    if ((y(`[AgentSummary] Stopping summarization for ${A}`), (_ = !0), w))
+    if ((writeDebugLog(`[AgentSummary] Stopping summarization for ${A}`), (_ = !0), w))
       (clearTimeout(w), (w = null));
     if (z) (z.abort(), (z = null));
   }
@@ -228824,7 +228824,7 @@ async function lpY(A) {
   } catch (Y) {
     if (Y.code === "ENOENT") return null;
     return (
-      y(
+      writeDebugLog(
         `[PermissionSync] Failed to read team file for ${A}: ${Y instanceof Error ? Y.message : String(Y)}`,
       ),
       null
@@ -228836,7 +228836,7 @@ async function Uo4(A) {
   if (!q) return null;
   let K = await lpY(q);
   if (!K)
-    return (y(`[PermissionSync] Team file not found for team: ${q}`), null);
+    return (writeDebugLog(`[PermissionSync] Team file not found for team: ${q}`), null);
   return (
     K.members.find((z) => z.agentId === K.leadAgentId)?.name || "team-lead"
   );
@@ -228845,7 +228845,7 @@ async function QN1(A) {
   let q = await Uo4(A.teamName);
   if (!q)
     return (
-      y(
+      writeDebugLog(
         "[PermissionSync] Cannot send permission request: leader name not found",
       ),
       !1
@@ -228865,21 +228865,21 @@ async function QN1(A) {
         q,
         {
           from: A.workerName,
-          text: p6(K),
+          text: trySafeStringify(K),
           timestamp: new Date().toISOString(),
           color: A.workerColor,
         },
         A.teamName,
       ),
-      y(
+      writeDebugLog(
         `[PermissionSync] Sent permission request ${A.id} to leader ${q} via mailbox`,
       ),
       !0
     );
   } catch (K) {
     return (
-      y(`[PermissionSync] Failed to send permission request via mailbox: ${K}`),
-      $6(K instanceof Error ? K : Error(String(K))),
+      writeDebugLog(`[PermissionSync] Failed to send permission request via mailbox: ${K}`),
+      sendError(K instanceof Error ? K : Error(String(K))),
       !1
     );
   }
@@ -228888,7 +228888,7 @@ async function UN1(A, q, K, Y) {
   let z = Y || $5();
   if (!z)
     return (
-      y(
+      writeDebugLog(
         "[PermissionSync] Cannot send permission response: team name not found",
       ),
       !1
@@ -228905,20 +228905,20 @@ async function UN1(A, q, K, Y) {
     return (
       await e5(
         A,
-        { from: _, text: p6(w), timestamp: new Date().toISOString() },
+        { from: _, text: trySafeStringify(w), timestamp: new Date().toISOString() },
         z,
       ),
-      y(
+      writeDebugLog(
         `[PermissionSync] Sent permission response for ${K} to worker ${A} via mailbox`,
       ),
       !0
     );
   } catch (w) {
     return (
-      y(
+      writeDebugLog(
         `[PermissionSync] Failed to send permission response via mailbox: ${w}`,
       ),
-      $6(w instanceof Error ? w : Error(String(w))),
+      sendError(w instanceof Error ? w : Error(String(w))),
       !1
     );
   }
@@ -228930,7 +228930,7 @@ async function co4(A, q, K) {
   let Y = K || $5();
   if (!Y)
     return (
-      y(
+      writeDebugLog(
         "[PermissionSync] Cannot send sandbox permission request: team name not found",
       ),
       !1
@@ -228938,7 +228938,7 @@ async function co4(A, q, K) {
   let z = await Uo4(Y);
   if (!z)
     return (
-      y(
+      writeDebugLog(
         "[PermissionSync] Cannot send sandbox permission request: leader name not found",
       ),
       !1
@@ -228948,7 +228948,7 @@ async function co4(A, q, K) {
     $ = fO();
   if (!w || !_)
     return (
-      y(
+      writeDebugLog(
         "[PermissionSync] Cannot send sandbox permission request: worker ID or name not found",
       ),
       !1
@@ -228964,20 +228964,20 @@ async function co4(A, q, K) {
     return (
       await e5(
         z,
-        { from: _, text: p6(O), timestamp: new Date().toISOString(), color: $ },
+        { from: _, text: trySafeStringify(O), timestamp: new Date().toISOString(), color: $ },
         Y,
       ),
-      y(
+      writeDebugLog(
         `[PermissionSync] Sent sandbox permission request ${q} for host ${A} to leader ${z} via mailbox`,
       ),
       !0
     );
   } catch (O) {
     return (
-      y(
+      writeDebugLog(
         `[PermissionSync] Failed to send sandbox permission request via mailbox: ${O}`,
       ),
-      $6(O instanceof Error ? O : Error(String(O))),
+      sendError(O instanceof Error ? O : Error(String(O))),
       !1
     );
   }
@@ -228986,7 +228986,7 @@ async function lo4(A, q, K, Y, z) {
   let w = z || $5();
   if (!w)
     return (
-      y(
+      writeDebugLog(
         "[PermissionSync] Cannot send sandbox permission response: team name not found",
       ),
       !1
@@ -228997,20 +228997,20 @@ async function lo4(A, q, K, Y, z) {
     return (
       await e5(
         A,
-        { from: $, text: p6(_), timestamp: new Date().toISOString() },
+        { from: $, text: trySafeStringify(_), timestamp: new Date().toISOString() },
         w,
       ),
-      y(
+      writeDebugLog(
         `[PermissionSync] Sent sandbox permission response for ${q} (host: ${K}, allow: ${Y}) to worker ${A} via mailbox`,
       ),
       !0
     );
   } catch (_) {
     return (
-      y(
+      writeDebugLog(
         `[PermissionSync] Failed to send sandbox permission response via mailbox: ${_}`,
       ),
-      $6(_ instanceof Error ? _ : Error(String(_))),
+      sendError(_ instanceof Error ? _ : Error(String(_))),
       !1
     );
   }
@@ -229049,13 +229049,13 @@ var lf6 = E(() => {
 });
 function dN1(A) {
   (if6.set(A.requestId, A),
-    y(
+    writeDebugLog(
       `[SwarmPermissionPoller] Registered callback for request ${A.requestId}`,
     ));
 }
 function io4(A) {
   (if6.delete(A),
-    y(`[SwarmPermissionPoller] Unregistered callback for request ${A}`));
+    writeDebugLog(`[SwarmPermissionPoller] Unregistered callback for request ${A}`));
 }
 function no4(A) {
   return if6.has(A);
@@ -229067,13 +229067,13 @@ function nf6(A) {
   let q = if6.get(A.requestId);
   if (!q)
     return (
-      y(
+      writeDebugLog(
         `[SwarmPermissionPoller] No callback registered for mailbox response ${A.requestId}`,
       ),
       !1
     );
   if (
-    (y(
+    (writeDebugLog(
       `[SwarmPermissionPoller] Processing mailbox response for request ${A.requestId}: ${A.decision}`,
     ),
     if6.delete(A.requestId),
@@ -229087,7 +229087,7 @@ function nf6(A) {
 }
 function oo4(A) {
   (Bc6.set(A.requestId, A),
-    y(
+    writeDebugLog(
       `[SwarmPermissionPoller] Registered sandbox callback for request ${A.requestId}`,
     ));
 }
@@ -229098,13 +229098,13 @@ function so4(A) {
   let q = Bc6.get(A.requestId);
   if (!q)
     return (
-      y(
+      writeDebugLog(
         `[SwarmPermissionPoller] No sandbox callback registered for request ${A.requestId}`,
       ),
       !1
     );
   return (
-    y(
+    writeDebugLog(
       `[SwarmPermissionPoller] Processing sandbox response for request ${A.requestId}: allow=${A.allow}`,
     ),
     Bc6.delete(A.requestId),
@@ -229333,7 +229333,7 @@ async function rpY(A, q, K, Y) {
 }
 async function Ya4(A, q, K, Y) {
   let z = gp6(A, Y);
-  await rpY(A, p6(z), q, K);
+  await rpY(A, trySafeStringify(z), q, K);
 }
 function opY(A) {
   return new Promise((q) => setTimeout(q, A));
@@ -229363,21 +229363,21 @@ async function za4(A, q) {
     if (!Y) return;
     let z = await RG8(A, Y.id, q);
     if (!z.success) {
-      y(`[inProcessRunner] Failed to claim task #${Y.id}: ${z.reason}`);
+      writeDebugLog(`[inProcessRunner] Failed to claim task #${Y.id}: ${z.reason}`);
       return;
     }
     return (
       await yI(A, Y.id, { status: "in_progress" }),
-      y(`[inProcessRunner] Claimed task #${Y.id}: ${Y.subject}`),
+      writeDebugLog(`[inProcessRunner] Claimed task #${Y.id}: ${Y.subject}`),
       spY(Y)
     );
   } catch (K) {
-    y(`[inProcessRunner] Error checking task list: ${K}`);
+    writeDebugLog(`[inProcessRunner] Error checking task list: ${K}`);
     return;
   }
 }
 async function tpY(A, q, K, Y, z, w) {
-  y(
+  writeDebugLog(
     `[inProcessRunner] ${A.agentName} starting poll loop (abort=${q.signal.aborted})`,
   );
   let $ = 0;
@@ -229404,7 +229404,7 @@ async function tpY(A, q, K, Y, z, w) {
             },
           };
         }),
-        y(
+        writeDebugLog(
           `[inProcessRunner] ${A.agentName} found pending user message (poll #${$})`,
         ),
         { type: "new_message", message: J, from: "user" }
@@ -229413,12 +229413,12 @@ async function tpY(A, q, K, Y, z, w) {
     if ($ > 0) await opY(500);
     if (($++, q.signal.aborted))
       return (
-        y(
+        writeDebugLog(
           `[inProcessRunner] ${A.agentName} aborted while waiting (poll #${$})`,
         ),
         { type: "aborted" }
       );
-    y(`[inProcessRunner] ${A.agentName} poll #${$}: checking mailbox`);
+    writeDebugLog(`[inProcessRunner] ${A.agentName} poll #${$}: checking mailbox`);
     try {
       let J = await lc(A.agentName, A.teamName),
         D = -1,
@@ -229437,7 +229437,7 @@ async function tpY(A, q, K, Y, z, w) {
         let P = J[D],
           W = J.slice(0, D).filter((G) => !G.read).length;
         return (
-          y(
+          writeDebugLog(
             `[inProcessRunner] ${A.agentName} received shutdown request from ${X?.from} (prioritized over ${W} unread messages)`,
           ),
           await mp6(A.agentName, A.teamName, D),
@@ -229457,7 +229457,7 @@ async function tpY(A, q, K, Y, z, w) {
         let P = J[M];
         if (P)
           return (
-            y(
+            writeDebugLog(
               `[inProcessRunner] ${A.agentName} received new message from ${P.from} (index ${M})`,
             ),
             await mp6(A.agentName, A.teamName, M),
@@ -229471,13 +229471,13 @@ async function tpY(A, q, K, Y, z, w) {
           );
       }
     } catch (J) {
-      y(`[inProcessRunner] ${A.agentName} poll error: ${J}`);
+      writeDebugLog(`[inProcessRunner] ${A.agentName} poll error: ${J}`);
     }
     let j = await za4(w, A.agentName);
     if (j) return { type: "new_message", message: j, from: "task-list" };
   }
   return (
-    y(
+    writeDebugLog(
       `[inProcessRunner] ${A.agentName} exiting poll loop (abort=${q.signal.aborted}, polls=${$})`,
     ),
     { type: "aborted" }
@@ -229500,7 +229500,7 @@ async function epY(A) {
       allowPermissionPrompts: X,
     } = A,
     { setAppState: M } = $;
-  y(`[inProcessRunner] Starting agent loop for ${q.agentId}`);
+  writeDebugLog(`[inProcessRunner] Starting agent loop for ${q.agentId}`);
   let P = {
       agentId: q.agentId,
       parentSessionId: q.parentSessionId,
@@ -229530,7 +229530,7 @@ async function epY(A) {
 # Custom Agent Instructions
 ${S}`);
       if (w.memory)
-        n("tengu_agent_memory_loaded", {
+        emitEvent("tengu_agent_memory_loaded", {
           ...{},
           scope: w.memory,
           source: "in-process-teammate",
@@ -229563,7 +229563,7 @@ ${S}`);
       M,
     );
     while (!O.signal.aborted && !V) {
-      y(
+      writeDebugLog(
         `[inProcessRunner] ${q.agentId} processing prompt: ${N.substring(0, 50)}...`,
       );
       let v = G3();
@@ -229573,7 +229573,7 @@ ${S}`);
         I = Z,
         B = countMessageTokens(Z);
       if (B > PQ6($.options.mainLoopModel)) {
-        y(`[inProcessRunner] ${q.agentId} compacting history (${B} tokens)`);
+        writeDebugLog(`[inProcessRunner] ${q.agentId} compacting history (${B} tokens)`);
         let A6 = {
             ...$,
             readFileState: Xc($.readFileState),
@@ -229639,11 +229639,11 @@ ${S}`);
               allowedTools: D,
             })) {
               if (O.signal.aborted) {
-                y(`[inProcessRunner] ${q.agentId} lifecycle aborted`);
+                writeDebugLog(`[inProcessRunner] ${q.agentId} lifecycle aborted`);
                 break;
               }
               if (v.signal.aborted) {
-                (y(
+                (writeDebugLog(
                   `[inProcessRunner] ${q.agentId} current work aborted (Escape pressed)`,
                 ),
                   (e = !0));
@@ -229691,7 +229691,7 @@ ${S}`);
       )
         break;
       if (e) {
-        y(`[inProcessRunner] ${q.agentId} work interrupted, returning to idle`);
+        writeDebugLog(`[inProcessRunner] ${q.agentId} work interrupted, returning to idle`);
         let A6 = kY({ content: U96 });
         Qx(K, (D6) => ({ ...D6, messages: [...(D6.messages ?? []), A6] }), M);
       }
@@ -229715,14 +229715,14 @@ ${S}`);
           summary: Up6(Z),
         });
       else
-        y(
+        writeDebugLog(
           `[inProcessRunner] Skipping duplicate idle notification for ${q.agentName}`,
         );
-      y(`[inProcessRunner] ${q.agentId} finished prompt, waiting for next`);
+      writeDebugLog(`[inProcessRunner] ${q.agentId} finished prompt, waiting for next`);
       let q6 = await tpY(q, O, K, $.getAppState, M, q.parentSessionId);
       switch (q6.type) {
         case "shutdown_request":
-          (y(
+          (writeDebugLog(
             `[inProcessRunner] ${q.agentId} received shutdown request - passing to model`,
           ),
             (N = Bx8(q6.request?.from || "team-lead", q6.originalMessage)),
@@ -229730,7 +229730,7 @@ ${S}`);
           break;
         case "new_message":
           if (
-            (y(
+            (writeDebugLog(
               `[inProcessRunner] ${q.agentId} received new message from ${q6.from}`,
             ),
             q6.from === "user")
@@ -229741,7 +229741,7 @@ ${S}`);
               MG1(K, K8({ content: N }), M));
           break;
         case "aborted":
-          (y(`[inProcessRunner] ${q.agentId} aborted while waiting`), (V = !0));
+          (writeDebugLog(`[inProcessRunner] ${q.agentId} aborted while waiting`), (V = !0));
           break;
       }
     }
@@ -229779,7 +229779,7 @@ ${S}`);
   } catch (v) {
     let L = v instanceof Error ? v.message : "Unknown error";
     return (
-      y(`[inProcessRunner] Agent ${q.agentId} failed: ${L}`),
+      writeDebugLog(`[inProcessRunner] Agent ${q.agentId} failed: ${L}`),
       Qx(
         K,
         (S) => {
@@ -229821,7 +229821,7 @@ ${S}`);
 }
 function lN1(A) {
   epY(A).catch((q) => {
-    y(`[inProcessRunner] Unhandled error in ${A.identity.agentId}: ${q}`);
+    writeDebugLog(`[inProcessRunner] Unhandled error in ${A.identity.agentId}: ${q}`);
   });
 }
 var ipY = 500;
@@ -229868,7 +229868,7 @@ class wa4 {
   async spawn(A) {
     if (!this.context)
       return (
-        y(`[InProcessBackend] spawn() called without context for ${A.name}`),
+        writeDebugLog(`[InProcessBackend] spawn() called without context for ${A.name}`),
         {
           success: !1,
           agentId: `${A.name}@${A.teamName}`,
@@ -229876,7 +229876,7 @@ class wa4 {
             "InProcessBackend not initialized. Call setContext() before spawn().",
         }
       );
-    y(`[InProcessBackend] spawn() called for ${A.name}`);
+    writeDebugLog(`[InProcessBackend] spawn() called for ${A.name}`);
     let q = await jZ6(
       {
         name: A.name,
@@ -229908,7 +229908,7 @@ class wa4 {
         allowedTools: A.permissions,
         allowPermissionPrompts: A.allowPermissionPrompts,
       }),
-        y(`[InProcessBackend] Started agent execution for ${q.agentId}`));
+        writeDebugLog(`[InProcessBackend] Started agent execution for ${q.agentId}`));
     return {
       success: q.success,
       agentId: q.agentId,
@@ -229918,13 +229918,13 @@ class wa4 {
     };
   }
   async sendMessage(A, q) {
-    y(
+    writeDebugLog(
       `[InProcessBackend] sendMessage() to ${A}: ${q.text.substring(0, 50)}...`,
     );
     let K = L96(A);
     if (!K)
       throw (
-        y(`[InProcessBackend] Invalid agentId format: ${A}`),
+        writeDebugLog(`[InProcessBackend] Invalid agentId format: ${A}`),
         Error(
           `Invalid agentId format: ${A}. Expected format: agentName@teamName`,
         )
@@ -229940,26 +229940,26 @@ class wa4 {
       },
       z,
     ),
-      y(`[InProcessBackend] sendMessage() completed for ${A}`));
+      writeDebugLog(`[InProcessBackend] sendMessage() completed for ${A}`));
   }
   async terminate(A, q) {
     if (
-      (y(`[InProcessBackend] terminate() called for ${A}: ${q}`), !this.context)
+      (writeDebugLog(`[InProcessBackend] terminate() called for ${A}: ${q}`), !this.context)
     )
       return (
-        y(`[InProcessBackend] terminate() failed: no context set for ${A}`),
+        writeDebugLog(`[InProcessBackend] terminate() failed: no context set for ${A}`),
         !1
       );
     let K = await this.context.getAppState(),
       Y = D66(A, K.tasks);
     if (!Y)
       return (
-        y(`[InProcessBackend] terminate() failed: task not found for ${A}`),
+        writeDebugLog(`[InProcessBackend] terminate() failed: task not found for ${A}`),
         !1
       );
     if (Y.shutdownRequested)
       return (
-        y(
+        writeDebugLog(
           `[InProcessBackend] terminate(): shutdown already requested for ${A}`,
         ),
         !0
@@ -229978,45 +229978,45 @@ class wa4 {
         Y.identity.teamName,
       ),
       fL8(Y.id, this.context.setAppState),
-      y(`[InProcessBackend] terminate() sent shutdown request to ${A}`),
+      writeDebugLog(`[InProcessBackend] terminate() sent shutdown request to ${A}`),
       !0
     );
   }
   async kill(A) {
-    if ((y(`[InProcessBackend] kill() called for ${A}`), !this.context))
+    if ((writeDebugLog(`[InProcessBackend] kill() called for ${A}`), !this.context))
       return (
-        y(`[InProcessBackend] kill() failed: no context set for ${A}`),
+        writeDebugLog(`[InProcessBackend] kill() failed: no context set for ${A}`),
         !1
       );
     let q = await this.context.getAppState(),
       K = D66(A, q.tasks);
     if (!K)
       return (
-        y(`[InProcessBackend] kill() failed: task not found for ${A}`),
+        writeDebugLog(`[InProcessBackend] kill() failed: task not found for ${A}`),
         !1
       );
     if (K.localTaskId) await QJ1(K.identity.teamName, K.localTaskId);
     let Y = DG1(K.id, this.context.setAppState);
     return (
-      y(`[InProcessBackend] kill() ${Y ? "succeeded" : "failed"} for ${A}`),
+      writeDebugLog(`[InProcessBackend] kill() ${Y ? "succeeded" : "failed"} for ${A}`),
       Y
     );
   }
   async isActive(A) {
-    if ((y(`[InProcessBackend] isActive() called for ${A}`), !this.context))
+    if ((writeDebugLog(`[InProcessBackend] isActive() called for ${A}`), !this.context))
       return (
-        y(`[InProcessBackend] isActive() failed: no context set for ${A}`),
+        writeDebugLog(`[InProcessBackend] isActive() failed: no context set for ${A}`),
         !1
       );
     let q = await this.context.getAppState(),
       K = D66(A, q.tasks);
     if (!K)
-      return (y(`[InProcessBackend] isActive(): task not found for ${A}`), !1);
+      return (writeDebugLog(`[InProcessBackend] isActive(): task not found for ${A}`), !1);
     let Y = K.status === "running",
       z = K.abortController?.signal.aborted ?? !0,
       w = Y && !z;
     return (
-      y(
+      writeDebugLog(
         `[InProcessBackend] isActive() for ${A}: ${w} (running=${Y}, aborted=${z})`,
       ),
       w
@@ -230098,19 +230098,19 @@ function Fx8() {
 function px8(A) {
   ((Uc6 = null),
     (kz6 = A),
-    y(`[TeammateModeSnapshot] CLI override cleared, new mode: ${A}`));
+    writeDebugLog(`[TeammateModeSnapshot] CLI override cleared, new mode: ${A}`));
 }
 function ja4() {
   if (Uc6)
     ((kz6 = Uc6),
-      y(`[TeammateModeSnapshot] Captured from CLI override: ${kz6}`));
+      writeDebugLog(`[TeammateModeSnapshot] Captured from CLI override: ${kz6}`));
   else
     ((kz6 = getSettings().teammateMode ?? "auto"),
-      y(`[TeammateModeSnapshot] Captured from config: ${kz6}`));
+      writeDebugLog(`[TeammateModeSnapshot] Captured from config: ${kz6}`));
 }
 function dc6() {
   if (kz6 === null)
-    ($6(
+    (sendError(
       Error(
         "getTeammateModeFromSnapshot called before capture - this indicates an initialization bug",
       ),
@@ -230191,7 +230191,7 @@ class Xa4 {
     let q = ok(A.name, A.teamName);
     if (!this.context)
       return (
-        y(`[PaneBackendExecutor] spawn() called without context for ${A.name}`),
+        writeDebugLog(`[PaneBackendExecutor] spawn() called without context for ${A.name}`),
         {
           success: !1,
           agentId: q,
@@ -230211,7 +230211,7 @@ class Xa4 {
           `--agent-name ${P4([A.name])}`,
           `--team-name ${P4([A.teamName])}`,
           `--agent-color ${P4([K])}`,
-          `--parent-session-id ${P4([A.parentSessionId || d1()])}`,
+          `--parent-session-id ${P4([A.parentSessionId || getSessionId()])}`,
           A.planModeRequired ? "--plan-mode-required" : "",
         ]
           .filter(Boolean)
@@ -230240,7 +230240,7 @@ class Xa4 {
         ((this.cleanupRegistered = !0),
           Xq(async () => {
             for (let [M, P] of this.spawnedTeammates)
-              (y(`[PaneBackendExecutor] Cleanup: killing pane for ${M}`),
+              (writeDebugLog(`[PaneBackendExecutor] Cleanup: killing pane for ${M}`),
                 await this.backend.killPane(P.paneId, !P.insideTmux));
             this.spawnedTeammates.clear();
           }));
@@ -230254,19 +230254,19 @@ class Xa4 {
           },
           A.teamName,
         ),
-        y(`[PaneBackendExecutor] Spawned teammate ${q} in pane ${Y}`),
+        writeDebugLog(`[PaneBackendExecutor] Spawned teammate ${q} in pane ${Y}`),
         { success: !0, agentId: q, paneId: Y }
       );
     } catch (K) {
       let Y = K instanceof Error ? K.message : String(K);
       return (
-        y(`[PaneBackendExecutor] Failed to spawn ${q}: ${Y}`),
+        writeDebugLog(`[PaneBackendExecutor] Failed to spawn ${q}: ${Y}`),
         { success: !1, agentId: q, error: Y }
       );
     }
   }
   async sendMessage(A, q) {
-    y(
+    writeDebugLog(
       `[PaneBackendExecutor] sendMessage() to ${A}: ${q.text.substring(0, 50)}...`,
     );
     let K = L96(A);
@@ -230285,14 +230285,14 @@ class Xa4 {
       },
       z,
     ),
-      y(`[PaneBackendExecutor] sendMessage() completed for ${A}`));
+      writeDebugLog(`[PaneBackendExecutor] sendMessage() completed for ${A}`));
   }
   async terminate(A, q) {
-    y(`[PaneBackendExecutor] terminate() called for ${A}: ${q}`);
+    writeDebugLog(`[PaneBackendExecutor] terminate() called for ${A}: ${q}`);
     let K = L96(A);
     if (!K)
       return (
-        y("[PaneBackendExecutor] terminate() failed: invalid agentId format"),
+        writeDebugLog("[PaneBackendExecutor] terminate() failed: invalid agentId format"),
         !1
       );
     let { agentName: Y, teamName: z } = K,
@@ -230305,19 +230305,19 @@ class Xa4 {
     return (
       await e5(
         Y,
-        { from: "team-lead", text: p6(w), timestamp: new Date().toISOString() },
+        { from: "team-lead", text: trySafeStringify(w), timestamp: new Date().toISOString() },
         z,
       ),
-      y(`[PaneBackendExecutor] terminate() sent shutdown request to ${A}`),
+      writeDebugLog(`[PaneBackendExecutor] terminate() sent shutdown request to ${A}`),
       !0
     );
   }
   async kill(A) {
-    y(`[PaneBackendExecutor] kill() called for ${A}`);
+    writeDebugLog(`[PaneBackendExecutor] kill() called for ${A}`);
     let q = this.spawnedTeammates.get(A);
     if (!q)
       return (
-        y(
+        writeDebugLog(
           `[PaneBackendExecutor] kill() failed: teammate ${A} not found in spawned map`,
         ),
         !1
@@ -230326,17 +230326,17 @@ class Xa4 {
       z = await this.backend.killPane(K, !Y);
     if (z)
       (this.spawnedTeammates.delete(A),
-        y(`[PaneBackendExecutor] kill() succeeded for ${A}`));
-    else y(`[PaneBackendExecutor] kill() failed for ${A}`);
+        writeDebugLog(`[PaneBackendExecutor] kill() succeeded for ${A}`));
+    else writeDebugLog(`[PaneBackendExecutor] kill() failed for ${A}`);
     return z;
   }
   async isActive(A) {
     if (
-      (y(`[PaneBackendExecutor] isActive() called for ${A}`),
+      (writeDebugLog(`[PaneBackendExecutor] isActive() called for ${A}`),
       !this.spawnedTeammates.get(A))
     )
       return (
-        y(`[PaneBackendExecutor] isActive(): teammate ${A} not found`),
+        writeDebugLog(`[PaneBackendExecutor] isActive(): teammate ${A} not found`),
         !1
       );
     return !0;
@@ -230359,20 +230359,20 @@ var Pa4 = E(() => {
 import { homedir as oN1 } from "os";
 async function Wa4() {
   if ((await M8("which", ["uv"])).code === 0)
-    return (y("[it2Setup] Found uv (will use uv tool install)"), "uvx");
+    return (writeDebugLog("[it2Setup] Found uv (will use uv tool install)"), "uvx");
   if ((await M8("which", ["pipx"])).code === 0)
-    return (y("[it2Setup] Found pipx package manager"), "pipx");
+    return (writeDebugLog("[it2Setup] Found pipx package manager"), "pipx");
   if ((await M8("which", ["pip"])).code === 0)
-    return (y("[it2Setup] Found pip package manager"), "pip");
+    return (writeDebugLog("[it2Setup] Found pip package manager"), "pip");
   if ((await M8("which", ["pip3"])).code === 0)
-    return (y("[it2Setup] Found pip3 package manager"), "pip");
-  return (y("[it2Setup] No Python package manager found"), null);
+    return (writeDebugLog("[it2Setup] Found pip3 package manager"), "pip");
+  return (writeDebugLog("[it2Setup] No Python package manager found"), null);
 }
 async function zQY() {
   return (await M8("which", ["it2"])).code === 0;
 }
 async function Ga4(A) {
-  y(`[it2Setup] Installing it2 using ${A}`);
+  writeDebugLog(`[it2Setup] Installing it2 using ${A}`);
   let q;
   switch (A) {
     case "uvx":
@@ -230392,17 +230392,17 @@ async function Ga4(A) {
   if (q.code !== 0) {
     let K = q.stderr || "Unknown installation error";
     return (
-      $6(Error(`[it2Setup] Failed to install it2: ${K}`)),
+      sendError(Error(`[it2Setup] Failed to install it2: ${K}`)),
       { success: !1, error: K, packageManager: A }
     );
   }
   return (
-    y("[it2Setup] it2 installed successfully"),
+    writeDebugLog("[it2Setup] it2 installed successfully"),
     { success: !0, packageManager: A }
   );
 }
 async function dx8() {
-  if ((y("[it2Setup] Verifying it2 setup..."), !(await zQY())))
+  if ((writeDebugLog("[it2Setup] Verifying it2 setup..."), !(await zQY())))
     return { success: !1, error: "it2 CLI is not installed or not in PATH" };
   let q = await M8("it2", ["session", "list"]);
   if (q.code !== 0) {
@@ -230414,7 +230414,7 @@ async function dx8() {
       K.includes("not enabled")
     )
       return (
-        y("[it2Setup] Python API not enabled in iTerm2"),
+        writeDebugLog("[it2Setup] Python API not enabled in iTerm2"),
         {
           success: !1,
           error: "Python API not enabled in iTerm2 preferences",
@@ -230426,7 +230426,7 @@ async function dx8() {
       error: q.stderr || "Failed to communicate with iTerm2",
     };
   }
-  return (y("[it2Setup] it2 setup verified successfully"), { success: !0 });
+  return (writeDebugLog("[it2Setup] it2 setup verified successfully"), { success: !0 });
 }
 function Za4() {
   return [
@@ -230440,12 +230440,12 @@ function Za4() {
 function cx8() {
   if (getSettings().iterm2It2SetupComplete !== !0)
     (updateSettings((q) => ({ ...q, iterm2It2SetupComplete: !0 })),
-      y("[it2Setup] Marked it2 setup as complete"));
+      writeDebugLog("[it2Setup] Marked it2 setup as complete"));
 }
 function fa4(A) {
   if (getSettings().preferTmuxOverIterm2 !== A)
     (updateSettings((K) => ({ ...K, preferTmuxOverIterm2: A })),
-      y(`[it2Setup] Set preferTmuxOverIterm2 = ${A}`));
+      writeDebugLog(`[it2Setup] Set preferTmuxOverIterm2 = ${A}`));
 }
 function Ta4() {
   return getSettings().preferTmuxOverIterm2 === !0;
