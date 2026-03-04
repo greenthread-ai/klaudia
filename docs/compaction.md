@@ -208,11 +208,14 @@ for await (let event of callModel({ messages, ... })) { ... }
 
 ## Remaining rename candidates
 
-| Current | Suggested | Occurrences |
-|---------|-----------|-------------|
-| `I96` | `effectiveContextWindow` | ~3 |
-| `PQ6` | `compactThreshold` | ~3 |
-| `ZD4` | `partialCompact` | ~2 |
-| `re` | `expandCompactionResult` | ~2 |
-| `le` | `clearMicrocompactCaches` | ~3 |
-| `se` | `clearCompactionCaches` | ~3 |
+These short identifiers are reused across many scopes in the esbuild output,
+making bulk rename unsafe. Manual per-line edits would be needed.
+
+| Current | Suggested | Occurrences | Status |
+|---------|-----------|-------------|--------|
+| `I96` | `effectiveContextWindow` | 6 | Done |
+| `PQ6` | `compactThreshold` | 5 | Done |
+| `ZD4` | `partialCompact` | 2 | Done |
+| `re` | `expandCompactionResult` | 5 (but 100+ `re` identifiers in other scopes) | Deferred |
+| `le` | `clearMicrocompactCaches` | 4 (but 26+ `le` identifiers in other scopes) | Deferred |
+| `se` | `clearCompactionCaches` | 6 (but 24+ `se` identifiers in other scopes) | Deferred |

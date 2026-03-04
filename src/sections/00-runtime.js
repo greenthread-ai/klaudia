@@ -69,7 +69,7 @@ var s1 = (A, q) => {
     });
 };
 var E = (A, q) => () => (A && (q = A((A = 0))), q);
-var u6 = amq(import.meta.url),
+var require = amq(import.meta.url),
   smq = Symbol.dispose || Symbol.for("Symbol.dispose"),
   tmq = Symbol.asyncDispose || Symbol.for("Symbol.asyncDispose"),
   hY = (A, q, K) => {

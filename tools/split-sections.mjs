@@ -14,7 +14,7 @@ const OUT_DIR = "src/sections";
 // Each section starts at startLine and ends at the next section's startLine - 1.
 const SECTIONS = [
   [1, "00-runtime.js", "Shebang, copyright, esbuild helpers (E/C/s1)"],
-  [118, "01-lodash.js", "Lodash utils, early ESM modules, Zod"],
+  [118, "01-zod-state.js", "Zod validation, i18n locales, session state, MCP transport"],
   [15099, "02-network.js", "ws, AJV, Axios, HTTP utilities"],
   [53849, "03-providers.js", "OpenTelemetry, AWS SDK, gRPC, Azure, provider router"],
   [125449, "04-react-ink.js", "React 18, Ink 3, yoga-layout, Sharp, permission modes"],

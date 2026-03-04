@@ -3913,7 +3913,7 @@ s1(Te8, {
 });
 import { join as Tdq, dirname as Ndq } from "path";
 function Kx1() {
-  if (!Ax1) Ax1 = u6("perf_hooks").performance;
+  if (!Ax1) Ax1 = require("perf_hooks").performance;
   return Ax1;
 }
 function Bq(A) {
@@ -4028,7 +4028,7 @@ function Sdq(A) {
     );
   let q;
   if (process.env.RIPGREP_NODE_PATH)
-    q = u6(process.env.RIPGREP_NODE_PATH).ripgrepMain;
+    q = require(process.env.RIPGREP_NODE_PATH).ripgrepMain;
   else {
     let K = Rdq(ydq(Ldq(import.meta.url)), "ripgrep.node");
     q = Edq(import.meta.url)(K).ripgrepMain;

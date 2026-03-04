@@ -5745,7 +5745,7 @@ var Pq = E(() => {
   Ty();
 });
 var kO7 = C((qT2, vO7) => {
-  var VO7 = u6("child_process"),
+  var VO7 = require("child_process"),
     fO7 = VO7.spawn,
     dE5 = VO7.exec;
   vO7.exports = function (A, q, K) {
@@ -21504,7 +21504,7 @@ var LJ7 = C(($k2, EJ7) => {
         ? process.cwd()
         : ".",
     kJ7 = []
-      .concat(u6("module").builtinModules, "bootstrap_node", "node")
+      .concat(require("module").builtinModules, "bootstrap_node", "node")
       .map(
         (A) =>
           new RegExp(
@@ -25700,8 +25700,8 @@ var nI6 = E(() => {
   qM7 = Y6(W6(), 1);
 });
 var zM7 = C((My2, YM7) => {
-  var ih5 = u6("os"),
-    KM7 = u6("tty"),
+  var ih5 = require("os"),
+    KM7 = require("tty"),
     Ry = _y6(),
     { env: MM } = process,
     pa;
@@ -32572,7 +32572,7 @@ var _P7 = C((Dx2, wP7) => {
     defaultConnectionHandler: () => tY8,
   });
   wP7.exports = Bx5(KP7);
-  var gx5 = qP7(u6("net")),
+  var gx5 = qP7(require("net")),
     YP7 = ((A) => {
       return (
         (A[(A.connect = 1)] = "connect"),
@@ -32725,7 +32725,7 @@ var _P7 = C((Dx2, wP7) => {
           this.socket.resume());
       }
     },
-    px5 = qP7(u6("net"));
+    px5 = qP7(require("net"));
   function tY8(A, q) {
     if (A.command !== "connect") return q("COMMAND_NOT_SUPPORTED");
     A.socket.on("error", () => {});
@@ -38898,7 +38898,7 @@ ${K.indent}`;
   hQ5.stringifyPair = SQ5;
 });
 var D28 = C((uQ5) => {
-  var if7 = u6("process");
+  var if7 = require("process");
   function xQ5(A, ...q) {
     if (A === "debug") console.log(...q);
   }
@@ -39637,7 +39637,7 @@ var jT7 = C((Pd5) => {
   Pd5.schema = Md5;
 });
 var E28 = C((fd5) => {
-  var Gb6 = u6("buffer"),
+  var Gb6 = require("buffer"),
     k28 = zD(),
     Gd5 = Jb6(),
     Zd5 = {
@@ -42001,7 +42001,7 @@ var wN7 = C((bi5) => {
   bi5.composeDoc = xi5;
 });
 var Kw8 = C((Qi5) => {
-  var mi5 = u6("process"),
+  var mi5 = require("process"),
     Bi5 = _28(),
     gi5 = Vb6(),
     Eb6 = vb6(),
@@ -43270,7 +43270,7 @@ var Dw8 = C((Sn5) => {
   Sn5.LineCounter = ZN7;
 });
 var Xw8 = C((bn5) => {
-  var In5 = u6("process"),
+  var In5 = require("process"),
     fN7 = p21(),
     xn5 = Jw8();
   function Zs(A, q) {
@@ -46699,7 +46699,7 @@ function Qw8() {
   if (process.platform !== "darwin") return null;
   try {
     if (process.env.MODIFIERS_NODE_PATH)
-      mb6 = u6(process.env.MODIFIERS_NODE_PATH);
+      mb6 = require(process.env.MODIFIERS_NODE_PATH);
     else {
       let A = Eo5(
         ko5(vo5(import.meta.url)),
@@ -47178,7 +47178,7 @@ var yV7 = C((uc2, LV7) => {
   LV7.exports = { isLinux: EV7, getReport: lo5 };
 });
 var CV7 = C((mc2, RV7) => {
-  var KM6 = u6("fs"),
+  var KM6 = require("fs"),
     io5 = (A) => {
       let q = KM6.openSync(A, "r"),
         K = Buffer.alloc(2048),
@@ -47228,7 +47228,7 @@ var hV7 = C((Bc2, SV7) => {
   SV7.exports = { interpreterPath: ro5 };
 });
 var Zw1 = C((gc2, rV7) => {
-  var xV7 = u6("child_process"),
+  var xV7 = require("child_process"),
     { isLinux: YM6, getReport: bV7 } = yV7(),
     { LDD_PATH: Gw1, SELF_PATH: uV7, readFile: lw8, readFileSync: iw8 } = CV7(),
     { interpreterPath: mV7 } = hV7(),
@@ -48587,8 +48587,8 @@ var Y_8 = C((wl2, av7) => {
   /*!
   Copyright 2013 Lovell Fuller and others.
   SPDX-License-Identifier: Apache-2.0
-*/ var { spawnSync: Rw1 } = u6("node:child_process"),
-    { createHash: Gs5 } = u6("node:crypto"),
+*/ var { spawnSync: Rw1 } = require("node:child_process"),
+    { createHash: Gs5 } = require("node:crypto"),
     cv7 = Hv7(),
     Zs5 = aw8(),
     fs5 = pv7(),
@@ -48631,7 +48631,7 @@ var Y_8 = C((wl2, av7) => {
     },
     Ls5 = () => {
       try {
-        return u6(`@img/sharp-libvips-dev-${wM6()}/include`);
+        return require(`@img/sharp-libvips-dev-${wM6()}/include`);
       } catch {
         try {
           return (() => {
@@ -48655,10 +48655,10 @@ var Y_8 = C((wl2, av7) => {
     },
     Rs5 = () => {
       try {
-        return u6(`@img/sharp-libvips-dev-${wM6()}/lib`);
+        return require(`@img/sharp-libvips-dev-${wM6()}/lib`);
       } catch {
         try {
-          return u6(`@img/sharp-libvips-${wM6()}/lib`);
+          return require(`@img/sharp-libvips-${wM6()}/lib`);
         } catch {}
       }
       return "";
@@ -48779,7 +48779,7 @@ var Ub6 = C(($l2, tv7) => {
     Qb6 = [];
   for (z_8 of Fs5)
     try {
-      _M6 = u6(z_8);
+      _M6 = require(z_8);
       break;
     } catch (A) {
       Qb6.push(A);
@@ -48825,7 +48825,7 @@ var Ub6 = C(($l2, tv7) => {
       );
     if (A && /(symbol not found|CXXABI_)/i.test(z))
       try {
-        let { config: w } = u6(`@img/sharp-libvips-${mK6}/package`),
+        let { config: w } = require(`@img/sharp-libvips-${mK6}/package`),
           _ = `${bs5()} ${us5()}`,
           $ = `${w.musl ? "musl" : "glibc"} ${w.musl || w.glibc}`;
         Y.push("- Update your OS:", `    Found ${_}`, `    Requires ${$}`);
@@ -48862,8 +48862,8 @@ var Ak7 = C((Hl2, ev7) => {
   /*!
   Copyright 2013 Lovell Fuller and others.
   SPDX-License-Identifier: Apache-2.0
-*/ var ps5 = u6("node:util"),
-    w_8 = u6("node:stream"),
+*/ var ps5 = require("node:util"),
+    w_8 = require("node:stream"),
     Qs5 = Um();
   Ub6();
   var Us5 = ps5.debuglog("sharp"),
@@ -51992,7 +51992,7 @@ var uk7 = C((Zl2, bk7) => {
   /*!
   Copyright 2013 Lovell Fuller and others.
   SPDX-License-Identifier: Apache-2.0
-*/ var X_8 = u6("node:path"),
+*/ var X_8 = require("node:path"),
     G1 = Um(),
     JM6 = Ub6(),
     hk7 = new Map([
@@ -52938,7 +52938,7 @@ var Fk7 = C((fl2, gk7) => {
   /*!
   Copyright 2013 Lovell Fuller and others.
   SPDX-License-Identifier: Apache-2.0
-*/ var Be5 = u6("node:events"),
+*/ var Be5 = require("node:events"),
     Iw1 = Zw1(),
     Uy = Um(),
     { runtimePlatformArch: ge5 } = Y_8(),
@@ -52962,10 +52962,10 @@ var Fk7 = C((fl2, gk7) => {
   if (!P_8.isGlobal)
     if (!P_8.isWasm)
       try {
-        DM6 = u6(`@img/sharp-${mk7}/versions`);
+        DM6 = require(`@img/sharp-${mk7}/versions`);
       } catch (A) {
         try {
-          DM6 = u6(`@img/sharp-libvips-${mk7}/versions`);
+          DM6 = require(`@img/sharp-libvips-${mk7}/versions`);
         } catch (q) {}
       }
     else
@@ -52993,7 +52993,7 @@ var Fk7 = C((fl2, gk7) => {
   if (Iw1.familySync() === Iw1.GLIBC && !Xf._isUsingJemalloc())
     Xf.concurrency(1);
   else if (Iw1.familySync() === Iw1.MUSL && Xf.concurrency() === 1024)
-    Xf.concurrency(u6("node:os").availableParallelism());
+    Xf.concurrency(require("node:os").availableParallelism());
   var Qe5 = new Be5.EventEmitter();
   function Ue5() {
     return Xf.counters();

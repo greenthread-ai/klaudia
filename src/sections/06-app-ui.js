@@ -8504,7 +8504,7 @@ var bV1 = C((jq) => {
 });
 var We4 = C((Pe4) => {
   Object.defineProperty(Pe4, "__esModule", { value: !0 });
-  var Je4 = u6("util"),
+  var Je4 = require("util"),
     Di = bV1();
   class uV1 extends Di.AbstractMessageBuffer {
     constructor(A = "utf-8") {
@@ -8704,10 +8704,10 @@ var ve4 = C((CY) => {
       void 0;
   var jT6 = We4();
   jT6.default.install();
-  var Ge4 = u6("path"),
-    wcY = u6("os"),
-    _cY = u6("crypto"),
-    mV1 = u6("net"),
+  var Ge4 = require("path"),
+    wcY = require("os"),
+    _cY = require("crypto"),
+    mV1 = require("net"),
     ZE = bV1();
   zcY(bV1(), CY);
   class fe4 extends ZE.AbstractMessageReader {
@@ -37327,7 +37327,7 @@ var sKq = E(() => {
   YD();
 });
 function rB8() {
-  if (!lB8) lB8 = u6("perf_hooks").performance;
+  if (!lB8) lB8 = require("perf_hooks").performance;
   return lB8;
 }
 function oB8() {
@@ -68649,8 +68649,8 @@ Minimum version required to store current data is: ` +
   };
 });
 var Lp8 = C((AO$, T_q) => {
-  var VKz = u6("util"),
-    f_q = u6("stream"),
+  var VKz = require("util"),
+    f_q = require("stream"),
     Ob = (T_q.exports = function () {
       (f_q.call(this),
         (this._buffers = []),
@@ -68910,7 +68910,7 @@ var Cp8 = C((YO$, v_q) => {
   };
 });
 var L_q = C((zO$, E_q) => {
-  var RKz = u6("util"),
+  var RKz = require("util"),
     k_q = Lp8(),
     CKz = Cp8(),
     SKz = (E_q.exports = function (A) {
@@ -69385,8 +69385,8 @@ var up8 = C((HO$, h_q) => {
   };
 });
 var b_q = C((jO$, x_q) => {
-  var UKz = u6("util"),
-    mp8 = u6("zlib"),
+  var UKz = require("util"),
+    mp8 = require("zlib"),
     I_q = Lp8(),
     dKz = L_q(),
     cKz = xp8(),
@@ -69711,7 +69711,7 @@ var Bp8 = C((XO$, p_q) => {
     w3z = Ip8(),
     _3z = m_q(),
     $3z = F_q(),
-    O3z = u6("zlib"),
+    O3z = require("zlib"),
     o16 = (p_q.exports = function (A) {
       if (
         ((this._options = A),
@@ -69809,8 +69809,8 @@ var Bp8 = C((XO$, p_q) => {
   };
 });
 var c_q = C((MO$, d_q) => {
-  var H3z = u6("util"),
-    Q_q = u6("stream"),
+  var H3z = require("util"),
+    Q_q = require("stream"),
     j3z = BN6(),
     J3z = Bp8(),
     U_q = (d_q.exports = function (A) {
@@ -69846,10 +69846,10 @@ var c_q = C((MO$, d_q) => {
   };
 });
 var a_q = C((Si6, o_q) => {
-  var l_q = u6("assert").ok,
-    gN6 = u6("zlib"),
-    D3z = u6("util"),
-    i_q = u6("buffer").kMaxLength;
+  var l_q = require("assert").ok,
+    gN6 = require("zlib"),
+    D3z = require("util"),
+    i_q = require("buffer").kMaxLength;
   function G26(A) {
     if (!(this instanceof G26)) return new G26(A);
     if (A && A.chunkSize < gN6.Z_MIN_CHUNK) A.chunkSize = gN6.Z_MIN_CHUNK;
@@ -69980,7 +69980,7 @@ var e_q = C((G3z) => {
 });
 var Y$q = C((GO$, K$q) => {
   var A$q = !0,
-    q$q = u6("zlib"),
+    q$q = require("zlib"),
     f3z = a_q();
   if (!q$q.deflateSync) A$q = !1;
   var T3z = gp8(),
@@ -70054,7 +70054,7 @@ var Y$q = C((GO$, K$q) => {
 });
 var $$q = C((ZO$, _$q) => {
   var z$q = !0,
-    w$q = u6("zlib");
+    w$q = require("zlib");
   if (!w$q.deflateSync) z$q = !1;
   var E3z = BN6(),
     L3z = Bp8();
@@ -70089,8 +70089,8 @@ var O$q = C((C3z) => {
   };
 });
 var j$q = C((m3z) => {
-  var I3z = u6("util"),
-    H$q = u6("stream"),
+  var I3z = require("util"),
+    H$q = require("stream"),
     x3z = b_q(),
     b3z = c_q(),
     u3z = O$q(),
@@ -70289,7 +70289,7 @@ var hi6 = C((B3z) => {
   };
 });
 var D$q = C((d3z) => {
-  var Q3z = u6("fs"),
+  var Q3z = require("fs"),
     U3z = j$q().PNG,
     pp8 = hi6();
   d3z.render = function (q, K) {
@@ -70378,7 +70378,7 @@ var M$q = C((t3z) => {
   };
   t3z.renderToFile = function (q, K, Y, z) {
     if (typeof z > "u") ((z = Y), (Y = void 0));
-    let w = u6("fs"),
+    let w = require("fs"),
       _ = t3z.render(K, Y);
     w.writeFile(q, _, z);
   };
@@ -70538,7 +70538,7 @@ var V$q = C((W5z) => {
   W5z.render = P5z.render;
   W5z.renderToFile = function (q, K, Y, z) {
     if (typeof z > "u") ((z = Y), (Y = void 0));
-    let w = u6("fs"),
+    let w = require("fs"),
       $ =
         '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' +
         W5z.render(K, Y);
@@ -99333,7 +99333,7 @@ function QL1() {
   if (A !== "darwin" && A !== "linux" && A !== "win32") return null;
   try {
     if (process.env.AUDIO_CAPTURE_NODE_PATH)
-      pL1 = u6(process.env.AUDIO_CAPTURE_NODE_PATH);
+      pL1 = require(process.env.AUDIO_CAPTURE_NODE_PATH);
     else {
       let K = `${process.arch}-${A}`,
         Y = sOz(

@@ -15883,11 +15883,11 @@ var VTq = C((fPz) => {
   fPz.suggestSimilar = ZPz;
 });
 var LTq = C((LPz) => {
-  var NPz = u6("node:events").EventEmitter,
-    nl8 = u6("node:child_process"),
-    ei = u6("node:path"),
-    rl8 = u6("node:fs"),
-    Ej = u6("node:process"),
+  var NPz = require("node:events").EventEmitter,
+    nl8 = require("node:child_process"),
+    ei = require("node:path"),
+    rl8 = require("node:fs"),
+    Ej = require("node:process"),
     { Argument: VPz, humanReadableArgName: vPz } = ZR1(),
     { CommanderError: ol8 } = Zr6(),
     { Help: kPz } = ll8(),
@@ -66047,7 +66047,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
                 appendSystemPrompt: x7.options.appendSystemPrompt,
               }),
               [cK, $q] = await Promise.all([Q_(), ZO()]),
-              _Y = await ZD4(
+              _Y = await partialCompact(
                 Rq,
                 U8,
                 x7,

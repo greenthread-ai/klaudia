@@ -1,6 +1,6 @@
 # Klaudia
 
-A locally-buildable fork of Claude Code, extracted from the v2.1.66 npm package. The long-term goal is to replace vendored third-party tools with custom Go implementations — see [PRD.md](PRD.md) for the full roadmap.
+A locally-buildable, extensible fork of Claude Code, extracted from the v2.1.66 npm package. See [PRD.md](PRD.md) for the full roadmap.
 
 ## Prerequisites
 
@@ -13,30 +13,72 @@ A locally-buildable fork of Claude Code, extracted from the v2.1.66 npm package.
 ```bash
 cd klaudia
 npm install
+node build.mjs          # Concatenates sections → dist/cli.js
 ```
 
-## Build
+## Usage
+
+### Interactive (REPL)
 
 ```bash
-node build.mjs
+node dist/cli.js
 ```
 
-Builds `src/cli.js` → `dist/cli.js`. Currently a pass-through (the source is already a self-contained bundle), but this is where esbuild config lives for when we start splitting modules.
-
-## Run
+### Headless (one-shot)
 
 ```bash
-# Direct (uses src/cli.js)
-CLAUDECODE= node src/cli.js --print "hello"
+# Basic — waits for all turns, prints final result
+node dist/cli.js -p "What files are in this directory?"
 
-# Built output
-CLAUDECODE= node dist/cli.js --print "hello"
+# With full autonomy (skips all permission prompts)
+node dist/cli.js -p "Create hello.py" --dangerously-skip-permissions
 
-# Interactive mode
-CLAUDECODE= node src/cli.js
+# Stream events as they happen (see tool calls in real-time)
+node dist/cli.js -p "Explain the build system" --output-format stream-json --verbose
+
+# JSON output with full metadata
+node dist/cli.js -p "What is 2+2?" --output-format json
+
+# To Spy on your running session
+ls -t ~/.claude/projects/*/*.jsonl | head -1 | xargs tail -20
 ```
 
 **Note:** You must unset `CLAUDECODE` when running inside a Claude Code session, otherwise it blocks with a "nested sessions" error.
+
+### Watching progress in headless mode
+
+In text mode (`-p`), output only appears after all turns complete. To monitor:
+
+```bash
+# Watch the live session transcript
+ls -t ~/.claude/projects/*/*.jsonl | head -1 | xargs tail -f
+
+# Or use stream-json to see events as they arrive
+node dist/cli.js -p "..." --output-format stream-json --verbose 2>/dev/null \
+  | jq -r 'select(.type == "assistant") | .message.content[] | select(.type == "text") | .text'
+```
+
+### Permission modes
+
+| Flag | Mode | Behavior |
+|------|------|----------|
+| *(default)* | `default` | Prompts for dangerous operations (interactive only) |
+| `--permission-mode acceptEdits` | `acceptEdits` | Auto-accepts file edits |
+| `--dangerously-skip-permissions` | `bypassPermissions` | Allows everything |
+| `--permission-mode plan` | `plan` | Read-only exploration, no modifications |
+| `--permission-mode dontAsk` | `dontAsk` | Denies anything not pre-approved |
+
+In headless mode (`-p`) without `--dangerously-skip-permissions`, tools needing
+approval are **denied** (no TTY to prompt). The model adapts and reports what it
+found without modifying anything.
+
+### Model selection
+
+```bash
+node dist/cli.js --model haiku       # Fast/cheap
+node dist/cli.js --model sonnet      # Default
+node dist/cli.js --model opus        # Most capable
+```
 
 ### Auth
 
@@ -48,147 +90,100 @@ Klaudia uses the same auth as Claude Code. Either:
 
 ```bash
 # Default: Anthropic direct API
-CLAUDECODE= node src/cli.js --print "hello"
+node dist/cli.js -p "hello"
 
 # AWS Bedrock
-CLAUDE_CODE_USE_BEDROCK=1 CLAUDECODE= node src/cli.js --print "hello"
+CLAUDE_CODE_USE_BEDROCK=1 node dist/cli.js -p "hello"
 
 # Google Vertex AI
-CLAUDE_CODE_USE_VERTEX=1 CLAUDECODE= node src/cli.js --print "hello"
+CLAUDE_CODE_USE_VERTEX=1 node dist/cli.js -p "hello"
 ```
 
-## Test
+## Build
 
 ```bash
-./test-harness.sh
+node build.mjs            # One-shot build
+node build.mjs --watch    # Watch mode (rebuilds on section changes)
 ```
 
-Runs 5 validation tests:
+### Go tools
 
-| # | Test | What it checks |
-|---|------|----------------|
-| 1 | Version | `--version` outputs version string |
-| 2 | Simple prompt | `--print` returns expected response |
-| 3 | Model override | `--model claude-haiku-4-5` selects correct model |
-| 4 | JSON output | `--output-format json` produces valid JSON |
-| 5 | Help | `--help` shows usage info |
-
-All tests use `--print` (non-interactive mode) and make real API calls (except test 5).
-
-## Go Tools
-
-Klaudia progressively replaces vendored third-party tools with custom Go implementations. All are built with `CGO_ENABLED=0` (pure Go, no C dependencies).
-
-### Building
+All Go tools are built with `CGO_ENABLED=0` (pure Go, no C dependencies):
 
 ```bash
-cd klaudia
-
-# Build all Go tools
 CGO_ENABLED=0 go build -o vendor/klaudia-search ./tools/search/
 CGO_ENABLED=0 go build -o vendor/klaudia-pdf ./tools/pdf/
 CGO_ENABLED=0 go build -o vendor/klaudia-bash-parser ./tools/bash-parser/
 cd tools/screenshot && CGO_ENABLED=0 go build -o ../../vendor/klaudia-screenshot . && cd ../..
 ```
 
-### Status
+## Test
+
+```bash
+bash test-harness.sh                  # 5 core tests
+bash test-harness.sh --with-websearch # 6 tests (includes web search)
+```
+
+| # | Test | What it checks |
+|---|------|----------------|
+| 1 | Version | `--version` outputs `2.1.66-klaudia` |
+| 2 | Simple prompt | `-p` returns expected response |
+| 3 | Model override | `--model claude-haiku-4-5` selects correct model |
+| 4 | JSON output | `--output-format json` produces valid JSON |
+| 5 | Help | `--help` shows usage info |
+| 6 | Web search | Server-side `web_search` tool works (optional) |
+
+## Architecture
+
+The app is split into 9 section files in `src/sections/`, concatenated by `build.mjs` into `dist/cli.js`.
+
+| File | Contents |
+|------|----------|
+| `00-runtime.js` | esbuild helpers (`E()`, `C()`, `s1()`) |
+| `01-zod-state.js` | Zod validation, i18n locales, session state, MCP transport |
+| `02-network.js` | WebSocket, AJV, Axios |
+| `03-providers.js` | OpenTelemetry, AWS, gRPC, Azure |
+| `04-react-ink.js` | React, Ink, yoga-layout, tool name constants |
+| `05-app-core.js` | Tools, permissions, MCP, compaction |
+| `06-app-ui.js` | UI, API client, tool dispatch, server-side tools |
+| `07-app-features.js` | Tree-sitter, screenshot, voice, headless mode |
+| `08-entry.js` | CLI bootstrap, Commander setup |
+
+### Key renamed functions
+
+We've renamed ~35 mangled identifiers to readable names. Key ones:
+
+| Name | File | Purpose |
+|------|------|---------|
+| `cliMain` | 08-entry.js | CLI entry point |
+| `setupCommander` | 08-entry.js | Commander CLI parser |
+| `runHeadless` | 07-app-features.js | Headless mode executor |
+| `agentLoop` | 06-app-ui.js | Core stream→tools→repeat loop |
+| `callModel` | 06-app-ui.js | SDK entry point |
+| `streamApiRequest` | 06-app-ui.js | API request builder |
+| `dispatchToolUse` | 06-app-ui.js | Tool executor |
+| `checkToolPermissions` | 07-app-features.js | Permission checker |
+| `microcompact` | 05-app-core.js | Fast client-side compaction |
+| `autocompactFn` | 05-app-core.js | Model-based compaction |
+| `buildToolSchema` | 06-app-ui.js | Tool → API schema |
+
+### Go tool status
 
 | Tool | Binary | Replaces | Wired In |
 |------|--------|----------|----------|
-| `tools/search/main.go` | `vendor/klaudia-search` | ripgrep | Yes |
-| `tools/pdf/main.go` | `vendor/klaudia-pdf` | pdfinfo + pdftoppm | Yes |
-| `tools/bash-parser/main.go` | `vendor/klaudia-bash-parser` | tree-sitter-bash.wasm | Yes (fallback) |
-| `tools/screenshot/main.go` | `vendor/klaudia-screenshot` | resvg.wasm | Yes (fallback) |
+| `tools/search/` | `vendor/klaudia-search` | ripgrep | Yes |
+| `tools/pdf/` | `vendor/klaudia-pdf` | pdfinfo + pdftoppm | Yes |
+| `tools/bash-parser/` | `vendor/klaudia-bash-parser` | tree-sitter-bash.wasm | Yes (fallback) |
+| `tools/screenshot/` | `vendor/klaudia-screenshot` | resvg.wasm | Yes (fallback) |
 
-Go tools are preferred at runtime when present in `vendor/`; the app falls back to the original tools if they're missing.
+Go tools are preferred at runtime; the app falls back to originals if missing.
 
-### Testing Go tools directly
+## Documentation
 
-```bash
-# Search (ripgrep-compatible)
-echo "hello world" | vendor/klaudia-search "hello" -n
-vendor/klaudia-search --files --glob "*.go" .
-
-# PDF
-vendor/klaudia-pdf info sample.pdf
-vendor/klaudia-pdf text sample.pdf -f 1 -l 5
-
-# Bash parser
-echo 'FOO=bar git commit -m "msg"' | vendor/klaudia-bash-parser
-# → {"command":"git","args":["commit","-m","\"msg\""],"envVars":["FOO=bar"],...}
-
-# Screenshot (text-to-PNG renderer)
-echo '{"lines":[[{"text":"hello","color":{"r":0,"g":255,"b":0}}]],"options":{}}' | vendor/klaudia-screenshot output.png
-```
-
-## Project Structure
-
-```
-klaudia/
-├── src/cli.js            # Prettified source (600K lines, from minified bundle)
-├── dist/cli.js           # Built output
-├── build.mjs             # esbuild configuration
-├── test-harness.sh       # 5-test validation suite
-├── package.json          # Dependencies
-├── PRD.md                # Product roadmap (3 phases)
-├── go.mod                # Go module definition
-├── tools/
-│   ├── search/main.go    # Go ripgrep replacement
-│   ├── pdf/main.go       # Go PDF tool (pdfcpu)
-│   ├── bash-parser/      # Go bash parser (mvdan.cc/sh)
-│   │   └── main.go
-│   └── screenshot/       # Go text-to-PNG renderer (golang.org/x/image)
-│       └── main.go
-├── vendor/
-│   ├── klaudia-search    # Built Go binary
-│   ├── klaudia-pdf       # Built Go binary
-│   ├── klaudia-bash-parser # Built Go binary
-│   ├── klaudia-screenshot  # Built Go binary
-│   └── ripgrep/          # Original rg binaries (fallback)
-├── resvg.wasm            # SVG rendering (Go replacement active, WASM is fallback)
-├── tree-sitter.wasm      # Code parsing
-└── tree-sitter-bash.wasm # Bash grammar (Go replacement active, WASM is fallback)
-```
-
-## Architecture (Key Locations in `src/cli.js`)
-
-The source is a prettified esbuild bundle with 4,603 modules (2,369 ESM + 2,234 CommonJS). Variable names are mangled but module boundaries are clear.
-
-### Layout
-
-| Line Range | Content |
-|------------|---------|
-| 1–70 | esbuild runtime helpers |
-| 70–15K | Lodash utilities |
-| 15K–25K | WebSocket, AJV, network libs |
-| 63K–66K | OpenTelemetry tracing |
-| 100K–125K | AWS SDK, gRPC, Azure |
-| 120K–180K | React + Ink (terminal UI) |
-| **180K–600K** | **Claude Code application** |
-| 597K–600K | Entry point, `main()` bootstrap |
-
-### Key Functions
-
-| Function | Line | Purpose |
-|----------|------|---------|
-| `fI()` | ~236587 | API client factory — **all** API calls route through here |
-| `h7()` | ~69273 | Provider router (Bedrock/Vertex/Foundry/firstParty) |
-| `Cz` | ~157253 | Base HTTP client class |
-| `mh` | ~157750 | Anthropic firstParty client |
-
-### API Flow
-
-```
-User prompt
-  → main() bootstrap (line ~600K)
-  → conversation loop
-  → fI() creates client (line ~236587)
-  → h7() selects provider (line ~69273)
-  → client.beta.messages.create({ model, messages, ... })
-  → POST https://api.anthropic.com/v1/messages?beta=true
-  → SSE stream parsed (message_start → content_block_delta → message_stop)
-  → Response rendered via React/Ink
-```
+- [PRD.md](PRD.md) — Product roadmap and phase tracking
+- [docs/agent-calling-usage.md](docs/agent-calling-usage.md) — Full CLI → agent → tool execution flow
+- [docs/compaction.md](docs/compaction.md) — Context window management (microcompact + autocompact)
+- [docs/server-side-tools.md](docs/server-side-tools.md) — WebSearch, WebFetch, Code Execution, MCP schemas
 
 ## Origins
 
@@ -198,5 +193,5 @@ Extracted from the `@anthropic-ai/claude-code` npm package v2.1.66:
 # How this was created (for reference, don't re-run)
 curl -sL https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.66.tgz | tar xz
 npx prettier --write package/cli.js
-# Then moved into this directory structure
+# Then split into sections and moved into this directory structure
 ```

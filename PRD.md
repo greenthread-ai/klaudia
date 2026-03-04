@@ -112,7 +112,7 @@ All Go tools are built with `CGO_ENABLED=0` (pure Go, no C dependencies).
 klaudia/
   src/sections/     # Source split into 9 section files
     00-runtime.js   # esbuild E()/C()/s1() helpers
-    01-lodash.js    # Lodash, Zod, early utils
+    01-zod-state.js # Zod validation, i18n locales, session state, MCP transport
     02-network.js   # ws, AJV, Axios
     03-providers.js # OpenTelemetry, AWS, gRPC, Azure
     04-react-ink.js # React, Ink, yoga-layout, tool name constants
@@ -174,6 +174,29 @@ h = [...N, ...(w.extraToolSchemas ?? [])]
 3. Return results matching `webFetchOutputSchema` format
 
 See `docs/server-side-tools.md` for full request/response schemas.
+
+## Phase 2.7: Dependency Unbundling
+
+**Goal:** Replace inlined third-party code with npm imports to reduce bundle size.
+
+### Analysis (via Klaudia self-analysis)
+
+| Dependency | Section | Lines | Savings | Difficulty |
+|------------|---------|-------|---------|------------|
+| Lodash | 05-app-core.js:216374+ | ~5200 | ~165KB | Done — replaced with 4-line shim |
+| React | 03-providers.js:70976+ | ~460 | ~15KB | Done — replaced with `u6('react')` |
+| ws | 02-network.js:1-2494 | ~2494 | ~70KB | Done — replaced with `u6('ws')` |
+| **Total** | | | **~250KB** | |
+
+### Not Practical to Unbundle
+- `01-zod-state.js` — Zod + i18n locales + session state + MCP, deeply intertwined via E() blocks
+- AWS SDK, Ink, Zod, axios — deeply interleaved with application code
+
+### Strategy
+1. Replace the standalone Lodash block in `05-app-core.js` with `import _ from "lodash"`
+2. Replace the React block in `03-providers.js` with `import React from "react"`
+3. ws in `02-network.js` — evaluate feasibility of extraction
+4. Update `build.mjs` to handle the new imports (esbuild `external` or bundled)
 
 ## Phase 3: Server-Side Tool Replacement
 
