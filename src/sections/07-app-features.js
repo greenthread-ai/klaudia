@@ -1394,7 +1394,7 @@ async function nJz(A, q, K, Y, z, w) {
   }
   return null;
 }
-async function checkToolPermissions(A, q, K, Y, z) {
+async function rJz(A, q, K, Y, z) {
   if (K.abortController.signal.aborted) throw new j2();
   let w = await K.getAppState(),
     _ = jGq(w.toolPermissionContext, A);
@@ -1415,7 +1415,7 @@ async function checkToolPermissions(A, q, K, Y, z) {
   if (O) {
     if (
       !(
-        A.name === BASH_TOOL_NAME &&
+        A.name === l4 &&
         xA.isSandboxingEnabled() &&
         xA.isAutoAllowBashIfSandboxedEnabled() &&
         ri(q)
@@ -1554,7 +1554,7 @@ function JGq(A, q) {
 }
 var jc8,
   GD = async (A, q, K, Y, z) => {
-    let w = await checkToolPermissions(A, q, K, Y, z);
+    let w = await rJz(A, q, K, Y, z);
     if (w.behavior === "allow") {
       let _ = await K.getAppState();
       return w;
@@ -3811,7 +3811,7 @@ When done, return your result using the ${yX} tool with:
       let g = null,
         u = 0,
         U = !1;
-      for await (let c of agentLoop({
+      for await (let c of JC({
         messages: M,
         systemPrompt: S,
         userContext: {},
@@ -10046,9 +10046,9 @@ function tZq(A, q, K) {
   let Y = (() => {
       switch (q) {
         case "edit":
-          return EDIT_TOOL_NAME;
+          return Lq;
         case "read":
-          return READ_TOOL_NAME;
+          return n4;
       }
     })(),
     z = Dc8(A, Y, K),
@@ -18877,7 +18877,7 @@ function TWz(A) {
     let K = A[q];
     if (K?.type !== "assistant") continue;
     let Y = K.message.content.find(
-      (_) => _.type === "tool_use" && _.name === TODO_WRITE_TOOL_NAME,
+      (_) => _.type === "tool_use" && _.name === Bt,
     );
     if (!Y || Y.type !== "tool_use") continue;
     let z = Y.input;
@@ -19879,14 +19879,13 @@ var dNq = E(() => {
   q3();
   ((QC = Y6(W6(), 1)), (pV6 = Y6(W6(), 1)));
 });
-// Klaudia: Simplified welcome screen with ASCII art banner
-function WelcomeArt() {
-  let A = w6(12),
+function hR1() {
+  let A = w6(35),
     [q] = E7();
   if (s8.terminal === "Apple_Terminal") {
     let f;
     if (A[0] !== q)
-      ((f = a8.default.createElement(AppleTerminalWelcomeArt, {
+      ((f = a8.default.createElement(xWz, {
         theme: q,
         welcomeMessage: "Welcome to Klaudia",
       })),
@@ -19895,8 +19894,203 @@ function WelcomeArt() {
     else f = A[1];
     return f;
   }
-  let K, Y, z, w, _, $, O, H, j, J;
-  if (A[2] === Symbol.for("react.memo_cache_sentinel"))
+  if (["light", "light-daltonized", "light-ansi"].includes(q)) {
+    let f, N, V, v, L, S, I, B, h;
+    if (A[2] === Symbol.for("react.memo_cache_sentinel"))
+      ((f = a8.default.createElement(
+        T,
+        null,
+        a8.default.createElement(
+          T,
+          { color: "claude" },
+          "Welcome to Klaudia",
+          " ",
+        ),
+        a8.default.createElement(
+          T,
+          { dimColor: !0 },
+          "v",
+          {
+            ISSUES_EXPLAINER:
+              "report the issue at https://github.com/anthropics/claude-code/issues",
+            PACKAGE_URL: "klaudia",
+            README_URL: "https://code.claude.com/docs/en/overview",
+            VERSION: "2.1.66-klaudia",
+            FEEDBACK_CHANNEL:
+              "https://github.com/anthropics/claude-code/issues",
+            BUILD_TIME: "2026-03-04T00:18:36Z",
+          }.VERSION,
+          " ",
+        ),
+      )),
+        (N = a8.default.createElement(
+          T,
+          null,
+          "…………………………………………………………………………………………………………………………………………………………",
+        )),
+        (V = a8.default.createElement(
+          T,
+          null,
+          "                                                          ",
+        )),
+        (v = a8.default.createElement(
+          T,
+          null,
+          "                                                          ",
+        )),
+        (L = a8.default.createElement(
+          T,
+          null,
+          "                                                          ",
+        )),
+        (S = a8.default.createElement(
+          T,
+          null,
+          "            ░░░░░░                                        ",
+        )),
+        (I = a8.default.createElement(
+          T,
+          null,
+          "    ░░░   ░░░░░░░░░░                                      ",
+        )),
+        (B = a8.default.createElement(
+          T,
+          null,
+          "   ░░░░░░░░░░░░░░░░░░░                                    ",
+        )),
+        (h = a8.default.createElement(
+          T,
+          null,
+          "                                                          ",
+        )),
+        (A[2] = f),
+        (A[3] = N),
+        (A[4] = V),
+        (A[5] = v),
+        (A[6] = L),
+        (A[7] = S),
+        (A[8] = I),
+        (A[9] = B),
+        (A[10] = h));
+    else
+      ((f = A[2]),
+        (N = A[3]),
+        (V = A[4]),
+        (v = A[5]),
+        (L = A[6]),
+        (S = A[7]),
+        (I = A[8]),
+        (B = A[9]),
+        (h = A[10]));
+    let F;
+    if (A[11] === Symbol.for("react.memo_cache_sentinel"))
+      ((F = a8.default.createElement(
+        T,
+        null,
+        a8.default.createElement(
+          T,
+          { dimColor: !0 },
+          "                           ░░░░",
+        ),
+        a8.default.createElement(T, null, "                     ██    "),
+      )),
+        (A[11] = F));
+    else F = A[11];
+    let g, u;
+    if (A[12] === Symbol.for("react.memo_cache_sentinel"))
+      ((g = a8.default.createElement(
+        T,
+        null,
+        a8.default.createElement(
+          T,
+          { dimColor: !0 },
+          "                         ░░░░░░░░░░",
+        ),
+        a8.default.createElement(T, null, "               ██▒▒██  "),
+      )),
+        (u = a8.default.createElement(
+          T,
+          null,
+          "                                            ▒▒      ██   ▒",
+        )),
+        (A[12] = g),
+        (A[13] = u));
+    else ((g = A[12]), (u = A[13]));
+    let U;
+    if (A[14] === Symbol.for("react.memo_cache_sentinel"))
+      ((U = a8.default.createElement(
+        T,
+        null,
+        "      ",
+        a8.default.createElement(T, { color: "clawd_body" }, " █████████ "),
+        "                         ▒▒░░▒▒      ▒ ▒▒",
+      )),
+        (A[14] = U));
+    else U = A[14];
+    let c;
+    if (A[15] === Symbol.for("react.memo_cache_sentinel"))
+      ((c = a8.default.createElement(
+        T,
+        null,
+        "      ",
+        a8.default.createElement(
+          T,
+          { color: "clawd_body", backgroundColor: "clawd_background" },
+          "██▄█████▄██",
+        ),
+        "                           ▒▒         ▒▒ ",
+      )),
+        (A[15] = c));
+    else c = A[15];
+    let d;
+    if (A[16] === Symbol.for("react.memo_cache_sentinel"))
+      ((d = a8.default.createElement(
+        T,
+        null,
+        "      ",
+        a8.default.createElement(T, { color: "clawd_body" }, " █████████ "),
+        "                          ░          ▒   ",
+      )),
+        (A[16] = d));
+    else d = A[16];
+    let a;
+    if (A[17] === Symbol.for("react.memo_cache_sentinel"))
+      ((a = a8.default.createElement(
+        m,
+        { width: SR1 },
+        a8.default.createElement(
+          T,
+          null,
+          f,
+          N,
+          V,
+          v,
+          L,
+          S,
+          I,
+          B,
+          h,
+          F,
+          g,
+          u,
+          U,
+          c,
+          d,
+          a8.default.createElement(
+            T,
+            null,
+            "…………………",
+            a8.default.createElement(T, { color: "clawd_body" }, "█ █   █ █"),
+            "……………………………………………………………………░…………………………▒…………",
+          ),
+        ),
+      )),
+        (A[17] = a));
+    else a = A[17];
+    return a;
+  }
+  let K, Y, z, w, _, $, O;
+  if (A[18] === Symbol.for("react.memo_cache_sentinel"))
     ((K = a8.default.createElement(
       T,
       null,
@@ -19916,8 +20110,7 @@ function WelcomeArt() {
           PACKAGE_URL: "klaudia",
           README_URL: "https://code.claude.com/docs/en/overview",
           VERSION: "2.1.66-klaudia",
-          FEEDBACK_CHANNEL:
-            "https://github.com/anthropics/claude-code/issues",
+          FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
           BUILD_TIME: "2026-03-04T00:18:36Z",
         }.VERSION,
         " ",
@@ -19926,59 +20119,385 @@ function WelcomeArt() {
       (Y = a8.default.createElement(
         T,
         null,
-        "\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026",
+        "…………………………………………………………………………………………………………………………………………………………",
       )),
-      (z = a8.default.createElement(T, null, " __   .__                   .___.__                       ")),
-      (w = a8.default.createElement(T, null, "|  | _|  | _____   __ __  __| _/|__|____                  ")),
-      (_ = a8.default.createElement(T, null, "|  |/ /  | \\__  \\ |  |  \\/ __ | |  \\__  \\                 ")),
-      ($ = a8.default.createElement(T, null, "|    <|  |__/ __ \\|  |  / /_/ | |  |/ __ \\_               ")),
-      (O = a8.default.createElement(T, null, "|__|_ \\____(____  /____/\\____ | |__(____  /               ")),
-      (H = a8.default.createElement(T, null, "     \\/         \\/           \\/         \\/                ")),
-      (j = a8.default.createElement(
+      (z = a8.default.createElement(
         T,
         null,
-        "\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026",
+        "                                                          ",
       )),
-      (A[2] = K),
-      (A[3] = Y),
-      (A[4] = z),
-      (A[5] = w),
-      (A[6] = _),
-      (A[7] = $),
-      (A[8] = O),
-      (A[9] = H),
-      (A[10] = j));
+      (w = a8.default.createElement(
+        T,
+        null,
+        "     *                                       █████▓▓░     ",
+      )),
+      (_ = a8.default.createElement(
+        T,
+        null,
+        "                                 *         ███▓░     ░░   ",
+      )),
+      ($ = a8.default.createElement(
+        T,
+        null,
+        "            ░░░░░░                        ███▓░           ",
+      )),
+      (O = a8.default.createElement(
+        T,
+        null,
+        "    ░░░   ░░░░░░░░░░                      ███▓░           ",
+      )),
+      (A[18] = K),
+      (A[19] = Y),
+      (A[20] = z),
+      (A[21] = w),
+      (A[22] = _),
+      (A[23] = $),
+      (A[24] = O));
   else
-    ((K = A[2]),
-      (Y = A[3]),
-      (z = A[4]),
-      (w = A[5]),
-      (_ = A[6]),
-      ($ = A[7]),
-      (O = A[8]),
-      (H = A[9]),
-      (j = A[10]));
-  if (A[11] === Symbol.for("react.memo_cache_sentinel"))
+    ((K = A[18]),
+      (Y = A[19]),
+      (z = A[20]),
+      (w = A[21]),
+      (_ = A[22]),
+      ($ = A[23]),
+      (O = A[24]));
+  let H, j, J, D, X;
+  if (A[25] === Symbol.for("react.memo_cache_sentinel"))
     ((J = a8.default.createElement(
-      m,
-      { width: WELCOME_WIDTH },
-      a8.default.createElement(T, null, K, Y, z, w, _, $, O, H, j),
+      T,
+      null,
+      a8.default.createElement(T, null, "   ░░░░░░░░░░░░░░░░░░░    "),
+      a8.default.createElement(T, { bold: !0 }, "*"),
+      a8.default.createElement(T, null, "                ██▓░░      ▓   "),
     )),
-      (A[11] = J));
-  else J = A[11];
-  return J;
+      (D = a8.default.createElement(
+        T,
+        null,
+        "                                             ░▓▓███▓▓░    ",
+      )),
+      (X = a8.default.createElement(
+        T,
+        { dimColor: !0 },
+        " *                                 ░░░░                   ",
+      )),
+      (H = a8.default.createElement(
+        T,
+        { dimColor: !0 },
+        "                                 ░░░░░░░░                 ",
+      )),
+      (j = a8.default.createElement(
+        T,
+        { dimColor: !0 },
+        "                               ░░░░░░░░░░░░░░░░           ",
+      )),
+      (A[25] = H),
+      (A[26] = j),
+      (A[27] = J),
+      (A[28] = D),
+      (A[29] = X));
+  else ((H = A[25]), (j = A[26]), (J = A[27]), (D = A[28]), (X = A[29]));
+  let M;
+  if (A[30] === Symbol.for("react.memo_cache_sentinel"))
+    ((M = a8.default.createElement(T, { color: "clawd_body" }, " █████████ ")),
+      (A[30] = M));
+  else M = A[30];
+  let P;
+  if (A[31] === Symbol.for("react.memo_cache_sentinel"))
+    ((P = a8.default.createElement(
+      T,
+      null,
+      "      ",
+      M,
+      "                                       ",
+      a8.default.createElement(T, { dimColor: !0 }, "*"),
+      a8.default.createElement(T, null, " "),
+    )),
+      (A[31] = P));
+  else P = A[31];
+  let W;
+  if (A[32] === Symbol.for("react.memo_cache_sentinel"))
+    ((W = a8.default.createElement(
+      T,
+      null,
+      "      ",
+      a8.default.createElement(T, { color: "clawd_body" }, "██▄█████▄██"),
+      a8.default.createElement(T, null, "                        "),
+      a8.default.createElement(T, { bold: !0 }, "*"),
+      a8.default.createElement(T, null, "                "),
+    )),
+      (A[32] = W));
+  else W = A[32];
+  let G;
+  if (A[33] === Symbol.for("react.memo_cache_sentinel"))
+    ((G = a8.default.createElement(
+      T,
+      null,
+      "      ",
+      a8.default.createElement(T, { color: "clawd_body" }, " █████████ "),
+      "     *                                   ",
+    )),
+      (A[33] = G));
+  else G = A[33];
+  let Z;
+  if (A[34] === Symbol.for("react.memo_cache_sentinel"))
+    ((Z = a8.default.createElement(
+      m,
+      { width: SR1 },
+      a8.default.createElement(
+        T,
+        null,
+        K,
+        Y,
+        z,
+        w,
+        _,
+        $,
+        O,
+        J,
+        D,
+        X,
+        H,
+        j,
+        P,
+        W,
+        G,
+        a8.default.createElement(
+          T,
+          null,
+          "…………………",
+          a8.default.createElement(T, { color: "clawd_body" }, "█ █   █ █"),
+          "………………………………………………………………………………………………………………",
+        ),
+      ),
+    )),
+      (A[34] = Z));
+  else Z = A[34];
+  return Z;
 }
-function AppleTerminalWelcomeArt(A) {
-  let q = w6(15),
+function xWz(A) {
+  let q = w6(44),
     { theme: K, welcomeMessage: Y } = A;
+  if (["light", "light-daltonized", "light-ansi"].includes(K)) {
+    let S;
+    if (q[0] !== Y)
+      ((S = a8.default.createElement(T, { color: "claude" }, Y, " ")),
+        (q[0] = Y),
+        (q[1] = S));
+    else S = q[1];
+    let I;
+    if (q[2] === Symbol.for("react.memo_cache_sentinel"))
+      ((I = a8.default.createElement(
+        T,
+        { dimColor: !0 },
+        "v",
+        {
+          ISSUES_EXPLAINER:
+            "report the issue at https://github.com/anthropics/claude-code/issues",
+          PACKAGE_URL: "klaudia",
+          README_URL: "https://code.claude.com/docs/en/overview",
+          VERSION: "2.1.66-klaudia",
+          FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+          BUILD_TIME: "2026-03-04T00:18:36Z",
+        }.VERSION,
+        " ",
+      )),
+        (q[2] = I));
+    else I = q[2];
+    let B;
+    if (q[3] !== S)
+      ((B = a8.default.createElement(T, null, S, I)), (q[3] = S), (q[4] = B));
+    else B = q[4];
+    let h, F, g, u, U, c, d, a;
+    if (q[5] === Symbol.for("react.memo_cache_sentinel"))
+      ((g = a8.default.createElement(
+        T,
+        null,
+        "…………………………………………………………………………………………………………………………………………………………",
+      )),
+        (u = a8.default.createElement(
+          T,
+          null,
+          "                                                          ",
+        )),
+        (U = a8.default.createElement(
+          T,
+          null,
+          "                                                          ",
+        )),
+        (c = a8.default.createElement(
+          T,
+          null,
+          "                                                          ",
+        )),
+        (d = a8.default.createElement(
+          T,
+          null,
+          "            ░░░░░░                                        ",
+        )),
+        (a = a8.default.createElement(
+          T,
+          null,
+          "    ░░░   ░░░░░░░░░░                                      ",
+        )),
+        (h = a8.default.createElement(
+          T,
+          null,
+          "   ░░░░░░░░░░░░░░░░░░░                                    ",
+        )),
+        (F = a8.default.createElement(
+          T,
+          null,
+          "                                                          ",
+        )),
+        (q[5] = h),
+        (q[6] = F),
+        (q[7] = g),
+        (q[8] = u),
+        (q[9] = U),
+        (q[10] = c),
+        (q[11] = d),
+        (q[12] = a));
+    else
+      ((h = q[5]),
+        (F = q[6]),
+        (g = q[7]),
+        (u = q[8]),
+        (U = q[9]),
+        (c = q[10]),
+        (d = q[11]),
+        (a = q[12]));
+    let e;
+    if (q[13] === Symbol.for("react.memo_cache_sentinel"))
+      ((e = a8.default.createElement(
+        T,
+        null,
+        a8.default.createElement(
+          T,
+          { dimColor: !0 },
+          "                           ░░░░",
+        ),
+        a8.default.createElement(T, null, "                     ██    "),
+      )),
+        (q[13] = e));
+    else e = q[13];
+    let j6, P6, f6;
+    if (q[14] === Symbol.for("react.memo_cache_sentinel"))
+      ((j6 = a8.default.createElement(
+        T,
+        null,
+        a8.default.createElement(
+          T,
+          { dimColor: !0 },
+          "                         ░░░░░░░░░░",
+        ),
+        a8.default.createElement(T, null, "               ██▒▒██  "),
+      )),
+        (P6 = a8.default.createElement(
+          T,
+          null,
+          "                                            ▒▒      ██   ▒",
+        )),
+        (f6 = a8.default.createElement(
+          T,
+          null,
+          "                                          ▒▒░░▒▒      ▒ ▒▒",
+        )),
+        (q[14] = j6),
+        (q[15] = P6),
+        (q[16] = f6));
+    else ((j6 = q[14]), (P6 = q[15]), (f6 = q[16]));
+    let q6;
+    if (q[17] === Symbol.for("react.memo_cache_sentinel"))
+      ((q6 = a8.default.createElement(
+        T,
+        null,
+        "      ",
+        a8.default.createElement(T, { color: "clawd_body" }, "▗"),
+        a8.default.createElement(
+          T,
+          { color: "clawd_background", backgroundColor: "clawd_body" },
+          " ",
+          "▗",
+          "     ",
+          "▖",
+          " ",
+        ),
+        a8.default.createElement(T, { color: "clawd_body" }, "▖"),
+        "                           ▒▒         ▒▒ ",
+      )),
+        (q[17] = q6));
+    else q6 = q[17];
+    let A6;
+    if (q[18] === Symbol.for("react.memo_cache_sentinel"))
+      ((A6 = a8.default.createElement(
+        T,
+        null,
+        "       ",
+        a8.default.createElement(
+          T,
+          { backgroundColor: "clawd_body" },
+          " ".repeat(9),
+        ),
+        "                           ░          ▒   ",
+      )),
+        (q[18] = A6));
+    else A6 = q[18];
+    let D6;
+    if (q[19] === Symbol.for("react.memo_cache_sentinel"))
+      ((D6 = a8.default.createElement(
+        T,
+        null,
+        "…………………",
+        a8.default.createElement(T, { backgroundColor: "clawd_body" }, " "),
+        a8.default.createElement(T, null, " "),
+        a8.default.createElement(T, { backgroundColor: "clawd_body" }, " "),
+        a8.default.createElement(T, null, "   "),
+        a8.default.createElement(T, { backgroundColor: "clawd_body" }, " "),
+        a8.default.createElement(T, null, " "),
+        a8.default.createElement(T, { backgroundColor: "clawd_body" }, " "),
+        "……………………………………………………………………░…………………………▒…………",
+      )),
+        (q[19] = D6));
+    else D6 = q[19];
+    let G6;
+    if (q[20] !== B)
+      ((G6 = a8.default.createElement(
+        m,
+        { width: SR1 },
+        a8.default.createElement(
+          T,
+          null,
+          B,
+          g,
+          u,
+          U,
+          c,
+          d,
+          a,
+          h,
+          F,
+          e,
+          j6,
+          P6,
+          f6,
+          q6,
+          A6,
+          D6,
+        ),
+      )),
+        (q[20] = B),
+        (q[21] = G6));
+    else G6 = q[21];
+    return G6;
+  }
   let w;
-  if (q[0] !== Y)
+  if (q[22] !== Y)
     ((w = a8.default.createElement(T, { color: "claude" }, Y, " ")),
-      (q[0] = Y),
-      (q[1] = w));
-  else w = q[1];
+      (q[22] = Y),
+      (q[23] = w));
+  else w = q[23];
   let _;
-  if (q[2] === Symbol.for("react.memo_cache_sentinel"))
+  if (q[24] === Symbol.for("react.memo_cache_sentinel"))
     ((_ = a8.default.createElement(
       T,
       { dimColor: !0 },
@@ -19994,70 +20513,200 @@ function AppleTerminalWelcomeArt(A) {
       }.VERSION,
       " ",
     )),
-      (q[2] = _));
-  else _ = q[2];
+      (q[24] = _));
+  else _ = q[24];
   let $;
-  if (q[3] !== w)
-    (($ = a8.default.createElement(T, null, w, _)), (q[3] = w), (q[4] = $));
-  else $ = q[4];
-  let O, H, j, J, D, X, M, P;
-  if (q[5] === Symbol.for("react.memo_cache_sentinel"))
+  if (q[25] !== w)
+    (($ = a8.default.createElement(T, null, w, _)), (q[25] = w), (q[26] = $));
+  else $ = q[26];
+  let O, H, j, J, D, X;
+  if (q[27] === Symbol.for("react.memo_cache_sentinel"))
     ((O = a8.default.createElement(
       T,
       null,
-      "\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026",
+      "…………………………………………………………………………………………………………………………………………………………",
     )),
-      (H = a8.default.createElement(T, null, " __   .__                   .___.__                       ")),
-      (j = a8.default.createElement(T, null, "|  | _|  | _____   __ __  __| _/|__|____                  ")),
-      (J = a8.default.createElement(T, null, "|  |/ /  | \\__  \\ |  |  \\/ __ | |  \\__  \\                 ")),
-      (D = a8.default.createElement(T, null, "|    <|  |__/ __ \\|  |  / /_/ | |  |/ __ \\_               ")),
-      (X = a8.default.createElement(T, null, "|__|_ \\____(____  /____/\\____ | |__(____  /               ")),
-      (M = a8.default.createElement(T, null, "     \\/         \\/           \\/         \\/                ")),
+      (H = a8.default.createElement(
+        T,
+        null,
+        "                                                          ",
+      )),
+      (j = a8.default.createElement(
+        T,
+        null,
+        "     *                                       █████▓▓░     ",
+      )),
+      (J = a8.default.createElement(
+        T,
+        null,
+        "                                 *         ███▓░     ░░   ",
+      )),
+      (D = a8.default.createElement(
+        T,
+        null,
+        "            ░░░░░░                        ███▓░           ",
+      )),
+      (X = a8.default.createElement(
+        T,
+        null,
+        "    ░░░   ░░░░░░░░░░                      ███▓░           ",
+      )),
+      (q[27] = O),
+      (q[28] = H),
+      (q[29] = j),
+      (q[30] = J),
+      (q[31] = D),
+      (q[32] = X));
+  else
+    ((O = q[27]),
+      (H = q[28]),
+      (j = q[29]),
+      (J = q[30]),
+      (D = q[31]),
+      (X = q[32]));
+  let M, P, W, G, Z;
+  if (q[33] === Symbol.for("react.memo_cache_sentinel"))
+    ((M = a8.default.createElement(
+      T,
+      null,
+      a8.default.createElement(T, null, "   ░░░░░░░░░░░░░░░░░░░    "),
+      a8.default.createElement(T, { bold: !0 }, "*"),
+      a8.default.createElement(T, null, "                ██▓░░      ▓   "),
+    )),
       (P = a8.default.createElement(
         T,
         null,
-        "\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026",
+        "                                             ░▓▓███▓▓░    ",
       )),
-      (q[5] = O),
-      (q[6] = H),
-      (q[7] = j),
-      (q[8] = J),
-      (q[9] = D),
-      (q[10] = X),
-      (q[11] = M),
-      (q[12] = P));
-  else
-    ((O = q[5]),
-      (H = q[6]),
-      (j = q[7]),
-      (J = q[8]),
-      (D = q[9]),
-      (X = q[10]),
-      (M = q[11]),
-      (P = q[12]));
+      (W = a8.default.createElement(
+        T,
+        { dimColor: !0 },
+        " *                                 ░░░░                   ",
+      )),
+      (G = a8.default.createElement(
+        T,
+        { dimColor: !0 },
+        "                                 ░░░░░░░░                 ",
+      )),
+      (Z = a8.default.createElement(
+        T,
+        { dimColor: !0 },
+        "                               ░░░░░░░░░░░░░░░░           ",
+      )),
+      (q[33] = M),
+      (q[34] = P),
+      (q[35] = W),
+      (q[36] = G),
+      (q[37] = Z));
+  else ((M = q[33]), (P = q[34]), (W = q[35]), (G = q[36]), (Z = q[37]));
+  let f;
+  if (q[38] === Symbol.for("react.memo_cache_sentinel"))
+    ((f = a8.default.createElement(
+      T,
+      null,
+      "                                                      ",
+      a8.default.createElement(T, { dimColor: !0 }, "*"),
+      a8.default.createElement(T, null, " "),
+    )),
+      (q[38] = f));
+  else f = q[38];
+  let N;
+  if (q[39] === Symbol.for("react.memo_cache_sentinel"))
+    ((N = a8.default.createElement(
+      T,
+      null,
+      "        ",
+      a8.default.createElement(T, { color: "clawd_body" }, "▗"),
+      a8.default.createElement(
+        T,
+        { color: "clawd_background", backgroundColor: "clawd_body" },
+        " ",
+        "▗",
+        "     ",
+        "▖",
+        " ",
+      ),
+      a8.default.createElement(T, { color: "clawd_body" }, "▖"),
+      a8.default.createElement(T, null, "                       "),
+      a8.default.createElement(T, { bold: !0 }, "*"),
+      a8.default.createElement(T, null, "                "),
+    )),
+      (q[39] = N));
+  else N = q[39];
+  let V;
+  if (q[40] === Symbol.for("react.memo_cache_sentinel"))
+    ((V = a8.default.createElement(
+      T,
+      null,
+      "        ",
+      a8.default.createElement(
+        T,
+        { backgroundColor: "clawd_body" },
+        " ".repeat(9),
+      ),
+      "      *                                   ",
+    )),
+      (q[40] = V));
+  else V = q[40];
+  let v;
+  if (q[41] === Symbol.for("react.memo_cache_sentinel"))
+    ((v = a8.default.createElement(
+      T,
+      null,
+      "…………………",
+      a8.default.createElement(T, { backgroundColor: "clawd_body" }, " "),
+      a8.default.createElement(T, null, " "),
+      a8.default.createElement(T, { backgroundColor: "clawd_body" }, " "),
+      a8.default.createElement(T, null, "   "),
+      a8.default.createElement(T, { backgroundColor: "clawd_body" }, " "),
+      a8.default.createElement(T, null, " "),
+      a8.default.createElement(T, { backgroundColor: "clawd_body" }, " "),
+      "………………………………………………………………………………………………………………",
+    )),
+      (q[41] = v));
+  else v = q[41];
   let L;
-  if (q[13] !== $)
+  if (q[42] !== $)
     ((L = a8.default.createElement(
       m,
-      { width: WELCOME_WIDTH },
-      a8.default.createElement(T, null, $, O, H, j, J, D, X, M, P),
+      { width: SR1 },
+      a8.default.createElement(
+        T,
+        null,
+        $,
+        O,
+        H,
+        j,
+        J,
+        D,
+        X,
+        M,
+        P,
+        W,
+        G,
+        Z,
+        f,
+        N,
+        V,
+        v,
+      ),
     )),
-      (q[13] = $),
-      (q[14] = L));
-  else L = q[14];
+      (q[42] = $),
+      (q[43] = L));
+  else L = q[43];
   return L;
 }
 var a8,
-  WELCOME_WIDTH = 58;
-var initWelcomeArt = E(() => {
+  SR1 = 58;
+var Vi8 = E(() => {
   e6();
   Q6();
   s5();
   a8 = Y6(W6(), 1);
 });
-var onboardingExports = {};
-s1(onboardingExports, { Onboarding: () => OnboardingComponent });
-function OnboardingComponent({ onDone: A }) {
+var cNq = {};
+s1(cNq, { Onboarding: () => bWz });
+function bWz({ onDone: A }) {
   let [q, K] = QV6.useState(0),
     Y = PJ(),
     [z, w] = E7();
@@ -20227,7 +20876,7 @@ function OnboardingComponent({ onDone: A }) {
     P9.default.createElement(
       m,
       { flexDirection: "column" },
-      P9.default.createElement(WelcomeArt, null),
+      P9.default.createElement(hR1, null),
       P9.default.createElement(
         m,
         { flexDirection: "column", marginTop: 1 },
@@ -20249,7 +20898,7 @@ function OnboardingComponent({ onDone: A }) {
   );
 }
 var P9, QV6;
-var initOnboarding = E(() => {
+var lNq = E(() => {
   Q6();
   rA();
   l8();
@@ -20268,7 +20917,7 @@ var initOnboarding = E(() => {
   s5();
   Y5();
   hK6();
-  initWelcomeArt();
+  Vi8();
   ((P9 = Y6(W6(), 1)), (QV6 = Y6(W6(), 1)));
 });
 function iNq(A) {
@@ -20291,8 +20940,8 @@ function nNq(A) {
   return A.some(
     (q) =>
       q.ruleBehavior === "allow" &&
-      (q.ruleValue.toolName === BASH_TOOL_NAME ||
-        q.ruleValue.toolName.startsWith(BASH_TOOL_NAME + "(")),
+      (q.ruleValue.toolName === l4 ||
+        q.ruleValue.toolName.startsWith(l4 + "(")),
   );
 }
 function eNq() {
@@ -20617,7 +21266,7 @@ function pWz(A) {
   );
 }
 function QWz(A) {
-  return A === BASH_TOOL_NAME || A.startsWith(BASH_TOOL_NAME + "(");
+  return A === l4 || A.startsWith(l4 + "(");
 }
 function UWz(A) {
   return (
@@ -20628,7 +21277,7 @@ function UWz(A) {
   );
 }
 function dWz(A) {
-  return A === BASH_TOOL_NAME || A.startsWith(BASH_TOOL_NAME + "(");
+  return A === l4 || A.startsWith(l4 + "(");
 }
 var ZT;
 var $Vq = E(() => {
@@ -20914,7 +21563,7 @@ function eWz(A, q) {
   return K;
 }
 function AGz(A) {
-  let q = countMessageTokens(A);
+  let q = ak(A);
   if (!uD4()) {
     if (!BD4(q)) return !1;
     mD4();
@@ -20941,7 +21590,7 @@ async function qGz(A) {
   } catch ($) {
     if ($.code !== "EEXIST") throw $;
   }
-  let z = await readTool.call({ file_path: Y }, A),
+  let z = await l9.call({ file_path: Y }, A),
     w = "",
     _ = z.data;
   if (_.type === "text") w = _.file.content;
@@ -20958,7 +21607,7 @@ function MVq() {
 function zGz(A) {
   return async (q, K) => {
     if (
-      q.name === EDIT_TOOL_NAME &&
+      q.name === Lq &&
       typeof K === "object" &&
       K !== null &&
       "file_path" in K
@@ -20969,10 +21618,10 @@ function zGz(A) {
     }
     return {
       behavior: "deny",
-      message: `only ${EDIT_TOOL_NAME} on ${A} is allowed`,
+      message: `only ${Lq} on ${A} is allowed`,
       decisionReason: {
         type: "other",
-        reason: `only ${EDIT_TOOL_NAME} on ${A} is allowed`,
+        reason: `only ${Lq} on ${A} is allowed`,
       },
     };
   };
@@ -21048,7 +21697,7 @@ var PVq = E(() => {
         config_min_tokens_between_update: j.minimumTokensBetweenUpdate,
         config_tool_calls_between_updates: j.toolCallsBetweenUpdates,
       }),
-        bD4(countMessageTokens(q)),
+        bD4(ak(q)),
         wGz(q),
         SD4());
     })));
@@ -22680,7 +23329,7 @@ Use the ${tq} tool to launch all three agents concurrently in a single message. 
 
 For each change:
 
-1. **Search for existing utilities and helpers** that could replace newly written code. Use ${GREP_TOOL_NAME} to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+1. **Search for existing utilities and helpers** that could replace newly written code. Use ${k5} to find similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
 2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
 3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
 
@@ -28483,7 +29132,7 @@ function hZz() {
   return {
     agentType: "magic-docs",
     whenToUse: "Update Magic Docs",
-    tools: [EDIT_TOOL_NAME],
+    tools: [Lq],
     model: "sonnet",
     source: "built-in",
     baseDir: "built-in",
@@ -28510,7 +29159,7 @@ async function IZz(A, q) {
     }
     throw W;
   }
-  let j = await readTool.call({ file_path: A.path }, O),
+  let j = await l9.call({ file_path: A.path }, O),
     J = "",
     D = j.data;
   if (D.type === "text") J = D.file.content;
@@ -28522,7 +29171,7 @@ async function IZz(A, q) {
   let M = await evq(J, A.path, X.title, X.instructions),
     P = async (W, G) => {
       if (
-        W.name === EDIT_TOOL_NAME &&
+        W.name === Lq &&
         typeof G === "object" &&
         G !== null &&
         "file_path" in G
@@ -28533,8 +29182,8 @@ async function IZz(A, q) {
       }
       return {
         behavior: "deny",
-        message: `only ${EDIT_TOOL_NAME} is allowed for ${A.path}`,
-        decisionReason: { type: "other", reason: `only ${EDIT_TOOL_NAME} is allowed` },
+        message: `only ${Lq} is allowed for ${A.path}`,
+        decisionReason: { type: "other", reason: `only ${Lq} is allowed` },
       };
     };
   for await (let W of jC({
@@ -33210,7 +33859,7 @@ class dkq {
       h6,
       g6 = null,
       y6 = P ? gd8(this.mutableMessages, yX) : 0;
-    for await (let C6 of agentLoop({
+    for await (let C6 of JC({
       messages: D6,
       systemPrompt: d,
       userContext: c,
@@ -35352,9 +36001,9 @@ var DEq = E(() => {
   HEq();
   Vz();
 });
-var headlessExports = {};
-s1(headlessExports, {
-  runHeadless: () => runHeadless,
+var NEq = {};
+s1(NEq, {
+  runHeadless: () => hTz,
   removeInterruptedMessage: () => GEq,
   reconcileMcpServers: () => TEq,
   handleOrphanedPermissionResponse: () => ZEq,
@@ -35371,7 +36020,7 @@ function STz(A) {
   }
   return !0;
 }
-async function runHeadless(A, q, K, Y, z, w, _, $) {
+async function hTz(A, q, K, Y, z, w, _, $) {
   if (
     (qH.subscribe((L) => {
       if ((un6(L, K), xq()))
@@ -35404,7 +36053,7 @@ async function runHeadless(A, q, K, Y, z, w, _, $) {
       _3(1));
     return;
   }
-  let O = buildOutputWriter(A, $);
+  let O = BTz(A, $);
   if (xA.isSandboxingEnabled())
     try {
       await xA.initialize(O.createSandboxAskCallback());
@@ -35467,7 +36116,7 @@ async function runHeadless(A, q, K, Y, z, w, _, $) {
       messages: j,
       turnInterruptionState: J,
       agentSetting: D,
-    } = await loadSessionHistory(K, {
+    } = await mTz(K, {
       continue: $.continue,
       teleport: $.teleport,
       resume: $.resume,
@@ -35541,7 +36190,7 @@ async function runHeadless(A, q, K, Y, z, w, _, $) {
   (Ka8(), await tw7());
   let N = [],
     V = null;
-  for await (let L of headlessAgentLoop(
+  for await (let L of ITz(
     O,
     H.mcp.clients,
     [...Y, ...H.mcp.commands],
@@ -35621,7 +36270,7 @@ async function runHeadless(A, q, K, Y, z, w, _, $) {
   }
   (Ck8(), _3(v?.type === "result" && v?.is_error ? 1 : 0));
 }
-function headlessAgentLoop(A, q, K, Y, z, w, _, $, O, H, j, J) {
+function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
   let D = !1,
     X = !1,
     M = !1,
@@ -37207,7 +37856,7 @@ function GEq(A, q) {
   let K = A.findIndex((Y) => Y.uuid === q.uuid);
   if (K !== -1) A.splice(K, 2);
 }
-async function loadSessionHistory(A, q) {
+async function mTz(A, q) {
   let K = !ML();
   if (q.continue)
     try {
@@ -37316,7 +37965,7 @@ async function loadSessionHistory(A, q) {
     }
   return { messages: await xP("startup") };
 }
-function buildOutputWriter(A, q) {
+function BTz(A, q) {
   let K;
   if (typeof A === "string")
     if (A.trim() !== "")
@@ -37525,7 +38174,7 @@ Shut down your team and prepare your final response for the user.`,
   MEq = 1e4,
   tR1,
   aR1;
-var initHeadless = E(() => {
+var VEq = E(() => {
   fkq();
   IZ6();
   QR1();
@@ -37640,9 +38289,9 @@ var On8 = E(() => {
   e6();
   ((lV6 = Y6(W6(), 1)), (vEq = lV6.createContext(void 0)));
 });
-var appExports = {};
-s1(appExports, { App: () => AppComponent });
-function AppComponent(A) {
+var LEq = {};
+s1(LEq, { App: () => gTz });
+function gTz(A) {
   let q = w6(9),
     { getFpsMetrics: K, stats: Y, initialState: z, children: w } = A,
     _;
@@ -37673,7 +38322,7 @@ function AppComponent(A) {
   return O;
 }
 var eR1;
-var initApp = E(() => {
+var yEq = E(() => {
   e6();
   On8();
   Hi8();
@@ -38365,7 +39014,7 @@ function tTz(A, q) {
       D = [
         {
           type: "addRules",
-          rules: [{ toolName: EDIT_TOOL_NAME, ruleContent: J }],
+          rules: [{ toolName: Lq, ruleContent: J }],
           behavior: "allow",
           destination: "session",
         },
@@ -42656,7 +43305,7 @@ var rLq = E(() => {
 });
 function vVz(A) {
   try {
-    let q = webFetchTool.inputSchema.safeParse(A);
+    let q = tM.inputSchema.safeParse(A);
     if (!q.success) return `input:${A.toString()}`;
     let { url: K } = q.data;
     return `domain:${new URL(K).hostname}`;
@@ -42765,7 +43414,7 @@ function oLq(A) {
   let f = Z,
     N;
   if (q[14] !== $ || q[15] !== K.input || q[16] !== w)
-    ((N = webFetchTool.renderToolUseMessage(K.input, { theme: $, verbose: w })),
+    ((N = tM.renderToolUseMessage(K.input, { theme: $, verbose: w })),
       (q[14] = $),
       (q[15] = K.input),
       (q[16] = w),
@@ -46102,7 +46751,7 @@ function tVz(A) {
       return oVz ?? tV6;
     case aVz:
       return sVz ?? tV6;
-    case webFetchTool:
+    case tM:
       return oLq;
     case Wi:
       return eLq;
@@ -46116,7 +46765,7 @@ function tVz(A) {
       return Gyq;
     case ZF:
     case qb:
-    case readTool:
+    case l9:
       return nLq;
     default:
       return tV6;
@@ -48568,7 +49217,7 @@ function dyq(A) {
     { tokenUsage: K, model: Y } = A,
     z;
   if (q[0] !== Y || q[1] !== K)
-    ((z = calculateTokenThresholds(K, Y)), (q[0] = Y), (q[1] = K), (q[2] = z));
+    ((z = tc(K, Y)), (q[0] = Y), (q[1] = K), (q[2] = z));
   else z = q[2];
   let {
       percentLeft: w,
@@ -48624,7 +49273,7 @@ var cyq = E(() => {
   zw6 = Y6(W6(), 1);
 });
 function lyq(A, q) {
-  return calculateTokenThresholds(A, q).isAboveWarningThreshold;
+  return tc(A, q).isAboveWarningThreshold;
 }
 var iyq = E(() => {
   vg();
@@ -63384,7 +64033,7 @@ function Syz(A) {
       if (Y.type !== "tool_use" || !("name" in Y)) continue;
       let z = Y.name;
       if (z.startsWith("mcp__")) return !1;
-      if (z === BASH_TOOL_NAME) {
+      if (z === l4) {
         let _ = Y.input?.command || "";
         if (Ryz.some(($) => $.test(_))) return !1;
       }
@@ -65017,7 +65666,7 @@ function Ir8({
           appendSystemPrompt: X,
         });
         (L3("query_query_start"), Uh1(), dh1(), ch1());
-        for await (let ZY of agentLoop({
+        for await (let ZY of JC({
           messages: V1,
           systemPrompt: v_,
           userContext: A1,
@@ -65758,7 +66407,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
               if (U8) {
                 let h4 = {
                   type: "addRules",
-                  rules: [{ toolName: WEB_FETCH_TOOL_NAME, ruleContent: `domain:${x7}` }],
+                  rules: [{ toolName: HX, ruleContent: `domain:${x7}` }],
                   behavior: m8 ? "allow" : "deny",
                   destination: "localSettings",
                 };
@@ -65838,7 +66487,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
               ) {
                 let j7 = {
                   type: "addRules",
-                  rules: [{ toolName: WEB_FETCH_TOOL_NAME, ruleContent: `domain:${x7}` }],
+                  rules: [{ toolName: HX, ruleContent: `domain:${x7}` }],
                   behavior: "allow",
                   destination: "localSettings",
                 };
@@ -66047,7 +66696,7 @@ Note: ctrl + z now suspends Claude Code, ctrl + _ undoes input.
                 appendSystemPrompt: x7.options.appendSystemPrompt,
               }),
               [cK, $q] = await Promise.all([Q_(), ZO()]),
-              _Y = await partialCompact(
+              _Y = await ZD4(
                 Rq,
                 U8,
                 x7,
@@ -68986,7 +69635,7 @@ async function lRz(A) {
           PW.default.createElement(
             m,
             { flexDirection: "column", gap: 1 },
-            PW.default.createElement(WelcomeArt, null),
+            PW.default.createElement(hR1, null),
             q &&
               PW.default.createElement(
                 m,
@@ -69084,7 +69733,7 @@ var JS1 = E(() => {
   RA();
   Cl();
   g16();
-  initWelcomeArt();
+  Vi8();
   RR1();
   Tr8();
   u1();

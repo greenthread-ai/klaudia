@@ -57200,10 +57200,10 @@ var Oq6 = C((Kx3) => {
                     A.logger?.constructor?.name !== "NoOpLogger"
                     ? A.logger.warn.bind(A.logger)
                     : console.warn)(`@aws-sdk/credential-provider-node - defaultProvider::fromEnv WARNING:
-    Multiple credential sources detected: 
+    Multiple credential sources detected:
     Both AWS_PROFILE and the pair AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY static credentials are set.
     This SDK will proceed with the AWS_PROFILE value.
-    
+
     However, a future version may change this behavior to prefer the ENV static credentials.
     Please ensure that your environment only sets either the AWS_PROFILE or the
     AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY pair.
@@ -70973,9 +70973,466 @@ var K3 = E(() => {
   Object.defineProperties(Bh6.prototype, UJ6);
   ((KV5 = Bh6()), (DG2 = Bh6({ level: j_7 ? j_7.level : 0 })), (H1 = KV5));
 });
-var W6 = C((fV5, Wq6) => {
-  // Klaudia: Replaced 461-line bundled React 19.2.0 with npm import.
-  Wq6.exports = require('react');
+var W6 = C((fV5) => {
+  var RK8 = Symbol.for("react.transitional.element"),
+    YV5 = Symbol.for("react.portal"),
+    zV5 = Symbol.for("react.fragment"),
+    wV5 = Symbol.for("react.strict_mode"),
+    _V5 = Symbol.for("react.profiler"),
+    $V5 = Symbol.for("react.consumer"),
+    OV5 = Symbol.for("react.context"),
+    HV5 = Symbol.for("react.forward_ref"),
+    jV5 = Symbol.for("react.suspense"),
+    JV5 = Symbol.for("react.memo"),
+    G_7 = Symbol.for("react.lazy"),
+    DV5 = Symbol.for("react.activity"),
+    X_7 = Symbol.iterator;
+  function XV5(A) {
+    if (A === null || typeof A !== "object") return null;
+    return (
+      (A = (X_7 && A[X_7]) || A["@@iterator"]),
+      typeof A === "function" ? A : null
+    );
+  }
+  var Z_7 = {
+      isMounted: function () {
+        return !1;
+      },
+      enqueueForceUpdate: function () {},
+      enqueueReplaceState: function () {},
+      enqueueSetState: function () {},
+    },
+    f_7 = Object.assign,
+    T_7 = {};
+  function cJ6(A, q, K) {
+    ((this.props = A),
+      (this.context = q),
+      (this.refs = T_7),
+      (this.updater = K || Z_7));
+  }
+  cJ6.prototype.isReactComponent = {};
+  cJ6.prototype.setState = function (A, q) {
+    if (typeof A !== "object" && typeof A !== "function" && A != null)
+      throw Error(
+        "takes an object of state variables to update or a function which returns an object of state variables.",
+      );
+    this.updater.enqueueSetState(this, A, q, "setState");
+  };
+  cJ6.prototype.forceUpdate = function (A) {
+    this.updater.enqueueForceUpdate(this, A, "forceUpdate");
+  };
+  function N_7() {}
+  N_7.prototype = cJ6.prototype;
+  function CK8(A, q, K) {
+    ((this.props = A),
+      (this.context = q),
+      (this.refs = T_7),
+      (this.updater = K || Z_7));
+  }
+  var SK8 = (CK8.prototype = new N_7());
+  SK8.constructor = CK8;
+  f_7(SK8, cJ6.prototype);
+  SK8.isPureReactComponent = !0;
+  var M_7 = Array.isArray;
+  function yK8() {}
+  var T$ = { H: null, A: null, T: null, S: null },
+    V_7 = Object.prototype.hasOwnProperty;
+  function hK8(A, q, K) {
+    var Y = K.ref;
+    return {
+      $$typeof: RK8,
+      type: A,
+      key: q,
+      ref: Y !== void 0 ? Y : null,
+      props: K,
+    };
+  }
+  function MV5(A, q) {
+    return hK8(A.type, q, A.props);
+  }
+  function IK8(A) {
+    return typeof A === "object" && A !== null && A.$$typeof === RK8;
+  }
+  function PV5(A) {
+    var q = { "=": "=0", ":": "=2" };
+    return (
+      "$" +
+      A.replace(/[=:]/g, function (K) {
+        return q[K];
+      })
+    );
+  }
+  var P_7 = /\/+/g;
+  function LK8(A, q) {
+    return typeof A === "object" && A !== null && A.key != null
+      ? PV5("" + A.key)
+      : q.toString(36);
+  }
+  function WV5(A) {
+    switch (A.status) {
+      case "fulfilled":
+        return A.value;
+      case "rejected":
+        throw A.reason;
+      default:
+        switch (
+          (typeof A.status === "string"
+            ? A.then(yK8, yK8)
+            : ((A.status = "pending"),
+              A.then(
+                function (q) {
+                  A.status === "pending" &&
+                    ((A.status = "fulfilled"), (A.value = q));
+                },
+                function (q) {
+                  A.status === "pending" &&
+                    ((A.status = "rejected"), (A.reason = q));
+                },
+              )),
+          A.status)
+        ) {
+          case "fulfilled":
+            return A.value;
+          case "rejected":
+            throw A.reason;
+        }
+    }
+    throw A;
+  }
+  function dJ6(A, q, K, Y, z) {
+    var w = typeof A;
+    if (w === "undefined" || w === "boolean") A = null;
+    var _ = !1;
+    if (A === null) _ = !0;
+    else
+      switch (w) {
+        case "bigint":
+        case "string":
+        case "number":
+          _ = !0;
+          break;
+        case "object":
+          switch (A.$$typeof) {
+            case RK8:
+            case YV5:
+              _ = !0;
+              break;
+            case G_7:
+              return ((_ = A._init), dJ6(_(A._payload), q, K, Y, z));
+          }
+      }
+    if (_)
+      return (
+        (z = z(A)),
+        (_ = Y === "" ? "." + LK8(A, 0) : Y),
+        M_7(z)
+          ? ((K = ""),
+            _ != null && (K = _.replace(P_7, "$&/") + "/"),
+            dJ6(z, q, K, "", function (H) {
+              return H;
+            }))
+          : z != null &&
+            (IK8(z) &&
+              (z = MV5(
+                z,
+                K +
+                  (z.key == null || (A && A.key === z.key)
+                    ? ""
+                    : ("" + z.key).replace(P_7, "$&/") + "/") +
+                  _,
+              )),
+            q.push(z)),
+        1
+      );
+    _ = 0;
+    var $ = Y === "" ? "." : Y + ":";
+    if (M_7(A))
+      for (var O = 0; O < A.length; O++)
+        ((Y = A[O]), (w = $ + LK8(Y, O)), (_ += dJ6(Y, q, K, w, z)));
+    else if (((O = XV5(A)), typeof O === "function"))
+      for (A = O.call(A), O = 0; !(Y = A.next()).done; )
+        ((Y = Y.value), (w = $ + LK8(Y, O++)), (_ += dJ6(Y, q, K, w, z)));
+    else if (w === "object") {
+      if (typeof A.then === "function") return dJ6(WV5(A), q, K, Y, z);
+      throw (
+        (q = String(A)),
+        Error(
+          "Objects are not valid as a React child (found: " +
+            (q === "[object Object]"
+              ? "object with keys {" + Object.keys(A).join(", ") + "}"
+              : q) +
+            "). If you meant to render a collection of children, use an array instead.",
+        )
+      );
+    }
+    return _;
+  }
+  function s31(A, q, K) {
+    if (A == null) return A;
+    var Y = [],
+      z = 0;
+    return (
+      dJ6(A, Y, "", "", function (w) {
+        return q.call(K, w, z++);
+      }),
+      Y
+    );
+  }
+  function GV5(A) {
+    if (A._status === -1) {
+      var q = A._result;
+      ((q = q()),
+        q.then(
+          function (K) {
+            if (A._status === 0 || A._status === -1)
+              ((A._status = 1), (A._result = K));
+          },
+          function (K) {
+            if (A._status === 0 || A._status === -1)
+              ((A._status = 2), (A._result = K));
+          },
+        ),
+        A._status === -1 && ((A._status = 0), (A._result = q)));
+    }
+    if (A._status === 1) return A._result.default;
+    throw A._result;
+  }
+  var W_7 =
+      typeof reportError === "function"
+        ? reportError
+        : function (A) {
+            if (
+              typeof window === "object" &&
+              typeof window.ErrorEvent === "function"
+            ) {
+              var q = new window.ErrorEvent("error", {
+                bubbles: !0,
+                cancelable: !0,
+                message:
+                  typeof A === "object" &&
+                  A !== null &&
+                  typeof A.message === "string"
+                    ? String(A.message)
+                    : String(A),
+                error: A,
+              });
+              if (!window.dispatchEvent(q)) return;
+            } else if (
+              typeof process === "object" &&
+              typeof process.emit === "function"
+            ) {
+              process.emit("uncaughtException", A);
+              return;
+            }
+            console.error(A);
+          },
+    ZV5 = {
+      map: s31,
+      forEach: function (A, q, K) {
+        s31(
+          A,
+          function () {
+            q.apply(this, arguments);
+          },
+          K,
+        );
+      },
+      count: function (A) {
+        var q = 0;
+        return (
+          s31(A, function () {
+            q++;
+          }),
+          q
+        );
+      },
+      toArray: function (A) {
+        return (
+          s31(A, function (q) {
+            return q;
+          }) || []
+        );
+      },
+      only: function (A) {
+        if (!IK8(A))
+          throw Error(
+            "React.Children.only expected to receive a single React element child.",
+          );
+        return A;
+      },
+    };
+  fV5.Activity = DV5;
+  fV5.Children = ZV5;
+  fV5.Component = cJ6;
+  fV5.Fragment = zV5;
+  fV5.Profiler = _V5;
+  fV5.PureComponent = CK8;
+  fV5.StrictMode = wV5;
+  fV5.Suspense = jV5;
+  fV5.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE = T$;
+  fV5.__COMPILER_RUNTIME = {
+    __proto__: null,
+    c: function (A) {
+      return T$.H.useMemoCache(A);
+    },
+  };
+  fV5.cache = function (A) {
+    return function () {
+      return A.apply(null, arguments);
+    };
+  };
+  fV5.cacheSignal = function () {
+    return null;
+  };
+  fV5.cloneElement = function (A, q, K) {
+    if (A === null || A === void 0)
+      throw Error(
+        "The argument must be a React element, but you passed " + A + ".",
+      );
+    var Y = f_7({}, A.props),
+      z = A.key;
+    if (q != null)
+      for (w in (q.key !== void 0 && (z = "" + q.key), q))
+        !V_7.call(q, w) ||
+          w === "key" ||
+          w === "__self" ||
+          w === "__source" ||
+          (w === "ref" && q.ref === void 0) ||
+          (Y[w] = q[w]);
+    var w = arguments.length - 2;
+    if (w === 1) Y.children = K;
+    else if (1 < w) {
+      for (var _ = Array(w), $ = 0; $ < w; $++) _[$] = arguments[$ + 2];
+      Y.children = _;
+    }
+    return hK8(A.type, z, Y);
+  };
+  fV5.createContext = function (A) {
+    return (
+      (A = {
+        $$typeof: OV5,
+        _currentValue: A,
+        _currentValue2: A,
+        _threadCount: 0,
+        Provider: null,
+        Consumer: null,
+      }),
+      (A.Provider = A),
+      (A.Consumer = { $$typeof: $V5, _context: A }),
+      A
+    );
+  };
+  fV5.createElement = function (A, q, K) {
+    var Y,
+      z = {},
+      w = null;
+    if (q != null)
+      for (Y in (q.key !== void 0 && (w = "" + q.key), q))
+        V_7.call(q, Y) &&
+          Y !== "key" &&
+          Y !== "__self" &&
+          Y !== "__source" &&
+          (z[Y] = q[Y]);
+    var _ = arguments.length - 2;
+    if (_ === 1) z.children = K;
+    else if (1 < _) {
+      for (var $ = Array(_), O = 0; O < _; O++) $[O] = arguments[O + 2];
+      z.children = $;
+    }
+    if (A && A.defaultProps)
+      for (Y in ((_ = A.defaultProps), _)) z[Y] === void 0 && (z[Y] = _[Y]);
+    return hK8(A, w, z);
+  };
+  fV5.createRef = function () {
+    return { current: null };
+  };
+  fV5.forwardRef = function (A) {
+    return { $$typeof: HV5, render: A };
+  };
+  fV5.isValidElement = IK8;
+  fV5.lazy = function (A) {
+    return { $$typeof: G_7, _payload: { _status: -1, _result: A }, _init: GV5 };
+  };
+  fV5.memo = function (A, q) {
+    return { $$typeof: JV5, type: A, compare: q === void 0 ? null : q };
+  };
+  fV5.startTransition = function (A) {
+    var q = T$.T,
+      K = {};
+    T$.T = K;
+    try {
+      var Y = A(),
+        z = T$.S;
+      (z !== null && z(K, Y),
+        typeof Y === "object" &&
+          Y !== null &&
+          typeof Y.then === "function" &&
+          Y.then(yK8, W_7));
+    } catch (w) {
+      W_7(w);
+    } finally {
+      (q !== null && K.types !== null && (q.types = K.types), (T$.T = q));
+    }
+  };
+  fV5.unstable_useCacheRefresh = function () {
+    return T$.H.useCacheRefresh();
+  };
+  fV5.use = function (A) {
+    return T$.H.use(A);
+  };
+  fV5.useActionState = function (A, q, K) {
+    return T$.H.useActionState(A, q, K);
+  };
+  fV5.useCallback = function (A, q) {
+    return T$.H.useCallback(A, q);
+  };
+  fV5.useContext = function (A) {
+    return T$.H.useContext(A);
+  };
+  fV5.useDebugValue = function () {};
+  fV5.useDeferredValue = function (A, q) {
+    return T$.H.useDeferredValue(A, q);
+  };
+  fV5.useEffect = function (A, q) {
+    return T$.H.useEffect(A, q);
+  };
+  fV5.useEffectEvent = function (A) {
+    return T$.H.useEffectEvent(A);
+  };
+  fV5.useId = function () {
+    return T$.H.useId();
+  };
+  fV5.useImperativeHandle = function (A, q, K) {
+    return T$.H.useImperativeHandle(A, q, K);
+  };
+  fV5.useInsertionEffect = function (A, q) {
+    return T$.H.useInsertionEffect(A, q);
+  };
+  fV5.useLayoutEffect = function (A, q) {
+    return T$.H.useLayoutEffect(A, q);
+  };
+  fV5.useMemo = function (A, q) {
+    return T$.H.useMemo(A, q);
+  };
+  fV5.useOptimistic = function (A, q) {
+    return T$.H.useOptimistic(A, q);
+  };
+  fV5.useReducer = function (A, q, K) {
+    return T$.H.useReducer(A, q, K);
+  };
+  fV5.useRef = function (A) {
+    return T$.H.useRef(A);
+  };
+  fV5.useState = function (A) {
+    return T$.H.useState(A);
+  };
+  fV5.useSyncExternalStore = function (A, q, K) {
+    return T$.H.useSyncExternalStore(A, q, K);
+  };
+  fV5.useTransition = function () {
+    return T$.H.useTransition();
+  };
+  fV5.version = "19.2.0";
 });
 import { dirname as Ov5 } from "path";
 function $8(A, q, K = {}) {

@@ -1,7 +1,4 @@
 // Klaudia: Replaced 2494-line bundled ws 8.x with npm import.
-// Original had 13 C() blocks (WebSocket, WebSocketServer, Sender, Receiver,
-// createWebSocketStream, plus 8 internal helpers). All internal — only
-// _e6 (export object) and L$6 (initializer) are referenced externally.
 var _e6 = {};
 s1(_e6, {
   default: () => V0,

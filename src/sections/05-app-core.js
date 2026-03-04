@@ -27634,7 +27634,7 @@ var Bj8 = E(() => {
         }),
         Object.defineProperty(this, zp7, {
           value: () => {
-            return `RestError: ${this.message} 
+            return `RestError: ${this.message}
  ${rM9.sanitize(Object.assign(Object.assign({}, this), { request: this.request, response: this.response }))}`;
           },
           enumerable: !1,
@@ -45606,8 +45606,8 @@ class td {
   }
   async getToken(A, q) {
     if (!this.client) {
-      let K = `${$56}: is unavailable. tenantId, clientId, and federatedTokenFilePath are required parameters. 
-      In DefaultAzureCredential and ManagedIdentityCredential, these can be provided as environment variables - 
+      let K = `${$56}: is unavailable. tenantId, clientId, and federatedTokenFilePath are required parameters.
+      In DefaultAzureCredential and ManagedIdentityCredential, these can be provided as environment variables -
       "AZURE_TENANT_ID",
       "AZURE_CLIENT_ID",
       "AZURE_FEDERATED_TOKEN_FILE". See the troubleshooting guide for more information: https://aka.ms/azsdk/js/identity/workloadidentitycredential/troubleshoot`;
@@ -47112,12 +47112,12 @@ class rM8 {
   }
   async getToken(A, q) {
     if (!this.clientAssertionCredential) {
-      let K = `${jI}: is unavailable. To use Federation Identity in Azure Pipelines, the following parameters are required - 
+      let K = `${jI}: is unavailable. To use Federation Identity in Azure Pipelines, the following parameters are required -
       tenantId,
       clientId,
       serviceConnectionId,
       systemAccessToken,
-      "SYSTEM_OIDCREQUESTURI".      
+      "SYSTEM_OIDCREQUESTURI".
       See the troubleshooting guide for more information: https://aka.ms/azsdk/js/identity/azurepipelinescredential/troubleshoot`;
       throw (_R.error(K), new N4(K));
     }
@@ -47170,7 +47170,7 @@ function nE9(A) {
   } catch (K) {
     let Y = `${jI}: Authentication Failed. oidcToken field not detected in the response.`;
     throw (
-      _R.error(`Response from service = ${q}, Response Headers ["x-vss-e2eid"] = ${A.headers.get("x-vss-e2eid")} 
+      _R.error(`Response from service = ${q}, Response Headers ["x-vss-e2eid"] = ${A.headers.get("x-vss-e2eid")}
       and ["x-msedge-ref"] = ${A.headers.get("x-msedge-ref")}, error message = ${K.message}`),
       _R.error(Y),
       new eh(A.status, {
@@ -55070,16 +55070,16 @@ var L64 = C((_P) => {
   _P.GoogleAuthExceptionMessages = {
     API_KEY_WITH_CREDENTIALS:
       "API Keys and Credentials are mutually exclusive authentication methods and cannot be used together.",
-    NO_PROJECT_ID_FOUND: `Unable to detect a Project Id in the current environment. 
-To learn more about authentication and Google APIs, visit: 
+    NO_PROJECT_ID_FOUND: `Unable to detect a Project Id in the current environment.
+To learn more about authentication and Google APIs, visit:
 https://cloud.google.com/docs/authentication/getting-started`,
-    NO_CREDENTIALS_FOUND: `Unable to find credentials in current environment. 
-To learn more about authentication and Google APIs, visit: 
+    NO_CREDENTIALS_FOUND: `Unable to find credentials in current environment.
+To learn more about authentication and Google APIs, visit:
 https://cloud.google.com/docs/authentication/getting-started`,
     NO_ADC_FOUND:
       "Could not load the default credentials. Browse to https://cloud.google.com/docs/authentication/getting-started for more information.",
     NO_UNIVERSE_DOMAIN_FOUND: `Unable to detect a Universe Domain in the current environment.
-To learn more about Universe Domain retrieval, visit: 
+To learn more about Universe Domain retrieval, visit:
 https://cloud.google.com/compute/docs/metadata/predefined-metadata-keys`,
   };
   class yP8 {
@@ -64103,11 +64103,11 @@ function p74(A) {
       "When looking for past context:",
       "1. Search topic files in your memory directory:",
       "```",
-      `${GREP_TOOL_NAME} with pattern="<search term>" path="${K}" glob="*.md"`,
+      `${k5} with pattern="<search term>" path="${K}" glob="*.md"`,
       "```",
       "2. Session transcript logs (last resort — large files, slow):",
       "```",
-      `${GREP_TOOL_NAME} with pattern="<search term>" path="${O}/" glob="*.jsonl"`,
+      `${k5} with pattern="<search term>" path="${O}/" glob="*.jsonl"`,
       "```",
       "Use narrow search terms (error messages, file paths, function names) rather than broad keywords.",
       "",
@@ -64210,11 +64210,11 @@ function Q74(A, q, K) {
       "When looking for past context:",
       "1. Search topic files in your memory directory:",
       "```",
-      `${GREP_TOOL_NAME} with pattern="<search term>" path="${q}" glob="*.md"`,
+      `${k5} with pattern="<search term>" path="${q}" glob="*.md"`,
       "```",
       "2. Session transcript logs (last resort — large files, slow):",
       "```",
-      `${GREP_TOOL_NAME} with pattern="<search term>" path="${z}/" glob="*.jsonl"`,
+      `${k5} with pattern="<search term>" path="${z}/" glob="*.jsonl"`,
       "```",
       "Use narrow search terms (error messages, file paths, function names) rather than broad keywords.",
       "",
@@ -64309,11 +64309,11 @@ function _p9(A) {
     "When looking for past context:",
     "1. Search topic files in your memory directory:",
     "```",
-    `${GREP_TOOL_NAME} with pattern="<search term>" path="${A}" glob="*.md"`,
+    `${k5} with pattern="<search term>" path="${A}" glob="*.md"`,
     "```",
     "2. Session transcript logs (last resort — large files, slow):",
     "```",
-    `${GREP_TOOL_NAME} with pattern="<search term>" path="${q}/" glob="*.jsonl"`,
+    `${k5} with pattern="<search term>" path="${q}/" glob="*.jsonl"`,
     "```",
     "Use narrow search terms (error messages, file paths, function names) rather than broad keywords.",
     "",
@@ -65140,7 +65140,7 @@ The assistant did not use the todo list because this is an informational request
 <example>
 User: Can you add a comment to the calculateTotal function to explain what it does?
 Assistant: Sure, let me add a comment to the calculateTotal function to explain what it does.
-* Uses the ${EDIT_TOOL_NAME} tool to add a comment to the calculateTotal function *
+* Uses the ${Lq} tool to add a comment to the calculateTotal function *
 
 <reasoning>
 The assistant did not use the todo list because this is a single, straightforward task confined to one location in the code. Adding a comment doesn't require tracking multiple steps or systematic organization.
@@ -65230,7 +65230,7 @@ function $44() {
 function O44() {
   return null;
 }
-var TODO_WRITE_TOOL_NAME = "TodoWrite";
+var Bt = "TodoWrite";
 import { AsyncLocalStorage as Vp9 } from "async_hooks";
 function fR() {
   return TG8.getStore();
@@ -65719,7 +65719,7 @@ var yP6 = E(() => {
       }),
     )),
     (aN = {
-      name: TODO_WRITE_TOOL_NAME,
+      name: Bt,
       maxResultSizeChars: 1e5,
       strict: !0,
       input_examples: [
@@ -65862,11 +65862,11 @@ Your strengths:
 - Reading and analyzing file contents
 
 Guidelines:
-- Use ${GLOB_TOOL_NAME} for broad file pattern matching
-- Use ${GREP_TOOL_NAME} for searching file contents with regex
-- Use ${READ_TOOL_NAME} when you know the specific file path you need to read
-- Use ${BASH_TOOL_NAME} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
-- NEVER use ${BASH_TOOL_NAME} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
+- Use ${Sz} for broad file pattern matching
+- Use ${k5} for searching file contents with regex
+- Use ${n4} when you know the specific file path you need to read
+- Use ${l4} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
+- NEVER use ${l4} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
 - Adapt your search approach based on the thoroughness level specified by the caller
 - Return file paths as absolute paths in your final response
 - For clear communication, avoid using emojis
@@ -65880,7 +65880,7 @@ Complete the user's search request efficiently and report your findings clearly.
     (QB = {
       agentType: "Explore",
       whenToUse: bp9,
-      disallowedTools: [tq, pB, EDIT_TOOL_NAME, WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME],
+      disallowedTools: [tq, pB, Lq, U3, o0],
       source: "built-in",
       baseDir: "built-in",
       model: "haiku",
@@ -66018,15 +66018,15 @@ function rp9(A, q) {
     Y = A.has(tq),
     z = q.length > 0 && A.has(_j),
     w = [
-      `To read files use ${READ_TOOL_NAME} instead of cat, head, tail, or sed`,
-      `To edit files use ${EDIT_TOOL_NAME} instead of sed or awk`,
-      `To create files use ${WRITE_TOOL_NAME} instead of cat with heredoc or echo redirection`,
-      `To search for files use ${GLOB_TOOL_NAME} instead of find or ls`,
-      `To search the content of files, use ${GREP_TOOL_NAME} instead of grep or rg`,
-      `Reserve using the ${BASH_TOOL_NAME} exclusively for system commands and terminal operations that require shell execution. If you are unsure and there is a relevant dedicated tool, default to using the dedicated tool and only fallback on using the ${BASH_TOOL_NAME} tool for these if it is absolutely necessary.`,
+      `To read files use ${n4} instead of cat, head, tail, or sed`,
+      `To edit files use ${Lq} instead of sed or awk`,
+      `To create files use ${U3} instead of cat with heredoc or echo redirection`,
+      `To search for files use ${Sz} instead of find or ls`,
+      `To search the content of files, use ${k5} instead of grep or rg`,
+      `Reserve using the ${l4} exclusively for system commands and terminal operations that require shell execution. If you are unsure and there is a relevant dedicated tool, default to using the dedicated tool and only fallback on using the ${l4} tool for these if it is absolutely necessary.`,
     ],
     _ = [
-      `Do NOT use the ${BASH_TOOL_NAME} to run commands when a relevant dedicated tool is provided. Using dedicated tools allows the user to better understand and review your work. This is CRITICAL to assisting the user:`,
+      `Do NOT use the ${l4} to run commands when a relevant dedicated tool is provided. Using dedicated tools allows the user to better understand and review your work. This is CRITICAL to assisting the user:`,
       w,
       K
         ? `Break down and manage your work with the ${aN.name} tool. These tools are helpful for planning your work and helping the user track your progress. Mark each task as completed as soon as you are done with the task. Do not batch up multiple tasks before marking them as completed.`
@@ -66034,8 +66034,8 @@ function rp9(A, q) {
       Y
         ? `Use the ${tq} tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Importantly, avoid duplicating work that subagents are already doing - if you delegate research to a subagent, do not also perform the same searches yourself.`
         : null,
-      `For simple, directed codebase searches (e.g. for a specific file/class/function) use the ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME} directly.`,
-      `For broader codebase exploration and deep research, use the ${tq} tool with subagent_type=${QB.agentType}. This is slower than calling ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME} directly so use this only when a simple, directed search proves to be insufficient or when your task will clearly require more than ${T44} queries.`,
+      `For simple, directed codebase searches (e.g. for a specific file/class/function) use the ${Sz} or ${k5} directly.`,
+      `For broader codebase exploration and deep research, use the ${tq} tool with subagent_type=${QB.agentType}. This is slower than calling ${Sz} or ${k5} directly so use this only when a simple, directed search proves to be insufficient or when your task will clearly require more than ${T44} queries.`,
       z
         ? `/<skill-name> (e.g., /commit) is shorthand for users to invoke a user-invocable skill. When executed, the skill gets expanded to a full prompt. Use the ${_j} tool to execute them. IMPORTANT: Only use ${_j} for skills listed in its user-invocable skills section - do not guess or use built-in CLI commands.`
         : null,
@@ -66498,7 +66498,7 @@ var h44 = E(() => {
 When asked to convert the user's shell PS1 configuration, follow these steps:
 1. Read the user's shell configuration files in this order of preference:
    - ~/.zshrc
-   - ~/.bashrc  
+   - ~/.bashrc
    - ~/.bash_profile
    - ~/.profile
 
@@ -66506,7 +66506,7 @@ When asked to convert the user's shell PS1 configuration, follow these steps:
 
 3. Convert PS1 escape sequences to shell commands:
    - \\u → $(whoami)
-   - \\h → $(hostname -s)  
+   - \\h → $(hostname -s)
    - \\H → $(hostname)
    - \\w → $(pwd)
    - \\W → $(basename "$(pwd)")
@@ -66565,7 +66565,7 @@ How to use the statusLine command:
        "type": "string"            // Optional: Agent type identifier
      }
    }
-   
+
    You can use this JSON data in your command like:
    - $(cat | jq -r '.model.display_name')
    - $(cat | jq -r '.workspace.current_dir')
@@ -66586,7 +66586,7 @@ How to use the statusLine command:
 3. Update the user's ~/.claude/settings.json with:
    {
      "statusLine": {
-       "type": "command", 
+       "type": "command",
        "command": "your_command_here"
      }
    }
@@ -66630,12 +66630,12 @@ You will be provided with a set of requirements and optionally a perspective on 
 
 2. **Explore Thoroughly**:
    - Read any files provided to you in the initial prompt
-   - Find existing patterns and conventions using ${GLOB_TOOL_NAME}, ${GREP_TOOL_NAME}, and ${READ_TOOL_NAME}
+   - Find existing patterns and conventions using ${Sz}, ${k5}, and ${n4}
    - Understand the current architecture
    - Identify similar features as reference
    - Trace through relevant code paths
-   - Use ${BASH_TOOL_NAME} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
-   - NEVER use ${BASH_TOOL_NAME} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
+   - Use ${l4} ONLY for read-only operations (ls, git status, git log, git diff, find, cat, head, tail)
+   - NEVER use ${l4} for: mkdir, touch, rm, cp, mv, git add, git commit, npm install, pip install, or any file creation/modification
 
 3. **Design Solution**:
    - Create implementation approach based on your assigned perspective
@@ -66662,7 +66662,7 @@ REMEMBER: You can ONLY explore and plan. You CANNOT and MUST NOT write, edit, or
       agentType: "Plan",
       whenToUse:
         "Software architect agent for designing implementation plans. Use this when you need to plan the implementation strategy for a task. Returns step-by-step plans, identifies critical files, and considers architectural trade-offs.",
-      disallowedTools: [tq, pB, EDIT_TOOL_NAME, WRITE_TOOL_NAME, NOTEBOOK_EDIT_TOOL_NAME],
+      disallowedTools: [tq, pB, Lq, U3, o0],
       source: "built-in",
       tools: QB.tools,
       baseDir: "built-in",
@@ -66731,12 +66731,12 @@ var QG8 = E(() => {
 
 **Approach:**
 1. Determine which domain the user's question falls into
-2. Use ${WEB_FETCH_TOOL_NAME} to fetch the appropriate docs map
+2. Use ${HX} to fetch the appropriate docs map
 3. Identify the most relevant documentation URLs from the map
 4. Fetch the specific documentation pages
 5. Provide clear, actionable guidance based on official documentation
-6. Use ${WEB_SEARCH_TOOL_NAME} if docs don't cover the topic
-7. Reference local project files (CLAUDE.md, .claude/ directory) when relevant using ${READ_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME}
+6. Use ${uy} if docs don't cover the topic
+7. Reference local project files (CLAUDE.md, .claude/ directory) when relevant using ${n4}, ${Sz}, and ${k5}
 
 **Guidelines:**
 - Always prioritize official documentation over assumptions
@@ -66751,7 +66751,7 @@ Complete the user's request by providing accurate, documentation-based guidance.
     agentType: pG8,
     whenToUse:
       'Use this agent when the user asks questions ("Can Claude...", "Does Claude...", "How do I...") about: (1) Claude Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Claude Agent SDK - building custom agents; (3) Claude API (formerly Anthropic API) - API usage, tool use, Anthropic SDK usage. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed claude-code-guide agent that you can resume using the "resume" parameter.',
-    tools: [GLOB_TOOL_NAME, GREP_TOOL_NAME, READ_TOOL_NAME, WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME],
+    tools: [Sz, k5, n4, HX, uy],
     source: "built-in",
     baseDir: "built-in",
     model: "haiku",
@@ -67007,7 +67007,7 @@ var p44 = E(() => {
   dB();
   FZw = [
     XP,
-    `${BASH_TOOL_NAME}(sleep:*)`,
+    `${l4}(sleep:*)`,
     "mcp__slack__send_message",
     "mcp__slack__read_thread",
     "mcp__claude_ai_Slack__slack_send_message",
@@ -90437,7 +90437,7 @@ function ww4(A, q, K, Y) {
       w.outputs = [
         {
           output_type: "stream",
-          text: `Outputs are too large to include. Use ${BASH_TOOL_NAME} with: cat <notebook_path> | jq '.cells[${q}].outputs'`,
+          text: `Outputs are too large to include. Use ${l4} with: cat <notebook_path> | jq '.cells[${q}].outputs'`,
         },
       ];
     else w.outputs = _;
@@ -93689,7 +93689,7 @@ async function z_4(A, q, K, Y, z, w, _, $, O, H, j) {
       V = p6(N),
       v = Buffer.byteLength(V);
     if (v > $)
-      throw Error(`Notebook content (${v3(v)}) exceeds maximum allowed size (${v3($)}). Use ${BASH_TOOL_NAME} with jq to read specific portions:
+      throw Error(`Notebook content (${v3(v)}) exceeds maximum allowed size (${v3($)}). Use ${l4} with jq to read specific portions:
   cat "${A}" | jq '.cells[:20]' # First 20 cells
   cat "${A}" | jq '.cells[100:120]' # Cells 100-120
   cat "${A}" | jq '.cells | length' # Count total cells
@@ -93894,7 +93894,7 @@ var he9,
   ge9,
   pe9,
   Qe9,
-  readTool,
+  l9,
   de9 = `
 
 <system-reminder>
@@ -94133,8 +94133,8 @@ var lI = E(() => {
         }),
       ]);
     })),
-    (readTool = {
-      name: READ_TOOL_NAME,
+    (l9 = {
+      name: n4,
       maxResultSizeChars: 1e5,
       strict: !0,
       input_examples: [
@@ -94185,7 +94185,7 @@ var lI = E(() => {
       },
       async checkPermissions(A, q) {
         let K = await q.getAppState();
-        return Re(readTool, A, K.toolPermissionContext);
+        return Re(l9, A, K.toolPermissionContext);
       },
       renderToolUseMessage: gw4,
       renderToolUseTag: Fw4,
@@ -97162,7 +97162,7 @@ function u_4(A, q) {
 function m_4(A, q, K, Y) {
   let z = `Error: result (${q.toLocaleString()} characters) exceeds maximum allowed tokens. Output has been saved to ${A}.
 Format: ${K}
-Use offset and limit parameters to read specific portions of the file, the ${GREP_TOOL_NAME} tool to search for specific content, and jq to make structured queries.
+Use offset and limit parameters to read specific portions of the file, the ${k5} tool to search for specific content, and jq to make structured queries.
 REQUIREMENTS FOR SUMMARIZATION/ANALYSIS/REVIEW:
 - You MUST read the content from the file at ${A} in sequential chunks until 100% of the content has been read.
 `,
@@ -98904,7 +98904,7 @@ Usage examples:
 `,
   Z$4 = `
 List available resources from configured MCP servers.
-Each returned resource will include all standard MCP resource fields plus a 'server' field 
+Each returned resource will include all standard MCP resource fields plus a 'server' field
 indicating which server the resource belongs to.
 
 Parameters:
@@ -109954,8 +109954,8 @@ async function gqY(A) {
         try {
           if (QR(w) <= z.timestamp) return null;
           let _ = { file_path: w };
-          if (!(await readTool.validateInput(_, A)).result) return null;
-          let O = await readTool.call(_, A);
+          if (!(await l9.validateInput(_, A)).result) return null;
+          let O = await l9.call(_, A);
           if (O.data.type === "text") {
             if (sV8(z.content, O.data.file.content) === "") return null;
             return {
@@ -110022,7 +110022,7 @@ async function pqY(A, q, K) {
 `) +
                   `
 
-> This memory file was truncated to the first ${Q01} lines. Use the ${READ_TOOL_NAME} tool to view the complete file at: ${H}`
+> This memory file was truncated to the first ${Q01} lines. Use the ${n4} tool to view the complete file at: ${H}`
                 : j;
             return (
               K.set(H, {
@@ -110065,7 +110065,7 @@ function QqY(A) {
 function nj4(A, q) {
   let K = new Set(
     q
-      .filter((Y) => B5(Y, READ_TOOL_NAME))
+      .filter((Y) => B5(Y, n4))
       .map((Y) => (QqY(Y.input) ? Y.input.file_path : void 0))
       .filter((Y) => Y !== void 0),
   );
@@ -110185,13 +110185,13 @@ function rqY(A) {
   return q >= GqY.TOKEN_COOLDOWN;
 }
 async function oqY(A) {
-  if (!A.options.tools.some((K) => B5(K, BASH_TOOL_NAME))) return [];
+  if (!A.options.tools.some((K) => B5(K, l4))) return [];
   let q = await Fc.getNewDiagnostics();
   if (q.length === 0) return [];
   return [{ type: "diagnostics", files: q, isNew: !0 }];
 }
 async function aqY(A) {
-  if (!A.options.tools.some((q) => B5(q, BASH_TOOL_NAME))) return [];
+  if (!A.options.tools.some((q) => B5(q, l4))) return [];
   y("LSP Diagnostics: getLSPDiagnosticAttachments called");
   try {
     let q = Yj4();
@@ -110308,7 +110308,7 @@ async function kv8(A, q, K, Y, z, w) {
       if (fG6(A, X.toolPermissionContext)) return null;
       try {
         let M = { file_path: A, offset: _ ?? 1, limit: qb6 },
-          P = await readTool.call(M, q);
+          P = await l9.call(M, q);
         return (
           n(K, {}),
           {
@@ -110323,9 +110323,9 @@ async function kv8(A, q, K, Y, z, w) {
         return (n(Y, {}), null);
       }
     }
-    if (!(await readTool.validateInput(j, q)).result) return null;
+    if (!(await l9.validateInput(j, q)).result) return null;
     try {
-      let X = await readTool.call(j, q);
+      let X = await l9.call(j, q);
       return (
         n(K, {}),
         { type: "file", filename: A, content: X.data, displayPath: ic(y1(), A) }
@@ -110377,7 +110377,7 @@ function tqY(A) {
   return { turnsSinceLastTodoWrite: Y, turnsSinceLastReminder: z };
 }
 async function eqY(A, q) {
-  if (!q.options.tools.some((z) => B5(z, TODO_WRITE_TOOL_NAME))) return [];
+  if (!q.options.tools.some((z) => B5(z, Bt))) return [];
   if (!A || A.length === 0) return [];
   let { turnsSinceLastTodoWrite: K, turnsSinceLastReminder: Y } = tqY(A);
   if (K >= d01.TURNS_SINCE_WRITE && Y >= d01.TURNS_BETWEEN_REMINDERS) {
@@ -110512,7 +110512,7 @@ function wKY(A) {
 }
 function _KY(A, q) {
   if (!X1(process.env.CLAUDE_CODE_ENABLE_TOKEN_USAGE_ATTACHMENT)) return [];
-  let K = effectiveContextWindow(q),
+  let K = I96(q),
     Y = lf(A);
   return [{ type: "token_usage", used: Y, total: K, remaining: K - Y }];
 }
@@ -113175,7 +113175,7 @@ async function fJ4(A, q, K, Y, z) {
     let S = $.isolation === "worktree" ? "worktree" : void 0;
     if (NY() && v && X !== void 0) {
       let I = new Set(X);
-      for (let B of [WRITE_TOOL_NAME, EDIT_TOOL_NAME, READ_TOOL_NAME]) if (!I.has(B)) X = [...X, B];
+      for (let B of [U3, Lq, n4]) if (!I.has(B)) X = [...X, B];
     }
     return {
       agentType: J,
@@ -113340,7 +113340,7 @@ function J3Y(A, q, K = "flagSettings") {
       z = m96(Y.tools);
     if (NY() && Y.memory && z !== void 0) {
       let O = new Set(z);
-      for (let H of [WRITE_TOOL_NAME, EDIT_TOOL_NAME, READ_TOOL_NAME]) if (!O.has(H)) z = [...z, H];
+      for (let H of [U3, Lq, n4]) if (!O.has(H)) z = [...z, H];
     }
     let w = Y.disallowedTools !== void 0 ? m96(Y.disallowedTools) : void 0,
       _ = Y.prompt;
@@ -113473,7 +113473,7 @@ function D3Y(A, q, K, Y, z) {
       h = m96(K.tools);
     if (NY() && P && h !== void 0) {
       let j6 = new Set(h);
-      for (let P6 of [WRITE_TOOL_NAME, EDIT_TOOL_NAME, READ_TOOL_NAME]) if (!j6.has(P6)) h = [...h, P6];
+      for (let P6 of [U3, Lq, n4]) if (!j6.has(P6)) h = [...h, P6];
     }
     let F = K.disallowedTools,
       g = F !== void 0 ? m96(F) : void 0,
@@ -113770,7 +113770,7 @@ function qQ6(A) {
   }
   return Math.ceil(q * 1.3333333333333333);
 }
-async function microcompact(A, q, K) {
+async function Lg(A, q, K) {
   if (
     (yJ4(),
     X1(process.env.DISABLE_MICROCOMPACT) || jA("tengu_cache_plum_violet", !1))
@@ -113803,7 +113803,7 @@ async function microcompact(A, q, K) {
   }
   let j = lf(A),
     J = q?.options.mainLoopModel ?? c3();
-  if (!calculateTokenThresholds(j, J).isAboveWarningThreshold || O < G3Y) (H.clear(), (O = 0));
+  if (!tc(j, J).isAboveWarningThreshold || O < G3Y) (H.clear(), (O = 0));
   let D = new Set(),
     X = 0;
   {
@@ -113900,7 +113900,7 @@ async function microcompact(A, q, K) {
           if (!ig6(S))
             L = `${KD1}Tool result saved to: ${S.filepath}
 
-Use ${READ_TOOL_NAME} to view${KZ8}`;
+Use ${n4} to view${KZ8}`;
           f.push({ ...v, content: L });
         } else f.push(v);
       }
@@ -113927,7 +113927,7 @@ Use ${READ_TOOL_NAME} to view${KZ8}`;
         Array.isArray(N.message.content)
       ) {
         for (let V of N.message.content)
-          if (V.type === "tool_use" && V.name === READ_TOOL_NAME) {
+          if (V.type === "tool_use" && V.name === n4) {
             let v = V.input?.file_path;
             if (typeof v === "string")
               if (H.has(V.id)) Z.set(v, V.id);
@@ -113985,7 +113985,7 @@ var ek = E(() => {
   fc();
   r1();
   f1();
-  ((T3Y = new Set([READ_TOOL_NAME, ...$d, GREP_TOOL_NAME, GLOB_TOOL_NAME, WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME, EDIT_TOOL_NAME, WRITE_TOOL_NAME, ...[]])),
+  ((T3Y = new Set([n4, ...$d, k5, Sz, uy, HX, Lq, U3, ...[]])),
     (B96 = new Set()),
     (ep6 = new Set()),
     (AQ6 = new Map()));
@@ -114023,7 +114023,7 @@ async function KQ6(A, q) {
 async function ie(A, q, K, Y) {
   let z = await Promise.all(
       A.map((_) =>
-        buildToolSchema(_, {
+        PP1(_, {
           getToolPermissionContext: q,
           tools: A,
           agents: K?.activeAgents ?? [],
@@ -114268,7 +114268,7 @@ async function C3Y(A) {
   return { agentTokens: Y, agentDetails: K };
 }
 async function S3Y(A) {
-  let q = await microcompact(A),
+  let q = await Lg(A),
     K = {
       totalTokens: 0,
       toolCallTokens: 0,
@@ -114327,7 +114327,7 @@ async function XP1(A, q, K, Y, z, w, _, $, O) {
     U = u.skillFrontmatter.reduce((Z6, S6) => Z6 + S6.tokens, 0),
     c = F.totalTokens,
     d = Vg(),
-    a = d ? effectiveContextWindow(q) - ov8 : void 0,
+    a = d ? I96(q) - ov8 : void 0,
     e = [];
   if (X > 0)
     e.push({ name: "System prompt", tokens: X, color: "promptBorder" });
@@ -115042,7 +115042,7 @@ function ZP1(A) {
     else if (K.type === "tool_use") q += p6(K.input).length;
   return q;
 }
-function countMessageTokens(A) {
+function ak(A) {
   let q = A.length - 1;
   while (q >= 0) {
     let K = A[q],
@@ -115209,7 +115209,7 @@ Here's an example of how your output should be structured:
 5. Problem Solving:
    [Description of solved problems and ongoing troubleshooting]
 
-6. All user messages: 
+6. All user messages:
     - [Detailed non tool use user message]
     - [...]
 
@@ -115227,7 +115227,7 @@ Here's an example of how your output should be structured:
 </summary>
 </example>
 
-Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response. 
+Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.
 
 There may be additional summarization instructions provided in the included context. If so, remember to follow these instructions when creating the above summary. Examples of instructions include:
 <example>
@@ -115992,10 +115992,10 @@ function re(A) {
     ...A.hookResults,
   ];
 }
-async function compactConversation(A, q, K, Y, z, w = !1) {
+async function SG6(A, q, K, Y, z, w = !1) {
   try {
     if (A.length === 0) throw Error(HQ6);
-    let _ = countMessageTokens(A),
+    let _ = ak(A),
       $ = OD4(A),
       O = {};
     try {
@@ -116127,13 +116127,13 @@ ${j.newCustomInstructions}`
       q.setSDKStatus?.(null));
   }
 }
-async function partialCompact(A, q, K, Y, z) {
+async function ZD4(A, q, K, Y, z) {
   try {
     let w = A.slice(q),
       _ = A.slice(0, q);
     if (w.length === 0)
       throw Error("Nothing to summarize after the selected message.");
-    let $ = countMessageTokens(A);
+    let $ = ak(A);
     (K.onCompactProgress?.({ type: "hooks_start", hookType: "pre_compact" }),
       K.setSDKStatus?.("compacting"));
     let O = await CP1(
@@ -116341,9 +116341,9 @@ async function TD4({
           Y.options.agentDefinitions.activeAgents,
           "compact",
         ))
-          ? UZ([readTool, TP1, ...K.mcp.tools], "name")
-          : [readTool],
-        W = callModel({
+          ? UZ([l9, TP1, ...K.mcp.tools], "name")
+          : [l9],
+        W = hG6({
           messages: PD(w5Y([...DV(A), q])),
           systemPrompt: Qq([
             "You are a helpful AI assistant tasked with summarizing conversations.",
@@ -117375,12 +117375,12 @@ var QP1 = E(() => {
   MQ6();
   Vq();
 });
-function effectiveContextWindow(A) {
+function I96(A) {
   let q = Math.min(Ek8(A), S5Y);
   return fX(A, iH()) - q;
 }
-function compactThreshold(A) {
-  let q = effectiveContextWindow(A),
+function PQ6(A) {
+  let q = I96(A),
     K = q - ov8,
     Y = process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
   if (Y) {
@@ -117392,9 +117392,9 @@ function compactThreshold(A) {
   }
   return K;
 }
-function calculateTokenThresholds(A, q) {
-  let K = compactThreshold(q),
-    Y = Vg() ? K : effectiveContextWindow(q),
+function tc(A, q) {
+  let K = PQ6(q),
+    Y = Vg() ? K : I96(q),
     z = Math.max(0, Math.round(((Y - A) / Y) * 100)),
     w = Y - h5Y,
     _ = Y - I5Y,
@@ -117419,24 +117419,24 @@ function Vg() {
   if (X1(process.env.DISABLE_AUTO_COMPACT)) return !1;
   return k1().autoCompactEnabled;
 }
-async function shouldAutocompact(A, q, K) {
+async function x5Y(A, q, K) {
   if (K === "session_memory" || K === "compact") return !1;
   if (!Vg()) return !1;
-  let Y = countMessageTokens(A),
-    z = compactThreshold(q),
-    w = effectiveContextWindow(q);
+  let Y = ak(A),
+    z = PQ6(q),
+    w = I96(q);
   y(`autocompact: tokens=${Y} threshold=${z} effectiveWindow=${w}`);
-  let { isAboveAutoCompactThreshold: _ } = calculateTokenThresholds(Y, q);
+  let { isAboveAutoCompactThreshold: _ } = tc(Y, q);
   return _;
 }
-async function autocompactFn(A, q, K, Y) {
+async function JX4(A, q, K, Y) {
   if (X1(process.env.DISABLE_COMPACT)) return { wasCompacted: !1 };
   let z = q.options.mainLoopModel;
-  if (!(await shouldAutocompact(A, z, Y))) return { wasCompacted: !1 };
-  let _ = await uP1(A, q.agentId, compactThreshold(z));
+  if (!(await x5Y(A, z, Y))) return { wasCompacted: !1 };
+  let _ = await uP1(A, q.agentId, PQ6(z));
   if (_) return (d96(void 0), se(), { wasCompacted: !0, compactionResult: _ });
   try {
-    let $ = await compactConversation(A, q, K, !0, void 0, !0);
+    let $ = await SG6(A, q, K, !0, void 0, !0);
     return (d96(void 0), se(), { wasCompacted: !0, compactionResult: $ });
   } catch ($) {
     if (!ay6($, U96)) $6($ instanceof Error ? $ : Error(String($)));
@@ -118592,9 +118592,9 @@ When using the ${tq} tool, you must specify a subagent_type parameter to select 
   return `${w}
 
 When NOT to use the ${tq} tool:
-- If you want to read a specific file path, use the ${READ_TOOL_NAME} or ${GLOB_TOOL_NAME} tool instead of the ${tq} tool, to find the match more quickly
-- If you are searching for a specific class definition like "class Foo", use the ${GLOB_TOOL_NAME} tool instead, to find the match more quickly
-- If you are searching for code within a specific file or set of 2-3 files, use the ${READ_TOOL_NAME} tool instead of the ${tq} tool, to find the match more quickly
+- If you want to read a specific file path, use the ${n4} or ${Sz} tool instead of the ${tq} tool, to find the match more quickly
+- If you are searching for a specific class definition like "class Foo", use the ${Sz} tool instead, to find the match more quickly
+- If you are searching for code within a specific file or set of 2-3 files, use the ${n4} tool instead of the ${tq} tool, to find the match more quickly
 - Other tasks that are not related to the agent descriptions above
 
 
@@ -118637,8 +118637,8 @@ Example usage:
 <example>
 user: "Please write a function that checks if a number is prime"
 assistant: Sure let me write a function that checks if a number is prime
-assistant: First let me use the ${WRITE_TOOL_NAME} tool to write a function that checks if a number is prime
-assistant: I'm going to use the ${WRITE_TOOL_NAME} tool to write the following code:
+assistant: First let me use the ${U3} tool to write a function that checks if a number is prime
+assistant: I'm going to use the ${U3} tool to write the following code:
 <code>
 function isPrime(n) {
   if (n <= 1) return false
@@ -118793,16 +118793,16 @@ var NQ6 = E(() => {
   ((dG6 = new Set([SU, VG, pG6, tq, TO, CU])),
     (Qk8 = new Set([...dG6])),
     (zW1 = new Set([
-      READ_TOOL_NAME,
-      WEB_SEARCH_TOOL_NAME,
-      TODO_WRITE_TOOL_NAME,
-      GREP_TOOL_NAME,
-      WEB_FETCH_TOOL_NAME,
-      GLOB_TOOL_NAME,
+      n4,
+      uy,
+      Bt,
+      k5,
+      HX,
+      Sz,
       ...$d,
-      EDIT_TOOL_NAME,
-      WRITE_TOOL_NAME,
-      NOTEBOOK_EDIT_TOOL_NAME,
+      Lq,
+      U3,
+      o0,
       _j,
       yX,
       XP,
@@ -118900,7 +118900,7 @@ function aX4(A, q) {
 ### ENTERING SUB-AGENT ROUTINE ###
 Entered sub-agent context
 
-PLEASE NOTE: 
+PLEASE NOTE:
 - The messages above this point are from the main thread prior to sub-agent execution. They are provided as context only.
 - Context messages may include tool_use blocks for tools that are not available in the sub-agent context. You should only use the tools specifically provided to you in the system prompt.
 - Only complete the specific sub-agent task you have been assigned below.`,
@@ -146097,7 +146097,7 @@ var eT4 = C((dew, tT4) => {
         keyword:
           "lock rep repe repz repne repnz xaquire xrelease bnd nobnd aaa aad aam aas adc add and arpl bb0_reset bb1_reset bound bsf bsr bswap bt btc btr bts call cbw cdq cdqe clc cld cli clts cmc cmp cmpsb cmpsd cmpsq cmpsw cmpxchg cmpxchg486 cmpxchg8b cmpxchg16b cpuid cpu_read cpu_write cqo cwd cwde daa das dec div dmint emms enter equ f2xm1 fabs fadd faddp fbld fbstp fchs fclex fcmovb fcmovbe fcmove fcmovnb fcmovnbe fcmovne fcmovnu fcmovu fcom fcomi fcomip fcomp fcompp fcos fdecstp fdisi fdiv fdivp fdivr fdivrp femms feni ffree ffreep fiadd ficom ficomp fidiv fidivr fild fimul fincstp finit fist fistp fisttp fisub fisubr fld fld1 fldcw fldenv fldl2e fldl2t fldlg2 fldln2 fldpi fldz fmul fmulp fnclex fndisi fneni fninit fnop fnsave fnstcw fnstenv fnstsw fpatan fprem fprem1 fptan frndint frstor fsave fscale fsetpm fsin fsincos fsqrt fst fstcw fstenv fstp fstsw fsub fsubp fsubr fsubrp ftst fucom fucomi fucomip fucomp fucompp fxam fxch fxtract fyl2x fyl2xp1 hlt ibts icebp idiv imul in inc incbin insb insd insw int int01 int1 int03 int3 into invd invpcid invlpg invlpga iret iretd iretq iretw jcxz jecxz jrcxz jmp jmpe lahf lar lds lea leave les lfence lfs lgdt lgs lidt lldt lmsw loadall loadall286 lodsb lodsd lodsq lodsw loop loope loopne loopnz loopz lsl lss ltr mfence monitor mov movd movq movsb movsd movsq movsw movsx movsxd movzx mul mwait neg nop not or out outsb outsd outsw packssdw packsswb packuswb paddb paddd paddsb paddsiw paddsw paddusb paddusw paddw pand pandn pause paveb pavgusb pcmpeqb pcmpeqd pcmpeqw pcmpgtb pcmpgtd pcmpgtw pdistib pf2id pfacc pfadd pfcmpeq pfcmpge pfcmpgt pfmax pfmin pfmul pfrcp pfrcpit1 pfrcpit2 pfrsqit1 pfrsqrt pfsub pfsubr pi2fd pmachriw pmaddwd pmagw pmulhriw pmulhrwa pmulhrwc pmulhw pmullw pmvgezb pmvlzb pmvnzb pmvzb pop popa popad popaw popf popfd popfq popfw por prefetch prefetchw pslld psllq psllw psrad psraw psrld psrlq psrlw psubb psubd psubsb psubsiw psubsw psubusb psubusw psubw punpckhbw punpckhdq punpckhwd punpcklbw punpckldq punpcklwd push pusha pushad pushaw pushf pushfd pushfq pushfw pxor rcl rcr rdshr rdmsr rdpmc rdtsc rdtscp ret retf retn rol ror rdm rsdc rsldt rsm rsts sahf sal salc sar sbb scasb scasd scasq scasw sfence sgdt shl shld shr shrd sidt sldt skinit smi smint smintold smsw stc std sti stosb stosd stosq stosw str sub svdc svldt svts swapgs syscall sysenter sysexit sysret test ud0 ud1 ud2b ud2 ud2a umov verr verw fwait wbinvd wrshr wrmsr xadd xbts xchg xlatb xlat xor cmove cmovz cmovne cmovnz cmova cmovnbe cmovae cmovnb cmovb cmovnae cmovbe cmovna cmovg cmovnle cmovge cmovnl cmovl cmovnge cmovle cmovng cmovc cmovnc cmovo cmovno cmovs cmovns cmovp cmovpe cmovnp cmovpo je jz jne jnz ja jnbe jae jnb jb jnae jbe jna jg jnle jge jnl jl jnge jle jng jc jnc jo jno js jns jpo jnp jpe jp sete setz setne setnz seta setnbe setae setnb setnc setb setnae setcset setbe setna setg setnle setge setnl setl setnge setle setng sets setns seto setno setpe setp setpo setnp addps addss andnps andps cmpeqps cmpeqss cmpleps cmpless cmpltps cmpltss cmpneqps cmpneqss cmpnleps cmpnless cmpnltps cmpnltss cmpordps cmpordss cmpunordps cmpunordss cmpps cmpss comiss cvtpi2ps cvtps2pi cvtsi2ss cvtss2si cvttps2pi cvttss2si divps divss ldmxcsr maxps maxss minps minss movaps movhps movlhps movlps movhlps movmskps movntps movss movups mulps mulss orps rcpps rcpss rsqrtps rsqrtss shufps sqrtps sqrtss stmxcsr subps subss ucomiss unpckhps unpcklps xorps fxrstor fxrstor64 fxsave fxsave64 xgetbv xsetbv xsave xsave64 xsaveopt xsaveopt64 xrstor xrstor64 prefetchnta prefetcht0 prefetcht1 prefetcht2 maskmovq movntq pavgb pavgw pextrw pinsrw pmaxsw pmaxub pminsw pminub pmovmskb pmulhuw psadbw pshufw pf2iw pfnacc pfpnacc pi2fw pswapd maskmovdqu clflush movntdq movnti movntpd movdqa movdqu movdq2q movq2dq paddq pmuludq pshufd pshufhw pshuflw pslldq psrldq psubq punpckhqdq punpcklqdq addpd addsd andnpd andpd cmpeqpd cmpeqsd cmplepd cmplesd cmpltpd cmpltsd cmpneqpd cmpneqsd cmpnlepd cmpnlesd cmpnltpd cmpnltsd cmpordpd cmpordsd cmpunordpd cmpunordsd cmppd comisd cvtdq2pd cvtdq2ps cvtpd2dq cvtpd2pi cvtpd2ps cvtpi2pd cvtps2dq cvtps2pd cvtsd2si cvtsd2ss cvtsi2sd cvtss2sd cvttpd2pi cvttpd2dq cvttps2dq cvttsd2si divpd divsd maxpd maxsd minpd minsd movapd movhpd movlpd movmskpd movupd mulpd mulsd orpd shufpd sqrtpd sqrtsd subpd subsd ucomisd unpckhpd unpcklpd xorpd addsubpd addsubps haddpd haddps hsubpd hsubps lddqu movddup movshdup movsldup clgi stgi vmcall vmclear vmfunc vmlaunch vmload vmmcall vmptrld vmptrst vmread vmresume vmrun vmsave vmwrite vmxoff vmxon invept invvpid pabsb pabsw pabsd palignr phaddw phaddd phaddsw phsubw phsubd phsubsw pmaddubsw pmulhrsw pshufb psignb psignw psignd extrq insertq movntsd movntss lzcnt blendpd blendps blendvpd blendvps dppd dpps extractps insertps movntdqa mpsadbw packusdw pblendvb pblendw pcmpeqq pextrb pextrd pextrq phminposuw pinsrb pinsrd pinsrq pmaxsb pmaxsd pmaxud pmaxuw pminsb pminsd pminud pminuw pmovsxbw pmovsxbd pmovsxbq pmovsxwd pmovsxwq pmovsxdq pmovzxbw pmovzxbd pmovzxbq pmovzxwd pmovzxwq pmovzxdq pmuldq pmulld ptest roundpd roundps roundsd roundss crc32 pcmpestri pcmpestrm pcmpistri pcmpistrm pcmpgtq popcnt getsec pfrcpv pfrsqrtv movbe aesenc aesenclast aesdec aesdeclast aesimc aeskeygenassist vaesenc vaesenclast vaesdec vaesdeclast vaesimc vaeskeygenassist vaddpd vaddps vaddsd vaddss vaddsubpd vaddsubps vandpd vandps vandnpd vandnps vblendpd vblendps vblendvpd vblendvps vbroadcastss vbroadcastsd vbroadcastf128 vcmpeq_ospd vcmpeqpd vcmplt_ospd vcmpltpd vcmple_ospd vcmplepd vcmpunord_qpd vcmpunordpd vcmpneq_uqpd vcmpneqpd vcmpnlt_uspd vcmpnltpd vcmpnle_uspd vcmpnlepd vcmpord_qpd vcmpordpd vcmpeq_uqpd vcmpnge_uspd vcmpngepd vcmpngt_uspd vcmpngtpd vcmpfalse_oqpd vcmpfalsepd vcmpneq_oqpd vcmpge_ospd vcmpgepd vcmpgt_ospd vcmpgtpd vcmptrue_uqpd vcmptruepd vcmplt_oqpd vcmple_oqpd vcmpunord_spd vcmpneq_uspd vcmpnlt_uqpd vcmpnle_uqpd vcmpord_spd vcmpeq_uspd vcmpnge_uqpd vcmpngt_uqpd vcmpfalse_ospd vcmpneq_ospd vcmpge_oqpd vcmpgt_oqpd vcmptrue_uspd vcmppd vcmpeq_osps vcmpeqps vcmplt_osps vcmpltps vcmple_osps vcmpleps vcmpunord_qps vcmpunordps vcmpneq_uqps vcmpneqps vcmpnlt_usps vcmpnltps vcmpnle_usps vcmpnleps vcmpord_qps vcmpordps vcmpeq_uqps vcmpnge_usps vcmpngeps vcmpngt_usps vcmpngtps vcmpfalse_oqps vcmpfalseps vcmpneq_oqps vcmpge_osps vcmpgeps vcmpgt_osps vcmpgtps vcmptrue_uqps vcmptrueps vcmplt_oqps vcmple_oqps vcmpunord_sps vcmpneq_usps vcmpnlt_uqps vcmpnle_uqps vcmpord_sps vcmpeq_usps vcmpnge_uqps vcmpngt_uqps vcmpfalse_osps vcmpneq_osps vcmpge_oqps vcmpgt_oqps vcmptrue_usps vcmpps vcmpeq_ossd vcmpeqsd vcmplt_ossd vcmpltsd vcmple_ossd vcmplesd vcmpunord_qsd vcmpunordsd vcmpneq_uqsd vcmpneqsd vcmpnlt_ussd vcmpnltsd vcmpnle_ussd vcmpnlesd vcmpord_qsd vcmpordsd vcmpeq_uqsd vcmpnge_ussd vcmpngesd vcmpngt_ussd vcmpngtsd vcmpfalse_oqsd vcmpfalsesd vcmpneq_oqsd vcmpge_ossd vcmpgesd vcmpgt_ossd vcmpgtsd vcmptrue_uqsd vcmptruesd vcmplt_oqsd vcmple_oqsd vcmpunord_ssd vcmpneq_ussd vcmpnlt_uqsd vcmpnle_uqsd vcmpord_ssd vcmpeq_ussd vcmpnge_uqsd vcmpngt_uqsd vcmpfalse_ossd vcmpneq_ossd vcmpge_oqsd vcmpgt_oqsd vcmptrue_ussd vcmpsd vcmpeq_osss vcmpeqss vcmplt_osss vcmpltss vcmple_osss vcmpless vcmpunord_qss vcmpunordss vcmpneq_uqss vcmpneqss vcmpnlt_usss vcmpnltss vcmpnle_usss vcmpnless vcmpord_qss vcmpordss vcmpeq_uqss vcmpnge_usss vcmpngess vcmpngt_usss vcmpngtss vcmpfalse_oqss vcmpfalsess vcmpneq_oqss vcmpge_osss vcmpgess vcmpgt_osss vcmpgtss vcmptrue_uqss vcmptruess vcmplt_oqss vcmple_oqss vcmpunord_sss vcmpneq_usss vcmpnlt_uqss vcmpnle_uqss vcmpord_sss vcmpeq_usss vcmpnge_uqss vcmpngt_uqss vcmpfalse_osss vcmpneq_osss vcmpge_oqss vcmpgt_oqss vcmptrue_usss vcmpss vcomisd vcomiss vcvtdq2pd vcvtdq2ps vcvtpd2dq vcvtpd2ps vcvtps2dq vcvtps2pd vcvtsd2si vcvtsd2ss vcvtsi2sd vcvtsi2ss vcvtss2sd vcvtss2si vcvttpd2dq vcvttps2dq vcvttsd2si vcvttss2si vdivpd vdivps vdivsd vdivss vdppd vdpps vextractf128 vextractps vhaddpd vhaddps vhsubpd vhsubps vinsertf128 vinsertps vlddqu vldqqu vldmxcsr vmaskmovdqu vmaskmovps vmaskmovpd vmaxpd vmaxps vmaxsd vmaxss vminpd vminps vminsd vminss vmovapd vmovaps vmovd vmovq vmovddup vmovdqa vmovqqa vmovdqu vmovqqu vmovhlps vmovhpd vmovhps vmovlhps vmovlpd vmovlps vmovmskpd vmovmskps vmovntdq vmovntqq vmovntdqa vmovntpd vmovntps vmovsd vmovshdup vmovsldup vmovss vmovupd vmovups vmpsadbw vmulpd vmulps vmulsd vmulss vorpd vorps vpabsb vpabsw vpabsd vpacksswb vpackssdw vpackuswb vpackusdw vpaddb vpaddw vpaddd vpaddq vpaddsb vpaddsw vpaddusb vpaddusw vpalignr vpand vpandn vpavgb vpavgw vpblendvb vpblendw vpcmpestri vpcmpestrm vpcmpistri vpcmpistrm vpcmpeqb vpcmpeqw vpcmpeqd vpcmpeqq vpcmpgtb vpcmpgtw vpcmpgtd vpcmpgtq vpermilpd vpermilps vperm2f128 vpextrb vpextrw vpextrd vpextrq vphaddw vphaddd vphaddsw vphminposuw vphsubw vphsubd vphsubsw vpinsrb vpinsrw vpinsrd vpinsrq vpmaddwd vpmaddubsw vpmaxsb vpmaxsw vpmaxsd vpmaxub vpmaxuw vpmaxud vpminsb vpminsw vpminsd vpminub vpminuw vpminud vpmovmskb vpmovsxbw vpmovsxbd vpmovsxbq vpmovsxwd vpmovsxwq vpmovsxdq vpmovzxbw vpmovzxbd vpmovzxbq vpmovzxwd vpmovzxwq vpmovzxdq vpmulhuw vpmulhrsw vpmulhw vpmullw vpmulld vpmuludq vpmuldq vpor vpsadbw vpshufb vpshufd vpshufhw vpshuflw vpsignb vpsignw vpsignd vpslldq vpsrldq vpsllw vpslld vpsllq vpsraw vpsrad vpsrlw vpsrld vpsrlq vptest vpsubb vpsubw vpsubd vpsubq vpsubsb vpsubsw vpsubusb vpsubusw vpunpckhbw vpunpckhwd vpunpckhdq vpunpckhqdq vpunpcklbw vpunpcklwd vpunpckldq vpunpcklqdq vpxor vrcpps vrcpss vrsqrtps vrsqrtss vroundpd vroundps vroundsd vroundss vshufpd vshufps vsqrtpd vsqrtps vsqrtsd vsqrtss vstmxcsr vsubpd vsubps vsubsd vsubss vtestps vtestpd vucomisd vucomiss vunpckhpd vunpckhps vunpcklpd vunpcklps vxorpd vxorps vzeroall vzeroupper pclmullqlqdq pclmulhqlqdq pclmullqhqdq pclmulhqhqdq pclmulqdq vpclmullqlqdq vpclmulhqlqdq vpclmullqhqdq vpclmulhqhqdq vpclmulqdq vfmadd132ps vfmadd132pd vfmadd312ps vfmadd312pd vfmadd213ps vfmadd213pd vfmadd123ps vfmadd123pd vfmadd231ps vfmadd231pd vfmadd321ps vfmadd321pd vfmaddsub132ps vfmaddsub132pd vfmaddsub312ps vfmaddsub312pd vfmaddsub213ps vfmaddsub213pd vfmaddsub123ps vfmaddsub123pd vfmaddsub231ps vfmaddsub231pd vfmaddsub321ps vfmaddsub321pd vfmsub132ps vfmsub132pd vfmsub312ps vfmsub312pd vfmsub213ps vfmsub213pd vfmsub123ps vfmsub123pd vfmsub231ps vfmsub231pd vfmsub321ps vfmsub321pd vfmsubadd132ps vfmsubadd132pd vfmsubadd312ps vfmsubadd312pd vfmsubadd213ps vfmsubadd213pd vfmsubadd123ps vfmsubadd123pd vfmsubadd231ps vfmsubadd231pd vfmsubadd321ps vfmsubadd321pd vfnmadd132ps vfnmadd132pd vfnmadd312ps vfnmadd312pd vfnmadd213ps vfnmadd213pd vfnmadd123ps vfnmadd123pd vfnmadd231ps vfnmadd231pd vfnmadd321ps vfnmadd321pd vfnmsub132ps vfnmsub132pd vfnmsub312ps vfnmsub312pd vfnmsub213ps vfnmsub213pd vfnmsub123ps vfnmsub123pd vfnmsub231ps vfnmsub231pd vfnmsub321ps vfnmsub321pd vfmadd132ss vfmadd132sd vfmadd312ss vfmadd312sd vfmadd213ss vfmadd213sd vfmadd123ss vfmadd123sd vfmadd231ss vfmadd231sd vfmadd321ss vfmadd321sd vfmsub132ss vfmsub132sd vfmsub312ss vfmsub312sd vfmsub213ss vfmsub213sd vfmsub123ss vfmsub123sd vfmsub231ss vfmsub231sd vfmsub321ss vfmsub321sd vfnmadd132ss vfnmadd132sd vfnmadd312ss vfnmadd312sd vfnmadd213ss vfnmadd213sd vfnmadd123ss vfnmadd123sd vfnmadd231ss vfnmadd231sd vfnmadd321ss vfnmadd321sd vfnmsub132ss vfnmsub132sd vfnmsub312ss vfnmsub312sd vfnmsub213ss vfnmsub213sd vfnmsub123ss vfnmsub123sd vfnmsub231ss vfnmsub231sd vfnmsub321ss vfnmsub321sd rdfsbase rdgsbase rdrand wrfsbase wrgsbase vcvtph2ps vcvtps2ph adcx adox rdseed clac stac xstore xcryptecb xcryptcbc xcryptctr xcryptcfb xcryptofb montmul xsha1 xsha256 llwpcb slwpcb lwpval lwpins vfmaddpd vfmaddps vfmaddsd vfmaddss vfmaddsubpd vfmaddsubps vfmsubaddpd vfmsubaddps vfmsubpd vfmsubps vfmsubsd vfmsubss vfnmaddpd vfnmaddps vfnmaddsd vfnmaddss vfnmsubpd vfnmsubps vfnmsubsd vfnmsubss vfrczpd vfrczps vfrczsd vfrczss vpcmov vpcomb vpcomd vpcomq vpcomub vpcomud vpcomuq vpcomuw vpcomw vphaddbd vphaddbq vphaddbw vphadddq vphaddubd vphaddubq vphaddubw vphaddudq vphadduwd vphadduwq vphaddwd vphaddwq vphsubbw vphsubdq vphsubwd vpmacsdd vpmacsdqh vpmacsdql vpmacssdd vpmacssdqh vpmacssdql vpmacsswd vpmacssww vpmacswd vpmacsww vpmadcsswd vpmadcswd vpperm vprotb vprotd vprotq vprotw vpshab vpshad vpshaq vpshaw vpshlb vpshld vpshlq vpshlw vbroadcasti128 vpblendd vpbroadcastb vpbroadcastw vpbroadcastd vpbroadcastq vpermd vpermpd vpermps vpermq vperm2i128 vextracti128 vinserti128 vpmaskmovd vpmaskmovq vpsllvd vpsllvq vpsravd vpsrlvd vpsrlvq vgatherdpd vgatherqpd vgatherdps vgatherqps vpgatherdd vpgatherqd vpgatherdq vpgatherqq xabort xbegin xend xtest andn bextr blci blcic blsi blsic blcfill blsfill blcmsk blsmsk blsr blcs bzhi mulx pdep pext rorx sarx shlx shrx tzcnt tzmsk t1mskc valignd valignq vblendmpd vblendmps vbroadcastf32x4 vbroadcastf64x4 vbroadcasti32x4 vbroadcasti64x4 vcompresspd vcompressps vcvtpd2udq vcvtps2udq vcvtsd2usi vcvtss2usi vcvttpd2udq vcvttps2udq vcvttsd2usi vcvttss2usi vcvtudq2pd vcvtudq2ps vcvtusi2sd vcvtusi2ss vexpandpd vexpandps vextractf32x4 vextractf64x4 vextracti32x4 vextracti64x4 vfixupimmpd vfixupimmps vfixupimmsd vfixupimmss vgetexppd vgetexpps vgetexpsd vgetexpss vgetmantpd vgetmantps vgetmantsd vgetmantss vinsertf32x4 vinsertf64x4 vinserti32x4 vinserti64x4 vmovdqa32 vmovdqa64 vmovdqu32 vmovdqu64 vpabsq vpandd vpandnd vpandnq vpandq vpblendmd vpblendmq vpcmpltd vpcmpled vpcmpneqd vpcmpnltd vpcmpnled vpcmpd vpcmpltq vpcmpleq vpcmpneqq vpcmpnltq vpcmpnleq vpcmpq vpcmpequd vpcmpltud vpcmpleud vpcmpnequd vpcmpnltud vpcmpnleud vpcmpud vpcmpequq vpcmpltuq vpcmpleuq vpcmpnequq vpcmpnltuq vpcmpnleuq vpcmpuq vpcompressd vpcompressq vpermi2d vpermi2pd vpermi2ps vpermi2q vpermt2d vpermt2pd vpermt2ps vpermt2q vpexpandd vpexpandq vpmaxsq vpmaxuq vpminsq vpminuq vpmovdb vpmovdw vpmovqb vpmovqd vpmovqw vpmovsdb vpmovsdw vpmovsqb vpmovsqd vpmovsqw vpmovusdb vpmovusdw vpmovusqb vpmovusqd vpmovusqw vpord vporq vprold vprolq vprolvd vprolvq vprord vprorq vprorvd vprorvq vpscatterdd vpscatterdq vpscatterqd vpscatterqq vpsraq vpsravq vpternlogd vpternlogq vptestmd vptestmq vptestnmd vptestnmq vpxord vpxorq vrcp14pd vrcp14ps vrcp14sd vrcp14ss vrndscalepd vrndscaleps vrndscalesd vrndscaless vrsqrt14pd vrsqrt14ps vrsqrt14sd vrsqrt14ss vscalefpd vscalefps vscalefsd vscalefss vscatterdpd vscatterdps vscatterqpd vscatterqps vshuff32x4 vshuff64x2 vshufi32x4 vshufi64x2 kandnw kandw kmovw knotw kortestw korw kshiftlw kshiftrw kunpckbw kxnorw kxorw vpbroadcastmb2q vpbroadcastmw2d vpconflictd vpconflictq vplzcntd vplzcntq vexp2pd vexp2ps vrcp28pd vrcp28ps vrcp28sd vrcp28ss vrsqrt28pd vrsqrt28ps vrsqrt28sd vrsqrt28ss vgatherpf0dpd vgatherpf0dps vgatherpf0qpd vgatherpf0qps vgatherpf1dpd vgatherpf1dps vgatherpf1qpd vgatherpf1qps vscatterpf0dpd vscatterpf0dps vscatterpf0qpd vscatterpf0qps vscatterpf1dpd vscatterpf1dps vscatterpf1qpd vscatterpf1qps prefetchwt1 bndmk bndcl bndcu bndcn bndmov bndldx bndstx sha1rnds4 sha1nexte sha1msg1 sha1msg2 sha256rnds2 sha256msg1 sha256msg2 hint_nop0 hint_nop1 hint_nop2 hint_nop3 hint_nop4 hint_nop5 hint_nop6 hint_nop7 hint_nop8 hint_nop9 hint_nop10 hint_nop11 hint_nop12 hint_nop13 hint_nop14 hint_nop15 hint_nop16 hint_nop17 hint_nop18 hint_nop19 hint_nop20 hint_nop21 hint_nop22 hint_nop23 hint_nop24 hint_nop25 hint_nop26 hint_nop27 hint_nop28 hint_nop29 hint_nop30 hint_nop31 hint_nop32 hint_nop33 hint_nop34 hint_nop35 hint_nop36 hint_nop37 hint_nop38 hint_nop39 hint_nop40 hint_nop41 hint_nop42 hint_nop43 hint_nop44 hint_nop45 hint_nop46 hint_nop47 hint_nop48 hint_nop49 hint_nop50 hint_nop51 hint_nop52 hint_nop53 hint_nop54 hint_nop55 hint_nop56 hint_nop57 hint_nop58 hint_nop59 hint_nop60 hint_nop61 hint_nop62 hint_nop63",
         built_in:
-          "ip eip rip al ah bl bh cl ch dl dh sil dil bpl spl r8b r9b r10b r11b r12b r13b r14b r15b ax bx cx dx si di bp sp r8w r9w r10w r11w r12w r13w r14w r15w eax ebx ecx edx esi edi ebp esp eip r8d r9d r10d r11d r12d r13d r14d r15d rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15 cs ds es fs gs ss st st0 st1 st2 st3 st4 st5 st6 st7 mm0 mm1 mm2 mm3 mm4 mm5 mm6 mm7 xmm0  xmm1  xmm2  xmm3  xmm4  xmm5  xmm6  xmm7  xmm8  xmm9 xmm10  xmm11 xmm12 xmm13 xmm14 xmm15 xmm16 xmm17 xmm18 xmm19 xmm20 xmm21 xmm22 xmm23 xmm24 xmm25 xmm26 xmm27 xmm28 xmm29 xmm30 xmm31 ymm0  ymm1  ymm2  ymm3  ymm4  ymm5  ymm6  ymm7  ymm8  ymm9 ymm10  ymm11 ymm12 ymm13 ymm14 ymm15 ymm16 ymm17 ymm18 ymm19 ymm20 ymm21 ymm22 ymm23 ymm24 ymm25 ymm26 ymm27 ymm28 ymm29 ymm30 ymm31 zmm0  zmm1  zmm2  zmm3  zmm4  zmm5  zmm6  zmm7  zmm8  zmm9 zmm10  zmm11 zmm12 zmm13 zmm14 zmm15 zmm16 zmm17 zmm18 zmm19 zmm20 zmm21 zmm22 zmm23 zmm24 zmm25 zmm26 zmm27 zmm28 zmm29 zmm30 zmm31 k0 k1 k2 k3 k4 GREP_TOOL_NAME k6 k7 bnd0 bnd1 bnd2 bnd3 cr0 cr1 cr2 cr3 cr4 cr8 dr0 dr1 dr2 dr3 dr8 tr3 tr4 tr5 tr6 tr7 r0 r1 r2 r3 r4 r5 r6 r7 r0b r1b r2b r3b r4b r5b r6b r7b r0w r1w r2w r3w r4w r5w r6w r7w r0d r1d r2d r3d r4d r5d r6d r7d r0h r1h r2h r3h r0l r1l r2l r3l r4l r5l r6l r7l r8l r9l r10l r11l r12l r13l r14l r15l db dw dd dq dt ddq do dy dz resb resw resd resq rest resdq reso resy resz incbin equ times byte word dword qword nosplit rel abs seg wrt strict near far a32 ptr",
+          "ip eip rip al ah bl bh cl ch dl dh sil dil bpl spl r8b r9b r10b r11b r12b r13b r14b r15b ax bx cx dx si di bp sp r8w r9w r10w r11w r12w r13w r14w r15w eax ebx ecx edx esi edi ebp esp eip r8d r9d r10d r11d r12d r13d r14d r15d rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15 cs ds es fs gs ss st st0 st1 st2 st3 st4 st5 st6 st7 mm0 mm1 mm2 mm3 mm4 mm5 mm6 mm7 xmm0  xmm1  xmm2  xmm3  xmm4  xmm5  xmm6  xmm7  xmm8  xmm9 xmm10  xmm11 xmm12 xmm13 xmm14 xmm15 xmm16 xmm17 xmm18 xmm19 xmm20 xmm21 xmm22 xmm23 xmm24 xmm25 xmm26 xmm27 xmm28 xmm29 xmm30 xmm31 ymm0  ymm1  ymm2  ymm3  ymm4  ymm5  ymm6  ymm7  ymm8  ymm9 ymm10  ymm11 ymm12 ymm13 ymm14 ymm15 ymm16 ymm17 ymm18 ymm19 ymm20 ymm21 ymm22 ymm23 ymm24 ymm25 ymm26 ymm27 ymm28 ymm29 ymm30 ymm31 zmm0  zmm1  zmm2  zmm3  zmm4  zmm5  zmm6  zmm7  zmm8  zmm9 zmm10  zmm11 zmm12 zmm13 zmm14 zmm15 zmm16 zmm17 zmm18 zmm19 zmm20 zmm21 zmm22 zmm23 zmm24 zmm25 zmm26 zmm27 zmm28 zmm29 zmm30 zmm31 k0 k1 k2 k3 k4 k5 k6 k7 bnd0 bnd1 bnd2 bnd3 cr0 cr1 cr2 cr3 cr4 cr8 dr0 dr1 dr2 dr3 dr8 tr3 tr4 tr5 tr6 tr7 r0 r1 r2 r3 r4 r5 r6 r7 r0b r1b r2b r3b r4b r5b r6b r7b r0w r1w r2w r3w r4w r5w r6w r7w r0d r1d r2d r3d r4d r5d r6d r7d r0h r1h r2h r3h r0l r1l r2l r3l r4l r5l r6l r7l r8l r9l r10l r11l r12l r13l r14l r15l db dw dd dq dt ddq do dy dz resb resw resd resq rest resdq reso resy resz incbin equ times byte word dword qword nosplit rel abs seg wrt strict near far a32 ptr",
         meta: "%define %xdefine %+ %undef %defstr %deftok %assign %strcat %strlen %substr %rotate %elif %else %endif %if %ifmacro %ifctx %ifidn %ifidni %ifid %ifnum %ifstr %iftoken %ifempty %ifenv %error %warning %fatal %rep %endrep %include %push %pop %repl %pathsearch %depend %use %arg %stacksize %local %line %comment %endcomment .nolist __FILE__ __LINE__ __SECT__  __BITS__ __OUTPUT_FORMAT__ __DATE__ __TIME__ __DATE_NUM__ __TIME_NUM__ __UTC_DATE__ __UTC_TIME__ __UTC_DATE_NUM__ __UTC_TIME_NUM__  __PASS__ struc endstruc istruc at iend align alignb sectalign daz nodaz up down zero default option assume public bits use16 use32 use64 default section segment absolute extern global common cpu float __utf16__ __utf16le__ __utf16be__ __utf32__ __utf32le__ __utf32be__ __float8__ __float16__ __float32__ __float64__ __float80m__ __float80e__ __float128l__ __float128h__ __Infinity__ __QNaN__ __SNaN__ Inf NaN QNaN SNaN float8 float16 float32 float64 float80m float80e float128l float128h __FLOAT_DAZ__ __FLOAT_ROUND__ __FLOAT__",
       },
       contains: [
@@ -157840,7 +157840,7 @@ function DXY(A) {
   return !1;
 }
 function XXY(A, q) {
-  if (A !== WRITE_TOOL_NAME && A !== EDIT_TOOL_NAME) return !1;
+  if (A !== U3 && A !== Lq) return !1;
   let K = JXY(q);
   return K !== void 0 && aQ6(K);
 }
@@ -203107,7 +203107,7 @@ var TS8 = C((hp4) => {
           "channel_stacktrace",
           "(" +
             this.channelzRef.id +
-            `) Channel constructed 
+            `) Channel constructed
 ` +
             ((O = X.stack) === null || O === void 0
               ? void 0
@@ -221816,7 +221816,7 @@ async function* jC({
   );
   let q6 = N.length > 0 ? N[N.length - 1].uuid : null;
   try {
-    for await (let A6 of agentLoop({
+    for await (let A6 of JC({
       messages: N,
       systemPrompt: g,
       userContext: v,
@@ -226112,7 +226112,7 @@ async function* YpY(A, q, K, Y) {
   let z = Y;
   for (let w of A) {
     Y.setInProgressToolUseIDs((_) => new Set([..._, w.id]));
-    for await (let _ of dispatchToolUse(
+    for await (let _ of Rc6(
       w,
       q.find(($) =>
         $.message.content.some((O) => O.type === "tool_use" && O.id === w.id),
@@ -226130,7 +226130,7 @@ async function* zpY(A, q, K, Y) {
   yield* YN1(
     A.map(async function* (z) {
       (Y.setInProgressToolUseIDs((w) => new Set([...w, z.id])),
-        yield* dispatchToolUse(
+        yield* Rc6(
           z,
           q.find((w) =>
             w.message.content.some(
@@ -226307,13 +226307,13 @@ function Pz6(A, q, K = wpY) {
   for (let _ of A)
     if (_.type === "assistant" && Array.isArray(_.message.content)) {
       for (let $ of _.message.content)
-        if ($.type === "tool_use" && $.name === READ_TOOL_NAME) {
+        if ($.type === "tool_use" && $.name === n4) {
           let O = $.input;
           if (O?.file_path && O?.offset === void 0 && O?.limit === void 0) {
             let H = Q4(O.file_path, q);
             z.set($.id, H);
           }
-        } else if ($.type === "tool_use" && $.name === WRITE_TOOL_NAME) {
+        } else if ($.type === "tool_use" && $.name === U3) {
           let O = $.input;
           if (O?.file_path && O?.content) {
             let H = Q4(O.file_path, q);
@@ -228155,7 +228155,7 @@ function ko4({
           H = [],
           j = 0,
           J = 0;
-        for await (let D of agentLoop({ messages: O, ...q })) {
+        for await (let D of JC({ messages: O, ...q })) {
           if ($.aborted) {
             w(O);
             return;
@@ -229347,7 +229347,7 @@ function apY(A) {
   });
 }
 function spY(A) {
-  let q = `Complete all open tasks. Start with task #${A.id}: 
+  let q = `Complete all open tasks. Start with task #${A.id}:
 
  ${A.subject}`;
   if (A.description)
@@ -229571,8 +229571,8 @@ ${S}`);
       let L = K8({ content: N }),
         S = [L],
         I = Z,
-        B = countMessageTokens(Z);
-      if (B > compactThreshold($.options.mainLoopModel)) {
+        B = ak(Z);
+      if (B > PQ6($.options.mainLoopModel)) {
         y(`[inProcessRunner] ${q.agentId} compacting history (${B} tokens)`);
         let A6 = {
             ...$,
@@ -229580,7 +229580,7 @@ ${S}`);
             onCompactProgress: void 0,
             setStreamMode: void 0,
           },
-          D6 = await compactConversation(
+          D6 = await SG6(
             Z,
             A6,
             {
