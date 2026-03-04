@@ -111048,10 +111048,10 @@ var Oq6 = C((Kx3) => {
                     A.logger?.constructor?.name !== "NoOpLogger"
                     ? A.logger.warn.bind(A.logger)
                     : console.warn)(`@aws-sdk/credential-provider-node - defaultProvider::fromEnv WARNING:
-    Multiple credential sources detected: 
+    Multiple credential sources detected:
     Both AWS_PROFILE and the pair AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY static credentials are set.
     This SDK will proceed with the AWS_PROFILE value.
-    
+
     However, a future version may change this behavior to prefer the ENV static credentials.
     Please ensure that your environment only sets either the AWS_PROFILE or the
     AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY pair.
@@ -208075,7 +208075,7 @@ var Bj8 = E(() => {
         }),
         Object.defineProperty(this, zp7, {
           value: () => {
-            return `RestError: ${this.message} 
+            return `RestError: ${this.message}
  ${rM9.sanitize(Object.assign(Object.assign({}, this), { request: this.request, response: this.response }))}`;
           },
           enumerable: !1,
@@ -226047,8 +226047,8 @@ class td {
   }
   async getToken(A, q) {
     if (!this.client) {
-      let K = `${$56}: is unavailable. tenantId, clientId, and federatedTokenFilePath are required parameters. 
-      In DefaultAzureCredential and ManagedIdentityCredential, these can be provided as environment variables - 
+      let K = `${$56}: is unavailable. tenantId, clientId, and federatedTokenFilePath are required parameters.
+      In DefaultAzureCredential and ManagedIdentityCredential, these can be provided as environment variables -
       "AZURE_TENANT_ID",
       "AZURE_CLIENT_ID",
       "AZURE_FEDERATED_TOKEN_FILE". See the troubleshooting guide for more information: https://aka.ms/azsdk/js/identity/workloadidentitycredential/troubleshoot`;
@@ -227553,12 +227553,12 @@ class rM8 {
   }
   async getToken(A, q) {
     if (!this.clientAssertionCredential) {
-      let K = `${jI}: is unavailable. To use Federation Identity in Azure Pipelines, the following parameters are required - 
+      let K = `${jI}: is unavailable. To use Federation Identity in Azure Pipelines, the following parameters are required -
       tenantId,
       clientId,
       serviceConnectionId,
       systemAccessToken,
-      "SYSTEM_OIDCREQUESTURI".      
+      "SYSTEM_OIDCREQUESTURI".
       See the troubleshooting guide for more information: https://aka.ms/azsdk/js/identity/azurepipelinescredential/troubleshoot`;
       throw (_R.error(K), new N4(K));
     }
@@ -227611,7 +227611,7 @@ function nE9(A) {
   } catch (K) {
     let Y = `${jI}: Authentication Failed. oidcToken field not detected in the response.`;
     throw (
-      _R.error(`Response from service = ${q}, Response Headers ["x-vss-e2eid"] = ${A.headers.get("x-vss-e2eid")} 
+      _R.error(`Response from service = ${q}, Response Headers ["x-vss-e2eid"] = ${A.headers.get("x-vss-e2eid")}
       and ["x-msedge-ref"] = ${A.headers.get("x-msedge-ref")}, error message = ${K.message}`),
       _R.error(Y),
       new eh(A.status, {
@@ -235511,16 +235511,16 @@ var L64 = C((_P) => {
   _P.GoogleAuthExceptionMessages = {
     API_KEY_WITH_CREDENTIALS:
       "API Keys and Credentials are mutually exclusive authentication methods and cannot be used together.",
-    NO_PROJECT_ID_FOUND: `Unable to detect a Project Id in the current environment. 
-To learn more about authentication and Google APIs, visit: 
+    NO_PROJECT_ID_FOUND: `Unable to detect a Project Id in the current environment.
+To learn more about authentication and Google APIs, visit:
 https://cloud.google.com/docs/authentication/getting-started`,
-    NO_CREDENTIALS_FOUND: `Unable to find credentials in current environment. 
-To learn more about authentication and Google APIs, visit: 
+    NO_CREDENTIALS_FOUND: `Unable to find credentials in current environment.
+To learn more about authentication and Google APIs, visit:
 https://cloud.google.com/docs/authentication/getting-started`,
     NO_ADC_FOUND:
       "Could not load the default credentials. Browse to https://cloud.google.com/docs/authentication/getting-started for more information.",
     NO_UNIVERSE_DOMAIN_FOUND: `Unable to detect a Universe Domain in the current environment.
-To learn more about Universe Domain retrieval, visit: 
+To learn more about Universe Domain retrieval, visit:
 https://cloud.google.com/compute/docs/metadata/predefined-metadata-keys`,
   };
   class yP8 {
@@ -246939,7 +246939,7 @@ var h44 = E(() => {
 When asked to convert the user's shell PS1 configuration, follow these steps:
 1. Read the user's shell configuration files in this order of preference:
    - ~/.zshrc
-   - ~/.bashrc  
+   - ~/.bashrc
    - ~/.bash_profile
    - ~/.profile
 
@@ -246947,7 +246947,7 @@ When asked to convert the user's shell PS1 configuration, follow these steps:
 
 3. Convert PS1 escape sequences to shell commands:
    - \\u → $(whoami)
-   - \\h → $(hostname -s)  
+   - \\h → $(hostname -s)
    - \\H → $(hostname)
    - \\w → $(pwd)
    - \\W → $(basename "$(pwd)")
@@ -247006,7 +247006,7 @@ How to use the statusLine command:
        "type": "string"            // Optional: Agent type identifier
      }
    }
-   
+
    You can use this JSON data in your command like:
    - $(cat | jq -r '.model.display_name')
    - $(cat | jq -r '.workspace.current_dir')
@@ -247027,7 +247027,7 @@ How to use the statusLine command:
 3. Update the user's ~/.claude/settings.json with:
    {
      "statusLine": {
-       "type": "command", 
+       "type": "command",
        "command": "your_command_here"
      }
    }
@@ -279345,7 +279345,7 @@ Usage examples:
 `,
   Z$4 = `
 List available resources from configured MCP servers.
-Each returned resource will include all standard MCP resource fields plus a 'server' field 
+Each returned resource will include all standard MCP resource fields plus a 'server' field
 indicating which server the resource belongs to.
 
 Parameters:
@@ -295650,7 +295650,7 @@ Here's an example of how your output should be structured:
 5. Problem Solving:
    [Description of solved problems and ongoing troubleshooting]
 
-6. All user messages: 
+6. All user messages:
     - [Detailed non tool use user message]
     - [...]
 
@@ -295668,7 +295668,7 @@ Here's an example of how your output should be structured:
 </summary>
 </example>
 
-Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response. 
+Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.
 
 There may be additional summarization instructions provided in the included context. If so, remember to follow these instructions when creating the above summary. Examples of instructions include:
 <example>
@@ -299341,7 +299341,7 @@ function aX4(A, q) {
 ### ENTERING SUB-AGENT ROUTINE ###
 Entered sub-agent context
 
-PLEASE NOTE: 
+PLEASE NOTE:
 - The messages above this point are from the main thread prior to sub-agent execution. They are provided as context only.
 - Context messages may include tool_use blocks for tools that are not available in the sub-agent context. You should only use the tools specifically provided to you in the system prompt.
 - Only complete the specific sub-agent task you have been assigned below.`,
@@ -383548,7 +383548,7 @@ var TS8 = C((hp4) => {
           "channel_stacktrace",
           "(" +
             this.channelzRef.id +
-            `) Channel constructed 
+            `) Channel constructed
 ` +
             ((O = X.stack) === null || O === void 0
               ? void 0
@@ -415003,7 +415003,7 @@ function apY(A) {
   });
 }
 function spY(A) {
-  let q = `Complete all open tasks. Start with task #${A.id}: 
+  let q = `Complete all open tasks. Start with task #${A.id}:
 
  ${A.subject}`;
   if (A.description)
@@ -423631,7 +423631,7 @@ var $e4 = C((Ke4) => {
       if (j6()) return;
       if (x6.id === null)
         if (x6.error)
-          z.error(`Received response message without id: Error is: 
+          z.error(`Received response message without id: Error is:
 ${JSON.stringify(x6.error, void 0, 4)}`);
         else
           z.error(
@@ -459791,7 +459791,7 @@ function KN6(A) {
       lines: [
         " function greet() {",
         '-  console.log("Hello, World!");',
-        '+  console.log("Hello, Claude!");',
+        '+  console.log("Hello, Everyone!");',
         " }",
       ],
     }),
@@ -463767,7 +463767,7 @@ function H1z(A) {
     X = `## Context Usage
 
 `;
-  ((X += `**Model:** ${w}  
+  ((X += `**Model:** ${w}
 `),
     (X += `**Tokens:** ${XM(K)} / ${XM(Y)} (${z}%)
 
@@ -469541,7 +469541,7 @@ This PR adds a GitHub Actions workflow that enables Claude Code integration in o
 ### What is Claude Code?
 
 [Claude Code](https://claude.com/claude-code) is an AI coding agent that can help with:
-- Bug fixes and improvements  
+- Bug fixes and improvements
 - Documentation updates
 - Implementing new features
 - Code reviews and suggestions
@@ -502969,7 +502969,7 @@ When a user describes what they want an agent to do, you will:
       user: "Hello"
       assistant: "I'm going to use the ${tq} tool to launch the greeting-responder agent to respond with a friendly joke"
       <commentary>
-      Since the user is greeting, use the greeting-responder agent to respond with a friendly joke. 
+      Since the user is greeting, use the greeting-responder agent to respond with a friendly joke.
       </commentary>
     </example>
   - If the user mentioned or implied that the agent should be used proactively, you should include examples of this.
@@ -518586,13 +518586,13 @@ ${pPq}`,
         keepCodingInstructions: !0,
         prompt: `You are an interactive CLI tool that helps users with software engineering tasks. In addition to software engineering tasks, you should help users learn more about the codebase through hands-on practice and educational insights.
 
-You should be collaborative and encouraging. Balance task completion with learning by requesting user input for meaningful design decisions while handling routine implementation yourself.   
+You should be collaborative and encouraging. Balance task completion with learning by requesting user input for meaningful design decisions while handling routine implementation yourself.
 
 # Learning Style Active
 ## Requesting Human Contributions
 In order to encourage learning, ask the human to contribute 2-10 line code pieces when generating 20+ lines involving:
 - Design decisions (error handling, data structures)
-- Business logic with multiple valid approaches  
+- Business logic with multiple valid approaches
 - Key algorithms or interface definitions
 
 **TodoList Integration**: If using a TodoList for the overall task, include a specific todo item like "Request human input on [specific decision]" when planning to request human input. This ensures proper task tracking. Note: TodoList is not required for all tasks.
@@ -518612,7 +518612,7 @@ ${a6.bullet} **Learn by Doing**
 
 ### Key Guidelines
 - Frame contributions as valuable design decisions, not busy work
-- You must first add a TODO(human) section into the codebase with your editing tools before making the Learn by Doing request      
+- You must first add a TODO(human) section into the codebase with your editing tools before making the Learn by Doing request
 - Make sure there is one and only one TODO(human) section in the code
 - Don't take any action or output anything after the Learn by Doing request. Wait for human implementation before proceeding.
 
@@ -523348,7 +523348,7 @@ Only create commits when requested by the user. If unclear, ask first. When the 
 
 Git Safety Protocol:
 - NEVER update the git config
-- NEVER run destructive git commands (push --force, reset --hard, checkout ., restore ., clean -f, branch -D) unless the user explicitly requests these actions. Taking unauthorized destructive actions is unhelpful and can result in lost work, so it's best to ONLY run these commands when given direct instructions 
+- NEVER run destructive git commands (push --force, reset --hard, checkout ., restore ., clean -f, branch -D) unless the user explicitly requests these actions. Taking unauthorized destructive actions is unhelpful and can result in lost work, so it's best to ONLY run these commands when given direct instructions
 - NEVER skip hooks (--no-verify, --no-gpg-sign, etc) unless the user explicitly requests it
 - NEVER run force push to main/master, warn the user if they request it
 - CRITICAL: Always create NEW commits rather than amending, unless the user explicitly requests a git amend. When a pre-commit hook fails, the commit did NOT happen — so --amend would modify the PREVIOUS commit, which may result in destroying work or losing previous changes. Instead, after hook failure, fix the issue, re-stage, and create a NEW commit

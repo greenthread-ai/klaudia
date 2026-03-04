@@ -1,24 +1,42 @@
-import { build, context } from "esbuild";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, watch } from "fs";
+import { join } from "path";
 
 const isWatch = process.argv.includes("--watch");
 
-const buildOptions = {
-  entryPoints: ["src/cli.js"],
-  bundle: false, // Source is already a self-contained bundle
-  platform: "node",
-  target: "node18",
-  format: "esm",
-  outfile: "dist/cli.js",
-  define: {
-    "process.env.KLAUDIA_VERSION": '"0.1.0"',
-  },
-};
+// Section files in concatenation order
+const SECTIONS_DIR = "src/sections";
+const OUT_FILE = "dist/cli.js";
+
+function getSectionFiles() {
+  return readdirSync(SECTIONS_DIR)
+    .filter((f) => f.endsWith(".js"))
+    .sort() // 00-, 01-, 02-... ensures correct order
+    .map((f) => join(SECTIONS_DIR, f));
+}
+
+function buildBundle() {
+  const files = getSectionFiles();
+  const parts = files.map((f) => readFileSync(f, "utf-8"));
+
+  mkdirSync("dist", { recursive: true });
+  writeFileSync(OUT_FILE, parts.join(""));
+
+  console.log(`Build complete: ${OUT_FILE} (${files.length} sections concatenated)`);
+}
 
 if (isWatch) {
-  const ctx = await context(buildOptions);
-  await ctx.watch();
-  console.log("Watching for changes...");
+  buildBundle();
+  console.log(`Watching ${SECTIONS_DIR}/ for changes...`);
+  watch(SECTIONS_DIR, { recursive: true }, (eventType, filename) => {
+    if (filename?.endsWith(".js")) {
+      console.log(`\n${filename} changed, rebuilding...`);
+      try {
+        buildBundle();
+      } catch (e) {
+        console.error(`Build error: ${e.message}`);
+      }
+    }
+  });
 } else {
-  await build(buildOptions);
-  console.log("Build complete: dist/cli.js");
+  buildBundle();
 }
