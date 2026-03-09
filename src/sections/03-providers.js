@@ -501,8 +501,6 @@ function $0A(A) {
 function sendError(A) {
   try {
     if (
-      isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-      isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
       process.env.DISABLE_ERROR_REPORTING ||
       process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
     )
@@ -8565,8 +8563,6 @@ var a76 = E(() => {
 });
 function b0() {
   return (
-    isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-    isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
     !!process.env.DISABLE_TELEMETRY ||
     !!process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
   );
@@ -15428,11 +15424,7 @@ var P46 = E(() => {
     ])));
 });
 function getProvider() {
-  return isTruthy(process.env.CLAUDE_CODE_USE_VERTEX)
-    ? "vertex"
-    : isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
-      ? "foundry"
-      : "firstParty";
+  return "firstParty";
 }
 function W46() {
   return getProvider();
@@ -15533,10 +15525,7 @@ function RbA(A) {
   return q.length > 0 ? q : void 0;
 }
 function EcK(A) {
-  let q = getProvider();
-  if (q === "foundry") return !0;
-  if (q === "firstParty") return !A.includes("claude-3-");
-  return A.includes("claude-opus-4") || A.includes("claude-sonnet-4");
+  return !A.includes("claude-3-");
 }
 function LcK(A) {
   let q = A.toLowerCase();
@@ -15547,18 +15536,9 @@ function LcK(A) {
   );
 }
 function ycK(A) {
-  let q = getProvider();
-  if (q === "foundry") return !0;
-  if (q === "firstParty") return !A.includes("claude-3-");
-  return (
-    A.includes("claude-opus-4") ||
-    A.includes("claude-sonnet-4") ||
-    A.includes("claude-haiku-4")
-  );
+  return !A.includes("claude-3-");
 }
 function Z46(A) {
-  let q = getProvider();
-  if (q !== "firstParty" && q !== "foundry") return !1;
   return (
     A.includes("claude-sonnet-4-6") ||
     A.includes("claude-sonnet-4-5") ||
@@ -15569,15 +15549,10 @@ function Z46(A) {
   );
 }
 function CbA() {
-  let A = getProvider();
-  if (A === "vertex") return VbA;
   return NbA;
 }
 function FH6() {
-  return (
-    (getProvider() === "firstParty" || getProvider() === "foundry") &&
-    !isTruthy(process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS)
-  );
+  return !isTruthy(process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS);
 }
 function RA1(A, q) {
   let K = [...Qv(A)];
@@ -15619,8 +15594,6 @@ var Uv = E(() => {
     let $ = Jw("tengu_tool_pear");
     if (Z46(A) && $) q.push(Mo);
     if (z && jA("tengu_scarf_coffee", !1)) q.push(EA1);
-    if (Y === "vertex" && LcK(A)) q.push(Ln1);
-    if (Y === "foundry") q.push(Ln1);
     if (z) q.push(RR6);
     if (process.env.ANTHROPIC_BETAS && !K)
       q.push(
@@ -70338,7 +70311,6 @@ var kh6 = E(() => {
   FN5 = ["us", "eu", "apac", "global"];
 });
 function Wa(A) {
-  if (getProvider() === "foundry") return;
   let q = A.toLowerCase();
   if (q.includes("claude-opus-4-6[1m]")) return "Opus 4.6 (with 1M context)";
   if (q.includes("claude-opus-4-6")) return "Opus 4.6";

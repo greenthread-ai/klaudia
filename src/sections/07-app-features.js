@@ -7165,13 +7165,6 @@ function q86() {
         "Fast mode is not available in the Agent SDK"
       );
   }
-  if (getProvider() !== "firstParty")
-    return (
-      writeDebugLog(
-        "Fast mode unavailable: Fast mode is not available on Vertex or Foundry",
-      ),
-      "Fast mode is not available on Vertex or Foundry"
-    );
   if (ai.status === "disabled") {
     if (ai.reason === "network_error") return null;
     let q = z4() !== null ? "oauth" : "api-key",
@@ -11633,17 +11626,13 @@ s1(lN6, {
 import { mkdir as TMz } from "fs/promises";
 import { exec as NMz } from "child_process";
 function PJ() {
-  let A =
-      isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-      isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY),
-    K = (SA() || {}).apiKeyHelper,
+  let K = (SA() || {}).apiKeyHelper,
     Y =
       process.env.ANTHROPIC_AUTH_TOKEN ||
       K ||
       process.env.CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR,
     { source: z } = p_({ skipRetrievingKeyFromApiKeyHelper: !0 });
   return !(
-    A ||
     Y ||
     ((z === "ANTHROPIC_API_KEY" || z === "apiKeyHelper") &&
       !isTruthy(process.env.CLAUDE_CODE_REMOTE))
@@ -12064,11 +12053,6 @@ function Y7() {
   return qB(z4()?.scopes);
 }
 function rh8() {
-  if (
-    isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-    isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
-  )
-    return !1;
   if (Y7()) return !1;
   return !0;
 }
@@ -12140,10 +12124,7 @@ function hE1() {
   }
 }
 function gk() {
-  return !!(
-    isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-    isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
-  );
+  return !1;
 }
 function Zfq() {
   return (SA() || {}).otelHeadersHelper;

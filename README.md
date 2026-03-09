@@ -80,24 +80,35 @@ node dist/cli.js --model sonnet      # Default
 node dist/cli.js --model opus        # Most capable
 ```
 
+### Custom model and endpoint
+
+For inference against a custom endpoint (e.g. a dev model on a local network), use CLI flags or env vars. Server-side calls (telemetry, auth, token counting metadata) always go to the Anthropic prod API — only inference calls are routed to the custom endpoint.
+
+**CLI flags:**
+
+```bash
+node dist/cli.js \
+  --custom-model moonshotai/Kimi-VL-A3B-Thinking-2506 \
+  --custom-endpoint http://122.252.4.33:8000
+```
+
+**Environment variables (ideal for galph/subshell usage):**
+
+```bash
+export KLAUDIA_CUSTOM_MODEL=moonshotai/Kimi-VL-A3B-Thinking-2506
+export KLAUDIA_CUSTOM_ENDPOINT=http://122.252.4.33:8000
+node dist/cli.js
+```
+
+You can also select "Custom endpoint" from the interactive `/model` picker at runtime.
+
 ### Auth
 
 Klaudia uses the same auth as Claude Code. Either:
 - Set `ANTHROPIC_API_KEY` in your environment, or
 - Use an existing Claude Code OAuth session (tokens in `~/.claude/`)
 
-### Provider Selection
-
-```bash
-# Default: Anthropic direct API
-node dist/cli.js -p "hello"
-
-# AWS Bedrock
-CLAUDE_CODE_USE_BEDROCK=1 node dist/cli.js -p "hello"
-
-# Google Vertex AI
-CLAUDE_CODE_USE_VERTEX=1 node dist/cli.js -p "hello"
-```
+Auth is used for both prod Anthropic API calls and custom endpoint calls (the same API key/token is sent to both).
 
 ## Build
 
@@ -142,16 +153,20 @@ The app is split into 9 section files in `src/sections/`, concatenated by `build
 | `00-runtime.js` | esbuild helpers (`E()`, `C()`, `s1()`) |
 | `01-zod-state.js` | Zod validation, i18n locales, session state, MCP transport |
 | `02-network.js` | WebSocket, AJV, Axios |
-| `03-providers.js` | OpenTelemetry, AWS, gRPC, Azure |
+| `03-providers.js` | OpenTelemetry, gRPC |
 | `04-react-ink.js` | React, Ink, yoga-layout, tool name constants |
 | `05-app-core.js` | Tools, permissions, MCP, compaction |
 | `06-app-ui.js` | UI, API client, tool dispatch, server-side tools |
 | `07-app-features.js` | Tree-sitter, screenshot, voice, headless mode |
 | `08-entry.js` | CLI bootstrap, Commander setup |
 
+### Removed providers
+
+Bedrock (AWS), Vertex (Google), and Foundry (Microsoft) provider code paths have been removed. `getProvider()` always returns `"firstParty"` (Anthropic direct API). Custom model endpoints are supported via `--custom-model` / `--custom-endpoint`.
+
 ### Key renamed functions
 
-We've renamed ~35 mangled identifiers to readable names. Key ones:
+We've renamed ~75 mangled identifiers to readable names. Key ones:
 
 | Name | File | Purpose |
 |------|------|---------|
@@ -163,9 +178,18 @@ We've renamed ~35 mangled identifiers to readable names. Key ones:
 | `streamApiRequest` | 06-app-ui.js | API request builder |
 | `dispatchToolUse` | 06-app-ui.js | Tool executor |
 | `checkToolPermissions` | 07-app-features.js | Permission checker |
+| `createApiClient` | 05-app-core.js | API client factory (supports custom `baseURL`) |
+| `getProvider` | 03-providers.js | Provider router (always `"firstParty"`) |
+| `getModelOverride` | 07-app-features.js | Model override retrieval |
+| `getCurrentModel` | 07-app-features.js | Current model getter |
+| `getCustomEndpoint` | 07-app-features.js | Custom endpoint URL resolver |
+| `getModelDisplayName` | 07-app-features.js | Model display name formatter |
+| `ModelPickerUI` | 06-app-ui.js | Interactive model selection component |
+| `buildModelOptions` | 06-app-ui.js | Model option list builder |
 | `microcompact` | 05-app-core.js | Fast client-side compaction |
 | `autocompactFn` | 05-app-core.js | Model-based compaction |
 | `buildToolSchema` | 06-app-ui.js | Tool → API schema |
+| `onAppStateChange` | 07-app-features.js | App state change handler |
 
 ### Go tool status
 

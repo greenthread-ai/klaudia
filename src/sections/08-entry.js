@@ -650,6 +650,14 @@ async function setupCommander() {
         "--model <model>",
         "Model for the current session. Provide an alias for the latest model (e.g. 'sonnet' or 'opus') or a model's full name (e.g. 'claude-sonnet-4-6').",
       )
+      .option(
+        "--custom-model <model>",
+        "Custom model ID for inference (e.g. 'moonshotai/Kimi-VL-A3B-Thinking-2506'). Equivalent to KLAUDIA_CUSTOM_MODEL env var.",
+      )
+      .option(
+        "--custom-endpoint <url>",
+        "Custom endpoint URL for inference (e.g. 'http://10.0.1.50:8000'). Equivalent to KLAUDIA_CUSTOM_ENDPOINT env var.",
+      )
       .addOption(
         new n3(
           "--effort <level>",
@@ -1128,6 +1136,9 @@ ${kU8}`
         (await V6(qCz(), X6, J, q6, f6, D6, V ? Tk(V) : void 0, A6, s6),
           writeDebugLog(`[STARTUP] setup() completed in ${Date.now() - M6}ms`),
           Bq("action_after_setup"));
+        if ($.customModel) process.env.KLAUDIA_CUSTOM_MODEL = $.customModel;
+        if ($.customEndpoint) process.env.KLAUDIA_CUSTOM_ENDPOINT = $.customEndpoint;
+        if ($.customModel && !$.model) $.model = "custom";
         let O1 = $.model === "default" ? KW() : $.model,
           w1 = Z === "default" ? KW() : Z,
           J1 = y1();

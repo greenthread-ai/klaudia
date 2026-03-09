@@ -29262,7 +29262,6 @@ var Hs = E(() => {
   xX6 = ["low", "medium", "high", "max"];
 });
 function sz1(A) {
-  if (getProvider() === "vertex") return q28;
   if (A?.isNonInteractive) {
     if (A.hasAppendSystemPrompt) return Gf7;
     return Zf7;

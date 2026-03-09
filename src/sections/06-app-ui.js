@@ -30700,17 +30700,7 @@ var MB8 = E(() => {
       return q ? `Searching for ${q}` : "Searching the web";
     },
     isEnabled() {
-      let A = getProvider(),
-        q = getCurrentModel();
-      if (A === "firstParty") return !0;
-      if (A === "vertex")
-        return (
-          q.includes("claude-opus-4") ||
-          q.includes("claude-sonnet-4") ||
-          q.includes("claude-haiku-4")
-        );
-      if (A === "foundry") return !0;
-      return !1;
+      return !0;
     },
     get inputSchema() {
       return waY();
@@ -37719,10 +37709,7 @@ function H3q(A) {
   return q;
 }
 function j3q(A) {
-  let q = A.toLowerCase(),
-    K = getProvider();
-  if (K === "foundry" || K === "firstParty") return !q.includes("claude-3-");
-  return q.includes("sonnet-4") || q.includes("opus-4");
+  return !A.toLowerCase().includes("claude-3-");
 }
 function Kk1(A) {
   let q = A.toLowerCase();
@@ -39761,8 +39748,6 @@ var b3q = E(() => {
     argumentHint: "[report]",
     isEnabled: () =>
       !(
-        isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-        isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
         process.env.DISABLE_FEEDBACK_COMMAND ||
         process.env.DISABLE_BUG_COMMAND ||
         process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC ||

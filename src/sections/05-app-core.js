@@ -56015,55 +56015,6 @@ async function createApiClient({ apiKey: A, maxRetries: q, model: K, fetchOverri
     fetchOptions: jq6(),
     ...(Y && { fetch: Y }),
   };
-  if (isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)) {
-    let { AnthropicFoundry: D } = await Promise.resolve().then(
-        () => (kF7(), vF7),
-      ),
-      X;
-    if (!process.env.ANTHROPIC_FOUNDRY_API_KEY)
-      if (isTruthy(process.env.CLAUDE_CODE_SKIP_FOUNDRY_AUTH))
-        X = () => Promise.resolve("");
-      else {
-        let { DefaultAzureCredential: P, getBearerTokenProvider: W } =
-          await Promise.resolve().then(() => (go7(), Bo7));
-        X = W(new P(), "https://cognitiveservices.azure.com/.default");
-      }
-    let M = {
-      ...j,
-      ...(X && { azureADTokenProvider: X }),
-      ...(qu() && { logger: dj1() }),
-    };
-    return new D(M);
-  }
-  if (isTruthy(process.env.CLAUDE_CODE_USE_VERTEX)) {
-    let [{ AnthropicVertex: D }, { GoogleAuth: X }] = await Promise.all([
-        Promise.resolve().then(() => (n64(), i64)),
-        Promise.resolve().then(() => Y6(hP8(), 1)),
-      ]),
-      M =
-        process.env.GCLOUD_PROJECT ||
-        process.env.GOOGLE_CLOUD_PROJECT ||
-        process.env.gcloud_project ||
-        process.env.google_cloud_project,
-      P =
-        process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-        process.env.google_application_credentials,
-      W = isTruthy(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH)
-        ? { getClient: () => ({ getRequestHeaders: () => ({}) }) }
-        : new X({
-            scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-            ...(M || P
-              ? {}
-              : { projectId: process.env.ANTHROPIC_VERTEX_PROJECT_ID }),
-          }),
-      G = {
-        ...j,
-        region: Rs6(K),
-        googleAuth: W,
-        ...(qu() && { logger: dj1() }),
-      };
-    return new D(G);
-  }
   let J = {
     apiKey: Y7() ? null : A || fk(),
     authToken: Y7() ? z4()?.accessToken : void 0,
@@ -114606,7 +114557,7 @@ async function _p6(A, q) {
         Y = Qv(K),
         z = lJ4(A);
       let w = await createApiClient({ maxRetries: 1, model: K, baseURL: getCustomEndpoint() }),
-        _ = getProvider() === "vertex" ? Y.filter((O) => Cn1.has(O)) : Y,
+        _ = Y,
         $ = await w.beta.messages.countTokens({
           model: Tg(K),
           messages: A.length > 0 ? A : [{ role: "user", content: "foo" }],
@@ -114639,14 +114590,12 @@ function __4(A, q) {
 }
 async function BJ4(A, q) {
   let K = lJ4(A),
-    Y = isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) && Rs6(PO()) === "global",
-    w = isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) && K,
-    _ = Y || w ? df() : PO(),
+    _ = PO(),
     $ = await createApiClient({ maxRetries: 1, model: _, baseURL: getCustomEndpoint() }),
     O = p3Y(A),
     H = O.length > 0 ? O : [{ role: "user", content: "count" }],
     j = Qv(_),
-    J = getProvider() === "vertex" ? j.filter((G) => Cn1.has(G)) : j,
+    J = j,
     X = (
       await $.beta.messages.create({
         model: Tg(_),
@@ -157152,11 +157101,6 @@ var tW1 = E(() => {
 });
 async function _XY() {
   try {
-    if (
-      isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
-      isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
-    )
-      return !0;
     return (
       await g8.get("https://api.anthropic.com/api/hello", {
         timeout: 5000,
@@ -169076,11 +169020,7 @@ var lG1 = E(() => {
       "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
       "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL",
       "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
-      "CLAUDE_CODE_SKIP_FOUNDRY_AUTH",
-      "CLAUDE_CODE_SKIP_VERTEX_AUTH",
       "CLAUDE_CODE_SUBAGENT_MODEL",
-      "CLAUDE_CODE_USE_FOUNDRY",
-      "CLAUDE_CODE_USE_VERTEX",
       "DISABLE_AUTOUPDATER",
       "DISABLE_BUG_COMMAND",
       "DISABLE_COST_WARNINGS",
@@ -214245,35 +214185,10 @@ function FT1() {
   return q;
 }
 function pT1() {
-  let A = getProvider(),
-    q = [];
-  if (A !== "firstParty") {
-    let z = {
-      vertex: "Google Vertex AI",
-      foundry: "Microsoft Foundry",
-    }[A];
-    q.push({ label: "API provider", value: z });
-  }
-  if (A === "firstParty") {
+  let q = [];
+  {
     let z = process.env.ANTHROPIC_BASE_URL;
     if (z) q.push({ label: "Anthropic base URL", value: z });
-  } else if (A === "vertex") {
-    let z = process.env.VERTEX_BASE_URL;
-    if (z) q.push({ label: "Vertex base URL", value: z });
-    let w = process.env.ANTHROPIC_VERTEX_PROJECT_ID;
-    if (w) q.push({ label: "GCP project", value: w });
-    if (
-      (q.push({ label: "Default region", value: ys6() }),
-      isTruthy(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH))
-    )
-      q.push({ value: "GCP auth skipped" });
-  } else if (A === "foundry") {
-    let z = process.env.ANTHROPIC_FOUNDRY_BASE_URL;
-    if (z) q.push({ label: "Microsoft Foundry base URL", value: z });
-    let w = process.env.ANTHROPIC_FOUNDRY_RESOURCE;
-    if (w) q.push({ label: "Microsoft Foundry resource", value: w });
-    if (isTruthy(process.env.CLAUDE_CODE_SKIP_FOUNDRY_AUTH))
-      q.push({ value: "Microsoft Foundry auth skipped" });
   }
   let K = Ph();
   if (K) q.push({ label: "Proxy", value: K });
@@ -229879,8 +229794,6 @@ var Ux8 = E(() => {
   B1();
   of6();
   YQY = [
-    "CLAUDE_CODE_USE_VERTEX",
-    "CLAUDE_CODE_USE_FOUNDRY",
     "ANTHROPIC_BASE_URL",
     "CLAUDE_CONFIG_DIR",
   ];
