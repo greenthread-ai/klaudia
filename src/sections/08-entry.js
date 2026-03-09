@@ -93,7 +93,7 @@ async function showSetupScreens(A, q, K, Y, z) {
             (completeOnboarding(), O());
           },
         }),
-      { onChangeAppState: h86 },
+      { onChangeAppState: onAppStateChange },
     );
   }
   if (!isTruthy(process.env.CLAUBBIT)) {
@@ -143,7 +143,7 @@ async function showSetupScreens(A, q, K, Y, z) {
         A,
         (j) =>
           r$.default.createElement(H, { customApiKeyTruncated: $, onDone: j }),
-        { onChangeAppState: h86 },
+        { onChangeAppState: onAppStateChange },
       );
     }
   }
@@ -163,7 +163,7 @@ async function showSetupScreens(A, q, K, Y, z) {
 }
 function wCz() {
   (updateSettings((q) => ({ ...q, numStartups: (q.numStartups ?? 0) + 1 })), $Cz());
-  let A = O5(Q_6() ?? KW());
+  let A = resolveModelId(Q_6() ?? KW());
   kR1(y1(), fX(A, iH()));
 }
 function _Cz() {
@@ -207,10 +207,9 @@ function Fr8() {
     Q_(),
     HCz(),
     LR1(),
-    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) &&
-      !isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH))
+    !1)
   )
-    Tl8();
+    void 0;
   if (
     (Z81(y1(), AbortSignal.timeout(3000), []),
     vl8(),
@@ -1166,10 +1165,10 @@ ${kU8}`
           if (F8) t = F8;
         }
         let gA = O1;
-        if (!gA && BA?.model && BA.model !== "inherit") gA = O5(BA.model);
-        (LW(gA), eh1(eR() || null));
+        if (!gA && BA?.model && BA.model !== "inherit") gA = resolveModelId(BA.model);
+        (LW(gA), eh1(getModelOverride() || null));
         let GA = Q_6(),
-          fK = O5(GA ?? KW());
+          fK = resolveModelId(GA ?? KW());
         if (
           D7() &&
           G6?.agentId &&
@@ -1378,7 +1377,7 @@ ${U6}`
               process.stderr.write(`[WARN] ${L1}. Using ${LE}.
 `);
           }
-          let r6 = Xy1(U6, h86);
+          let r6 = Xy1(U6, onAppStateChange);
           if (S6.mode === "bypassPermissions" || J) IPq(S6);
           if ($.sessionPersistence === !1) vI1(!0);
           (AI1(RbA(f)),

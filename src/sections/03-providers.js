@@ -501,7 +501,6 @@ function $0A(A) {
 function sendError(A) {
   try {
     if (
-      isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
       isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
       isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
       process.env.DISABLE_ERROR_REPORTING ||
@@ -8566,7 +8565,6 @@ var a76 = E(() => {
 });
 function b0() {
   return (
-    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
     isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
     isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
     !!process.env.DISABLE_TELEMETRY ||
@@ -15429,17 +15427,15 @@ var P46 = E(() => {
       "context-management-2025-06-27",
     ])));
 });
-function h7() {
-  return isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)
-    ? "bedrock"
-    : isTruthy(process.env.CLAUDE_CODE_USE_VERTEX)
-      ? "vertex"
-      : isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
-        ? "foundry"
-        : "firstParty";
+function getProvider() {
+  return isTruthy(process.env.CLAUDE_CODE_USE_VERTEX)
+    ? "vertex"
+    : isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
+      ? "foundry"
+      : "firstParty";
 }
 function W46() {
-  return h7();
+  return getProvider();
 }
 function gH6() {
   let A = process.env.ANTHROPIC_BASE_URL;
@@ -15537,7 +15533,7 @@ function RbA(A) {
   return q.length > 0 ? q : void 0;
 }
 function EcK(A) {
-  let q = h7();
+  let q = getProvider();
   if (q === "foundry") return !0;
   if (q === "firstParty") return !A.includes("claude-3-");
   return A.includes("claude-opus-4") || A.includes("claude-sonnet-4");
@@ -15551,7 +15547,7 @@ function LcK(A) {
   );
 }
 function ycK(A) {
-  let q = h7();
+  let q = getProvider();
   if (q === "foundry") return !0;
   if (q === "firstParty") return !A.includes("claude-3-");
   return (
@@ -15561,7 +15557,7 @@ function ycK(A) {
   );
 }
 function Z46(A) {
-  let q = h7();
+  let q = getProvider();
   if (q !== "firstParty" && q !== "foundry") return !1;
   return (
     A.includes("claude-sonnet-4-6") ||
@@ -15573,13 +15569,13 @@ function Z46(A) {
   );
 }
 function CbA() {
-  let A = h7();
-  if (A === "vertex" || A === "bedrock") return VbA;
+  let A = getProvider();
+  if (A === "vertex") return VbA;
   return NbA;
 }
 function FH6() {
   return (
-    (h7() === "firstParty" || h7() === "foundry") &&
+    (getProvider() === "firstParty" || getProvider() === "foundry") &&
     !isTruthy(process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS)
   );
 }
@@ -15611,7 +15607,7 @@ var Uv = E(() => {
   ((Sn1 = T8((A) => {
     let q = [],
       K = A.includes("haiku"),
-      Y = h7(),
+      Y = getProvider(),
       z = FH6();
     if (!K) q.push(vA1);
     if (Y7()) q.push(BZ);
@@ -15636,7 +15632,6 @@ var Uv = E(() => {
   })),
     (Qv = T8((A) => {
       let q = Sn1(A);
-      if (h7() === "bedrock") return q.filter((K) => !Rn1.has(K));
       return q;
     })),
     (hn1 = T8((A) => {
@@ -70343,7 +70338,7 @@ var kh6 = E(() => {
   FN5 = ["us", "eu", "apac", "global"];
 });
 function Wa(A) {
-  if (h7() === "foundry") return;
+  if (getProvider() === "foundry") return;
   let q = A.toLowerCase();
   if (q.includes("claude-opus-4-6[1m]")) return "Opus 4.6 (with 1M context)";
   if (q.includes("claude-opus-4-6")) return "Opus 4.6";
@@ -70508,21 +70503,21 @@ async function QN5() {
 }
 function UN5() {
   if (d_6() !== null) return;
-  if (h7() !== "bedrock") {
-    Rk6(uh6(h7()));
+  if (getProvider() !== "bedrock") {
+    Rk6(uh6(getProvider()));
     return;
   }
   sw7();
 }
 function m5() {
   let A = d_6();
-  if (A === null) return (UN5(), uh6(h7()));
+  if (A === null) return (UN5(), uh6(getProvider()));
   return A;
 }
 async function tw7() {
   if (d_6() !== null) return;
-  if (h7() !== "bedrock") {
-    Rk6(uh6(h7()));
+  if (getProvider() !== "bedrock") {
+    Rk6(uh6(getProvider()));
     return;
   }
   await sw7();

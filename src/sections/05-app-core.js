@@ -187,7 +187,7 @@ async function lw1() {
   await S_8();
 }
 async function h_8(A, q) {
-  if (h7() !== "firstParty") return;
+  if (getProvider() !== "firstParty") return;
   let K = cw1;
   if (K === null) K = await n69();
   if (!K || !c69.has(A)) return;
@@ -22396,79 +22396,8 @@ var VH8 = C((AP) => {
   uN.__exportStar(ru7(), AP);
   uN.__exportStar(su7(), AP);
 });
-import Dj9 from "assert";
-var tu7,
-  eu7,
-  Am7,
-  qm7,
-  Xj9 = () =>
-    Promise.resolve()
-      .then(() => Y6(VH8(), 1))
-      .then(({ fromNodeProviderChain: A }) =>
-        A({
-          clientConfig: {
-            requestHandler: new eu7.FetchHttpHandler({
-              requestInit: (q) => {
-                return { ...q };
-              },
-            }),
-          },
-        }),
-      )
-      .catch((A) => {
-        throw Error(
-          `Failed to import '@aws-sdk/credential-providers'.You can provide a custom \`providerChainResolver\` in the client options if your runtime does not have access to '@aws-sdk/credential-providers': \`new AnthropicBedrock({ providerChainResolver })\` Original error: ${A.message}`,
-        );
-      }),
-  Km7 = async (A, q) => {
-    Dj9(A.method, "Expected request method property to be set");
-    let K = await (q.providerChainResolver ? q.providerChainResolver() : Xj9()),
-      Y = await Mj9(
-        () => {
-          if (q.awsAccessKey) process.env.AWS_ACCESS_KEY_ID = q.awsAccessKey;
-          if (q.awsSecretKey)
-            process.env.AWS_SECRET_ACCESS_KEY = q.awsSecretKey;
-          if (q.awsSessionToken)
-            process.env.AWS_SESSION_TOKEN = q.awsSessionToken;
-        },
-        () => K(),
-      ),
-      z = new qm7.SignatureV4({
-        service: "bedrock",
-        region: q.regionName,
-        credentials: Y,
-        sha256: tu7.Sha256,
-      }),
-      w = new URL(q.url),
-      _ = !A.headers
-        ? {}
-        : Symbol.iterator in A.headers
-          ? Object.fromEntries(Array.from(A.headers).map((H) => [...H]))
-          : { ...A.headers };
-    (delete _.connection, (_.host = w.hostname));
-    let $ = new Am7.HttpRequest({
-      method: A.method.toUpperCase(),
-      protocol: w.protocol,
-      path: w.pathname,
-      headers: _,
-      body: A.body,
-    });
-    return (await z.sign($)).headers;
-  },
-  Mj9 = async (A, q) => {
-    let K = { ...process.env };
-    try {
-      return (A(), await q());
-    } finally {
-      process.env = K;
-    }
-  };
-var Ym7 = E(() => {
-  ((tu7 = Y6($h7(), 1)),
-    (eu7 = Y6(OO8(), 1)),
-    (Am7 = Y6(jO8(), 1)),
-    (qm7 = Y6(Xx7(), 1)));
-});
+// [Bedrock SigV4 signing removed]
+var Ym7 = E(() => {});
 var kH8 = C((Ls2, X$1) => {
   /*! *****************************************************************************
 Copyright (c) Microsoft Corporation.
@@ -26430,109 +26359,10 @@ var PF7 = E(() => {
   zj8();
   ((XF7 = Object.freeze(Object.create(null))), (jj8 = vM9(MF7)));
 });
-function LM9(A) {
-  let q = new Pk(A);
-  return (delete q.batches, delete q.countTokens, q);
-}
-function yM9(A) {
-  let q = new KG(A);
-  return (
-    delete q.promptCaching,
-    delete q.messages.batches,
-    delete q.messages.countTokens,
-    q
-  );
-}
-var kM9 = "bedrock-2023-05-31",
-  EM9,
-  Jj8;
-var Dj8 = E(() => {
-  Ad();
-  gx6();
-  Ym7();
-  jF7();
-  Lu6();
-  DF7();
-  PF7();
-  Ad();
-  EM9 = new Set(["/v1/complete", "/v1/messages", "/v1/messages?beta=true"]);
-  Jj8 = class Jj8 extends Cz {
-    constructor({
-      awsRegion: A = Oj8("AWS_REGION") ?? "us-east-1",
-      baseURL: q = Oj8("ANTHROPIC_BEDROCK_BASE_URL") ??
-        `https://bedrock-runtime.${A}.amazonaws.com`,
-      awsSecretKey: K = null,
-      awsAccessKey: Y = null,
-      awsSessionToken: z = null,
-      providerChainResolver: w = null,
-      ..._
-    } = {}) {
-      super({ baseURL: q, ..._ });
-      ((this.skipAuth = !1),
-        (this.messages = LM9(this)),
-        (this.completions = new ea(this)),
-        (this.beta = yM9(this)),
-        (this.awsSecretKey = K),
-        (this.awsAccessKey = Y),
-        (this.awsRegion = A),
-        (this.awsSessionToken = z),
-        (this.skipAuth = _.skipAuth ?? !1),
-        (this.providerChainResolver = w));
-    }
-    validateHeaders() {}
-    async prepareRequest(A, { url: q, options: K }) {
-      if (this.skipAuth) return;
-      let Y = this.awsRegion;
-      if (!Y)
-        throw Error(
-          "Expected `awsRegion` option to be passed to the client or the `AWS_REGION` environment variable to be present",
-        );
-      let z = await Km7(A, {
-        url: q,
-        regionName: Y,
-        awsAccessKey: this.awsAccessKey,
-        awsSecretKey: this.awsSecretKey,
-        awsSessionToken: this.awsSessionToken,
-        fetchOptions: this.fetchOptions,
-        providerChainResolver: this.providerChainResolver,
-      });
-      A.headers = Hj8([z, A.headers]).values;
-    }
-    async buildRequest(A) {
-      if (((A.__streamClass = B$1), b$1(A.body))) A.body = { ...A.body };
-      if (b$1(A.body)) {
-        if (!A.body.anthropic_version) A.body.anthropic_version = kM9;
-        if (A.headers && !A.body.anthropic_beta) {
-          let q = Hj8([A.headers]).values.get("anthropic-beta");
-          if (q != null) A.body.anthropic_beta = q.split(",");
-        }
-      }
-      if (EM9.has(A.path) && A.method === "post") {
-        if (!b$1(A.body))
-          throw Error(
-            "Expected request body to be an object for post /v1/messages",
-          );
-        let q = A.body.model;
-        A.body.model = void 0;
-        let K = A.body.stream;
-        if (((A.body.stream = void 0), K))
-          A.path = jj8`/model/${q}/invoke-with-response-stream`;
-        else A.path = jj8`/model/${q}/invoke`;
-      }
-      return super.buildRequest(A);
-    }
-  };
-});
+// [Bedrock client class removed]
+var Jj8 = null;
 var WF7 = {};
-s1(WF7, {
-  default: () => Jj8,
-  BaseAnthropic: () => Cz,
-  AnthropicBedrock: () => Jj8,
-});
-var GF7 = E(() => {
-  Dj8();
-  Dj8();
-});
+var GF7 = E(() => {});
 var g$1 = E(() => {
   qG();
 });
@@ -26621,7 +26451,7 @@ var Gj8 = E(() => {
   Ad();
   Ad();
   gx6();
-  Wj8 = class Wj8 extends mh {
+  Wj8 = class Wj8 extends AnthropicClient {
     constructor({
       baseURL: A = p$1("ANTHROPIC_FOUNDRY_BASE_URL"),
       apiKey: q = p$1("ANTHROPIC_FOUNDRY_API_KEY"),
@@ -26687,7 +26517,7 @@ var Gj8 = E(() => {
 var vF7 = {};
 s1(vF7, {
   default: () => Wj8,
-  BaseAnthropic: () => Cz,
+  BaseAnthropic: () => BaseHttpClient,
   AnthropicFoundry: () => Wj8,
 });
 var kF7 = E(() => {
@@ -56051,7 +55881,7 @@ var mP8 = E(() => {
   Ad();
   ((l64 = Y6(hP8(), 1)),
     (sh9 = new Set(["/v1/messages", "/v1/messages?beta=true"])));
-  uP8 = class uP8 extends Cz {
+  uP8 = class uP8 extends BaseHttpClient {
     constructor({
       baseURL: A = Qj1("ANTHROPIC_VERTEX_BASE_URL"),
       region: q = Qj1("CLOUD_ML_REGION") ?? null,
@@ -56135,7 +55965,7 @@ var mP8 = E(() => {
 var i64 = {};
 s1(i64, {
   default: () => uP8,
-  BaseAnthropic: () => Cz,
+  BaseAnthropic: () => BaseHttpClient,
   AnthropicVertex: () => uP8,
 });
 var n64 = E(() => {
@@ -56150,7 +55980,7 @@ function dj1() {
     debug: (A, ...q) => console.error("[Anthropic SDK DEBUG]", A, ...q),
   };
 }
-async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
+async function createApiClient({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y, baseURL: z6 }) {
   let z = process.env.CLAUDE_CODE_CONTAINER_ID,
     w = process.env.CLAUDE_CODE_REMOTE_SESSION_ID,
     _ = process.env.CLAUDE_AGENT_SDK_CLIENT_APP,
@@ -56185,35 +56015,6 @@ async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
     fetchOptions: jq6(),
     ...(Y && { fetch: Y }),
   };
-  if (isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)) {
-    let { AnthropicBedrock: D } = await Promise.resolve().then(
-        () => (GF7(), WF7),
-      ),
-      X =
-        K === PO() && process.env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION
-          ? process.env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION
-          : dA6(),
-      M = {
-        ...j,
-        awsRegion: X,
-        ...(isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH) && { skipAuth: !0 }),
-        ...(qu() && { logger: dj1() }),
-      };
-    if (process.env.AWS_BEARER_TOKEN_BEDROCK)
-      ((M.skipAuth = !0),
-        (M.defaultHeaders = {
-          ...M.defaultHeaders,
-          Authorization: `Bearer ${process.env.AWS_BEARER_TOKEN_BEDROCK}`,
-        }));
-    else if (!isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH)) {
-      let P = await Ma();
-      if (P)
-        ((M.awsAccessKey = P.accessKeyId),
-          (M.awsSecretKey = P.secretAccessKey),
-          (M.awsSessionToken = P.sessionToken));
-    }
-    return new D(M);
-  }
   if (isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)) {
     let { AnthropicFoundry: D } = await Promise.resolve().then(
         () => (kF7(), vF7),
@@ -56269,8 +56070,9 @@ async function fI({ apiKey: A, maxRetries: q, model: K, fetchOverride: Y }) {
     ...{},
     ...j,
     ...(qu() && { logger: dj1() }),
+    ...(z6 ? { baseURL: z6 } : {}),
   };
-  return new mh(J);
+  return new AnthropicClient(J);
 }
 function AI9(A, q) {
   let K = process.env.ANTHROPIC_AUTH_TOKEN || jP6(q);
@@ -56513,7 +56315,7 @@ function dP8(A) {
 }
 async function JI9() {
   let A = PO(),
-    q = await fI({ maxRetries: 0, model: A }),
+    q = await createApiClient({ maxRetries: 0, model: A, baseURL: getCustomEndpoint() }),
     K = [{ role: "user", content: "quota" }],
     Y = Qv(A);
   return q.beta.messages
@@ -57149,26 +56951,12 @@ function qJ1(A, q, K) {
         ? `Failed to authenticate. ${WO}: ${A.message}`
         : `${WO}: ${A.message} · Please run /login`,
     });
-  if (
-    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) &&
-    A instanceof Error &&
-    A.message.toLowerCase().includes("model id")
-  ) {
-    let Y = C7() ? "--model" : "/model",
-      z = $14(q);
-    return kY({
-      content: z
-        ? `${WO} (${q}): ${A.message}. Try ${Y} to switch to ${z}.`
-        : `${WO} (${q}): ${A.message}. Run ${Y} to pick a different model.`,
-      error: "invalid_request",
-    });
-  }
   if (A instanceof W4 && A.status === 404) {
     let Y = C7() ? "--model" : "/model",
       z = $14(q);
     return kY({
       content: z
-        ? `The model ${q} is not available on your ${h7()} deployment. Try ${Y} to switch to ${z}, or ask your admin to enable this model.`
+        ? `The model ${q} is not available on your ${getProvider()} deployment. Try ${Y} to switch to ${z}, or ask your admin to enable this model.`
         : `There's an issue with the selected model (${q}). It may not exist or you may not have access to it. Run ${Y} to pick a different model.`,
       error: "invalid_request",
     });
@@ -57180,7 +56968,7 @@ function qJ1(A, q, K) {
   return kY({ content: WO, error: "unknown" });
 }
 function $14(A) {
-  if (h7() === "firstParty") return;
+  if (getProvider() === "firstParty") return;
   let q = A.toLowerCase();
   if (q.includes("opus-4-6") || q.includes("opus_4_6")) return m5().opus41;
   if (q.includes("sonnet-4-6") || q.includes("sonnet_4_6"))
@@ -57269,12 +57057,6 @@ function O14(A) {
     return "oauth_org_not_allowed";
   if (A instanceof W4 && (A.status === 401 || A.status === 403))
     return "auth_error";
-  if (
-    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) &&
-    A instanceof Error &&
-    A.message.toLowerCase().includes("model id")
-  )
-    return "bedrock_model_access";
   if (A instanceof W4) {
     let q = A.status;
     if (q >= 500) return "server_error";
@@ -59916,13 +59698,9 @@ function dW8(A) {
   );
 }
 function EA4(A) {
-  if (isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)) {
-    if (TA4(A) || (A instanceof W4 && A.status === 403)) return !0;
-  }
   return !1;
 }
 function $g9(A) {
-  if (EA4(A)) return (Wg6(), !0);
   return !1;
 }
 function Og9(A) {
@@ -66220,7 +65998,7 @@ Assistant knowledge cutoff is ${_}.`
       `OS Version: ${Y}`,
       w,
       $,
-      `The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: '${bG8.opus}', Sonnet 4.6: '${bG8.sonnet}', Haiku 4.5: '${bG8.haiku}'. When building AI applications, default to the latest and most capable Claude models.`,
+      `The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: '${modelIds.opus}', Sonnet 4.6: '${modelIds.sonnet}', Haiku 4.5: '${modelIds.haiku}'. When building AI applications, default to the latest and most capable Claude models.`,
     ].filter((D) => D !== null),
     J = `
 <fast_mode_info>
@@ -66292,7 +66070,7 @@ var Bp9 = null,
   S56 = "__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__",
   mG8 = "Claude Opus 4.6",
   gp9 = "claude-opus-4-6",
-  bG8,
+  modelIds,
   L44,
   y44 =
     "You are an agent for Claude Code, Anthropic's official CLI for Claude. Given the user's message, you should use the tools available to complete the task. Do what has been asked; nothing more, nothing less. When you complete the task simply respond with a detailed writeup.";
@@ -66321,7 +66099,7 @@ var NR = E(() => {
   kz();
   f1();
   RJ1();
-  bG8 = {
+  modelIds = {
     opus: "claude-opus-4-6",
     sonnet: "claude-sonnet-4-6",
     haiku: "claude-haiku-4-5-20251001",
@@ -66339,14 +66117,14 @@ var NR = E(() => {
   });
 });
 function Wc(A) {
-  return h56.includes(A);
+  return modelAliases.includes(A);
 }
 function CP6(A) {
-  return KQ9.includes(A);
+  return modelShortNames.includes(A);
 }
-var h56, KQ9;
+var modelAliases, modelShortNames;
 var SP6 = E(() => {
-  h56 = [
+  modelAliases = [
     "sonnet",
     "opus",
     "haiku",
@@ -66355,20 +66133,15 @@ var SP6 = E(() => {
     "opus[1m]",
     "opusplan",
   ];
-  KQ9 = ["sonnet", "opus", "haiku"];
+  modelShortNames = ["sonnet", "opus", "haiku"];
 });
 function BG8() {
   return "inherit";
 }
 function lJ1(A, q, K, Y, z) {
   if (process.env.CLAUDE_CODE_SUBAGENT_MODEL)
-    return O5(process.env.CLAUDE_CODE_SUBAGENT_MODEL);
-  let w = TK8(q),
-    _ = (O) => {
-      if (w && h7() === "bedrock") return aw7(O, w);
-      return O;
-    };
-  if (K) return _(O5(K));
+    return resolveModelId(process.env.CLAUDE_CODE_SUBAGENT_MODEL);
+  if (K) return resolveModelId(K);
   let $ = A ?? BG8();
   if ($ === "inherit")
     return RI({
@@ -66376,14 +66149,14 @@ function lJ1(A, q, K, Y, z) {
       mainLoopModel: q,
       exceeds200kTokens: !1,
     });
-  return _(O5($));
+  return resolveModelId($);
 }
 function iJ1(A) {
   if (!A) return "Inherit from parent (default)";
   if (A === "inherit") return "Inherit from parent";
   return A.charAt(0).toUpperCase() + A.slice(1);
 }
-function C44() {
+function getModelOptions() {
   return [
     {
       value: "sonnet",
@@ -66405,6 +66178,11 @@ function C44() {
       label: "Inherit from parent",
       description: "Use the same model as the main conversation",
     },
+    {
+      value: "custom",
+      label: "Custom",
+      description: "Use a custom model ID and endpoint",
+    },
   ];
 }
 var hP6;
@@ -66413,7 +66191,7 @@ var Ut = E(() => {
   Q2();
   SP6();
   t4();
-  hP6 = [...h56, "inherit"];
+  hP6 = [...modelAliases, "inherit"];
 });
 function I56(A) {
   if (A === "general-purpose") return;
@@ -88411,7 +88189,7 @@ function bF6(A, q, K, Y, z, w, _ = { isSkillMode: !1 }) {
       W = $.when_to_use,
       G = $.version,
       Z = $.name,
-      f = $.model === "inherit" ? void 0 : $.model ? O5($.model) : void 0,
+      f = $.model === "inherit" ? void 0 : $.model ? resolveModelId($.model) : void 0,
       N = $["disable-model-invocation"],
       V;
     if (_.isSkillMode) V = N === void 0 ? !1 : isTruthy(N);
@@ -93269,7 +93047,7 @@ async function sF6(A, q) {
                 H["user-invocable"] === void 0 ? !0 : dX1(H["user-invocable"]),
               W = dX1(H["disable-model-invocation"]),
               G =
-                H.model === "inherit" ? void 0 : H.model ? O5(H.model) : void 0,
+                H.model === "inherit" ? void 0 : H.model ? resolveModelId(H.model) : void 0,
               Z = sw4(H, J),
               f = H.context === "fork" ? "fork" : void 0,
               N = H.agent,
@@ -93390,7 +93168,7 @@ async function Ee9(A) {
           M = pI(_["allowed-tools"]),
           P = _["user-invocable"] === void 0 ? !0 : dX1(_["user-invocable"]),
           W = dX1(_["disable-model-invocation"]),
-          G = _.model === "inherit" ? void 0 : _.model ? O5(_.model) : void 0,
+          G = _.model === "inherit" ? void 0 : _.model ? resolveModelId(_.model) : void 0,
           Z = _.context === "fork" ? "fork" : void 0,
           f = _.agent,
           N = sw4(_, J),
@@ -93662,7 +93440,7 @@ function Ue9(A) {
   return oX1(A);
 }
 function le9() {
-  let A = R$(c3());
+  let A = R$(getCurrentModel());
   return !ce9.has(A);
 }
 async function Y_4(A, q, K) {
@@ -107023,7 +106801,7 @@ async function Uc(A) {
       temperature: J,
       thinking: D,
     } = A,
-    X = await fI({ maxRetries: O, model: q }),
+    X = await createApiClient({ maxRetries: O, model: q, baseURL: getCustomEndpoint() }),
     M = [...Qv(q)];
   if (_ && Z46(q) && !M.includes(Mo)) M.push(Mo);
   let P = N7Y(Y),
@@ -113724,7 +113502,7 @@ function xJ4() {
     jP1.resetCachedMCState(ce);
   JP1 = null;
 }
-function cv8(A) {
+function processMicrocompactBoundaries(A) {
   (B96.clear(), ep6.clear(), AQ6.clear());
   let q = DV(A);
   for (let Y of q)
@@ -113748,7 +113526,7 @@ function bJ4(A) {
   if (typeof A.content === "string") return Jz(A.content);
   return A.content.reduce((q, K) => {
     if (K.type === "text") return q + Jz(K.text);
-    else if (K.type === "image" || K.type === "document") return q + dv8;
+    else if (K.type === "image" || K.type === "document") return q + ESTIMATED_TOKENS_PER_IMAGE;
     return q;
   }, 0);
 }
@@ -113765,7 +113543,7 @@ function qQ6(A) {
     for (let Y of K.message.content)
       if (Y.type === "text") q += Jz(Y.text);
       else if (Y.type === "tool_result") q += bJ4(Y);
-      else if (Y.type === "image" || Y.type === "document") q += dv8;
+      else if (Y.type === "image" || Y.type === "document") q += ESTIMATED_TOKENS_PER_IMAGE;
       else q += Jz(trySafeStringify(Y));
   }
   return Math.ceil(q * 1.3333333333333333);
@@ -113777,7 +113555,7 @@ async function Lg(A, q, K) {
   )
     return { messages: A };
   isTruthy(process.env.USE_API_CONTEXT_MANAGEMENT);
-  let Y = Z3Y,
+  let Y = TOOL_RESULT_TOKEN_THRESHOLD,
     z = [],
     w = new Map();
   for (let Z of A)
@@ -113793,7 +113571,7 @@ async function Lg(A, q, K) {
           w.set(f.tool_use_id, N);
         }
     }
-  let _ = z.slice(-f3Y),
+  let _ = z.slice(-KEEP_LAST_N_RESULTS),
     $ = Array.from(w.values()).reduce((Z, f) => Z + f, 0),
     O = 0,
     H = new Set();
@@ -113802,8 +113580,8 @@ async function Lg(A, q, K) {
     if ($ - O > Y) (H.add(Z), (O += w.get(Z) || 0));
   }
   let j = lf(A),
-    J = q?.options.mainLoopModel ?? c3();
-  if (!tc(j, J).isAboveWarningThreshold || O < G3Y) (H.clear(), (O = 0));
+    J = q?.options.mainLoopModel ?? getCurrentModel();
+  if (!tc(j, J).isAboveWarningThreshold || O < MIN_TOKENS_TO_SAVE) (H.clear(), (O = 0));
   let D = new Set(),
     X = 0;
   {
@@ -113823,7 +113601,7 @@ async function Lg(A, q, K) {
       ) {
         let V = 0;
         for (let v of N.message.content)
-          if (v.type === "image" || v.type === "document") V += dv8;
+          if (v.type === "image" || v.type === "document") V += ESTIMATED_TOKENS_PER_IMAGE;
         if (V > 0) (D.add(N.uuid), (X += V));
       }
   }
@@ -113954,10 +113732,10 @@ Use ${READ_TOOL_NAME} to view${KZ8}`;
   }
   return { messages: W };
 }
-var G3Y = 20000,
-  Z3Y = 40000,
-  f3Y = 3,
-  dv8 = 2000,
+var MIN_TOKENS_TO_SAVE = 20000,
+  TOOL_RESULT_TOKEN_THRESHOLD = 40000,
+  KEEP_LAST_N_RESULTS = 3,
+  ESTIMATED_TOKENS_PER_IMAGE = 2000,
   T3Y,
   B96,
   ep6,
@@ -114327,7 +114105,7 @@ async function XP1(A, q, K, Y, z, w, _, $, O) {
     U = u.skillFrontmatter.reduce((Z6, S6) => Z6 + S6.tokens, 0),
     c = F.totalTokens,
     d = Vg(),
-    a = d ? I96(q) - ov8 : void 0,
+    a = d ? I96(q) - COMPACT_BUFFER_TOKENS : void 0,
     e = [];
   if (X > 0)
     e.push({ name: "System prompt", tokens: X, color: "promptBorder" });
@@ -114359,7 +114137,7 @@ async function XP1(A, q, K, Y, z, w, _, $, O) {
   if (d && a !== void 0)
     ((f6 = j - a), e.push({ name: lv8, tokens: f6, color: "inactive" }));
   else if (!d)
-    ((f6 = av8), e.push({ name: iv8, tokens: f6, color: "inactive" }));
+    ((f6 = BLOCKING_LIMIT_OFFSET), e.push({ name: iv8, tokens: f6, color: "inactive" }));
   let q6 = Math.max(0, j - P6 - f6);
   e.push({ name: "Free space", tokens: q6, color: "promptBorder" });
   let A6 = P6,
@@ -114824,19 +114602,11 @@ async function w_4(A) {
 async function _p6(A, q) {
   return gA4(A, q, async () => {
     try {
-      let K = c3(),
+      let K = getCurrentModel(),
         Y = Qv(K),
         z = lJ4(A);
-      if (h7() === "bedrock")
-        return d3Y({
-          model: Tg(K),
-          messages: A,
-          tools: q,
-          betas: Y,
-          containsThinking: z,
-        });
-      let w = await fI({ maxRetries: 1, model: K }),
-        _ = h7() === "vertex" ? Y.filter((O) => Cn1.has(O)) : Y,
+      let w = await createApiClient({ maxRetries: 1, model: K, baseURL: getCustomEndpoint() }),
+        _ = getProvider() === "vertex" ? Y.filter((O) => Cn1.has(O)) : Y,
         $ = await w.beta.messages.countTokens({
           model: Tg(K),
           messages: A.length > 0 ? A : [{ role: "user", content: "foo" }],
@@ -114870,14 +114640,13 @@ function __4(A, q) {
 async function BJ4(A, q) {
   let K = lJ4(A),
     Y = isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) && Rs6(PO()) === "global",
-    z = isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) && K,
     w = isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) && K,
-    _ = Y || z || w ? df() : PO(),
-    $ = await fI({ maxRetries: 1, model: _ }),
+    _ = Y || w ? df() : PO(),
+    $ = await createApiClient({ maxRetries: 1, model: _, baseURL: getCustomEndpoint() }),
     O = p3Y(A),
     H = O.length > 0 ? O : [{ role: "user", content: "count" }],
     j = Qv(_),
-    J = h7() === "vertex" ? j.filter((G) => Cn1.has(G)) : j,
+    J = getProvider() === "vertex" ? j.filter((G) => Cn1.has(G)) : j,
     X = (
       await $.beta.messages.create({
         model: Tg(_),
@@ -114925,37 +114694,7 @@ function U3Y(A) {
   if (A.type === "tool_result") return Kk8(A.content);
   return 0;
 }
-async function d3Y({
-  model: A,
-  messages: q,
-  tools: K,
-  betas: Y,
-  containsThinking: z,
-}) {
-  try {
-    let w = await ow7(),
-      _ = fK8(A) ? A : await r31(A);
-    if (!_) return null;
-    let $ = {
-        anthropic_version: "bedrock-2023-05-31",
-        messages: q.length > 0 ? q : [{ role: "user", content: "foo" }],
-        max_tokens: z ? cJ4 : 1,
-        ...(K.length > 0 ? { tools: K } : {}),
-        ...(Y.length > 0 ? { anthropic_beta: Y } : {}),
-        ...(z ? { thinking: { type: "enabled", budget_tokens: Yk8 } } : {}),
-      },
-      { CountTokensCommand: O } = await Promise.resolve().then(() =>
-        Y6(n31(), 1),
-      ),
-      H = {
-        modelId: _,
-        input: { invokeModel: { body: new TextEncoder().encode(trySafeStringify($)) } },
-      };
-    return (await w.send(new O(H))).inputTokens ?? null;
-  } catch (w) {
-    return (sendError(w), null);
-  }
-}
+// [Bedrock token counting removed]
 var Yk8 = 1024,
   cJ4 = 2048;
 var wV = E(() => {
@@ -116977,7 +116716,7 @@ Some session memory sections were truncated for length. The full session memory 
     postCompactTokenCount: qQ6(J),
   };
 }
-async function uP1(A, q, K) {
+async function sessionMemoryCompact(A, q, K) {
   if (!bP1()) return null;
   (await W5Y(), await hD4());
   let Y = RD4(),
@@ -116992,7 +116731,7 @@ async function uP1(A, q, K) {
     } else ((w = A.length - 1), emitEvent("tengu_sm_compact_resumed_session", {}));
     let _ = f5Y(A, w),
       $ = A.slice(_).filter((X) => !iR(X)),
-      O = await xP("compact", { model: c3() }),
+      O = await xP("compact", { model: getCurrentModel() }),
       H = g$(getSessionId()),
       j = T5Y(A, z, $, O, H, q),
       J = re(j),
@@ -117376,12 +117115,12 @@ var QP1 = E(() => {
   Vq();
 });
 function I96(A) {
-  let q = Math.min(Ek8(A), S5Y);
+  let q = Math.min(Ek8(A), MAX_RESERVED_TOKENS);
   return fX(A, iH()) - q;
 }
 function PQ6(A) {
   let q = I96(A),
-    K = q - ov8,
+    K = q - COMPACT_BUFFER_TOKENS,
     Y = process.env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE;
   if (Y) {
     let z = parseFloat(Y);
@@ -117396,12 +117135,12 @@ function tc(A, q) {
   let K = PQ6(q),
     Y = Vg() ? K : I96(q),
     z = Math.max(0, Math.round(((Y - A) / Y) * 100)),
-    w = Y - h5Y,
-    _ = Y - I5Y,
+    w = Y - WARNING_THRESHOLD_OFFSET,
+    _ = Y - ERROR_THRESHOLD_OFFSET,
     $ = A >= w,
     O = A >= _,
     H = Vg() && A >= K,
-    J = fX(q, iH()) - av8,
+    J = fX(q, iH()) - BLOCKING_LIMIT_OFFSET,
     D = process.env.CLAUDE_CODE_BLOCKING_LIMIT_OVERRIDE,
     X = D ? parseInt(D, 10) : NaN,
     M = !isNaN(X) && X > 0 ? X : J,
@@ -117433,7 +117172,7 @@ async function JX4(A, q, K, Y) {
   if (isTruthy(process.env.DISABLE_COMPACT)) return { wasCompacted: !1 };
   let z = q.options.mainLoopModel;
   if (!(await x5Y(A, z, Y))) return { wasCompacted: !1 };
-  let _ = await uP1(A, q.agentId, PQ6(z));
+  let _ = await sessionMemoryCompact(A, q.agentId, PQ6(z));
   if (_) return (d96(void 0), se(), { wasCompacted: !0, compactionResult: _ });
   try {
     let $ = await SG6(A, q, K, !0, void 0, !0);
@@ -117443,11 +117182,11 @@ async function JX4(A, q, K, Y) {
     return { wasCompacted: !1 };
   }
 }
-var S5Y = 20000,
-  ov8 = 13000,
-  h5Y = 20000,
-  I5Y = 20000,
-  av8 = 3000;
+var MAX_RESERVED_TOKENS = 20000,
+  COMPACT_BUFFER_TOKENS = 13000,
+  WARNING_THRESHOLD_OFFSET = 20000,
+  ERROR_THRESHOLD_OFFSET = 20000,
+  BLOCKING_LIMIT_OFFSET = 3000;
 var vg = E(() => {
   BG();
   Yl();
@@ -157028,7 +156767,7 @@ var oW1 = E(() => {
   bW();
 });
 function tDY() {
-  let A = eR(),
+  let A = getModelOverride(),
     q = Y7() ? " · Billed as extra usage" : "";
   if (A === "opus" && Wl())
     return { alias: "opus[1m]", name: "Opus 1M", multiplier: 5, postfix: q };
@@ -157414,7 +157153,6 @@ var tW1 = E(() => {
 async function _XY() {
   try {
     if (
-      isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
       isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
       isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
     )
@@ -169338,11 +169076,9 @@ var lG1 = E(() => {
       "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
       "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL",
       "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
-      "CLAUDE_CODE_SKIP_BEDROCK_AUTH",
       "CLAUDE_CODE_SKIP_FOUNDRY_AUTH",
       "CLAUDE_CODE_SKIP_VERTEX_AUTH",
       "CLAUDE_CODE_SUBAGENT_MODEL",
-      "CLAUDE_CODE_USE_BEDROCK",
       "CLAUDE_CODE_USE_FOUNDRY",
       "CLAUDE_CODE_USE_VERTEX",
       "DISABLE_AUTOUPDATER",
@@ -169909,7 +169645,7 @@ function VU6() {
   return C0Y(_A(), S0Y);
 }
 function gg() {
-  if (h7() !== "firstParty") return !1;
+  if (getProvider() !== "firstParty") return !1;
   if (!gH6()) return !1;
   try {
     let { key: q } = p_({ skipRetrievingKeyFromApiKeyHelper: !0 });
@@ -170296,7 +170032,7 @@ function APY(A) {
   return `sha256:${l0Y("sha256").update(K).digest("hex")}`;
 }
 function Zx() {
-  if (h7() !== "firstParty") return !1;
+  if (getProvider() !== "firstParty") return !1;
   if (!gH6()) return !1;
   try {
     let { key: q } = p_({ skipRetrievingKeyFromApiKeyHelper: !0 });
@@ -214509,11 +214245,10 @@ function FT1() {
   return q;
 }
 function pT1() {
-  let A = h7(),
+  let A = getProvider(),
     q = [];
   if (A !== "firstParty") {
     let z = {
-      bedrock: "AWS Bedrock",
       vertex: "Google Vertex AI",
       foundry: "Microsoft Foundry",
     }[A];
@@ -214522,14 +214257,6 @@ function pT1() {
   if (A === "firstParty") {
     let z = process.env.ANTHROPIC_BASE_URL;
     if (z) q.push({ label: "Anthropic base URL", value: z });
-  } else if (A === "bedrock") {
-    let z = process.env.BEDROCK_BASE_URL;
-    if (z) q.push({ label: "Bedrock base URL", value: z });
-    if (
-      (q.push({ label: "AWS region", value: dA6() }),
-      isTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH))
-    )
-      q.push({ value: "AWS auth skipped" });
   } else if (A === "vertex") {
     let z = process.env.VERTEX_BASE_URL;
     if (z) q.push({ label: "Vertex base URL", value: z });
@@ -214571,7 +214298,7 @@ function pT1() {
   return q;
 }
 function Ui4(A) {
-  let q = lG(A);
+  let q = getModelDisplayName(A);
   if (A === null && Y7()) {
     let K = hf6();
     q = `${H1.bold("Default")} ${K}`;
@@ -214775,7 +214502,7 @@ async function vBY(A) {
         .write(`Not logged in. Run claude auth login to authenticate.
 `);
   } else {
-    let j = h7(),
+    let j = getProvider(),
       J = Y !== "none" ? Y : z ? "ANTHROPIC_API_KEY" : null,
       D = { loggedIn: O, authMethod: H, apiProvider: j };
     if (J) D.apiKeySource = J;
@@ -215125,7 +214852,7 @@ function Yz6({
                     G7.default.createElement(
                       T,
                       { dimColor: !0 },
-                      "Amazon Bedrock, Microsoft Foundry, or Vertex AI",
+                      "Microsoft Foundry or Vertex AI",
                     ),
                     `
 `,
@@ -215160,7 +214887,7 @@ function Yz6({
             G7.default.createElement(
               T,
               null,
-              "Claude Code supports Amazon Bedrock, Microsoft Foundry, and Vertex AI. Set the required environment variables, then restart Claude Code.",
+              "Claude Code supports Microsoft Foundry and Vertex AI. Set the required environment variables, then restart Claude Code.",
             ),
             G7.default.createElement(
               T,
@@ -215171,17 +214898,6 @@ function Yz6({
               m,
               { flexDirection: "column", marginTop: 1 },
               G7.default.createElement(T, { bold: !0 }, "Documentation:"),
-              G7.default.createElement(
-                T,
-                null,
-                "· Amazon Bedrock:",
-                " ",
-                G7.default.createElement(
-                  B7,
-                  { url: "https://code.claude.com/docs/en/amazon-bedrock" },
-                  "https://code.claude.com/docs/en/amazon-bedrock",
-                ),
-              ),
               G7.default.createElement(
                 T,
                 null,
@@ -215426,7 +215142,7 @@ function a66() {
   let A = useAppState((K) => K.mainLoopModel),
     q = useAppState((K) => K.mainLoopModelForSession);
   return ti4.useMemo(() => {
-    return O5(q ?? A ?? jF());
+    return resolveModelId(q ?? A ?? jF());
   }, [q, A]);
 }
 var ti4;
@@ -220497,8 +220213,8 @@ function Zr4(A) {
       ),
     );
   if (A.model) {
-    let K = O5(A.model),
-      Y = c3();
+    let K = resolveModelId(A.model),
+      Y = getCurrentModel();
     if (K !== Y)
       q.push(
         I8.createElement(
@@ -230163,7 +229879,6 @@ var Ux8 = E(() => {
   B1();
   of6();
   YQY = [
-    "CLAUDE_CODE_USE_BEDROCK",
     "CLAUDE_CODE_USE_VERTEX",
     "CLAUDE_CODE_USE_FOUNDRY",
     "ANTHROPIC_BASE_URL",

@@ -15,8 +15,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.700.0",
-    "@aws-sdk/credential-providers": "^3.700.0",
     "@azure/identity": "^4.5.0",
     "@azure/msal-node": "^2.16.0",
     "@grpc/grpc-js": "^1.14.0",

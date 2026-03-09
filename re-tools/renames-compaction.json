@@ -1,0 +1,13 @@
+[
+  ["f3Y", "KEEP_LAST_N_RESULTS"],
+  ["Z3Y", "TOOL_RESULT_TOKEN_THRESHOLD"],
+  ["G3Y", "MIN_TOKENS_TO_SAVE"],
+  ["dv8", "ESTIMATED_TOKENS_PER_IMAGE"],
+  ["S5Y", "MAX_RESERVED_TOKENS"],
+  ["ov8", "COMPACT_BUFFER_TOKENS"],
+  ["h5Y", "WARNING_THRESHOLD_OFFSET"],
+  ["I5Y", "ERROR_THRESHOLD_OFFSET"],
+  ["av8", "BLOCKING_LIMIT_OFFSET"],
+  ["cv8", "processMicrocompactBoundaries"],
+  ["uP1", "sessionMemoryCompact"]
+]

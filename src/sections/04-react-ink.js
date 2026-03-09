@@ -23780,7 +23780,7 @@ var Fx6 = (A) => {
     return globalThis.Deno.env?.get?.(A)?.trim();
   return;
 };
-class Cz {
+class BaseHttpClient {
   constructor({
     baseURL: A = Fx6("ANTHROPIC_BASE_URL"),
     apiKey: q = Fx6("ANTHROPIC_API_KEY") ?? null,
@@ -24235,7 +24235,7 @@ var oY8,
   n07,
   r07 = "\\n\\nHuman:",
   o07 = "\\n\\nAssistant:",
-  mh;
+  AnthropicClient;
 var Ad = E(() => {
   rU();
   _K6();
@@ -24253,31 +24253,31 @@ var Ad = E(() => {
   Xk();
   LY1();
   _K6();
-  ((aY8 = Cz),
+  ((aY8 = BaseHttpClient),
     (tY1 = new WeakMap()),
     (oY8 = new WeakSet()),
     (n07 = function () {
       return this.baseURL !== "https://api.anthropic.com";
     }));
-  Cz.Anthropic = aY8;
-  Cz.HUMAN_PROMPT = r07;
-  Cz.AI_PROMPT = o07;
-  Cz.DEFAULT_TIMEOUT = 600000;
-  Cz.AnthropicError = s7;
-  Cz.APIError = W4;
-  Cz.APIConnectionError = AG;
-  Cz.APIConnectionTimeoutError = Im;
-  Cz.APIUserAbortError = Rz;
-  Cz.NotFoundError = wK6;
-  Cz.ConflictError = Kx6;
-  Cz.RateLimitError = zx6;
-  Cz.BadRequestError = Ax6;
-  Cz.AuthenticationError = zK6;
-  Cz.InternalServerError = wx6;
-  Cz.PermissionDeniedError = qx6;
-  Cz.UnprocessableEntityError = Yx6;
-  Cz.toFile = hY1;
-  mh = class mh extends Cz {
+  BaseHttpClient.Anthropic = aY8;
+  BaseHttpClient.HUMAN_PROMPT = r07;
+  BaseHttpClient.AI_PROMPT = o07;
+  BaseHttpClient.DEFAULT_TIMEOUT = 600000;
+  BaseHttpClient.AnthropicError = s7;
+  BaseHttpClient.APIError = W4;
+  BaseHttpClient.APIConnectionError = AG;
+  BaseHttpClient.APIConnectionTimeoutError = Im;
+  BaseHttpClient.APIUserAbortError = Rz;
+  BaseHttpClient.NotFoundError = wK6;
+  BaseHttpClient.ConflictError = Kx6;
+  BaseHttpClient.RateLimitError = zx6;
+  BaseHttpClient.BadRequestError = Ax6;
+  BaseHttpClient.AuthenticationError = zK6;
+  BaseHttpClient.InternalServerError = wx6;
+  BaseHttpClient.PermissionDeniedError = qx6;
+  BaseHttpClient.UnprocessableEntityError = Yx6;
+  BaseHttpClient.toFile = hY1;
+  AnthropicClient = class AnthropicClient extends BaseHttpClient {
     constructor() {
       super(...arguments);
       ((this.completions = new ea(this)),
@@ -24286,10 +24286,10 @@ var Ad = E(() => {
         (this.beta = new KG(this)));
     }
   };
-  mh.Completions = ea;
-  mh.Messages = Pk;
-  mh.Models = wX6;
-  mh.Beta = KG;
+  AnthropicClient.Completions = ea;
+  AnthropicClient.Messages = Pk;
+  AnthropicClient.Models = wX6;
+  AnthropicClient.Beta = KG;
 });
 var vN = E(() => {
   Ad();
@@ -28505,7 +28505,7 @@ function iz8(A) {
   return { firstPage: Y, lastPage: z };
 }
 function Ab6() {
-  return h7() === "firstParty";
+  return getProvider() === "firstParty";
 }
 function EX6(A) {
   let q = A.startsWith(".") ? A.slice(1) : A;
@@ -29262,7 +29262,7 @@ var Hs = E(() => {
   xX6 = ["low", "medium", "high", "max"];
 });
 function sz1(A) {
-  if (h7() === "vertex") return q28;
+  if (getProvider() === "vertex") return q28;
   if (A?.isNonInteractive) {
     if (A.hasAppendSystemPrompt) return Gf7;
     return Zf7;
@@ -30848,14 +30848,14 @@ function Tw8() {
   return [
     {
       key: "workspace",
-      text: "Ask Claude to create a new app or clone a repository",
+      text: "Ask Klaudia to create a new app or clone a repository",
       isComplete: !1,
       isCompletable: !0,
       isEnabled: q,
     },
     {
       key: "claudemd",
-      text: "Run /init to create a CLAUDE.md file with instructions for Claude",
+      text: "Run /init to create a CLAUDE.md file with project instructions",
       isComplete: A,
       isCompletable: !0,
       isEnabled: !q,

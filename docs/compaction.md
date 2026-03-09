@@ -28,19 +28,19 @@ Fast, client-side content removal. **Does not call the model.**
 
 ### What it does
 
-1. Finds tool results older than the last 3 (`f3Y = 3`)
-2. If total tool result tokens exceed 40K (`Z3Y`), removes old results
+1. Finds tool results older than the last 3 (`KEEP_LAST_N_RESULTS = 3`)
+2. If total tool result tokens exceed 40K (`TOOL_RESULT_TOKEN_THRESHOLD`), removes old results
 3. Replaces images/documents with `[image]` / `[document]` placeholders
-4. Only acts if savings >= 20K tokens (`G3Y`)
+4. Only acts if savings >= 20K tokens (`MIN_TOKENS_TO_SAVE`)
 
 ### Constants
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `f3Y` | 3 | Keep last N tool results untouched |
-| `Z3Y` | 40000 | Tool result token threshold |
-| `G3Y` | 20000 | Minimum tokens to save before acting |
-| `dv8` | 2000 | Estimated tokens per image/document |
+| `KEEP_LAST_N_RESULTS` | 3 | Keep last N tool results untouched |
+| `TOOL_RESULT_TOKEN_THRESHOLD` | 40000 | Tool result token threshold |
+| `MIN_TOKENS_TO_SAVE` | 20000 | Minimum tokens to save before acting |
+| `ESTIMATED_TOKENS_PER_IMAGE` | 2000 | Estimated tokens per image/document |
 
 ### Output
 
@@ -91,11 +91,11 @@ blockingLimit    = effectiveWindow - 3000       ← hard stop
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `S5Y` | 20000 | Max reserved tokens |
-| `ov8` | 13000 | Buffer before compact threshold |
-| `h5Y` | 20000 | Warning threshold offset |
-| `I5Y` | 20000 | Error threshold offset |
-| `av8` | 3000 | Blocking limit offset |
+| `MAX_RESERVED_TOKENS` | 20000 | Max reserved tokens |
+| `COMPACT_BUFFER_TOKENS` | 13000 | Buffer before compact threshold |
+| `WARNING_THRESHOLD_OFFSET` | 20000 | Warning threshold offset |
+| `ERROR_THRESHOLD_OFFSET` | 20000 | Error threshold offset |
+| `BLOCKING_LIMIT_OFFSET` | 3000 | Blocking limit offset |
 
 ### How it compresses
 
@@ -193,13 +193,13 @@ for await (let event of callModel({ messages, ... })) { ... }
 | `autocompactFn` | Autocompact (was `JX4`) | 05-app-core.js | 117432 |
 | `shouldAutocompact` | Should autocompact trigger? (was `x5Y`) | 05-app-core.js | 117422 |
 | `calculateTokenThresholds` | Token threshold calculator (was `tc`) | 05-app-core.js | 117395 |
-| `I96` | Effective context window | 05-app-core.js | 117378 |
-| `PQ6` | Compact threshold | 05-app-core.js | 117382 |
+| `effectiveContextWindow` | Effective context window (was `I96`) | 05-app-core.js | 117378 |
+| `compactThreshold` | Compact threshold (was `PQ6`) | 05-app-core.js | 117382 |
 | `compactConversation` | Core autocompact, calls model (was `SG6`) | 05-app-core.js | 115995 |
-| `ZD4` | Partial/selective compaction | 05-app-core.js | 116130 |
-| `uP1` | Session memory compaction | 05-app-core.js | 116980 |
+| `partialCompact` | Partial/selective compaction (was `ZD4`) | 05-app-core.js | 116130 |
+| `sessionMemoryCompact` | Session memory compaction (was `uP1`) | 05-app-core.js | 116980 |
 | `re` | Expand compaction result | 05-app-core.js | 115986 |
-| `cv8` | Process microcompact boundaries | 05-app-core.js | 113727 |
+| `processMicrocompactBoundaries` | Process microcompact boundaries (was `cv8`) | 05-app-core.js | 113727 |
 | `countMessageTokens` | Count tokens in messages (was `ak`) | 05-app-core.js | 115045 |
 | `le` | Clear microcompact caches | 05-app-core.js | 113717 |
 | `se` | Clear all compaction caches | 05-app-core.js | 117365 |
@@ -213,9 +213,6 @@ making bulk rename unsafe. Manual per-line edits would be needed.
 
 | Current | Suggested | Occurrences | Status |
 |---------|-----------|-------------|--------|
-| `I96` | `effectiveContextWindow` | 6 | Done |
-| `PQ6` | `compactThreshold` | 5 | Done |
-| `ZD4` | `partialCompact` | 2 | Done |
 | `re` | `expandCompactionResult` | 5 (but 100+ `re` identifiers in other scopes) | Deferred |
 | `le` | `clearMicrocompactCaches` | 4 (but 26+ `le` identifiers in other scopes) | Deferred |
 | `se` | `clearCompactionCaches` | 6 (but 24+ `se` identifiers in other scopes) | Deferred |

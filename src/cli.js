@@ -459825,9 +459825,7 @@ function KN6(A) {
   let G6 =
       G === "env"
         ? `Syntax highlighting disabled (via CLAUDE_CODE_SYNTAX_HIGHLIGHT=${process.env.CLAUDE_CODE_SYNTAX_HIGHLIGHT})`
-        : G === "build"
-          ? "Syntax highlighting available only in native build"
-          : L
+        : L
             ? `Syntax highlighting disabled (${I} to enable)`
             : f
               ? `Syntax theme: ${f.theme}${f.source ? ` (from ${f.source})` : ""} (${I} to disable)`

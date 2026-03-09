@@ -1274,7 +1274,7 @@ var pa4 = E(() => {
 import { join as wb8 } from "path";
 import { readFile as GQY, mkdir as ZQY, writeFile as fQY } from "fs/promises";
 function _b8() {
-  return Pa[h7()];
+  return Pa[getProvider()];
 }
 async function TQY(A) {
   return (await M8(uG, ["has-session", "-t", A])).code === 0;
@@ -3794,7 +3794,7 @@ async function Ib8(A) {
         "anthropic-beta": "ccr-byoc-2025-07-29",
         "x-organization-uuid": w,
       },
-      Z = { sources: $ ? [$] : [], outcomes: O ? [O] : [], model: c3() },
+      Z = { sources: $ ? [$] : [], outcomes: O ? [O] : [], model: getCurrentModel() },
       f = q
         ? [
             {
@@ -30700,8 +30700,8 @@ var MB8 = E(() => {
       return q ? `Searching for ${q}` : "Searching the web";
     },
     isEnabled() {
-      let A = h7(),
-        q = c3();
+      let A = getProvider(),
+        q = getCurrentModel();
       if (A === "firstParty") return !0;
       if (A === "vertex")
         return (
@@ -33184,7 +33184,7 @@ var EB8 = E(() => {
 });
 function gaY(A, q) {
   if (A.includes(q)) return !0;
-  if (Wc(A)) return O5(A).toLowerCase().includes(q);
+  if (Wc(A)) return resolveModelId(A).toLowerCase().includes(q);
   return !1;
 }
 function qqq(A, q) {
@@ -33192,7 +33192,7 @@ function qqq(A, q) {
   return A.length === q.length || A[q.length] === "-";
 }
 function FaY(A, q) {
-  let K = Wc(A) ? O5(A).toLowerCase() : A;
+  let K = Wc(A) ? resolveModelId(A).toLowerCase() : A;
   if (qqq(K, q)) return !0;
   if (!q.startsWith("claude-") && qqq(K, `claude-${q}`)) return !0;
   return !1;
@@ -33219,12 +33219,12 @@ function E16(A) {
   }
   for (let w of z) if (CP6(w) && !Kqq(w, z) && gaY(Y, w)) return !0;
   if (Wc(Y)) {
-    let w = O5(Y).toLowerCase();
+    let w = resolveModelId(Y).toLowerCase();
     if (z.includes(w)) return !0;
   }
   for (let w of z)
     if (!CP6(w) && Wc(w)) {
-      if (O5(w).toLowerCase() === Y) return !0;
+      if (resolveModelId(w).toLowerCase() === Y) return !0;
     }
   for (let w of z)
     if (!CP6(w) && !Wc(w)) {
@@ -33237,7 +33237,7 @@ var xl6 = E(() => {
   SP6();
   t4();
 });
-async function nv1(A) {
+async function validateModelName(A) {
   let q = A.trim();
   if (!q) return { valid: !1, error: "Model name cannot be empty" };
   if (!E16(q))
@@ -33246,7 +33246,7 @@ async function nv1(A) {
       error: `Model '${q}' is not in the list of available models`,
     };
   let K = q.toLowerCase();
-  if (h56.includes(K)) return { valid: !0 };
+  if (modelAliases.includes(K)) return { valid: !0 };
   if (Yqq.has(q)) return { valid: !0 };
   try {
     return (
@@ -33310,7 +33310,7 @@ function paY(A, q) {
   };
 }
 function QaY(A) {
-  if (h7() === "firstParty") return;
+  if (getProvider() === "firstParty") return;
   let q = A.toLowerCase();
   if (q.includes("opus-4-6") || q.includes("opus_4_6")) return m5().opus41;
   if (q.includes("sonnet-4-6") || q.includes("sonnet_4_6"))
@@ -33329,10 +33329,10 @@ var LB8 = E(() => {
   Eq6();
   Yqq = new Map();
 });
-function rv1(A = !1) {
+function defaultModelOption(A = !1) {
   if (Y7())
     return { value: null, label: "Default (recommended)", description: hf6(A) };
-  let q = h7() !== "firstParty";
+  let q = getProvider() !== "firstParty";
   return {
     value: null,
     label: "Default (recommended)",
@@ -33340,7 +33340,7 @@ function rv1(A = !1) {
   };
 }
 function UaY() {
-  let A = h7() !== "firstParty",
+  let A = getProvider() !== "firstParty",
     q = process.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
   if (A && q)
     return {
@@ -33350,8 +33350,8 @@ function UaY() {
       descriptionForModel: `Custom Sonnet model (${q})`,
     };
 }
-function daY() {
-  let A = h7() !== "firstParty";
+function sonnetOption() {
+  let A = getProvider() !== "firstParty";
   return {
     value: A ? m5().sonnet46 : "sonnet",
     label: "Sonnet",
@@ -33361,7 +33361,7 @@ function daY() {
   };
 }
 function caY() {
-  let A = h7() !== "firstParty",
+  let A = getProvider() !== "firstParty",
     q = process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
   if (A && q)
     return {
@@ -33379,16 +33379,16 @@ function laY() {
     descriptionForModel: "Opus 4.1 - legacy version",
   };
 }
-function zqq(A = !1) {
+function opusOption(A = !1) {
   return {
-    value: h7() !== "firstParty" ? m5().opus46 : "opus",
+    value: getProvider() !== "firstParty" ? m5().opus46 : "opus",
     label: "Opus",
     description: `Opus 4.6 · Most capable for complex work${nz6(!1, A)}`,
     descriptionForModel: "Opus 4.6 - most capable for complex work",
   };
 }
-function wqq() {
-  let A = h7() !== "firstParty";
+function sonnet1MOption() {
+  let A = getProvider() !== "firstParty";
   return {
     value: A ? m5().sonnet46 + "[1m]" : "sonnet[1m]",
     label: "Sonnet (1M context)",
@@ -33397,9 +33397,9 @@ function wqq() {
       "Sonnet 4.6 with 1M context window - for long sessions with large codebases",
   };
 }
-function _qq(A = !1) {
+function opus1MOption(A = !1) {
   return {
-    value: h7() !== "firstParty" ? m5().opus46 + "[1m]" : "opus[1m]",
+    value: getProvider() !== "firstParty" ? m5().opus46 + "[1m]" : "opus[1m]",
     label: "Opus (1M context)",
     description: `Opus 4.6 for long sessions${nz6(!0, A)}`,
     descriptionForModel:
@@ -33407,7 +33407,7 @@ function _qq(A = !1) {
   };
 }
 function iaY() {
-  let A = h7() !== "firstParty",
+  let A = getProvider() !== "firstParty",
     q = process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
   if (A && q)
     return {
@@ -33417,11 +33417,11 @@ function iaY() {
       descriptionForModel: `Custom Haiku model (${q})`,
     };
 }
-function jqq() {
+function haikuOption() {
   return {
     value: "haiku",
     label: "Haiku",
-    description: `Haiku 4.5 · Fastest for quick answers${h7() !== "firstParty" ? "" : ` · ${GC(CB8)}`}`,
+    description: `Haiku 4.5 · Fastest for quick answers${getProvider() !== "firstParty" ? "" : ` · ${GC(CB8)}`}`,
     descriptionForModel:
       "Haiku 4.5 - fastest for quick answers. Lower cost but less capable than Sonnet 4.6.",
   };
@@ -33430,13 +33430,13 @@ function naY() {
   return {
     value: "haiku",
     label: "Haiku",
-    description: `Haiku 3.5 for simple tasks${h7() !== "firstParty" ? "" : ` · ${GC(RB8)}`}`,
+    description: `Haiku 3.5 for simple tasks${getProvider() !== "firstParty" ? "" : ` · ${GC(RB8)}`}`,
     descriptionForModel:
       "Haiku 3.5 - faster and lower cost, but less capable than Sonnet. Use for simple tasks.",
   };
 }
 function raY() {
-  return uT6() === m5().haiku45 ? jqq() : naY();
+  return uT6() === m5().haiku45 ? haikuOption() : naY();
 }
 function oaY(A = !1) {
   return {
@@ -33446,7 +33446,7 @@ function oaY(A = !1) {
   };
 }
 function $qq() {
-  let A = h7() !== "firstParty";
+  let A = getProvider() !== "firstParty";
   return {
     value: "sonnet[1m]",
     label: "Sonnet (1M context)",
@@ -33460,38 +33460,51 @@ function Oqq(A = !1) {
     description: `Opus 4.6 with 1M context · ${Y7() ? "Billed as extra usage" : "Billed at premium rate"}${nz6(!0, A)}`,
   };
 }
-function taY(A = !1) {
+function klaudiaCustomEndpointOption() {
+  let A = process.env.KLAUDIA_CUSTOM_MODEL,
+    q = process.env.KLAUDIA_CUSTOM_ENDPOINT;
+  return {
+    value: "custom",
+    label: "(temp) Custom endpoint",
+    description: A && q
+      ? `${A} @ ${q}`
+      : "Set KLAUDIA_CUSTOM_MODEL and KLAUDIA_CUSTOM_ENDPOINT env vars",
+  };
+}
+function buildModelOptions(A = !1) {
   if (Y7()) {
     if (mT6() || BT6()) {
-      let _ = [rv1(A)];
+      let _ = [defaultModelOption(A)];
       if (Wl()) _.push(Oqq(A));
       if ((_.push(aaY), Gl())) _.push($qq());
       return (_.push(Hqq), _);
     }
-    let w = [rv1(A)];
+    let w = [defaultModelOption(A)];
     if (Gl()) w.push($qq());
     if ((w.push(oaY(A)), Wl())) w.push(Oqq(A));
     return (w.push(Hqq), w);
   }
-  if (h7() === "firstParty") {
-    let w = [rv1(A)];
-    if (Gl()) w.push(wqq());
-    if ((w.push(zqq(A)), Wl())) w.push(_qq(A));
-    return (w.push(jqq()), w);
+  if (getProvider() === "firstParty") {
+    let w = [defaultModelOption(A)];
+    if (Gl()) w.push(sonnet1MOption());
+    if ((w.push(opusOption(A)), Wl())) w.push(opus1MOption(A));
+    w.push(haikuOption());
+    w.push(klaudiaCustomEndpointOption());
+    return w;
   }
-  let q = [rv1(A)],
+  let q = [defaultModelOption(A)],
     K = UaY();
   if (K !== void 0) q.push(K);
-  else if ((q.push(daY()), Gl())) q.push(wqq());
+  else if ((q.push(sonnetOption()), Gl())) q.push(sonnet1MOption());
   let Y = caY();
   if (Y !== void 0) q.push(Y);
-  else if ((q.push(laY()), q.push(zqq(A)), Wl())) q.push(_qq(A));
+  else if ((q.push(laY()), q.push(opusOption(A)), Wl())) q.push(opus1MOption(A));
   let z = iaY();
   if (z !== void 0) q.push(z);
   else q.push(raY());
   return q;
 }
-function eaY(A) {
+function detectModelAlias(A) {
   let q = A.toLowerCase();
   if (
     q.includes("claude-sonnet-4-6") ||
@@ -33516,10 +33529,10 @@ function eaY(A) {
   }
   return null;
 }
-function AsY(A) {
+function knownModelOption(A) {
   let q = Wa(A);
   if (!q) return null;
-  let K = eaY(A);
+  let K = detectModelAlias(A);
   if (!K) return { value: A, label: q, description: A };
   if (q !== K.currentVersionName)
     return {
@@ -33529,26 +33542,26 @@ function AsY(A) {
     };
   return { value: A, label: q, description: A };
 }
-function lz6(A = !1) {
-  let q = taY(A),
+function getModelPickerOptions(A = !1) {
+  let q = buildModelOptions(A),
     K = null,
-    Y = eR(),
+    Y = getModelOverride(),
     z = Q_6();
   if (Y !== void 0 && Y !== null) K = Y;
   else if (z !== null) K = z;
-  if (K === null || q.some((w) => w.value === K)) return yB8(q);
-  else if (K === "opusplan") return yB8([...q, saY()]);
+  if (K === null || q.some((w) => w.value === K)) return filterByAvailableModels(q);
+  else if (K === "opusplan") return filterByAvailableModels([...q, saY()]);
   else {
-    let w = AsY(K);
+    let w = knownModelOption(K);
     if (w) q.push(w);
     else q.push({ value: K, label: K, description: "Custom model" });
-    return yB8(q);
+    return filterByAvailableModels(q);
   }
 }
-function yB8(A) {
+function filterByAvailableModels(A) {
   if (!(SA() || {}).availableModels) return A;
   return A.filter(
-    (K) => K.value === null || (K.value !== null && E16(K.value)),
+    (K) => K.value === null || K.value === "custom" || (K.value !== null && E16(K.value)),
   );
 }
 var aaY,
@@ -33647,14 +33660,14 @@ var hB8 = E(() => {
       appStateKey: "mainLoopModel",
       getOptions: () => {
         try {
-          return lz6()
+          return getModelPickerOptions()
             .filter((A) => A.value !== null)
             .map((A) => A.value);
         } catch {
           return ["sonnet", "opus", "haiku"];
         }
       },
-      validateOnWrite: (A) => nv1(String(A)),
+      validateOnWrite: (A) => validateModelName(String(A)),
       formatOnRead: (A) => (A === null ? "default" : A),
     },
     alwaysThinkingEnabled: {
@@ -34793,7 +34806,7 @@ var HKq = E(() => {
       let H = WsY(z),
         j = ok(xz, H),
         J = _ || xz,
-        D = O5($.mainLoopModelForSession ?? $.mainLoopModel ?? KW()),
+        D = resolveModelId($.mainLoopModelForSession ?? $.mainLoopModel ?? KW()),
         X = $Kq(H),
         M = bB8(X, "config.json"),
         P = {
@@ -37707,7 +37720,7 @@ function H3q(A) {
 }
 function j3q(A) {
   let q = A.toLowerCase(),
-    K = h7();
+    K = getProvider();
   if (K === "foundry" || K === "firstParty") return !q.includes("claude-3-");
   return q.includes("sonnet-4") || q.includes("opus-4");
 }
@@ -39748,7 +39761,6 @@ var b3q = E(() => {
     argumentHint: "[report]",
     isEnabled: () =>
       !(
-        isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
         isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
         isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
         process.env.DISABLE_FEEDBACK_COMMAND ||
@@ -41921,7 +41933,7 @@ function AN6() {
     }
     return { commit: "", pr: "" };
   }
-  let A = c3(),
+  let A = getCurrentModel(),
     q = rl6(A) !== null,
     K = X5q() || q ? Ug8(A) : "Claude Opus 4.6",
     Y = `\uD83E\uDD16 Generated with [Claude Code](${fV1})`,
@@ -42029,7 +42041,7 @@ async function C5q(A) {
   writeDebugLog(
     `PR Attribution: claudePercent: ${z}, promptCount: ${w}, memoryAccessCount: ${_}`,
   );
-  let $ = R$(c3()),
+  let $ = R$(getCurrentModel()),
     H = (await M5q()) ? $ : P5q($);
   if (z === 0 && w === 0 && _ === 0)
     return (writeDebugLog("PR Attribution: returning default (no data)"), K);
@@ -42938,7 +42950,7 @@ var Y6z = async (A, q) => {
   let z = A.trim();
   try {
     if (!z) {
-      let J = await uP1(Y, q.agentId);
+      let J = await sessionMemoryCompact(Y, q.agentId);
       if (J) {
         (Q_.cache.clear?.(), se(), LG6());
         let D = _Y6("tip"),
@@ -43711,9 +43723,7 @@ function KN6(A) {
   let G6 =
       G === "env"
         ? `Syntax highlighting disabled (via CLAUDE_CODE_SYNTAX_HIGHLIGHT=${process.env.CLAUDE_CODE_SYNTAX_HIGHLIGHT})`
-        : G === "build"
-          ? "Syntax highlighting available only in native build"
-          : L
+        : L
             ? `Syntax highlighting disabled (${I} to enable)`
             : f
               ? `Syntax theme: ${f.theme}${f.source ? ` (from ${f.source})` : ""} (${I} to disable)`
@@ -43837,7 +43847,7 @@ var Tk1 = E(() => {
   Dd();
   NK = Y6(W6(), 1);
 });
-function YN6(A) {
+function ModelPickerUI(A) {
   let q = reactMemoCache(83),
     {
       initial: K,
@@ -43861,14 +43871,14 @@ function YN6(A) {
   let [Z, f] = Nk1.useState(G),
     N = X ?? !1,
     V;
-  if (q[2] !== N) ((V = lz6(N)), (q[2] = N), (q[3] = V));
+  if (q[2] !== N) ((V = getModelPickerOptions(N)), (q[2] = N), (q[3] = V));
   else V = q[3];
   let v = V,
     L;
   A: {
     if (K !== null && !v.some((C6) => C6.value === K)) {
       let C6;
-      if (q[4] !== K) ((C6 = lG(K)), (q[4] = K), (q[5] = C6));
+      if (q[4] !== K) ((C6 = getModelDisplayName(K)), (q[4] = K), (q[5] = C6));
       else C6 = q[5];
       let d6;
       if (q[6] !== K || q[7] !== C6)
@@ -44022,7 +44032,7 @@ function YN6(A) {
         T,
         { dimColor: !0 },
         "Currently using ",
-        lG(Y),
+        getModelDisplayName(Y),
         " for this session (set by plan mode). Selecting a model will undo this.",
       )),
       (q[44] = Y),
@@ -44246,7 +44256,7 @@ function V6z(A) {
 function X9q(A) {
   if (!A) return !1;
   if (A === qi6) return NK6(KW());
-  return NK6(O5(A));
+  return NK6(resolveModelId(A));
 }
 function M9q(A) {
   let q = reactMemoCache(3),
@@ -44282,7 +44292,7 @@ function P9q(A, q) {
   else return K[(Y - 1 + K.length) % K.length];
 }
 function Ai6(A) {
-  let q = A && A !== qi6 ? O5(A) : KW(),
+  let q = A && A !== qi6 ? resolveModelId(A) : KW(),
     K = bX6(q);
   return K !== void 0 ? vK6(K) : "high";
 }
@@ -45094,7 +45104,7 @@ function V9q({
     (emitEvent("tengu_config_model_changed", { from_model: U, to_model: r }),
       j6((S6) => ({ ...S6, mainLoopModel: r })),
       f6((S6) => {
-        let C6 = lG(r) + (A26(r, !1) ? " · Billed as extra usage" : "");
+        let C6 = getModelDisplayName(r) + (A26(r, !1) ? " · Billed as extra usage" : "");
         if ("model" in S6) {
           let { model: d6, ...o6 } = S6;
           return { ...o6, model: C6 };
@@ -45863,7 +45873,7 @@ function V9q({
           ? o1.createElement(
               o1.Fragment,
               null,
-              o1.createElement(YN6, {
+              o1.createElement(ModelPickerUI, {
                 initial: U,
                 onSelect: (r, Z6) => {
                   (O6(r), v6(null), K(!1));
@@ -49795,7 +49805,7 @@ async function l1z(A, q, K) {
   let Y = A.filter((z) => z.isMcp);
   if (Y.length === 0) return null;
   try {
-    let z = c3(),
+    let z = getCurrentModel(),
       { mcpToolTokens: w, mcpToolDetails: _ } = await nv8(A, q, K, z);
     if (w <= JN6) return null;
     let $ = new Map();
@@ -72087,12 +72097,12 @@ var HOq = E(() => {
       type: "info",
       isActive: (A) => A.showOpus46Notice === !0,
       render: () => {
-        let q = h7() !== "firstParty",
+        let q = getProvider() !== "firstParty",
           K = kK(),
           Y = K === "max",
           z = K === "team",
           w = K === "pro",
-          _ = c3().toLowerCase().includes("opus-4-6"),
+          _ = getCurrentModel().toLowerCase().includes("opus-4-6"),
           $;
         if (Y || z || w || _)
           $ = w4.createElement(T, { dimColor: !0 }, "Welcome to Opus 4.6");
@@ -72360,7 +72370,7 @@ function RE1() {
     q = mh1(),
     K = process.env.DEMO_VERSION ? "/code/claude" : w3(y1()),
     Y = q ? `${K} in ${q.replace(/^https?:\/\//, "")}` : K,
-    z = c3(),
+    z = getCurrentModel(),
     w = zQ8(z),
     _ = Y7() ? hE1() : "API Usage Billing",
     $ = U7().agent;
@@ -72425,85 +72435,19 @@ var CE1 = E(() => {
   bi6 = [];
 });
 function wQ8() {
-  let A = reactMemoCache(3);
-  if (s8.terminal === "Apple_Terminal") {
-    let Y;
-    if (A[0] === Symbol.for("react.memo_cache_sentinel"))
-      ((Y = e9.createElement(Z9z, null)), (A[0] = Y));
-    else Y = A[0];
-    return Y;
-  }
-  let q;
-  if (A[1] === Symbol.for("react.memo_cache_sentinel"))
-    ((q = e9.createElement(
-      T,
-      null,
-      e9.createElement(T, { color: "clawd_body" }, " ▐"),
-      e9.createElement(
-        T,
-        { color: "clawd_body", backgroundColor: "clawd_background" },
-        "▛███▜",
-      ),
-      e9.createElement(T, { color: "clawd_body" }, "▌"),
-    )),
-      (A[1] = q));
-  else q = A[1];
-  let K;
-  if (A[2] === Symbol.for("react.memo_cache_sentinel"))
-    ((K = e9.createElement(
-      m,
-      { flexDirection: "column" },
-      q,
-      e9.createElement(
-        T,
-        null,
-        e9.createElement(T, { color: "clawd_body" }, "▝▜"),
-        e9.createElement(
-          T,
-          { color: "clawd_body", backgroundColor: "clawd_background" },
-          "█████",
-        ),
-        e9.createElement(T, { color: "clawd_body" }, "▛▘"),
-      ),
-      e9.createElement(T, { color: "clawd_body" }, "  ", "▘▘ ▝▝", "  "),
-    )),
-      (A[2] = K));
-  else K = A[2];
-  return K;
+  return e9.createElement(
+    m,
+    { flexDirection: "column" },
+    e9.createElement(T, { dimColor: !0 }, " ____  __.__"),
+    e9.createElement(T, { dimColor: !0 }, "|    |/ _|  | _____   __ __  __| _/|__|____"),
+    e9.createElement(T, { color: "claude" }, "|      < |  | \\__  \\ |  |  \\/ __ | |  \\__  \\"),
+    e9.createElement(T, { color: "claude" }, "|    |  \\|  |__/ __ \\|  |  / /_/ | |  |/ __ \\_"),
+    e9.createElement(T, { dimColor: !0 }, "|____|__ \\____(____  /____/\\____ | |__(____  /"),
+    e9.createElement(T, { dimColor: !0 }, "        \\/         \\/           \\/         \\/"),
+  );
 }
 function Z9z() {
-  let A = reactMemoCache(2),
-    q;
-  if (A[0] === Symbol.for("react.memo_cache_sentinel"))
-    ((q = e9.createElement(
-      T,
-      null,
-      e9.createElement(T, { color: "clawd_body" }, "▗"),
-      e9.createElement(
-        T,
-        { color: "clawd_background", backgroundColor: "clawd_body" },
-        " ",
-        "▗",
-        "   ",
-        "▖",
-        " ",
-      ),
-      e9.createElement(T, { color: "clawd_body" }, "▖"),
-    )),
-      (A[0] = q));
-  else q = A[0];
-  let K;
-  if (A[1] === Symbol.for("react.memo_cache_sentinel"))
-    ((K = e9.createElement(
-      m,
-      { flexDirection: "column", alignItems: "center" },
-      q,
-      e9.createElement(T, { backgroundColor: "clawd_body" }, " ".repeat(7)),
-      e9.createElement(T, { color: "clawd_body" }, "▘▘ ▝▝"),
-    )),
-      (A[1] = K));
-  else K = A[1];
-  return K;
+  return wQ8();
 }
 var e9;
 var vOq = E(() => {
@@ -73322,8 +73266,8 @@ function cOq(A) {
   }
   let U = WOq(O),
     c = getSettings().theme,
-    d = ` ${bA("claude", c)("Claude Code")} ${bA("inactive", c)(`v${S}`)} `,
-    a = bA("claude", c)(" Claude Code ");
+    d = ` ${bA("claude", c)("Klaudia")} ${bA("inactive", c)(`v${S}`)} `,
+    a = bA("claude", c)(" Klaudia ");
   if (U === "compact") {
     let O1 = yE1($);
     if (h8(O1) > O - 4) {
@@ -73352,7 +73296,7 @@ function cOq(A) {
         { marginY: 1 },
         PA.createElement(
           m,
-          { height: 5, flexDirection: "column", justifyContent: "flex-end" },
+          { height: 8, flexDirection: "column", justifyContent: "flex-end" },
           PA.createElement(m, { marginBottom: w }, Z1),
         ),
       )),
@@ -73450,7 +73394,7 @@ function cOq(A) {
   if (q[34] !== w)
     ((g6 = PA.createElement(
       m,
-      { height: 5, flexDirection: "column", justifyContent: "flex-end" },
+      { height: 8, flexDirection: "column", justifyContent: "flex-end" },
       PA.createElement(m, { marginBottom: w }, h6),
     )),
       (q[34] = w),
@@ -87990,12 +87934,12 @@ var EDq = E(() => {
   zK();
   E26 = Y6(W6(), 1);
 });
-function XL1(A) {
+function ModelPicker(A) {
   let q = reactMemoCache(12),
     { initialModel: K, onComplete: Y, onCancel: z } = A,
     w;
   if (q[0] === Symbol.for("react.memo_cache_sentinel"))
-    ((w = C44()), (q[0] = w));
+    ((w = getModelOptions()), (q[0] = w));
   else w = q[0];
   let _ = w,
     $;
@@ -88064,7 +88008,7 @@ var PU8 = E(() => {
   Ut();
   Bi = Y6(W6(), 1);
 });
-function LDq() {
+function ModelWizardStep() {
   let A = reactMemoCache(8),
     { goNext: q, goBack: K, updateWizardData: Y, wizardData: z } = D_(),
     w;
@@ -88098,7 +88042,7 @@ function LDq() {
     ((O = L26.default.createElement(
       hO,
       { subtitle: "Select model", footerText: $ },
-      L26.default.createElement(XL1, {
+      L26.default.createElement(ModelPicker, {
         initialModel: z.selectedModel,
         onComplete: _,
         onCancel: K,
@@ -88962,7 +88906,7 @@ function BDq(A) {
   else H = q[8];
   let j;
   if (q[9] !== _ || q[10] !== $ || q[11] !== H)
-    ((j = [$Dq, HDq, MDq, _, fDq, NDq, $, LDq, CDq, ...O, H]),
+    ((j = [$Dq, HDq, MDq, _, fDq, NDq, $, ModelWizardStep, CDq, ...O, H]),
       (q[9] = _),
       (q[10] = $),
       (q[11] = H),
@@ -89145,7 +89089,7 @@ function FDq({ agent: A, tools: q, onSaved: K, onBack: Y }) {
         },
       });
     case "edit-model":
-      return pX.createElement(XL1, {
+      return pX.createElement(ModelPicker, {
         initialModel: A.model,
         onComplete: async (f) => {
           (_("menu"), await M({ model: f }));
@@ -92531,7 +92475,7 @@ var DMq = E(() => {
 });
 var XMq = {};
 s1(XMq, { call: () => T_z });
-function $_z(A) {
+function ModelCommandUI(A) {
   let q = reactMemoCache(17),
     { onDone: K } = A,
     Y = useAppState(J_z),
@@ -92542,7 +92486,7 @@ function $_z(A) {
   if (q[0] !== Y || q[1] !== K)
     (($ = function () {
       emitEvent("tengu_model_command_menu", { action: "cancel" });
-      let M = lG(Y);
+      let M = getModelDisplayName(Y);
       K(`Kept model as ${H1.bold(M)}`, { display: "system" });
     }),
       (q[0] = Y),
@@ -92555,7 +92499,7 @@ function $_z(A) {
     ((H = function (M, P) {
       (emitEvent("tengu_model_command_menu", { action: M, from_model: Y, to_model: M }),
         _((Z) => ({ ...Z, mainLoopModel: M, mainLoopModelForSession: null })));
-      let W = `Set model to ${H1.bold(lG(M))}`;
+      let W = `Set model to ${H1.bold(getModelDisplayName(M))}`;
       if (P !== void 0) W = W + ` with ${H1.bold(P)} effort`;
       let G = void 0;
       if (xq()) {
@@ -92579,7 +92523,7 @@ function $_z(A) {
   else J = q[10];
   let D;
   if (q[11] !== O || q[12] !== j || q[13] !== Y || q[14] !== z || q[15] !== J)
-    ((D = Pb.createElement(YN6, {
+    ((D = Pb.createElement(ModelPickerUI, {
       initial: Y,
       sessionModel: z,
       onSelect: j,
@@ -92608,28 +92552,28 @@ function j_z(A) {
 function J_z(A) {
   return A.mainLoopModel;
 }
-function D_z({ args: A, onDone: q }) {
+function ModelInlineCommand({ args: A, onDone: q }) {
   let K = useAppState((w) => w.fastMode),
     Y = tA(),
     z = A === "default" ? null : A;
   return (
     Pb.useEffect(() => {
       async function w() {
-        if (z && !E16(z)) {
+        if (z && z !== "custom" && !E16(z)) {
           q(
             `Model '${z}' is not available. Your organization restricts model selection.`,
             { display: "system" },
           );
           return;
         }
-        if (z && M_z(z)) {
+        if (z && isOpus1MUnavailable(z)) {
           q(
             "Opus 4.6 with 1M context is not available for your account. Learn more: https://code.claude.com/docs/en/model-config#extended-context-with-1m",
             { display: "system" },
           );
           return;
         }
-        if (z && P_z(z)) {
+        if (z && isSonnet1MUnavailable(z)) {
           q(
             "Sonnet 4.6 with 1M context is not available for your account. Learn more: https://code.claude.com/docs/en/model-config#extended-context-with-1m",
             { display: "system" },
@@ -92640,12 +92584,16 @@ function D_z({ args: A, onDone: q }) {
           _(null);
           return;
         }
-        if (X_z(z)) {
+        if (z === "custom") {
+          _(z);
+          return;
+        }
+        if (isModelAlias(z)) {
           _(z);
           return;
         }
         try {
-          let { valid: $, error: O } = await nv1(z);
+          let { valid: $, error: O } = await validateModelName(z);
           if ($) _(z);
           else q(O || `Model '${z}' not found`, { display: "system" });
         } catch ($) {
@@ -92654,7 +92602,7 @@ function D_z({ args: A, onDone: q }) {
       }
       function _($) {
         Y((j) => ({ ...j, mainLoopModel: $, mainLoopModelForSession: null }));
-        let O = `Set model to ${H1.bold(lG($))}`,
+        let O = `Set model to ${H1.bold(getModelDisplayName($))}`,
           H = void 0;
         if (xq()) {
           if ((Y26(), !fj($) && K))
@@ -92670,26 +92618,26 @@ function D_z({ args: A, onDone: q }) {
     null
   );
 }
-function X_z(A) {
-  return h56.includes(A.toLowerCase().trim());
+function isModelAlias(A) {
+  return modelAliases.includes(A.toLowerCase().trim());
 }
-function M_z(A) {
+function isOpus1MUnavailable(A) {
   let q = A.toLowerCase();
   return !Wl() && q.includes("opus") && q.includes("[1m]");
 }
-function P_z(A) {
+function isSonnet1MUnavailable(A) {
   let q = A.toLowerCase();
   return !Gl() && (q.includes("sonnet[1m]") || q.includes("sonnet-4-6[1m]"));
 }
-function W_z(A) {
+function ModelInfoDisplay(A) {
   let { onDone: q } = A,
     K = useAppState(f_z),
     Y = useAppState(Z_z),
     z = useAppState(G_z),
-    w = lG(K),
+    w = getModelDisplayName(K),
     _ = z !== void 0 ? ` (effort: ${z})` : "";
   if (Y)
-    q(`Current model: ${H1.bold(lG(Y))} (session override from plan mode)
+    q(`Current model: ${H1.bold(getModelDisplayName(Y))} (session override from plan mode)
 Base model: ${w}${_}`);
   else q(`Current model: ${w}${_}`);
   return null;
@@ -92708,7 +92656,7 @@ var Pb,
     if (((K = K?.trim() || ""), wH6.includes(K)))
       return (
         emitEvent("tengu_model_command_inline_help", { args: K }),
-        Pb.createElement(W_z, { onDone: A })
+        Pb.createElement(ModelInfoDisplay, { onDone: A })
       );
     if (zH6.includes(K)) {
       A(
@@ -92720,9 +92668,9 @@ var Pb,
     if (K)
       return (
         emitEvent("tengu_model_command_inline", { args: K }),
-        Pb.createElement(D_z, { args: K, onDone: A })
+        Pb.createElement(ModelInlineCommand, { args: K, onDone: A })
       );
-    return Pb.createElement($_z, { onDone: A });
+    return Pb.createElement(ModelCommandUI, { onDone: A });
   };
 var MMq = E(() => {
   e6();
@@ -92751,7 +92699,7 @@ var WMq = E(() => {
       return "model";
     },
     get description() {
-      return `Set the AI model for Claude Code (currently ${iM(c3())})`;
+      return `Set the AI model for Claude Code (currently ${iM(getCurrentModel())})`;
     },
     isEnabled: () => !0,
     isHidden: !1,
@@ -105151,8 +105099,6 @@ function kn6({ scope: A, querySource: q } = {}) {
   };
 }
 function Xjz(A) {
-  if (h7() === "bedrock" && isTruthy(process.env.ENABLE_PROMPT_CACHING_1H_BEDROCK))
-    return !0;
   if (!(Y7() && !iN.isUsingOverage)) return !1;
   let K = FI1();
   if (K === null)
@@ -105180,7 +105126,7 @@ async function _Wq(A, q) {
       Y = Qv(K);
     return await vr4(
       DJ1(
-        () => fI({ apiKey: A, maxRetries: 3, model: K }),
+        () => createApiClient({ apiKey: A, maxRetries: 3, model: K, baseURL: getCustomEndpoint() }),
         async (z) => {
           let w = [{ role: "user", content: "test" }];
           return (
@@ -105313,7 +105259,7 @@ function Gjz(A) {
 async function* zWq(A, q, K, Y, z) {
   let w = DJ1(
       () =>
-        fI({ maxRetries: 0, model: A.model, fetchOverride: A.fetchOverride }),
+        createApiClient({ maxRetries: 0, model: A.model, fetchOverride: A.fetchOverride, baseURL: getCustomEndpoint() }),
       async ($, O, H) => {
         let j = Date.now(),
           J = K(H);
@@ -105392,10 +105338,7 @@ async function* $Wq(A, q, K, Y, z, w) {
     return;
   }
   let _ = Zjz(A),
-    $ =
-      h7() === "bedrock" && w.model.includes("application-inference-profile")
-        ? ((await r31(w.model)) ?? w.model)
-        : w.model;
+    $ = w.model;
   L3("query_tool_schema_build_start");
   let O =
       w.querySource.startsWith("repl_main_thread") ||
@@ -105418,7 +105361,7 @@ async function* $Wq(A, q, K, Y, z, w) {
     });
   } else J = Y.filter((L6) => !B5(L6, XP));
   let D = j ? CbA() : null;
-  if (D && h7() !== "bedrock") {
+  if (D) {
     if (!H.includes(D)) H.push(D);
   }
   let X = !1,
@@ -105532,7 +105475,7 @@ ${L6}
     D6 = (L6) => {
       let h6 = [...H];
       if (!h6.includes(Xo) && nW8(L6.model)) h6.push(Xo);
-      let g6 = h7() === "bedrock" ? [...hn1(L6.model), ...(D ? [D] : [])] : [],
+      let g6 = [],
         y6 = WP1(g6),
         r = { ...(y6.output_config ?? {}) },
         Z6 = Wf7() ?? w.effortValue ?? bX6(w.model);
@@ -105568,7 +105511,7 @@ ${L6}
       if (xq() && ZJ() && !mB() && fj(w.model) && !!L6.fastMode)
         (h6.push(kbA), (x6 = "fast"));
       let D1 =
-        X && h7() === "firstParty" && w.querySource === "repl_main_thread";
+        X && getProvider() === "firstParty" && w.querySource === "repl_main_thread";
       if (D1) {
         if (!h6.includes(M))
           (h6.push(M),
@@ -105651,7 +105594,7 @@ ${L6}
     L3("query_client_creation_start");
     let L6 = DJ1(
         () =>
-          fI({ maxRetries: 0, model: w.model, fetchOverride: w.fetchOverride }),
+          createApiClient({ maxRetries: 0, model: w.model, fetchOverride: w.fetchOverride, baseURL: getCustomEndpoint() }),
         async (K1, x6, t6) => {
           ((d = x6), (E6 = t6.fastMode ?? !1), (c = Date.now()), a.push(c));
           let D1 = D6(t6);

@@ -7165,12 +7165,12 @@ function q86() {
         "Fast mode is not available in the Agent SDK"
       );
   }
-  if (h7() !== "firstParty")
+  if (getProvider() !== "firstParty")
     return (
       writeDebugLog(
-        "Fast mode unavailable: Fast mode is not available on Bedrock, Vertex, or Foundry",
+        "Fast mode unavailable: Fast mode is not available on Vertex or Foundry",
       ),
-      "Fast mode is not available on Bedrock, Vertex, or Foundry"
+      "Fast mode is not available on Vertex or Foundry"
     );
   if (ai.status === "disabled") {
     if (ai.reason === "network_error") return null;
@@ -7191,7 +7191,7 @@ function Qc8(A) {
 function fj(A) {
   if (!xq()) return !1;
   let q = A ?? jF();
-  return O5(q).toLowerCase().includes("opus-4-6");
+  return resolveModelId(q).toLowerCase().includes("opus-4-6");
 }
 function GZq(A) {
   return (
@@ -7730,17 +7730,17 @@ s1(a$q, {
   renderModelSetting: () => zQ8,
   renderModelName: () => iM,
   renderDefaultModelSetting: () => SB8,
-  parseUserSpecifiedModel: () => O5,
+  parseUserSpecifiedModel: () => resolveModelId,
   normalizeModelStringForAPI: () => Tg,
-  modelDisplayString: () => lG,
+  modelDisplayString: () => getModelDisplayName,
   isNonCustomOpusModel: () => W56,
-  getUserSpecifiedModelSetting: () => eR,
+  getUserSpecifiedModelSetting: () => getModelOverride,
   getSmallFastModel: () => PO,
   getRuntimeMainLoopModel: () => RI,
   getPublicModelName: () => Ug8,
   getPublicModelDisplayName: () => rl6,
   getOpus46PricingSuffix: () => nz6,
-  getMainLoopModel: () => c3,
+  getMainLoopModel: () => getCurrentModel,
   getDefaultSonnetModel: () => df,
   getDefaultOpusModel: () => NE,
   getDefaultMainLoopModelSetting: () => jF,
@@ -7761,7 +7761,7 @@ function W56(A) {
     A === m5().opus46
   );
 }
-function eR() {
+function getModelOverride() {
   let A,
     q = vS();
   if (q !== void 0) A = q;
@@ -7769,12 +7769,28 @@ function eR() {
     let K = SA() || {};
     A = process.env.ANTHROPIC_MODEL || K.model || void 0;
   }
+  if (A === "custom") {
+    let K = SA() || {};
+    return process.env.KLAUDIA_CUSTOM_MODEL || K.customModelId || void 0;
+  }
   if (A && !E16(A)) return;
   return A;
 }
-function c3() {
-  let A = eR();
-  if (A !== void 0 && A !== null) return O5(A);
+function getCustomEndpoint() {
+  let A = vS();
+  if (A === void 0) {
+    let q = SA() || {};
+    A = q.model;
+  }
+  if (A === "custom") {
+    let q = SA() || {};
+    return process.env.KLAUDIA_CUSTOM_ENDPOINT || q.customEndpoint || null;
+  }
+  return null;
+}
+function getCurrentModel() {
+  let A = getModelOverride();
+  if (A !== void 0 && A !== null) return resolveModelId(A);
   return KW();
 }
 function yZq() {
@@ -7783,13 +7799,13 @@ function yZq() {
 function NE() {
   if (process.env.ANTHROPIC_DEFAULT_OPUS_MODEL)
     return process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
-  if (h7() === "firstParty") return m5().opus46;
+  if (getProvider() === "firstParty") return m5().opus46;
   return m5().opus41;
 }
 function df() {
   if (process.env.ANTHROPIC_DEFAULT_SONNET_MODEL)
     return process.env.ANTHROPIC_DEFAULT_SONNET_MODEL;
-  if (h7() !== "firstParty") return m5().sonnet45;
+  if (getProvider() !== "firstParty") return m5().sonnet45;
   return m5().sonnet46;
 }
 function uT6() {
@@ -7799,8 +7815,8 @@ function uT6() {
 }
 function RI(A) {
   let { permissionMode: q, mainLoopModel: K, exceeds200kTokens: Y = !1 } = A;
-  if (eR() === "opusplan" && q === "plan" && !Y) return NE();
-  if (eR() === "haiku" && q === "plan") return df();
+  if (getModelOverride() === "opusplan" && q === "plan" && !Y) return NE();
+  if (getModelOverride() === "haiku" && q === "plan") return df();
   return K;
 }
 function jF() {
@@ -7809,7 +7825,7 @@ function jF() {
   return df();
 }
 function KW() {
-  return O5(jF());
+  return resolveModelId(jF());
 }
 function R$(A) {
   if (A.includes("claude-opus-4-6")) return "claude-opus-4-6";
@@ -7831,10 +7847,10 @@ function hf6(A = !1) {
 }
 function SB8(A) {
   if (A === "opusplan") return "Opus 4.6 in plan mode, else Sonnet 4.6";
-  return iM(O5(A));
+  return iM(resolveModelId(A));
 }
 function nz6(A, q) {
-  if (h7() !== "firstParty") return "";
+  if (getProvider() !== "firstParty") return "";
   let K = GC(tN6(A, q));
   return ` ·${q ? ` (${J66})` : ""} ${K}`;
 }
@@ -7889,7 +7905,7 @@ function Ug8(A) {
   if (q) return `Claude ${q}`;
   return `Claude (${A})`;
 }
-function O5(A) {
+function resolveModelId(A) {
   let q = A.trim(),
     K = q.toLowerCase(),
     Y = pv(K),
@@ -7911,12 +7927,12 @@ function O5(A) {
   if (Y) return q.replace(/\[1m\]$/i, "").trim() + "[1m]";
   return q;
 }
-function lG(A) {
+function getModelDisplayName(A) {
   if (A === null) {
     if (Y7()) return `Default (${hf6()})`;
     return `Default (${KW()})`;
   }
-  let q = O5(A);
+  let q = resolveModelId(A);
   return A === q ? q : `${A} (${q})`;
 }
 function Tg(A) {
@@ -8058,7 +8074,7 @@ function GXz() {
   }
 }
 async function LM6(A = {}) {
-  let q = A.model ? String(A.model) : c3(),
+  let q = A.model ? String(A.model) : getCurrentModel(),
     K = Qv(q),
     [Y, z] = await Promise.all([WXz(), sh6()]),
     w = GXz();
@@ -11618,7 +11634,6 @@ import { mkdir as TMz } from "fs/promises";
 import { exec as NMz } from "child_process";
 function PJ() {
   let A =
-      isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
       isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
       isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY),
     K = (SA() || {}).apiKeyHelper,
@@ -12050,7 +12065,6 @@ function Y7() {
 }
 function rh8() {
   if (
-    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
     isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
     isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
   )
@@ -12127,7 +12141,6 @@ function hE1() {
 }
 function gk() {
   return !!(
-    isTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
     isTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
     isTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
   );
@@ -12185,7 +12198,7 @@ function TU6() {
   return Y7() && A !== null && xMz(A);
 }
 function Kc6() {
-  if (h7() !== "firstParty") return;
+  if (getProvider() !== "firstParty") return;
   let { source: q } = Ix(),
     K = {};
   if (
@@ -17448,7 +17461,7 @@ var Ai8 = E(() => {
 });
 function wWz(A) {
   let q = A.toLowerCase(),
-    K = h7();
+    K = getProvider();
   for (let [Y, z] of Object.entries(zWz)) {
     let w = z.retirementDates[K];
     if (!q.includes(Y) || !w) continue;
@@ -18819,7 +18832,7 @@ var Di8 = E(() => {
       cooldownSessions: 2,
       async isRelevant() {
         let A = getSettings(),
-          K = eR() === "opusplan",
+          K = getModelOverride() === "opusplan",
           Y = A.lastPlanModeUse
             ? (Date.now() - A.lastPlanModeUse) / 86400000
             : 1 / 0;
@@ -18921,7 +18934,7 @@ function s26(A, q, K) {
       { agentDefinition: void 0, agentType: void 0 }
     );
   if ((tp(Y.agentType), !vS() && Y.model && Y.model !== "inherit"))
-    LW(O5(Y.model));
+    LW(resolveModelId(Y.model));
   return { agentDefinition: Y, agentType: Y.agentType };
 }
 async function VWz(A, q, K, Y) {
@@ -19118,7 +19131,7 @@ var RNq = E(() => {
 });
 function CNq() {
   if (getSettings().opusProMigrationComplete) return;
-  if (h7() !== "firstParty" || !Yb6()) {
+  if (getProvider() !== "firstParty" || !Yb6()) {
     (updateSettings((Y) => ({ ...Y, opusProMigrationComplete: !0 })),
       emitEvent("tengu_reset_pro_to_opus_default", { skipped: !0 }));
     return;
@@ -19472,7 +19485,7 @@ var Zi8 = E(() => {
   INq();
   bN();
 });
-function h86({ newState: A, oldState: q }) {
+function onAppStateChange({ newState: A, oldState: q }) {
   if (A.mainLoopModel !== q.mainLoopModel && A.mainLoopModel === null)
     (iA("userSettings", { model: void 0 }), LW(null));
   if (A.mainLoopModel !== q.mainLoopModel && A.mainLoopModel !== null)
@@ -29625,7 +29638,7 @@ async function Zkq() {
   }
 }
 function Kfz() {
-  if (h7() !== "firstParty" || !gH6()) return !1;
+  if (getProvider() !== "firstParty" || !gH6()) return !1;
   let A = z4();
   return Boolean(A?.accessToken && A.scopes?.includes(dS));
 }
@@ -33268,7 +33281,7 @@ class dkq {
         return D1;
       },
       B = await W(),
-      h = X ? O5(X) : c3(),
+      h = X ? resolveModelId(X) : getCurrentModel(),
       F = $ ? $ : cT6() !== !1 ? { type: "adaptive" } : { type: "disabled" },
       [g, u, U] = await Promise.all([
         xf(
@@ -35998,9 +36011,9 @@ function ITz(A, q, K, Y, z, w, _, $, O, H, j, J) {
       GEq(V, J.message),
       IG({ mode: "prompt", value: J.message.message.content, uuid: H0() }));
   let L = oN6(V),
-    I = lz6().map((y6) => {
+    I = getModelPickerOptions().map((y6) => {
       let r = y6.value === null ? "default" : y6.value,
-        Z6 = r === "default" ? KW() : O5(r),
+        Z6 = r === "default" ? KW() : resolveModelId(r),
         S6 = NK6(Z6),
         C6 = Kk1(Z6);
       return {
@@ -37367,7 +37380,7 @@ async function bTz(A, q, K, Y, z, w, _, $, O, H, j) {
         if (G) O.systemPrompt = G;
       }
       if (!O.userSpecifiedModel && W.model && W.model !== "inherit") {
-        let G = O5(W.model);
+        let G = resolveModelId(W.model);
         LW(G);
       }
     }
@@ -37958,7 +37971,7 @@ function gTz(A) {
   if (q[0] !== w || q[1] !== z)
     ((_ = eR1.default.createElement(
       Xj,
-      { initialState: z, onChangeAppState: h86 },
+      { initialState: z, onChangeAppState: onAppStateChange },
       w,
     )),
       (q[0] = w),
@@ -40782,7 +40795,7 @@ ${$}`
 }
 
 Explain this command in context.`,
-      H = c3(),
+      H = getCurrentModel(),
       j = await Uc({
         model: H,
         system: mNz,
@@ -44103,7 +44116,7 @@ ${L}${G6}${T6}${z6}`,
 }
 function IVz(A, q) {
   if (!A) return null;
-  let K = RI({ permissionMode: q, mainLoopModel: c3(), exceeds200kTokens: !1 }),
+  let K = RI({ permissionMode: q, mainLoopModel: getCurrentModel(), exceeds200kTokens: !1 }),
     Y = fX(K, iH()),
     { used: z } = yA1(
       {
@@ -49236,7 +49249,7 @@ function $Rq(A) {
   let G = W,
     Z;
   if (q[2] === Symbol.for("react.memo_cache_sentinel"))
-    ((Z = c3()), (q[2] = Z));
+    ((Z = getCurrentModel()), (q[2] = Z));
   else Z = q[2];
   let f = Z,
     N = lyq(G, f),
@@ -53067,7 +53080,7 @@ function Kr8(A) {
 }
 function pkz(A, q, K, Y, z, w) {
   let _ = pA6(),
-    $ = RI({ permissionMode: A, mainLoopModel: c3(), exceeds200kTokens: q }),
+    $ = RI({ permissionMode: A, mainLoopModel: getCurrentModel(), exceeds200kTokens: q }),
     O = K?.outputStyle || nM,
     H = MP1(Y),
     j = fX($, iH()),
@@ -56674,7 +56687,7 @@ function pEz({
         }),
           Tz(!1));
         let c8 = (M6 ?? !1) && !a1,
-          H7 = `Model set to ${lG(m6)}`;
+          H7 = `Model set to ${getModelDisplayName(m6)}`;
         if (A26(m6, c8)) H7 += " · Billed as extra usage";
         if (a1) H7 += " · Fast mode OFF";
         (H8({
@@ -56695,7 +56708,7 @@ function pEz({
       return M7.createElement(
         m,
         { flexDirection: "column", marginTop: 1 },
-        M7.createElement(YN6, {
+        M7.createElement(ModelPickerUI, {
           initial: j1,
           sessionModel: R1,
           onSelect: N_,
@@ -60721,7 +60734,7 @@ function dhq({ model: A, onDone: q }) {
   );
 }
 function chq(A) {
-  if (!O5(A).toLowerCase().includes("opus-4-6")) return !1;
+  if (!resolveModelId(A).toLowerCase().includes("opus-4-6")) return !1;
   if (getSettings().effortCalloutDismissed) return !1;
   let Y = Kb6();
   if (Y !== void 0) {
@@ -60970,7 +60983,7 @@ function nhq(A, q, K, Y = "session", z = !1) {
       shouldShowTranscriptPrompt: G,
       onTranscriptSelect: Z,
     }),
-    L = c3(),
+    L = getCurrentModel(),
     S = JW.useMemo(() => {
       if (O.onForModels.length === 0) return !1;
       if (O.onForModels.includes("*")) return !0;
@@ -63087,34 +63100,6 @@ var aIq = E(() => {
   AS1 = Y6(W6(), 1);
 });
 function sIq() {
-  let A = reactMemoCache(3),
-    { addNotification: q } = Nq(),
-    K = qS1.useRef(!1),
-    Y,
-    z;
-  if (A[0] !== q)
-    ((Y = () => {
-      if (Eq()) return;
-      if (K.current || T9() || isTruthy(process.env.DISABLE_INSTALLATION_CHECKS))
-        return;
-      _F().then((w) => {
-        if (K.current || w === "development") return;
-        ((K.current = !0),
-          q({
-            timeoutMs: 15000,
-            key: "npm-deprecation-warning",
-            text: Myz,
-            color: "warning",
-            priority: "high",
-          }));
-      });
-    }),
-      (z = [q]),
-      (A[0] = q),
-      (A[1] = Y),
-      (A[2] = z));
-  else ((Y = A[1]), (z = A[2]));
-  qS1.useEffect(Y, z);
 }
 var qS1,
   Myz =
@@ -64861,7 +64846,7 @@ function Ir8({
                   ? { name: m8.agentName ?? "", color: m8.agentColor }
                   : void 0,
             }));
-          (cv8(x7), Tw6(x7, m8.projectPath ?? HA()), Sj(), W9(null), m6(V1));
+          (processMicrocompactBoundaries(x7), Tw6(x7, m8.projectPath ?? HA()), Sj(), W9(null), m6(V1));
           let dK = Uc8(V1);
           (dc8(), U_6(), Z0(XX(V1)));
           let { renameRecordingForSession: cK } = await Promise.resolve().then(
@@ -64892,7 +64877,7 @@ function Ir8({
       GY.current = vP6(GY.current, U8);
     }, []);
   n8.useEffect(() => {
-    if (Y && Y.length > 0) (cv8(Y), Tw6(Y, HA()));
+    if (Y && Y.length > 0) (processMicrocompactBoundaries(Y), Tw6(Y, HA()));
   }, []);
   let { status: tE, reverify: Y8 } = BSq(),
     [o8, b8] = n8.useState(null),
@@ -68085,7 +68070,7 @@ async function PRz(A, q, K) {
       if (!J) throw Error(`Tool ${$} not found`);
       try {
         if (!J.isEnabled()) throw Error(`Tool ${$} is not enabled`);
-        let D = c3(),
+        let D = getCurrentModel(),
           X = await J.validateInput?.(O ?? {}, {
             abortController: G3(),
             options: {
@@ -68118,7 +68103,7 @@ async function PRz(A, q, K) {
             options: {
               commands: Hbq,
               tools: j,
-              mainLoopModel: c3(),
+              mainLoopModel: getCurrentModel(),
               thinkingConfig: { type: "disabled" },
               mcpClients: [],
               mcpResources: {},
@@ -69288,7 +69273,7 @@ async function lRz(A) {
     A.render(
       PW.default.createElement(
         Xj,
-        { onChangeAppState: h86 },
+        { onChangeAppState: onAppStateChange },
         PW.default.createElement(
           hD,
           null,

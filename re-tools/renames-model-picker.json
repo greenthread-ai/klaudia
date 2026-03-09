@@ -1,0 +1,20 @@
+[
+  ["taY", "buildModelOptions"],
+  ["lz6", "getModelPickerOptions"],
+  ["YN6", "ModelPickerUI"],
+  ["rv1", "defaultModelOption"],
+  ["daY", "sonnetOption"],
+  ["zqq", "opusOption"],
+  ["wqq", "sonnet1MOption"],
+  ["_qq", "opus1MOption"],
+  ["jqq", "haikuOption"],
+  ["yB8", "filterByAvailableModels"],
+  ["nv1", "validateModelName"],
+  ["AsY", "knownModelOption"],
+  ["eaY", "detectModelAlias"],
+  ["X_z", "isModelAlias"],
+  ["M_z", "isOpus1MUnavailable"],
+  ["P_z", "isSonnet1MUnavailable"],
+  ["D_z", "ModelInlineCommand"],
+  ["W_z", "ModelInfoDisplay"]
+]
