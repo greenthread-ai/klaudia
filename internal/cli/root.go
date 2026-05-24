@@ -187,6 +187,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		Interactive:     false, // headless mode
 		InitialMessages: initialMessages,
 		Recorder:        recorder,
+		WebTools:        true,
 	}, emit)
 
 	out := ResultMessage{

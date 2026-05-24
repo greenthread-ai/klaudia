@@ -22,6 +22,13 @@ var DefaultBetas = []anthropic.AnthropicBeta{
 	"context-management-2025-06-27",
 }
 
+// WebToolBetas are the additional betas required when the server-side
+// web_search / web_fetch tools are enabled.
+var WebToolBetas = []anthropic.AnthropicBeta{
+	"web-search-2025-03-05",
+	"web-fetch-2025-09-10",
+}
+
 // DefaultModel is used when no --model is given. Server-side resolution may
 // pick a newer snapshot; this is the alias we send.
 const DefaultModel = "claude-sonnet-4-5"

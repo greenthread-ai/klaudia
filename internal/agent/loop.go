@@ -60,6 +60,9 @@ type Options struct {
 	// Recorder, if set, receives each user/assistant message for transcript
 	// persistence. May be nil.
 	Recorder Recorder
+	// WebTools enables the server-side web_search and web_fetch tools (executed
+	// by the Anthropic API, not locally).
+	WebTools bool
 }
 
 // Result is the outcome of a Run.
@@ -94,6 +97,14 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		return Result{}, err
 	}
 
+	// Server-side web tools are appended to the tool list and executed by the
+	// API; they require their own betas.
+	betas := api.DefaultBetas
+	if opts.WebTools {
+		toolParams = append(toolParams, webToolParams()...)
+		betas = append(append([]string{}, betas...), api.WebToolBetas...)
+	}
+
 	var system []anthropic.BetaTextBlockParam
 	if opts.System != "" {
 		system = []anthropic.BetaTextBlockParam{{Text: opts.System}}
@@ -116,6 +127,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			Messages:  messages,
 			System:    system,
 			Tools:     toolParams,
+			Betas:     betas,
 		}
 
 		assistant, finalText, err := l.streamTurn(ctx, params, emit)
@@ -130,10 +142,18 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// Persist the assistant turn (including the final, tool-less answer).
 		record(opts.Recorder, "assistant", assistant)
 
+		// pause_turn: the API paused a long-running server-side tool (e.g. web
+		// search). Re-send the accumulated turn to let it continue.
+		if assistant.StopReason == "pause_turn" {
+			messages = append(messages, assistant.ToParam())
+			continue
+		}
+
 		// Collect tool_use blocks from this turn.
 		toolUses := toolUseBlocks(assistant)
 		if len(toolUses) == 0 {
-			// No tools requested → the model is done.
+			// No tools requested → the model is done (server-side tool results,
+			// if any, were already resolved inline by the API).
 			return res, nil
 		}
 
