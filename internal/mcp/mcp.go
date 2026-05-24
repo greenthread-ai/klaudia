@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -170,13 +171,23 @@ func (m *Manager) Reconnect(name string) error {
 		_ = s.session.Close()
 		s.session = nil
 	}
-	fresh, err := ConnectCommand(m.ctx, name, cfg)
+	// Bound the launch+handshake so a hung server can't block the caller (the
+	// TUI runs this synchronously). On timeout the server stays disconnected.
+	ctx, cancel := context.WithTimeout(m.ctx, reconnectTimeout)
+	defer cancel()
+	fresh, err := ConnectCommand(ctx, name, cfg)
 	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("mcp %q: reconnect timed out after %s", name, reconnectTimeout)
+		}
 		return err
 	}
 	s.session = fresh.session
 	return nil
 }
+
+// reconnectTimeout bounds a single /mcp reconnect attempt.
+const reconnectTimeout = 10 * time.Second
 
 // Close terminates all server sessions.
 func (m *Manager) Close() {
