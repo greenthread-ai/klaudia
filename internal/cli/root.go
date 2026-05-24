@@ -13,6 +13,7 @@ import (
 
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
+	"github.com/greenthread/klaudia/internal/mcp"
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/session"
 	"github.com/greenthread/klaudia/internal/subagent"
@@ -174,12 +175,28 @@ func run(cmd *cobra.Command, opts *options) error {
 	model := api.ResolveModel(opts.model)
 	permCtx := permission.Context{Mode: mode}
 
-	// Build the tool registry. Sub-agents draw from the base tools; the
-	// top-level registry adds the Agent tool (which spawns sub-agents).
+	// Build the tool registry. Sub-agents draw from the base tools (incl. any
+	// MCP tools); the top-level registry adds the Agent tool.
 	base, err := tools.DefaultRegistry()
 	if err != nil {
 		return err
 	}
+
+	// Connect configured MCP servers (.mcp.json) and fold in their tools and
+	// resource tools. Best effort: a server failure does not abort the run.
+	mcpCfg, _ := mcp.LoadConfig(cwd)
+	mcpMgr, mcpErrs := mcp.Connect(ctx, mcpCfg)
+	defer mcpMgr.Close()
+	for _, e := range mcpErrs {
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", e)
+	}
+	baseTools := base.All()
+	baseTools = append(baseTools, mcpMgr.Tools(ctx)...)
+	if rts, rerr := mcpMgr.ResourceTools(); rerr == nil && len(mcpMgr.Servers()) > 0 {
+		baseTools = append(baseTools, rts...)
+	}
+	base = tools.NewRegistry(baseTools...)
+
 	registry, err := withAgentTool(base, client, model, permCtx, opts.maxTurns)
 	if err != nil {
 		return err
