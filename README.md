@@ -1,10 +1,10 @@
 # Klaudia
 
-A locally-buildable, extensible coding agent — a single static Go binary. Klaudia
-began as a cleanroom of Claude Code (v2.1.66) and has been ported to Go; the
-original JavaScript reference has been retired (preserved on the `js-reference`
-branch). See [PRD.md](PRD.md) for background and [docs/parity.md](docs/parity.md)
-for the feature map.
+A locally-buildable, extensible coding agent — a single static Go binary (Linux +
+macOS), no runtime dependencies. Klaudia began as a cleanroom of Claude Code
+(v2.1.66) and was ported to Go; the JavaScript reference is retired (preserved on
+the `js-reference` branch). See [Background](#background) for the story and
+[docs/parity.md](docs/parity.md) for the feature map.
 
 ## Getting started
 
@@ -266,14 +266,51 @@ Review the staged changes carefully. $ARGUMENTS
 
 ## Documentation
 
-- [PRD.md](PRD.md) — vision, status, and roadmap
 - [docs/parity.md](docs/parity.md) — JS→Go feature map and divergences
 - [docs/compaction.md](docs/compaction.md) — context-window management
 - [docs/server-side-tools.md](docs/server-side-tools.md) — Anthropic server-side tool schemas (reference)
 
-## History
+## Background
 
-The original JavaScript reference (extracted and prettified from the
-`@anthropic-ai/claude-code` v2.1.66 npm package, split into `src/sections/*.js`)
-served as the golden reference during the port and now lives on the
-`js-reference` branch. `git checkout js-reference` to consult it.
+Klaudia is a locally-buildable, extensible agentic coding tool for our team's
+workflow: one static Go binary with a self-contained tooling layer and room to
+grow tools, providers, and UI.
+
+It began as a cleanroom extraction of Claude Code (`@anthropic-ai/claude-code`
+v2.1.66) — prettified JavaScript split into `src/sections/*.js` — which served as
+the golden reference for differential testing during a full port to Go. The port
+is complete and is the product; the JavaScript reference (and the Go sidecar
+tools that preceded the pure-Go `native` packages) is retired to the
+`js-reference` branch — `git checkout js-reference` to consult it.
+
+Builds are pure Go (`CGO_ENABLED=0`): the search / bash-parsing / PDF layers are
+pure-Go too, so there are no wasm blobs, vendored binaries, or required system
+tools.
+
+### Deliberate divergences from the reference
+
+- Bubble Tea TUI (not React + Ink).
+- A multi-provider abstraction (the reference was Anthropic-only): Anthropic
+  Messages API + an OpenAI-compatible shim.
+- Local, default-on web search/browse via headless Chrome (the reference used
+  Anthropic's server-side `web_search`/`web_fetch`, still available on the
+  Anthropic provider).
+- Config and sessions live under `~/.klaudia` (`KLAUDIA_CONFIG_DIR`), not
+  `~/.claude`.
+- New capabilities with no reference analogue: OS/container Bash sandboxing,
+  persisted resume summaries, project `KNOWLEDGE.md`, background shells.
+
+## Roadmap
+
+- **Web**: more robust search-result parsing; optional custom MCP auth headers.
+- **Provider breadth**: image tool-results and richer translation across more
+  OpenAI-compatible backends.
+- **Knowledge**: let the agent curate `KNOWLEDGE.md` via scoped Memory writes;
+  evaluate embeddings for recall.
+- **Extended tooling**: project-specific analyzers and custom Go MCP servers.
+
+## Non-goals
+
+- Reimplementing the Anthropic SDK or the Claude API.
+- Cloud-provider SDK auth (Bedrock / Vertex / Foundry).
+- A general-purpose fork — this targets our team's workflow.
