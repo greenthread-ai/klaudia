@@ -30,6 +30,7 @@ func DefaultRegistry(executor sandbox.Executor) (*Registry, error) {
 		{"TodoWrite", func() (Tool, error) { return NewTodoWrite(todos) }},
 		{"NotebookEdit", func() (Tool, error) { return NewNotebookEdit() }},
 		{"AskUserQuestion", func() (Tool, error) { return NewAskUserQuestion() }},
+		{"ExitPlanMode", func() (Tool, error) { return NewExitPlanMode() }},
 	}
 
 	ts := make([]Tool, 0, len(ctors))

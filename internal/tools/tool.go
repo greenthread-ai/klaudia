@@ -38,6 +38,13 @@ type Asker interface {
 	Ask(ctx context.Context, question string, options []AskOption) (string, error)
 }
 
+// Planner handles ExitPlanMode: the model presents its plan and the frontend
+// decides whether to approve it and leave read-only plan mode. Returns true if
+// approved (the frontend then switches the session out of plan mode).
+type Planner interface {
+	ExitPlan(ctx context.Context, plan string) (approved bool, err error)
+}
+
 // Context carries per-invocation state into a tool. It is intentionally small
 // and grows as features land.
 type Context struct {
@@ -47,6 +54,8 @@ type Context struct {
 	AbortCh <-chan struct{}
 	// Ask, if non-nil, lets interactive tools (AskUserQuestion) prompt the user.
 	Ask Asker
+	// Plan, if non-nil, handles ExitPlanMode approval.
+	Plan Planner
 }
 
 // Tool is the contract implemented by every local tool (Read, Write, Bash, …).

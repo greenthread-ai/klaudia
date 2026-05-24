@@ -25,7 +25,7 @@ import (
 
 // RunFunc drives one user turn against the agent core, threading conversation
 // history and using the supplied approver, asker, and emitter.
-type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, emit agent.Emitter) (agent.Result, error)
+type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error)
 
 // Session is mutable state shared between the TUI and the RunFunc closure, so
 // slash commands like /model can change settings for subsequent turns. The
@@ -33,7 +33,7 @@ type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMe
 type Session struct {
 	Model          string         // model alias or full ID ("" = default)
 	ResolvedModel  string         // concrete model id for display
-	PermissionMode string         // for display
+	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
 	Memory         *memory.Store  // backs /memory (may be nil)
 	MCPSummary     []string       // lines for /mcp ("server: tool1, tool2")
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
@@ -46,6 +46,7 @@ const (
 	stateRunning
 	stateAwaitingPermission
 	stateAwaitingAnswer
+	stateAwaitingPlan
 )
 
 // --- messages delivered from the agent goroutine ---
@@ -63,6 +64,10 @@ type askMsg struct {
 	question string
 	options  []tools.AskOption
 	reply    chan string
+}
+type planMsg struct {
+	plan  string
+	reply chan bool
 }
 
 var (
@@ -104,6 +109,8 @@ type Model struct {
 	askReply    chan string
 	askOptions  []tools.AskOption
 	askQuestion string
+	// Pending ExitPlanMode approval.
+	planReply chan bool
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
@@ -192,6 +199,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.waitForEvent()
 
+	case planMsg:
+		m.state = stateAwaitingPlan
+		m.planReply = msg.reply
+		m.appendLine(askStyle.Render("Proposed plan:"))
+		m.appendLine(msg.plan)
+		m.appendLine(askStyle.Render("Approve and start implementing? (y)es / (n)o"))
+		return m, m.waitForEvent()
+
 	case doneMsg:
 		if msg.err != nil {
 			m.appendLine(errStyle.Render("error: " + api.FriendlyError(msg.err)))
@@ -221,6 +236,23 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
+	}
+
+	if m.state == stateAwaitingPlan {
+		switch strings.ToLower(msg.String()) {
+		case "y":
+			m.planReply <- true
+			m.planReply = nil
+			m.sess.PermissionMode = string(permission.ModeAcceptEdits) // leave plan mode
+			m.appendLine(toolStyle.Render("  → approved; plan mode off (acceptEdits)"))
+			m.state = stateRunning
+		case "n":
+			m.planReply <- false
+			m.planReply = nil
+			m.appendLine(toolStyle.Render("  → not approved; staying in plan mode"))
+			m.state = stateRunning
+		}
+		return m, nil
 	}
 
 	if m.state == stateAwaitingAnswer {
@@ -420,9 +452,10 @@ func (m *Model) startTurn(prompt string) {
 	}
 	approver := &uiApprover{events: m.events}
 	asker := &uiAsker{events: m.events}
+	planner := &uiPlanner{events: m.events}
 	emit := func(ev agent.Event) { m.events <- eventMsg{ev} }
 	go func() {
-		res, err := m.run(m.ctx, prompt, m.history, approver, asker, emit)
+		res, err := m.run(m.ctx, prompt, m.history, approver, asker, planner, emit)
 		m.events <- doneMsg{res: res, err: err}
 	}()
 }
@@ -497,6 +530,8 @@ func (m *Model) View() string {
 		bottom = askStyle.Render(fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", m.pendingReq.ToolName))
 	case stateAwaitingAnswer:
 		bottom = askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions)))
+	case stateAwaitingPlan:
+		bottom = askStyle.Render("Approve plan? (y)es / (n)o")
 	default:
 		bottom = m.input.View()
 	}
@@ -534,6 +569,23 @@ func (a *uiAsker) Ask(ctx context.Context, question string, options []tools.AskO
 		return "", ctx.Err()
 	case choice := <-reply:
 		return choice, nil
+	}
+}
+
+// uiPlanner implements tools.Planner by showing the plan and blocking for the
+// user's approval.
+type uiPlanner struct {
+	events chan tea.Msg
+}
+
+func (p *uiPlanner) ExitPlan(ctx context.Context, plan string) (bool, error) {
+	reply := make(chan bool, 1)
+	p.events <- planMsg{plan: plan, reply: reply}
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case ok := <-reply:
+		return ok, nil
 	}
 }
 

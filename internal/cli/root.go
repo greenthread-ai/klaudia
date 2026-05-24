@@ -329,21 +329,27 @@ func run(cmd *cobra.Command, opts *options) error {
 	if interactive {
 		// Shared settings so slash commands can read/change them between turns.
 		sess := &tui.Session{
-			Model:          opts.model,
+			// Effective model (flag or config default), never "" — otherwise a
+			// non-Anthropic provider would wrongly resolve to the Anthropic default.
+			Model:          modelStr,
 			ResolvedModel:  string(model),
 			PermissionMode: string(mode),
 			Memory:         memStore,
 			MCPSummary:     mcpSummary(ctx, mcpMgr),
 		}
-		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, emit agent.Emitter) (agent.Result, error) {
+		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
+			// Rebuild the permission context from the live session mode each turn
+			// so ExitPlanMode (which flips sess.PermissionMode) takes effect.
+			turnPerm := permission.Context{Mode: permission.Mode(sess.PermissionMode), Allow: allowRules, Deny: denyRules}
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,
 				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
 				System:          sysPrompt,
 				MaxTurns:        opts.maxTurns,
-				Permission:      permCtx,
+				Permission:      turnPerm,
 				Approver:        ap,
 				Asker:           asker,
+				Planner:         planner,
 				InitialMessages: history,
 				Recorder:        recorder,
 				WebTools:        true,
