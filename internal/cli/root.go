@@ -69,6 +69,34 @@ var builtinSlashCommands = map[string]bool{
 	"help": true, "?": true, "quit": true, "exit": true, "clear": true,
 	"model": true, "goal": true, "memory": true, "mcp": true, "stats": true,
 	"allow": true, "deny": true, "status": true,
+	"config": true, "agents": true, "context": true,
+}
+
+// providerName returns the resolved provider for display ("anthropic" default).
+func providerName(cfg config.Config) string {
+	if cfg.Provider != "" {
+		return cfg.Provider
+	}
+	return config.ProviderAnthropic
+}
+
+// sandboxMode returns the resolved sandbox mode for display ("local" default).
+func sandboxMode(sb config.Sandbox) string {
+	if sb.Mode != "" {
+		return sb.Mode
+	}
+	return config.SandboxLocal
+}
+
+// tuiAgents adapts the built-in sub-agent types into the TUI's AgentInfo for
+// the /agents command.
+func tuiAgents() []tui.AgentInfo {
+	bs := subagent.Builtin()
+	out := make([]tui.AgentInfo, 0, len(bs))
+	for _, t := range bs {
+		out = append(out, tui.AgentInfo{Name: t.Name, Description: t.Description})
+	}
+	return out
 }
 
 // tuiSkills adapts loaded skills into TUI /<name> commands, warning when a skill
@@ -442,6 +470,11 @@ func run(cmd *cobra.Command, opts *options) error {
 			Memory:         memStore,
 			MCPSummary:     mcpSummary(ctx, mcpMgr),
 			Skills:         tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
+			Provider:       providerName(cfg),
+			SandboxMode:    sandboxMode(cfg.Sandbox),
+			CWD:            cwd,
+			GitBranch:      gitBranch(cwd),
+			Agents:         tuiAgents(),
 		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
 			// Rebuild the permission context from the live session mode each turn

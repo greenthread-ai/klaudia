@@ -38,6 +38,19 @@ type Session struct {
 	MCPSummary     []string       // lines for /mcp ("server: tool1, tool2")
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
+
+	// Render-only context for /config and /context (set once at startup).
+	Provider    string   // resolved provider ("anthropic" | "openai" | …)
+	SandboxMode string   // resolved sandbox mode ("local" | "os" | "container")
+	CWD         string   // working directory
+	GitBranch   string   // current git branch (may be "")
+	Agents      []AgentInfo // built-in sub-agent types, for /agents
+}
+
+// AgentInfo is the model-facing summary of a sub-agent type, shown by /agents.
+type AgentInfo struct {
+	Name        string
+	Description string
 }
 
 // SkillCommand is a user-defined skill exposed as a /<name> command in the TUI.
@@ -339,6 +352,9 @@ const slashHelp = `Available commands:
   /mcp             List connected MCP servers and tools
   /stats           Show session stats (turns, tokens)
   /status          Show the current session settings
+  /config          Show resolved provider/model/sandbox settings
+  /agents          List available sub-agent types
+  /context         Show working directory, git branch, and message count
   /clear           Clear the screen and conversation history
   /quit, /exit     Exit Klaudia`
 
@@ -443,6 +459,12 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			model = "(default)"
 		}
 		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  permission-mode=%s  messages=%d", model, mode, len(m.history))))
+	case "/config":
+		m.appendLine(bannerStyle.Render(m.renderConfig()))
+	case "/agents":
+		m.appendLine(bannerStyle.Render(m.renderAgents()))
+	case "/context":
+		m.appendLine(bannerStyle.Render(m.renderContext()))
 	default:
 		// A /<skill> matching a user-defined skill renders its body and submits it
 		// as the turn prompt. Built-in commands above always win (a skill that
@@ -457,6 +479,57 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.appendLine(errStyle.Render("Unknown command " + cmd + ". Try /help."))
 	}
 	return m, nil
+}
+
+// renderConfig shows the resolved provider/model/sandbox/permission settings.
+func (m *Model) renderConfig() string {
+	provider := m.sess.Provider
+	if provider == "" {
+		provider = "anthropic"
+	}
+	model := m.sess.ResolvedModel
+	if model == "" {
+		model = m.sess.Model
+	}
+	if model == "" {
+		model = "(default)"
+	}
+	sandbox := m.sess.SandboxMode
+	if sandbox == "" {
+		sandbox = "local"
+	}
+	mode := m.sess.PermissionMode
+	if mode == "" {
+		mode = "default"
+	}
+	return fmt.Sprintf("Configuration:\n  provider=%s\n  model=%s\n  sandbox=%s\n  permission-mode=%s",
+		provider, model, sandbox, mode)
+}
+
+// renderAgents lists the available sub-agent types (Agent tool subagent_type).
+func (m *Model) renderAgents() string {
+	if len(m.sess.Agents) == 0 {
+		return "No sub-agent types available."
+	}
+	var b strings.Builder
+	b.WriteString("Available sub-agent types (Agent tool):")
+	for _, a := range m.sess.Agents {
+		fmt.Fprintf(&b, "\n  %-16s %s", a.Name, a.Description)
+	}
+	return b.String()
+}
+
+// renderContext shows the working directory, git branch, and model.
+func (m *Model) renderContext() string {
+	cwd := m.sess.CWD
+	if cwd == "" {
+		cwd = "(unknown)"
+	}
+	branch := m.sess.GitBranch
+	if branch == "" {
+		branch = "(none)"
+	}
+	return fmt.Sprintf("Context:\n  cwd=%s\n  git-branch=%s\n  messages=%d", cwd, branch, len(m.history))
 }
 
 // lookupSkill finds a loaded skill by name (case-sensitive).

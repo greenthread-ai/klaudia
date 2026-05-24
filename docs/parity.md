@@ -107,7 +107,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | /mcp | `tui/tui.go` | ✅ done | |
 | /stats, /status | `tui/tui.go` | ✅ done | |
 | /allow, /deny | `tui/tui.go` | ✅ done | |
-| /config, /agents, /context | — | 🔜 planned | Group A (render-only). |
+| /config, /agents, /context | `tui/tui.go` | ✅ done | Group A (render-only). |
 | /compact, /cost, /add-dir | — | 🔜 planned | Group B. |
 | /plan, /doctor, /diff, /commit, /export | — | 🔜 planned | Group C. |
 
@@ -128,7 +128,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 
 | Feature | JS ref | Klaudia pkg | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Skill system (`.klaudia/skills/*.md`) | 07-app-features | — | 🔜 planned | Workstream 2. |
+| Skill system (`.klaudia/skills/*.md`) | 07-app-features | `skill/` + `tools/skill.go` | ✅ done | Frontmatter skills as a Skill tool + TUI /<skill>. |
 
 ---
 
