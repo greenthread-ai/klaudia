@@ -1336,12 +1336,18 @@ func (m *Model) markdown(s string) string {
 }
 
 // buildGlamour (re)builds the Markdown renderer for the given viewport width.
+//
+// We use a fixed "dark" style rather than WithAutoStyle: auto-style queries the
+// terminal for its background colour (an OSC escape + reply), which blocks
+// inside Bubble Tea's input loop — Bubble Tea owns stdin, so the reply never
+// reaches glamour and it hangs until its internal timeout (the "initializing…"
+// freeze). "dark" is the safe default for developer terminals.
 func (m *Model) buildGlamour(width int) {
 	w := width - 2
 	if w < 20 {
 		w = 20
 	}
-	if r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(w)); err == nil {
+	if r, err := glamour.NewTermRenderer(glamour.WithStandardStyle("dark"), glamour.WithWordWrap(w)); err == nil {
 		m.glam = r
 		m.glamWidth = width
 	}

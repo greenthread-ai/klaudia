@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,10 @@ import (
 
 	"github.com/greenthread/klaudia/internal/permission"
 )
+
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
 
 func TestExportMarkdown(t *testing.T) {
 	history := []anthropic.BetaMessageParam{
@@ -104,7 +109,8 @@ func TestMarkdownAndFlush(t *testing.T) {
 	if m.streamBuf.Len() != 0 {
 		t.Error("streamBuf should be empty after flush")
 	}
-	if !strings.Contains(m.transcript.String(), "hello world") {
+	// glamour interleaves ANSI colour codes; strip them before checking content.
+	if !strings.Contains(stripANSI(m.transcript.String()), "hello world") {
 		t.Errorf("transcript missing flushed text: %q", m.transcript.String())
 	}
 	// A second flush with nothing buffered is a no-op.
