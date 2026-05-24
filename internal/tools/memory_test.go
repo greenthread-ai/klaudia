@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -46,8 +47,41 @@ func TestMemoryAddSearchView(t *testing.T) {
 	}
 }
 
+func TestMemoryAddProjectScope(t *testing.T) {
+	cwd := t.TempDir()
+	mt, err := NewMemoryForProject(memory.New(t.TempDir()), cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	add, _ := json.Marshal(MemoryInput{Operation: "add", Scope: "project", Content: "prefer table tests"})
+	res, _ := mt.Execute(context.Background(), Context{}, add)
+	if res[0].IsError {
+		t.Fatalf("project add failed: %+v", res[0])
+	}
+	data, err := os.ReadFile(memory.KnowledgePath(cwd))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "prefer table tests") {
+		t.Errorf("KNOWLEDGE.md = %q", data)
+	}
+}
+
 func TestMemoryValidate(t *testing.T) {
 	mt := newMemTool(t)
+	validAdd, _ := json.Marshal(MemoryInput{Operation: "add", Content: "remember this"})
+	if err := mt.ValidateInput(validAdd); err != nil {
+		t.Fatalf("valid add rejected: %v", err)
+	}
+	validSearch, _ := json.Marshal(MemoryInput{Operation: "search", Query: "remember"})
+	if err := mt.ValidateInput(validSearch); err != nil {
+		t.Fatalf("valid search rejected: %v", err)
+	}
+	validView, _ := json.Marshal(MemoryInput{Operation: "view"})
+	if err := mt.ValidateInput(validView); err != nil {
+		t.Fatalf("valid view rejected: %v", err)
+	}
 	bad, _ := json.Marshal(MemoryInput{Operation: "nope"})
 	if mt.ValidateInput(bad) == nil {
 		t.Error("expected invalid operation to be rejected")

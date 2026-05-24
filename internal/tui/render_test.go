@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/permission"
 )
 
@@ -25,6 +27,37 @@ func TestExportMarkdown(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("exportMarkdown missing %q in:\n%s", want, got)
 		}
+	}
+}
+
+func TestPermissionSummaryAndDetail(t *testing.T) {
+	m := newTestModel()
+	raw, err := json.Marshal(map[string]any{
+		"file_path":  "/tmp/example.go",
+		"old_string": "old\nvalue",
+		"new_string": "new value",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := agent.ApprovalRequest{ToolName: "Edit", Input: raw, Specifier: "/tmp/example.go"}
+	if got := m.permissionSummary(req); got != "edit /tmp/example.go" {
+		t.Errorf("permissionSummary = %q", got)
+	}
+	detail := permissionDetail(req)
+	for _, want := range []string{"file: /tmp/example.go", `replace "old value" → "new value"`} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("permissionDetail missing %q in %q", want, detail)
+		}
+	}
+}
+
+func TestRenderToolResultIncludesStatusAndToolName(t *testing.T) {
+	m := newTestModel()
+	m.renderEvent(agent.Event{Type: "tool_result", ToolName: "Edit", Content: "Edited /tmp/example.go (1 replacement(s))"})
+	got := stripANSI(m.transcript.String())
+	if !strings.Contains(got, "✓ Edit: Edited /tmp/example.go") {
+		t.Errorf("tool result missing explicit success: %q", got)
 	}
 }
 
@@ -69,6 +102,76 @@ func TestModeChoicesMarksCurrent(t *testing.T) {
 	}
 	if m.sess.PermissionMode != string(permission.SelectableModes()[0]) {
 		t.Errorf("apply did not set the mode: %q", m.sess.PermissionMode)
+	}
+}
+
+func TestThemeLookupAliases(t *testing.T) {
+	cases := map[string]string{
+		"Dracula":          "dracula",
+		"tokyo night":      "tokyo-night",
+		"catppuccin-mocha": "catppuccin",
+		"mocha":            "catppuccin",
+		"gruv":             "gruvbox",
+	}
+	for input, want := range cases {
+		theme, ok := lookupTheme(input)
+		if !ok {
+			t.Fatalf("lookupTheme(%q) was not found", input)
+		}
+		if theme.id != want {
+			t.Errorf("lookupTheme(%q) = %q, want %q", input, theme.id, want)
+		}
+	}
+	if _, ok := lookupTheme("unknown"); ok {
+		t.Error("lookupTheme(unknown) should not be found")
+	}
+}
+
+func TestThemeChoicesApplyTheme(t *testing.T) {
+	m := &Model{sess: &Session{Theme: "nord"}}
+	items := m.themeChoices()
+	if len(items) != len(renderThemes) {
+		t.Fatalf("themeChoices len = %d, want %d", len(items), len(renderThemes))
+	}
+	var marked int
+	for _, it := range items {
+		if strings.Contains(it.label, "(current)") {
+			marked++
+			if !strings.Contains(it.label, "Nord") {
+				t.Errorf("wrong item marked current: %q", it.label)
+			}
+		}
+	}
+	if marked != 1 {
+		t.Errorf("expected exactly one current theme, got %d", marked)
+	}
+	if msg := items[0].apply(); !strings.Contains(msg, "Theme:") {
+		t.Errorf("apply returned %q", msg)
+	}
+	if m.sess.Theme != renderThemes[0].id {
+		t.Errorf("apply did not set theme: %q", m.sess.Theme)
+	}
+}
+
+func TestSetThemeRerendersMarkdownTranscript(t *testing.T) {
+	m := newTestModel()
+	m.ready = true
+	m.width = 80
+	m.buildGlamour(80)
+	m.appendMarkdown("# Title")
+	before := m.transcript.String()
+
+	m.setTheme("dracula")
+	after := m.transcript.String()
+
+	if m.sess.Theme != "dracula" {
+		t.Fatalf("theme = %q, want dracula", m.sess.Theme)
+	}
+	if before == after {
+		t.Fatal("expected transcript to be rerendered after theme change")
+	}
+	if !strings.Contains(stripANSI(after), "Title") {
+		t.Fatalf("rerendered transcript missing markdown text: %q", after)
 	}
 }
 

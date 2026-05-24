@@ -43,20 +43,31 @@ type aMsg struct {
 type aBlock struct {
 	Type      string          `json:"type"`
 	Text      string          `json:"text,omitempty"`
-	ID        string          `json:"id,omitempty"`         // tool_use
-	Name      string          `json:"name,omitempty"`       // tool_use
-	Input     json.RawMessage `json:"input,omitempty"`      // tool_use
+	ID        string          `json:"id,omitempty"`          // tool_use
+	Name      string          `json:"name,omitempty"`        // tool_use
+	Input     json.RawMessage `json:"input,omitempty"`       // tool_use
 	ToolUseID string          `json:"tool_use_id,omitempty"` // tool_result
-	Content   json.RawMessage `json:"content,omitempty"`    // tool_result (string or blocks)
+	Content   json.RawMessage `json:"content,omitempty"`     // tool_result (string or blocks)
+	Source    json.RawMessage `json:"source,omitempty"`      // image
 }
 
 // --- OpenAI Chat Completions shapes ---
 
 type oaMessage struct {
 	Role       string       `json:"role"`
-	Content    string       `json:"content,omitempty"`
+	Content    any          `json:"content,omitempty"`
 	ToolCallID string       `json:"tool_call_id,omitempty"`
 	ToolCalls  []oaToolCall `json:"tool_calls,omitempty"`
+}
+
+type oaContentPart struct {
+	Type     string      `json:"type"`
+	Text     string      `json:"text,omitempty"`
+	ImageURL *oaImageURL `json:"image_url,omitempty"`
+}
+
+type oaImageURL struct {
+	URL string `json:"url"`
 }
 
 type oaToolCall struct {
@@ -70,13 +81,13 @@ type oaToolCall struct {
 }
 
 type oaRequest struct {
-	Model               string         `json:"model"`
-	Messages            []oaMessage    `json:"messages"`
-	Tools               []oaTool       `json:"tools,omitempty"`
-	Temperature         float64        `json:"temperature"`
-	MaxCompletionTokens int64          `json:"max_completion_tokens,omitempty"`
-	Stream              bool           `json:"stream"`
-	StreamOptions       *oaStreamOpts  `json:"stream_options,omitempty"`
+	Model               string        `json:"model"`
+	Messages            []oaMessage   `json:"messages"`
+	Tools               []oaTool      `json:"tools,omitempty"`
+	Temperature         float64       `json:"temperature"`
+	MaxCompletionTokens int64         `json:"max_completion_tokens,omitempty"`
+	Stream              bool          `json:"stream"`
+	StreamOptions       *oaStreamOpts `json:"stream_options,omitempty"`
 }
 
 type oaStreamOpts struct {
@@ -198,7 +209,7 @@ func translateMessage(m aMsg) []oaMessage {
 			toolResults = append(toolResults, oaMessage{
 				Role:       "tool",
 				ToolCallID: b.ToolUseID,
-				Content:    toolResultText(b.Content),
+				Content:    toolResultContent(b.Content),
 			})
 		}
 	}
@@ -216,9 +227,9 @@ func translateMessage(m aMsg) []oaMessage {
 	return msgs
 }
 
-// toolResultText extracts the text from a tool_result content field, which may
-// be a plain string or an array of content blocks.
-func toolResultText(raw json.RawMessage) string {
+// toolResultContent extracts text and image blocks from an Anthropic tool_result
+// content field. Image blocks become OpenAI image_url parts using data URLs.
+func toolResultContent(raw json.RawMessage) any {
 	if len(raw) == 0 {
 		return ""
 	}
@@ -227,14 +238,61 @@ func toolResultText(raw json.RawMessage) string {
 		return s
 	}
 	var blocks []aBlock
-	if json.Unmarshal(raw, &blocks) == nil {
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+
+	parts := make([]oaContentPart, 0, len(blocks))
+	var text strings.Builder
+	hasImage := false
+	flushText := func() {
+		if text.Len() == 0 {
+			return
+		}
+		parts = append(parts, oaContentPart{Type: "text", Text: text.String()})
+		text.Reset()
+	}
+	for _, blk := range blocks {
+		switch blk.Type {
+		case "text":
+			text.WriteString(blk.Text)
+		case "image":
+			flushText()
+			if p, ok := imagePart(blk); ok {
+				parts = append(parts, p)
+				hasImage = true
+			}
+		}
+	}
+	flushText()
+	if !hasImage {
 		var b strings.Builder
-		for _, blk := range blocks {
-			b.WriteString(blk.Text)
+		for _, p := range parts {
+			b.WriteString(p.Text)
 		}
 		return b.String()
 	}
-	return ""
+	return parts
+}
+
+func imagePart(blk aBlock) (oaContentPart, bool) {
+	var source struct {
+		Type      string `json:"type"`
+		MediaType string `json:"media_type"`
+		Data      string `json:"data"`
+		URL       string `json:"url"`
+	}
+	if json.Unmarshal(blk.Source, &source) != nil {
+		return oaContentPart{}, false
+	}
+	url := source.URL
+	if url == "" && source.Type == "base64" && source.MediaType != "" && source.Data != "" {
+		url = "data:" + source.MediaType + ";base64," + source.Data
+	}
+	if url == "" {
+		return oaContentPart{}, false
+	}
+	return oaContentPart{Type: "image_url", ImageURL: &oaImageURL{URL: url}}, true
 }
 
 func readAll(r interface{ Read([]byte) (int, error) }, max int) (string, error) {

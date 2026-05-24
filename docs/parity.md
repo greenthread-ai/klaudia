@@ -43,7 +43,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Memory | 07-app-features | `tools/memory.go` + `memory/` | 🔀 divergent | Auto-memory + recall via `.klaudia/memory/`. |
 | ToolSearch (deferred loading) | 07-app-features | `tools/toolsearch.go` | ✅ done | Per-turn `buildToolParams` filter + `Context.Reveal`. |
 | SlashCommand (model-invoked) | 07-app-features | — | 🔜 planned | Skill system (workstream 2) covers this. |
-| WebSearch / WebFetch | 03-providers / 05 | `agent/webtools.go` | 🟡 partial | Server-side Anthropic betas only; no local impl for custom providers. See server-side-tools.md. |
+| WebSearch / WebFetch / browser navigation | 03-providers / 05 | `tools/websearch.go`, `tools/webfetch.go`, `tools/browser.go`, `browser/` | 🟡 partial | Local default tools use lazy Chrome + DDG/Google and rendered markdown; search can relaunch headed Chrome with persistent `~/.klaudia/browser/chrome-profile` for user-assisted challenge handling. Anthropic server-side betas still available via `agent/webtools.go`. |
 
 ## Agent loop & streaming
 

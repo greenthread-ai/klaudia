@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// TestEncodePathMatchesJS pins the cwd→dir encoding to the value the JS app
-// produces for this very repo (observed under ~/.claude/projects).
+// TestEncodePath is kept stable so existing Klaudia transcripts remain under the
+// same project directory names when moving storage roots.
 func TestEncodePathMatchesJS(t *testing.T) {
 	got := EncodePath("/Users/nickglynn/Projects/claude-code/klaudia")
 	want := "-Users-nickglynn-Projects-claude-code-klaudia"
@@ -28,7 +28,7 @@ func TestEncodePathLongTruncatesWithHash(t *testing.T) {
 }
 
 func TestWriteReadRoundTrip(t *testing.T) {
-	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	cwd := "/work/proj"
 	sid := "sess-123"
 
@@ -73,7 +73,7 @@ func TestWriteReadRoundTrip(t *testing.T) {
 }
 
 func TestMostRecent(t *testing.T) {
-	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	cwd := "/work/proj"
 	if _, ok := MostRecent(cwd); ok {
 		t.Error("expected no session initially")

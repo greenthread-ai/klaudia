@@ -17,6 +17,7 @@ import (
 
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
+	"github.com/greenthread/klaudia/internal/browser"
 	"github.com/greenthread/klaudia/internal/config"
 	"github.com/greenthread/klaudia/internal/doctor"
 	"github.com/greenthread/klaudia/internal/mcp"
@@ -35,8 +36,8 @@ import (
 
 // withAgentTool returns a registry that is the base tools plus the Agent tool,
 // wired to a sub-agent spawner that draws from the base tools.
-func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int) (*tools.Registry, error) {
-	spawner := agent.NewSpawner(provider, base, model, perm, approver, maxTurns)
+func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool) (*tools.Registry, error) {
+	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred)
 
 	infos := make([]tools.AgentTypeInfo, 0)
 	for _, t := range subagent.Builtin() {
@@ -185,6 +186,62 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 		}
 		return api.New(cred, os.Getenv("KLAUDIA_CUSTOM_ENDPOINT")), cfg.Model, nil
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func buildBrowserOptions(bc config.Browser) browser.Options {
+	opts := browser.Options{
+		Mode:           browser.ModeLaunch,
+		Headless:       true,
+		ChromePath:     strings.TrimSpace(os.Getenv("KLAUDIA_CHROME_PATH")),
+		UserDataDir:    firstNonEmpty(strings.TrimSpace(os.Getenv("KLAUDIA_CHROME_USER_DATA_DIR")), browser.DefaultUserDataDir()),
+		RemoteURL:      strings.TrimSpace(os.Getenv("KLAUDIA_CHROME_REMOTE_URL")),
+		HeadedFallback: true,
+	}
+	if bc.Headless != nil {
+		opts.Headless = *bc.Headless
+	} else if v := strings.TrimSpace(strings.ToLower(os.Getenv("KLAUDIA_BROWSER_HEADLESS"))); v != "" {
+		switch v {
+		case "1", "true", "yes", "on":
+			opts.Headless = true
+		case "0", "false", "no", "off":
+			opts.Headless = false
+		}
+	}
+	if bc.ChromePath != "" {
+		opts.ChromePath = bc.ChromePath
+	}
+	if bc.RemoteURL != "" {
+		opts.RemoteURL = bc.RemoteURL
+	}
+	if bc.UserDataDir != "" {
+		opts.UserDataDir = bc.UserDataDir
+	}
+	if bc.HeadedFallback != nil {
+		opts.HeadedFallback = *bc.HeadedFallback
+	} else if v := strings.TrimSpace(strings.ToLower(os.Getenv("KLAUDIA_BROWSER_HEADED_FALLBACK"))); v != "" {
+		switch v {
+		case "1", "true", "yes", "on":
+			opts.HeadedFallback = true
+		case "0", "false", "no", "off":
+			opts.HeadedFallback = false
+		}
+	}
+	if bc.SearchEngine != "" {
+		opts.SearchEngine = bc.SearchEngine
+	}
+	if opts.RemoteURL != "" {
+		opts.Mode = browser.ModeAttach
+	}
+	return opts
 }
 
 // buildExecutor selects the Bash execution backend from config. Both "os"
@@ -458,7 +515,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Build the tool registry. Sub-agents draw from the base tools (incl. any
 	// MCP tools); the top-level registry adds the Agent tool.
 	executor := buildExecutor(cfg.Sandbox, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
-	base, err := tools.DefaultRegistry(executor)
+	base, err := tools.DefaultRegistry(executor, buildBrowserOptions(cfg.Browser))
 	if err != nil {
 		return err
 	}
@@ -479,7 +536,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Persistent memory: one store shared by the Memory tool (agent + sub-agents)
 	// and the /memory command.
 	memStore := memory.New(filepath.Join(cwd, ".klaudia", "memory"))
-	if memTool, merr := tools.NewMemory(memStore); merr == nil {
+	if memTool, merr := tools.NewMemoryForProject(memStore, cwd); merr == nil {
 		baseTools = append(baseTools, memTool)
 	}
 
@@ -513,7 +570,7 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Headless has no interactive approver, so permission "ask" denies.
 	approver := agent.DenyAll
-	registry, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns)
+	registry, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools)
 	if err != nil {
 		return err
 	}

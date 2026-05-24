@@ -38,6 +38,38 @@ func TestLoadProjectOverridesHome(t *testing.T) {
 	}
 }
 
+func TestLoadBrowserProjectOverridesHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, `{"browser":{"engine":"chrome","headless":false,"chromePath":"/home/chrome","remoteUrl":"http://home:9222","userDataDir":"/home/profile","headedFallback":false,"searchEngine":"google"}}`)
+
+	cwd := t.TempDir()
+	writeConfig(t, cwd, `{"browser":{"headless":true,"chromePath":"/project/chrome","userDataDir":"/project/profile","headedFallback":true,"searchEngine":"ddg"}}`)
+
+	cfg := Load(cwd)
+	if cfg.Browser.Engine != "chrome" {
+		t.Errorf("browser.engine = %q, want inherited chrome", cfg.Browser.Engine)
+	}
+	if cfg.Browser.Headless == nil || *cfg.Browser.Headless != true {
+		t.Errorf("browser.headless = %v, want project true", cfg.Browser.Headless)
+	}
+	if cfg.Browser.ChromePath != "/project/chrome" {
+		t.Errorf("browser.chromePath = %q", cfg.Browser.ChromePath)
+	}
+	if cfg.Browser.RemoteURL != "http://home:9222" {
+		t.Errorf("browser.remoteUrl = %q, want inherited home value", cfg.Browser.RemoteURL)
+	}
+	if cfg.Browser.UserDataDir != "/project/profile" {
+		t.Errorf("browser.userDataDir = %q", cfg.Browser.UserDataDir)
+	}
+	if cfg.Browser.HeadedFallback == nil || *cfg.Browser.HeadedFallback != true {
+		t.Errorf("browser.headedFallback = %v, want project true", cfg.Browser.HeadedFallback)
+	}
+	if cfg.Browser.SearchEngine != "ddg" {
+		t.Errorf("browser.searchEngine = %q, want ddg", cfg.Browser.SearchEngine)
+	}
+}
+
 func TestResolveAPIKey(t *testing.T) {
 	if (Config{APIKey: "inline"}).ResolveAPIKey() != "inline" {
 		t.Error("inline apiKey not returned")
@@ -64,6 +96,34 @@ func TestLoadPermissionsAccumulate(t *testing.T) {
 	}
 	if len(cfg.Permissions.Deny) != 1 || cfg.Permissions.Deny[0] != "Bash(rm:*)" {
 		t.Errorf("deny = %v", cfg.Permissions.Deny)
+	}
+}
+
+func TestAppendProjectPermission(t *testing.T) {
+	cwd := t.TempDir()
+	if ok, err := AppendProjectPermission(cwd, "allow", "Edit"); err != nil || ok {
+		t.Fatalf("AppendProjectPermission without .klaudia = %v,%v, want false,nil", ok, err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(cwd, ".klaudia"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := AppendProjectPermission(cwd, "allow", "Edit"); err != nil || !ok {
+		t.Fatalf("AppendProjectPermission allow = %v,%v, want true,nil", ok, err)
+	}
+	if ok, err := AppendProjectPermission(cwd, "allow", "Edit"); err != nil || !ok {
+		t.Fatalf("AppendProjectPermission duplicate = %v,%v, want true,nil", ok, err)
+	}
+	if ok, err := AppendProjectPermission(cwd, "deny", "Bash(rm:*)"); err != nil || !ok {
+		t.Fatalf("AppendProjectPermission deny = %v,%v, want true,nil", ok, err)
+	}
+
+	cfg := Load(cwd)
+	if len(cfg.Permissions.Allow) != 1 || cfg.Permissions.Allow[0] != "Edit" {
+		t.Errorf("allow = %v, want [Edit]", cfg.Permissions.Allow)
+	}
+	if len(cfg.Permissions.Deny) != 1 || cfg.Permissions.Deny[0] != "Bash(rm:*)" {
+		t.Errorf("deny = %v, want [Bash(rm:*)]", cfg.Permissions.Deny)
 	}
 }
 

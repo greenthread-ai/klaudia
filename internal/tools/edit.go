@@ -74,6 +74,58 @@ func (e *Edit) CheckPermissions(pctx permission.Context, _ permission.Permission
 	return editClassDecision(pctx)
 }
 
+func normalizeEditStrings(oldString, newString, content string) (string, string) {
+	oldNorm := normalizeEditNewlines(oldString, content)
+	newNorm := newString
+	if oldNorm != oldString {
+		switch {
+		case strings.Contains(oldNorm, "\r\n") && !strings.Contains(oldString, "\r\n"):
+			newNorm = strings.ReplaceAll(strings.ReplaceAll(newString, "\r\n", "\n"), "\n", "\r\n")
+		case !strings.Contains(oldNorm, "\r\n") && strings.Contains(oldString, "\r\n"):
+			newNorm = strings.ReplaceAll(newString, "\r\n", "\n")
+		}
+	}
+	return oldNorm, newNorm
+}
+
+func normalizeEditNewlines(s, content string) string {
+	if strings.Contains(content, s) {
+		return s
+	}
+	if strings.Contains(s, "\r\n") && !strings.Contains(content, "\r\n") {
+		lf := strings.ReplaceAll(s, "\r\n", "\n")
+		if strings.Contains(content, lf) {
+			return lf
+		}
+	}
+	if strings.Contains(s, "\n") && strings.Contains(content, "\r\n") {
+		crlf := strings.ReplaceAll(s, "\n", "\r\n")
+		if strings.Contains(content, crlf) {
+			return crlf
+		}
+	}
+	return s
+}
+
+func editNotFoundMessage(content, oldString string) string {
+	msg := "old_string not found in file. No edits were made."
+	if suggestion := editHint(content, oldString); suggestion != "" {
+		msg += " " + suggestion
+	}
+	return msg
+}
+
+func editHint(content, oldString string) string {
+	trimmed := strings.TrimSpace(oldString)
+	if trimmed == "" {
+		return "old_string is empty or whitespace-only."
+	}
+	if strings.Contains(content, trimmed) {
+		return "Hint: the trimmed text exists; check leading/trailing whitespace or indentation."
+	}
+	return "Hint: old_string must match exactly, including whitespace. Use Read immediately before Edit and include surrounding unchanged context."
+}
+
 func (e *Edit) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
 	var in EditInput
 	if err := json.Unmarshal(raw, &in); err != nil {
@@ -89,9 +141,10 @@ func (e *Edit) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Res
 	}
 	content := string(data)
 
-	count := strings.Count(content, in.OldString)
+	oldString, newString := normalizeEditStrings(in.OldString, in.NewString, content)
+	count := strings.Count(content, oldString)
 	if count == 0 {
-		return []Result{{Content: "old_string not found in file. No edits were made.", IsError: true}}, nil
+		return []Result{{Content: editNotFoundMessage(content, oldString), IsError: true}}, nil
 	}
 	if count > 1 && !in.ReplaceAll {
 		return []Result{{Content: fmt.Sprintf("old_string is not unique (%d matches). Provide more context or set replace_all=true.", count), IsError: true}}, nil
@@ -99,9 +152,9 @@ func (e *Edit) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Res
 
 	var updated string
 	if in.ReplaceAll {
-		updated = strings.ReplaceAll(content, in.OldString, in.NewString)
+		updated = strings.ReplaceAll(content, oldString, newString)
 	} else {
-		updated = strings.Replace(content, in.OldString, in.NewString, 1)
+		updated = strings.Replace(content, oldString, newString, 1)
 	}
 
 	// Preserve the original file mode.

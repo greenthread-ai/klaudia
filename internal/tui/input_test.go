@@ -1,17 +1,21 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/anthropics/anthropic-sdk-go"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/greenthread/klaudia/internal/agent"
+	"github.com/greenthread/klaudia/internal/tools"
 )
 
 func newTestModel() *Model {
-	in := textinput.New()
+	in := newPromptInput()
 	return &Model{input: in, sess: &Session{}, histPos: 0}
 }
 
@@ -38,6 +42,56 @@ func TestHistoryNavigation(t *testing.T) {
 	m.navigateHistory(false) // → draft restored
 	if m.input.Value() != "draft" {
 		t.Fatalf("down to draft = %q, want draft", m.input.Value())
+	}
+}
+
+func TestCtrlJInsertsNewline(t *testing.T) {
+	m := newTestModel()
+	m.input.SetValue("first")
+
+	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyCtrlJ})
+	m.input.InsertString("second")
+
+	if got := m.input.Value(); got != "first\nsecond" {
+		t.Fatalf("input after Ctrl+J = %q, want %q", got, "first\nsecond")
+	}
+}
+
+func TestEnterSubmitsMultilinePrompt(t *testing.T) {
+	m := newTestModel()
+	m.ctx = context.Background()
+	m.events = make(chan tea.Msg, 1)
+	promptCh := make(chan string, 1)
+	m.run = func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
+		promptCh <- prompt
+		return agent.Result{}, nil
+	}
+	m.input.SetValue("first\nsecond")
+
+	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+
+	select {
+	case got := <-promptCh:
+		if got != "first\nsecond" {
+			t.Fatalf("submitted prompt = %q, want %q", got, "first\nsecond")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for submitted prompt")
+	}
+	if m.input.Value() != "" {
+		t.Fatalf("input after submit = %q, want empty", m.input.Value())
+	}
+}
+
+func TestHistoryArrowsInMultilineInputMoveCursor(t *testing.T) {
+	m := newTestModel()
+	m.pushHistory("history")
+	m.input.SetValue("first\nsecond")
+
+	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyUp})
+
+	if got := m.input.Value(); got != "first\nsecond" {
+		t.Fatalf("up in multiline input changed value to %q", got)
 	}
 }
 

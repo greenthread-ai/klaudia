@@ -74,9 +74,53 @@ func TestTranslateToolResultMessage(t *testing.T) {
 		req.Messages[0].ToolCalls[0].Function.Name != "Read" {
 		t.Errorf("assistant tool_calls wrong: %+v", req.Messages[0])
 	}
-	if req.Messages[1].Role != "tool" || req.Messages[1].ToolCallID != id ||
-		!strings.Contains(req.Messages[1].Content, "file contents") {
-		t.Errorf("tool result message wrong: %+v", req.Messages[1])
+	if req.Messages[1].Role != "tool" || req.Messages[1].ToolCallID != id {
+		t.Fatalf("tool result message wrong: %+v", req.Messages[1])
+	}
+	content, ok := req.Messages[1].Content.(string)
+	if !ok || !strings.Contains(content, "file contents") {
+		t.Errorf("tool result content = %#v", req.Messages[1].Content)
+	}
+}
+
+func TestTranslateToolResultImages(t *testing.T) {
+	id := "toolu_img"
+	assistant := anthropic.BetaMessageParam{
+		Role:    anthropic.BetaMessageParamRoleAssistant,
+		Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaToolUseBlock(id, map[string]any{"file_path": "/x.png"}, "Read")},
+	}
+	toolRes := anthropic.BetaMessageParam{
+		Role: anthropic.BetaMessageParamRoleUser,
+		Content: []anthropic.BetaContentBlockParamUnion{{
+			OfToolResult: &anthropic.BetaToolResultBlockParam{
+				ToolUseID: id,
+				Content: []anthropic.BetaToolResultBlockParamContentUnion{
+					{OfText: &anthropic.BetaTextBlockParam{Text: "[image: /x.png]"}},
+					{OfImage: &anthropic.BetaImageBlockParam{Source: anthropic.BetaImageBlockParamSourceUnion{
+						OfBase64: &anthropic.BetaBase64ImageSourceParam{MediaType: anthropic.BetaBase64ImageSourceMediaType("image/png"), Data: "abc123"},
+					}}},
+				},
+			},
+		}},
+	}
+
+	p := NewOpenAIProvider("https://x/v1", "k")
+	req, err := p.translateRequest(anthropic.BetaMessageNewParams{
+		Model:    "m",
+		Messages: []anthropic.BetaMessageParam{assistant, toolRes},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts, ok := req.Messages[1].Content.([]oaContentPart)
+	if !ok {
+		t.Fatalf("tool result content type = %T, want []oaContentPart", req.Messages[1].Content)
+	}
+	if len(parts) != 2 || parts[0].Type != "text" || parts[1].Type != "image_url" {
+		t.Fatalf("parts = %+v", parts)
+	}
+	if parts[1].ImageURL == nil || parts[1].ImageURL.URL != "data:image/png;base64,abc123" {
+		t.Errorf("image_url = %+v", parts[1].ImageURL)
 	}
 }
 

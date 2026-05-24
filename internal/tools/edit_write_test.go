@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/greenthread/klaudia/internal/permission"
@@ -66,6 +67,69 @@ func TestEditAmbiguousWithoutReplaceAll(t *testing.T) {
 	got, _ := os.ReadFile(path)
 	if string(got) != "y y y\n" {
 		t.Errorf("content = %q", got)
+	}
+}
+
+func TestEditNormalizesLineEndings(t *testing.T) {
+	cases := []struct {
+		name      string
+		content   string
+		oldString string
+		newString string
+		want      string
+	}{
+		{
+			name:      "crlf input for lf file",
+			content:   "alpha\nbeta\ngamma\n",
+			oldString: "alpha\r\nbeta\r\n",
+			newString: "one\r\ntwo\r\n",
+			want:      "one\ntwo\ngamma\n",
+		},
+		{
+			name:      "lf input for crlf file",
+			content:   "alpha\r\nbeta\r\ngamma\r\n",
+			oldString: "alpha\nbeta\n",
+			newString: "one\ntwo\n",
+			want:      "one\r\ntwo\r\ngamma\r\n",
+		},
+	}
+
+	e, _ := NewEdit()
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "f.txt")
+			if err := os.WriteFile(path, []byte(c.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			raw, _ := json.Marshal(EditInput{FilePath: path, OldString: c.oldString, NewString: c.newString})
+			res, err := e.Execute(context.Background(), Context{}, raw)
+			if err != nil || res[0].IsError {
+				t.Fatalf("edit failed: err=%v res=%+v", err, res[0])
+			}
+			got, _ := os.ReadFile(path)
+			if string(got) != c.want {
+				t.Errorf("content = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestEditNotFoundIncludesHint(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.txt")
+	if err := os.WriteFile(path, []byte("\talpha\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e, _ := NewEdit()
+	raw, _ := json.Marshal(EditInput{FilePath: path, OldString: "alpha ", NewString: "beta"})
+	res, err := e.Execute(context.Background(), Context{}, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res[0].IsError || !strings.Contains(res[0].Content, "trimmed text exists") {
+		t.Fatalf("expected whitespace hint, got %+v", res[0])
 	}
 }
 

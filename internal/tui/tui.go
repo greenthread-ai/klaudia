@@ -6,6 +6,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -16,9 +17,10 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/stopwatch"
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -26,6 +28,7 @@ import (
 
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
+	"github.com/greenthread/klaudia/internal/config"
 	"github.com/greenthread/klaudia/internal/memory"
 	"github.com/greenthread/klaudia/internal/native/search"
 	"github.com/greenthread/klaudia/internal/permission"
@@ -45,6 +48,7 @@ type Session struct {
 	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
 	Memory         *memory.Store  // backs /memory (may be nil)
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
+	Theme          string         // markdown render theme ("" = dark)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
 
 	// Render-only context for /config and /context (set once at startup).
@@ -176,7 +180,7 @@ type Model struct {
 	ctx    context.Context
 
 	vp     viewport.Model
-	input  textinput.Model
+	input  textarea.Model
 	spin   spinner.Model
 	state  uiState
 	ready  bool
@@ -184,6 +188,7 @@ type Model struct {
 	height int
 
 	transcript strings.Builder // rendered scrollback
+	rawBlocks  []transcriptBlock
 	history    []anthropic.BetaMessageParam
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
@@ -222,6 +227,11 @@ type Model struct {
 	glamWidth int
 }
 
+type transcriptBlock struct {
+	text     string
+	markdown bool
+}
+
 // New builds the model. ctx cancels in-flight turns when the program exits.
 // history seeds the conversation when resuming a session (may be nil). sess is
 // shared mutable settings (may be nil).
@@ -229,10 +239,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	if sess == nil {
 		sess = &Session{}
 	}
-	in := textinput.New()
-	in.Placeholder = "Ask Klaudia… (Ctrl+C to quit)"
-	in.Focus()
-	in.CharLimit = 0
+	in := newPromptInput()
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -253,7 +260,54 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		model, branch = sess.displayModel(), sess.GitBranch
 	}
 	m.transcript.WriteString(intro(model, branch))
+	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: intro(model, branch)})
 	return m
+}
+
+func newPromptInput() textarea.Model {
+	in := textarea.New()
+	in.Placeholder = "Ask Klaudia… (Enter to send, Ctrl+J for newline, Ctrl+C to quit)"
+	in.Prompt = ""
+	in.ShowLineNumbers = false
+	in.EndOfBufferCharacter = ' '
+	in.CharLimit = 0
+	in.MaxHeight = 6
+	in.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "newline"))
+	in.Focus()
+	return in
+}
+
+func (m *Model) inputHeight() int {
+	if m.state != stateIdle {
+		return 1
+	}
+	h := m.input.LineCount()
+	if h < 1 {
+		return 1
+	}
+	if h > m.input.MaxHeight {
+		return m.input.MaxHeight
+	}
+	return h
+}
+
+func (m *Model) syncInputHeight() {
+	if !m.ready {
+		return
+	}
+	inputH := m.inputHeight() + 1
+	if sug := m.slashSuggestionLine(); sug != "" {
+		inputH += strings.Count(sug, "\n") + 1
+	}
+	if inputH > m.height-1 {
+		inputH = m.height - 1
+	}
+	if inputH < 1 {
+		inputH = 1
+	}
+	m.vp.Height = m.height - inputH
+	m.input.SetHeight(m.inputHeight())
+	m.syncViewport()
 }
 
 // displayModel returns the model name to show in the intro/status.
@@ -265,7 +319,7 @@ func (s *Session) displayModel() string {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.waitForEvent())
+	return tea.Batch(textarea.Blink, m.waitForEvent())
 }
 
 // waitForEvent yields the next message from the agent goroutine.
@@ -288,6 +342,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.onKey(msg)
 
+	case tea.MouseMsg:
+		return m.onMouse(msg)
+
 	case eventMsg:
 		m.renderEvent(msg.ev)
 		return m, m.waitForEvent()
@@ -305,11 +362,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = stateAwaitingPermission
 		m.pending = msg.reply
 		m.pendingReq = msg.req
-		label := msg.req.ToolName
-		if msg.req.Specifier != "" {
-			label += " (" + msg.req.Specifier + ")"
+		m.appendLine(askStyle.Render("Permission required: " + m.permissionSummary(msg.req)))
+		if detail := permissionDetail(msg.req); detail != "" {
+			m.appendLine(toolStyle.Render("  " + detail))
 		}
-		m.appendLine(askStyle.Render(fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", label)))
+		m.appendLine(askStyle.Render(m.permissionPrompt()))
 		return m, m.waitForEvent()
 
 	case askMsg:
@@ -331,7 +388,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = stateAwaitingPlan
 		m.planReply = msg.reply
 		m.appendLine(askStyle.Render("Proposed plan:"))
-		m.appendLine(msg.plan)
+		m.appendMarkdown(msg.plan)
 		m.appendLine(askStyle.Render("Approve and start implementing? (y)es / (n)o"))
 		return m, m.waitForEvent()
 
@@ -358,7 +415,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pending, m.askReply, m.planReply = nil, nil, nil
 		m.state = stateIdle
 		m.input.Focus()
-		return m, tea.Batch(textinput.Blink, m.waitForEvent(), stopSW)
+		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW)
 
 	case compactDoneMsg:
 		if msg.err != nil {
@@ -369,7 +426,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.state = stateIdle
 		m.input.Focus()
-		return m, tea.Batch(textinput.Blink, m.waitForEvent())
+		return m, tea.Batch(textarea.Blink, m.waitForEvent())
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -384,6 +441,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+	m.syncInputHeight()
+	return m, cmd
+}
+
+func (m *Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.vp, cmd = m.vp.Update(msg)
 	return m, cmd
 }
 
@@ -493,10 +557,8 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "y":
 			m.answer(permission.Decision{Behavior: permission.Allow})
 		case "a":
-			// Remember this tool+specifier for the rest of the session.
 			rule := permission.Rule{Tool: m.pendingReq.ToolName, Specifier: m.pendingReq.Specifier}
-			m.sessionAllow = append(m.sessionAllow, rule)
-			m.appendLine(toolStyle.Render("  → always allow " + permission.FormatRule(rule) + " (this session)"))
+			m.rememberPermission("allow", rule)
 			m.answer(permission.Decision{Behavior: permission.Allow})
 		case "n":
 			m.answer(permission.Decision{Behavior: permission.Deny, Message: "denied by user"})
@@ -516,8 +578,14 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Input history navigation (only on a fresh idle line).
-	if m.state == stateIdle && (msg.Type == tea.KeyUp || msg.Type == tea.KeyDown) {
+	if m.state == stateIdle && m.input.LineCount() <= 1 && (msg.Type == tea.KeyUp || msg.Type == tea.KeyDown) {
 		m.navigateHistory(msg.Type == tea.KeyUp)
+		return m, nil
+	}
+
+	if msg.Type == tea.KeyCtrlJ && m.state == stateIdle {
+		m.input.InsertString("\n")
+		m.syncInputHeight()
 		return m, nil
 	}
 
@@ -545,6 +613,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+	m.syncInputHeight()
 	return m, cmd
 }
 
@@ -555,6 +624,7 @@ type cmdInfo struct{ name, args, desc string }
 var commandList = []cmdInfo{
 	{"/help", "", "Show this help"},
 	{"/model", "[name]", "Show or set the model (alias: haiku|sonnet|opus, or full ID)"},
+	{"/theme", "[name]", "Change Markdown render theme (no arg = picker)"},
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
 	{"/allow", "<rule>", "Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)"},
 	{"/deny", "<rule>", "Auto-deny a tool rule this session"},
@@ -583,6 +653,7 @@ const keyHints = `Keys:
   Tab              Complete a /command or an @<path> reference
   ↑ / ↓            Cycle through previous prompts
   PgUp / PgDn      Scroll the conversation history
+  Mouse wheel      Scroll the conversation history
   Esc              Interrupt the model mid-turn
   Ctrl+C           Quit`
 
@@ -703,6 +774,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "/clear":
 		m.transcript.Reset()
+		m.rawBlocks = nil
 		m.history = nil
 		m.appendLine(bannerStyle.Render("Cleared conversation and screen."))
 	case "/model":
@@ -719,6 +791,18 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.sess.Model = args[0]
 			m.appendLine(bannerStyle.Render("Model set to " + args[0] + " (applies to the next turn)."))
 		}
+	case "/theme":
+		if len(args) == 0 {
+			m.startChoice("Theme — choose Markdown render colours:", m.themeChoices())
+			return m, nil
+		}
+		theme, ok := lookupTheme(strings.Join(args, " "))
+		if !ok {
+			m.appendLine(errStyle.Render("unknown theme " + strings.Join(args, " ") + ". Available: " + themeNames()))
+			break
+		}
+		m.setTheme(theme.id)
+		m.appendLine(bannerStyle.Render("Theme: " + theme.name))
 	case "/goal":
 		switch {
 		case len(args) == 0:
@@ -806,11 +890,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			break
 		}
 		if cmd == "/allow" {
-			m.sessionAllow = append(m.sessionAllow, rule)
-			m.appendLine(bannerStyle.Render("Will auto-allow " + permission.FormatRule(rule) + " this session."))
+			m.rememberPermission("allow", rule)
 		} else {
-			m.sessionDeny = append(m.sessionDeny, rule)
-			m.appendLine(bannerStyle.Render("Will auto-deny " + permission.FormatRule(rule) + " this session."))
+			m.rememberPermission("deny", rule)
 		}
 	case "/status":
 		model := m.sess.Model
@@ -1246,6 +1328,132 @@ func (m *Model) skillHelpLines() string {
 	return b.String()
 }
 
+// permissionSummary returns a one-line description of the pending action.
+func (m *Model) permissionSummary(req agent.ApprovalRequest) string {
+	label := req.ToolName
+	if req.Specifier != "" {
+		label += " (" + req.Specifier + ")"
+	}
+	switch req.ToolName {
+	case "Edit":
+		if target := firstNonEmpty(stringField(req.Input, "file_path"), req.Specifier); target != "" {
+			return "edit " + target
+		}
+	case "Write":
+		if target := firstNonEmpty(stringField(req.Input, "file_path"), req.Specifier); target != "" {
+			return "write " + target
+		}
+	case "NotebookEdit":
+		if target := firstNonEmpty(stringField(req.Input, "notebook_path"), req.Specifier); target != "" {
+			return "edit notebook " + target
+		}
+	case "Bash":
+		if desc := stringField(req.Input, "description"); desc != "" {
+			return "run command — " + desc
+		}
+		if target := firstNonEmpty(req.Specifier, stringField(req.Input, "command")); target != "" {
+			return "run command " + target
+		}
+	}
+	return label
+}
+
+func (m *Model) permissionPrompt() string {
+	return fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", m.permissionSummary(m.pendingReq))
+}
+
+func permissionDetail(req agent.ApprovalRequest) string {
+	switch req.ToolName {
+	case "Edit":
+		return editPermissionDetail(req.Input)
+	case "Write":
+		if path := stringField(req.Input, "file_path"); path != "" {
+			return "file: " + path
+		}
+	case "NotebookEdit":
+		if path := stringField(req.Input, "notebook_path"); path != "" {
+			return "notebook: " + path
+		}
+	case "Bash":
+		if cmd := stringField(req.Input, "command"); cmd != "" {
+			return "command: " + oneLine(cmd, 220)
+		}
+	}
+	if req.Suggestion != "" {
+		return req.Suggestion
+	}
+	return ""
+}
+
+func editPermissionDetail(raw json.RawMessage) string {
+	path := stringField(raw, "file_path")
+	oldText := stringField(raw, "old_string")
+	newText := stringField(raw, "new_string")
+	var parts []string
+	if path != "" {
+		parts = append(parts, "file: "+path)
+	}
+	if oldText != "" || newText != "" {
+		parts = append(parts, fmt.Sprintf("replace %q → %q", oneLine(oldText, 80), oneLine(newText, 80)))
+	}
+	return strings.Join(parts, "\n  ")
+}
+
+func stringField(raw json.RawMessage, name string) string {
+	var fields map[string]any
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return ""
+	}
+	v, ok := fields[name].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(v)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func oneLine(s string, limit int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) > limit {
+		return s[:limit] + "…"
+	}
+	return s
+}
+
+// rememberPermission records a permission rule for the current UI session and,
+// when the project has a .klaudia directory, persists it to .klaudia/config.json.
+func (m *Model) rememberPermission(kind string, rule permission.Rule) {
+	formatted := permission.FormatRule(rule)
+	verb := "allow"
+	if kind == "deny" {
+		verb = "deny"
+		m.sessionDeny = append(m.sessionDeny, rule)
+	} else {
+		m.sessionAllow = append(m.sessionAllow, rule)
+	}
+
+	persisted := false
+	var err error
+	if m.sess != nil && m.sess.CWD != "" {
+		persisted, err = config.AppendProjectPermission(m.sess.CWD, kind, formatted)
+	}
+	msg := fmt.Sprintf("  → always %s %s (this session)", verb, formatted)
+	if err != nil {
+		msg += "; config save failed: " + err.Error()
+	} else if persisted {
+		msg += "; saved to .klaudia/config.json"
+	}
+	m.appendLine(toolStyle.Render(msg))
+}
+
 // answer resolves the pending permission ask.
 func (m *Model) answer(d permission.Decision) {
 	if m.pending != nil {
@@ -1290,15 +1498,20 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.appendLine(toolStyle.Render(fmt.Sprintf("⚙ %s", ev.ToolName)))
 	case "tool_result":
 		m.flushAssistant()
-		s := ev.Content
+		s := strings.TrimSpace(ev.Content)
+		if s == "" {
+			s = "completed"
+		}
 		if len(s) > 240 {
 			s = s[:240] + "…"
 		}
 		style := toolStyle
+		prefix := "✓ " + ev.ToolName + ": "
 		if ev.IsError {
 			style = errStyle
+			prefix = "✗ " + ev.ToolName + ": "
 		}
-		m.appendLine(style.Render("  " + strings.ReplaceAll(s, "\n", "\n  ")))
+		m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(s, "\n", "\n  ")))
 	case "compaction":
 		m.flushAssistant()
 		m.appendLine(bannerStyle.Render("· " + ev.Content))
@@ -1318,7 +1531,7 @@ func (m *Model) flushAssistant() {
 	if m.streamBuf.Len() == 0 {
 		return
 	}
-	m.transcript.WriteString(m.markdown(m.streamBuf.String()) + "\n")
+	m.appendMarkdown(m.streamBuf.String())
 	m.streamBuf.Reset()
 }
 
@@ -1347,16 +1560,37 @@ func (m *Model) buildGlamour(width int) {
 	if w < 20 {
 		w = 20
 	}
-	if r, err := glamour.NewTermRenderer(glamour.WithStandardStyle("dark"), glamour.WithWordWrap(w)); err == nil {
+	if r, err := glamour.NewTermRenderer(m.glamourThemeOption(), glamour.WithWordWrap(w)); err == nil {
 		m.glam = r
 		m.glamWidth = width
 	}
 }
 
 // appendLine appends a full, already-styled line.
+func (m *Model) appendMarkdown(s string) {
+	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: s, markdown: true})
+	m.transcript.WriteString(m.markdown(s) + "\n")
+	m.syncViewport()
+}
+
 func (m *Model) appendLine(s string) {
+	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: s})
 	m.transcript.WriteString(s + "\n")
 	m.syncViewport()
+}
+
+func (m *Model) rerenderTranscript() {
+	if len(m.rawBlocks) == 0 {
+		return
+	}
+	m.transcript.Reset()
+	for _, block := range m.rawBlocks {
+		if block.markdown {
+			m.transcript.WriteString(m.markdown(block.text) + "\n")
+		} else {
+			m.transcript.WriteString(block.text + "\n")
+		}
+	}
 }
 
 func (m *Model) syncViewport() {
@@ -1382,7 +1616,7 @@ func (m *Model) syncViewport() {
 
 func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
-	inputH := 2
+	inputH := m.inputHeight()
 	if !m.ready {
 		m.vp = viewport.New(w, h-inputH)
 		m.ready = true
@@ -1390,7 +1624,7 @@ func (m *Model) resize(w, h int) {
 		m.vp.Width = w
 		m.vp.Height = h - inputH
 	}
-	m.input.Width = w - 4
+	m.input.SetWidth(w - 4)
 	if m.glam == nil || m.glamWidth != w {
 		m.buildGlamour(w)
 	}
@@ -1406,7 +1640,7 @@ func (m *Model) View() string {
 	case stateRunning:
 		bottom = m.spin.View() + " working… " + bannerStyle.Render(m.sw.View()) + hintStyle.Render("  (esc to interrupt)")
 	case stateAwaitingPermission:
-		bottom = askStyle.Render(fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", m.pendingReq.ToolName))
+		bottom = askStyle.Render(m.permissionPrompt())
 	case stateAwaitingAnswer:
 		bottom = askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions)))
 	case stateAwaitingPlan:
@@ -1416,6 +1650,7 @@ func (m *Model) View() string {
 	case stateAwaitingChoice:
 		bottom = askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.choiceItems))) + hintStyle.Render("  (esc to cancel)")
 	default:
+		m.input.SetHeight(m.inputHeight())
 		bottom = m.input.View()
 		if sug := m.slashSuggestionLine(); sug != "" {
 			bottom += "\n" + sug
@@ -1479,7 +1714,11 @@ func (p *uiPlanner) ExitPlan(ctx context.Context, plan string) (bool, error) {
 // seeds a resumed conversation (may be nil); sess holds mutable settings shared
 // with the RunFunc closure (may be nil).
 func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam, sess *Session) error {
-	p := tea.NewProgram(New(ctx, run, history, sess), tea.WithAltScreen())
+	p := tea.NewProgram(
+		New(ctx, run, history, sess),
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
+	)
 	_, err := p.Run()
 	return err
 }

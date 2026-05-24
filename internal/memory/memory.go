@@ -1,7 +1,5 @@
-// Package memory is a small session memory store backed by a MEMORY.md
-// Markdown file. It backs the /memory command: viewing recalled notes and
-// adding new ones. (Dogfood: the core was implemented by GPT-5.5 running in
-// Klaudia.)
+// Package memory is a small Markdown-backed memory store. Session memory lives
+// in .klaudia/memory/MEMORY.md; project knowledge lives in .klaudia/KNOWLEDGE.md.
 package memory
 
 import (
@@ -20,6 +18,17 @@ type Store struct {
 // New returns a Store rooted at dir (e.g. ".klaudia/memory").
 func New(dir string) *Store {
 	return &Store{dir: dir}
+}
+
+// KnowledgePath returns the project KNOWLEDGE.md path for cwd.
+func KnowledgePath(cwd string) string {
+	return filepath.Join(cwd, ".klaudia", "KNOWLEDGE.md")
+}
+
+// AddKnowledge appends a timestamped bullet to .klaudia/KNOWLEDGE.md, creating
+// .klaudia and a header on first write. Empty text is rejected.
+func AddKnowledge(cwd, text string) error {
+	return appendBullet(KnowledgePath(cwd), "# Project Knowledge\n\n", text)
 }
 
 // Path is the MEMORY.md file path.
@@ -90,16 +99,19 @@ func (s *Store) Search(query string) ([]string, error) {
 // Add appends a timestamped bullet to MEMORY.md, creating the directory and a
 // header on first write. Empty (whitespace-only) text is rejected.
 func (s *Store) Add(text string) error {
+	return appendBullet(s.Path(), "# Memory\n\n", text)
+}
+
+func appendBullet(path, header, text string) error {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return errors.New("memory text is empty")
 	}
 
-	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 
-	path := s.Path()
 	_, err := os.Stat(path)
 	newFile := errors.Is(err, os.ErrNotExist)
 	if err != nil && !newFile {
@@ -113,7 +125,7 @@ func (s *Store) Add(text string) error {
 	defer file.Close()
 
 	if newFile {
-		if _, err := file.WriteString("# Memory\n\n"); err != nil {
+		if _, err := file.WriteString(header); err != nil {
 			return err
 		}
 	}

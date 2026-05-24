@@ -119,7 +119,7 @@ type GrepOptions struct {
 // GrepMatch is one matching line.
 type GrepMatch struct {
 	File string
-	Line int    // 1-indexed; 0 in multiline mode
+	Line int // 1-indexed; 0 in multiline mode
 	Text string
 }
 
@@ -180,10 +180,8 @@ func Grep(opts GrepOptions) ([]GrepMatch, error) {
 		if !opts.Hidden && strings.HasPrefix(d.Name(), ".") {
 			return nil
 		}
-		if opts.Glob != "" {
-			if ok, _ := doublestar.Match(opts.Glob, d.Name()); !ok {
-				return nil
-			}
+		if opts.Glob != "" && !matchGlob(root, path, opts.Glob) {
+			return nil
 		}
 		visit(path)
 		return nil

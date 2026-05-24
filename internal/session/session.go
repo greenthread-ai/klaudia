@@ -1,8 +1,5 @@
-// Package session reads and writes Klaudia/Claude Code session transcripts:
-// newline-delimited JSON (JSONL) under ~/.claude/projects/<encoded-cwd>/.
-//
-// The transcript schema and the cwd→directory encoding match the JS reference
-// so Go and JS can resume each other's sessions (round-trip compatibility).
+// Package session reads and writes Klaudia session transcripts:
+// newline-delimited JSON (JSONL) under ~/.klaudia/projects/<encoded-cwd>/.
 package session
 
 import (
@@ -22,12 +19,12 @@ const maxDirLen = 200
 
 var nonAlnum = regexp.MustCompile(`[^a-zA-Z0-9]`)
 
-// ProjectsRoot returns ~/.claude/projects (honoring CLAUDE_CONFIG_DIR).
+// ProjectsRoot returns ~/.klaudia/projects (honoring KLAUDIA_CONFIG_DIR).
 func ProjectsRoot() string {
-	base := os.Getenv("CLAUDE_CONFIG_DIR")
+	base := os.Getenv("KLAUDIA_CONFIG_DIR")
 	if base == "" {
 		home, _ := os.UserHomeDir()
-		base = filepath.Join(home, ".claude")
+		base = filepath.Join(home, ".klaudia")
 	}
 	return filepath.Join(base, "projects")
 }

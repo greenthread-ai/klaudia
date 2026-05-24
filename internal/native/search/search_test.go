@@ -11,10 +11,10 @@ func setupTree(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	files := map[string]string{
-		"a.go":            "package a\nfunc Foo() {}\n",
-		"b.go":            "package b\nfunc Bar() {}\n",
-		"sub/c.go":        "package sub\nfunc Baz() {}\n",
-		"sub/notes.txt":   "foo bar\nbaz\n",
+		"a.go":              "package a\nfunc Foo() {}\n",
+		"b.go":              "package b\nfunc Bar() {}\n",
+		"sub/c.go":          "package sub\nfunc Baz() {}\n",
+		"sub/notes.txt":     "foo bar\nbaz\n",
 		"node_modules/x.go": "should be ignored\n",
 	}
 	for rel, content := range files {
@@ -73,6 +73,17 @@ func TestGrepFilesAndContent(t *testing.T) {
 		if hit.Line == 0 {
 			t.Errorf("expected line numbers in non-multiline mode: %+v", hit)
 		}
+	}
+}
+
+func TestGrepGlobMatchesNestedPaths(t *testing.T) {
+	dir := setupTree(t)
+	matches, err := Grep(GrepOptions{Pattern: "func", Root: dir, Glob: "sub/*.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 1 || filepath.Base(matches[0].File) != "c.go" {
+		t.Fatalf("expected only sub/c.go, got %+v", matches)
 	}
 }
 

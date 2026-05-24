@@ -5,6 +5,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,8 @@ type Config struct {
 	APIKeyEnv string `json:"apiKeyEnv,omitempty"`
 	// Sandbox configures how the Bash tool executes commands.
 	Sandbox Sandbox `json:"sandbox,omitempty"`
+	// Browser configures local browser-backed tools (WebSearch/WebFetch and browser tools).
+	Browser Browser `json:"browser,omitempty"`
 	// Permissions holds persisted allow/deny rules for this project.
 	Permissions Permissions `json:"permissions,omitempty"`
 }
@@ -67,12 +70,94 @@ type Sandbox struct {
 	Network string `json:"network,omitempty"`
 }
 
+// Browser engines.
+const (
+	BrowserEngineChrome = "chrome"
+)
+
+// Browser configures local browser-backed tools.
+type Browser struct {
+	// Engine selects the browser engine. Currently only "chrome" is supported.
+	Engine string `json:"engine,omitempty"`
+	// Headless controls Chrome headless mode. Defaults to true when unset.
+	Headless *bool `json:"headless,omitempty"`
+	// ChromePath overrides the Chrome executable path for launch mode.
+	ChromePath string `json:"chromePath,omitempty"`
+	// RemoteURL attaches to an existing Chrome DevTools endpoint instead of launching.
+	RemoteURL string `json:"remoteUrl,omitempty"`
+	// UserDataDir stores Chrome profile state/cookies. Defaults to ~/.klaudia/browser/chrome-profile.
+	UserDataDir string `json:"userDataDir,omitempty"`
+	// HeadedFallback relaunches headed Chrome for user-assisted search challenge handling.
+	HeadedFallback *bool `json:"headedFallback,omitempty"`
+	// SearchEngine selects the default WebSearch engine: "ddg" or "google".
+	SearchEngine string `json:"searchEngine,omitempty"`
+}
+
 // MountCWDOr returns MountCWD or the default when unset.
 func (s Sandbox) MountCWDOr(def bool) bool {
 	if s.MountCWD == nil {
 		return def
 	}
 	return *s.MountCWD
+}
+
+// ProjectDir returns cwd/.klaudia.
+func ProjectDir(cwd string) string {
+	return filepath.Join(cwd, ".klaudia")
+}
+
+// ProjectPath returns cwd/.klaudia/config.json.
+func ProjectPath(cwd string) string {
+	return filepath.Join(ProjectDir(cwd), "config.json")
+}
+
+// ProjectDirExists reports whether cwd/.klaudia exists and is a directory.
+func ProjectDirExists(cwd string) bool {
+	st, err := os.Stat(ProjectDir(cwd))
+	return err == nil && st.IsDir()
+}
+
+// AppendProjectPermission appends rule to cwd/.klaudia/config.json under
+// permissions.allow or permissions.deny. It is a no-op when cwd/.klaudia does
+// not exist, so users opt into project-local persistence by creating the folder.
+func AppendProjectPermission(cwd, kind, rule string) (bool, error) {
+	if !ProjectDirExists(cwd) {
+		return false, nil
+	}
+	path := ProjectPath(cwd)
+	cfg, err := readProject(path)
+	if err != nil {
+		return false, err
+	}
+	switch kind {
+	case "allow":
+		if contains(cfg.Permissions.Allow, rule) {
+			return true, nil
+		}
+		cfg.Permissions.Allow = append(cfg.Permissions.Allow, rule)
+	case "deny":
+		if contains(cfg.Permissions.Deny, rule) {
+			return true, nil
+		}
+		cfg.Permissions.Deny = append(cfg.Permissions.Deny, rule)
+	default:
+		return false, errors.New("permission kind must be allow or deny")
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	data = append(data, '\n')
+	return true, os.WriteFile(path, data, 0o644)
+}
+
+func contains(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // Load reads ~/.klaudia/config.json then overlays ./.klaudia/config.json
@@ -82,18 +167,31 @@ func Load(cwd string) Config {
 	if home, err := os.UserHomeDir(); err == nil {
 		merge(&cfg, read(filepath.Join(home, ".klaudia", "config.json")))
 	}
-	merge(&cfg, read(filepath.Join(cwd, ".klaudia", "config.json")))
+	merge(&cfg, read(ProjectPath(cwd)))
 	return cfg
 }
 
 func read(path string) Config {
+	c, _ := readProject(path)
+	return c
+}
+
+func readProject(path string) (Config, error) {
 	var c Config
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return c
+		if os.IsNotExist(err) {
+			return c, nil
+		}
+		return c, err
 	}
-	_ = json.Unmarshal(data, &c)
-	return c
+	if strings.TrimSpace(string(data)) == "" {
+		return c, nil
+	}
+	if err := json.Unmarshal(data, &c); err != nil {
+		return c, err
+	}
+	return c, nil
 }
 
 // merge overlays non-empty fields of src onto dst.
@@ -133,6 +231,27 @@ func merge(dst *Config, src Config) {
 	}
 	if len(src.Sandbox.WriteRoots) > 0 {
 		dst.Sandbox.WriteRoots = append(dst.Sandbox.WriteRoots, src.Sandbox.WriteRoots...)
+	}
+	if src.Browser.Engine != "" {
+		dst.Browser.Engine = src.Browser.Engine
+	}
+	if src.Browser.Headless != nil {
+		dst.Browser.Headless = src.Browser.Headless
+	}
+	if src.Browser.ChromePath != "" {
+		dst.Browser.ChromePath = src.Browser.ChromePath
+	}
+	if src.Browser.RemoteURL != "" {
+		dst.Browser.RemoteURL = src.Browser.RemoteURL
+	}
+	if src.Browser.UserDataDir != "" {
+		dst.Browser.UserDataDir = src.Browser.UserDataDir
+	}
+	if src.Browser.HeadedFallback != nil {
+		dst.Browser.HeadedFallback = src.Browser.HeadedFallback
+	}
+	if src.Browser.SearchEngine != "" {
+		dst.Browser.SearchEngine = src.Browser.SearchEngine
 	}
 	// Permission rules accumulate (home rules + project rules).
 	dst.Permissions.Allow = append(dst.Permissions.Allow, src.Permissions.Allow...)

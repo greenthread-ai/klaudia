@@ -1,8 +1,10 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/greenthread/klaudia/internal/browser"
 	"github.com/greenthread/klaudia/internal/sandbox"
 	"github.com/greenthread/klaudia/internal/tasks"
 )
@@ -10,7 +12,7 @@ import (
 // DefaultRegistry builds the registry of all implemented local tools, with the
 // Bash tool wired to the given executor (local host, or a container sandbox).
 // New tools are added here as they are ported.
-func DefaultRegistry(executor sandbox.Executor) (*Registry, error) {
+func DefaultRegistry(executor sandbox.Executor, browserOpts ...browser.Options) (*Registry, error) {
 	if executor == nil {
 		executor = sandbox.NewLocal()
 	}
@@ -18,6 +20,13 @@ func DefaultRegistry(executor sandbox.Executor) (*Registry, error) {
 	todos := &TodoStore{}
 	// Per-session task state shared with task tools.
 	taskStore := tasks.New()
+
+	// Shared lazy browser engine for local web tools. Chrome launches only when a
+	// browser-backed tool call needs it.
+	browserEngine := browser.DefaultEngine(context.Background())
+	if len(browserOpts) > 0 {
+		browserEngine = browser.NewEngine(context.Background(), browserOpts[0])
+	}
 
 	type ctor struct {
 		name string
@@ -38,6 +47,10 @@ func DefaultRegistry(executor sandbox.Executor) (*Registry, error) {
 		{"NotebookEdit", func() (Tool, error) { return NewNotebookEdit() }},
 		{"AskUserQuestion", func() (Tool, error) { return NewAskUserQuestion() }},
 		{"ExitPlanMode", func() (Tool, error) { return NewExitPlanMode() }},
+		{"WebSearch", func() (Tool, error) { return NewWebSearch(browserEngine) }},
+		{"WebFetch", func() (Tool, error) { return NewWebFetch(browserEngine) }},
+		{"BrowserNavigate", func() (Tool, error) { return NewBrowserNavigate(browserEngine) }},
+		{"BrowserSnapshot", func() (Tool, error) { return NewBrowserSnapshot(browserEngine) }},
 	}
 
 	ts := make([]Tool, 0, len(ctors))
