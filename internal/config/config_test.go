@@ -51,6 +51,22 @@ func TestResolveAPIKey(t *testing.T) {
 	}
 }
 
+func TestLoadPermissionsAccumulate(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, `{"permissions":{"allow":["Edit"],"deny":["Bash(rm:*)"]}}`)
+	cwd := t.TempDir()
+	writeConfig(t, cwd, `{"permissions":{"allow":["Bash(go test:*)"]}}`)
+
+	cfg := Load(cwd)
+	if len(cfg.Permissions.Allow) != 2 {
+		t.Errorf("allow = %v, want home+project merged", cfg.Permissions.Allow)
+	}
+	if len(cfg.Permissions.Deny) != 1 || cfg.Permissions.Deny[0] != "Bash(rm:*)" {
+		t.Errorf("deny = %v", cfg.Permissions.Deny)
+	}
+}
+
 func TestLoadMissingIsEmpty(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	cfg := Load(t.TempDir())

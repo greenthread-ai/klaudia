@@ -113,6 +113,12 @@ func anyMatch(rules []Rule, tool, specifier string) bool {
 	return false
 }
 
+// MatchAny reports whether any rule matches the given tool + specifier. Exported
+// for frontends (e.g. the TUI's "allow & remember") to check their own rule sets.
+func MatchAny(rules []Rule, tool, specifier string) bool {
+	return anyMatch(rules, tool, specifier)
+}
+
 // Check evaluates the full permission flow for a tool invocation:
 //
 //  1. deny rules        → deny

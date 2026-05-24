@@ -115,6 +115,8 @@ type options struct {
 	resume          string // --resume <session-id>
 	continueSession bool   // --continue
 	forkSession     bool   // --fork-session
+	allowedTools    []string
+	disallowedTools []string
 }
 
 // NewRootCommand builds the top-level `klaudia` command.
@@ -154,6 +156,8 @@ func NewRootCommand() *cobra.Command {
 	f.StringVarP(&opts.resume, "resume", "r", "", "Resume a session by ID")
 	f.BoolVar(&opts.continueSession, "continue", false, "Resume the most recent session in this directory")
 	f.BoolVar(&opts.forkSession, "fork-session", false, "When resuming, start a new session ID (preserves the original)")
+	f.StringSliceVar(&opts.allowedTools, "allowedTools", nil, "Auto-allow tool rules, e.g. 'Edit' or 'Bash(git status:*)' (repeatable, comma-separated)")
+	f.StringSliceVar(&opts.disallowedTools, "disallowedTools", nil, "Deny tool rules (same format as --allowedTools)")
 
 	return cmd
 }
@@ -225,7 +229,17 @@ func run(cmd *cobra.Command, opts *options) error {
 		modelStr = providerModel
 	}
 	model := api.ResolveModel(modelStr)
-	permCtx := permission.Context{Mode: mode}
+
+	// Build allow/deny rules from config (.klaudia) + CLI flags.
+	allowRules, err := permission.ParseRules(append(append([]string{}, cfg.Permissions.Allow...), opts.allowedTools...))
+	if err != nil {
+		return fmt.Errorf("--allowedTools/permissions.allow: %w", err)
+	}
+	denyRules, err := permission.ParseRules(append(append([]string{}, cfg.Permissions.Deny...), opts.disallowedTools...))
+	if err != nil {
+		return fmt.Errorf("--disallowedTools/permissions.deny: %w", err)
+	}
+	permCtx := permission.Context{Mode: mode, Allow: allowRules, Deny: denyRules}
 	// Assemble the full system prompt (base instructions + env context +
 	// CLAUDE.md) once for this run.
 	sysPrompt := prompt.System(cwd, string(model))

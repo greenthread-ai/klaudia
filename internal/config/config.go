@@ -30,6 +30,15 @@ type Config struct {
 	APIKeyEnv string `json:"apiKeyEnv,omitempty"`
 	// Sandbox configures how the Bash tool executes commands.
 	Sandbox Sandbox `json:"sandbox,omitempty"`
+	// Permissions holds persisted allow/deny rules for this project.
+	Permissions Permissions `json:"permissions,omitempty"`
+}
+
+// Permissions persists allow/deny rule strings (e.g. "Bash(git status:*)",
+// "Edit") loaded into the permission context at startup.
+type Permissions struct {
+	Allow []string `json:"allow,omitempty"`
+	Deny  []string `json:"deny,omitempty"`
 }
 
 // Sandbox modes.
@@ -118,6 +127,9 @@ func merge(dst *Config, src Config) {
 	if src.Sandbox.Network != "" {
 		dst.Sandbox.Network = src.Sandbox.Network
 	}
+	// Permission rules accumulate (home rules + project rules).
+	dst.Permissions.Allow = append(dst.Permissions.Allow, src.Permissions.Allow...)
+	dst.Permissions.Deny = append(dst.Permissions.Deny, src.Permissions.Deny...)
 }
 
 // ResolveAPIKey returns the inline key, or the value of the named env var.

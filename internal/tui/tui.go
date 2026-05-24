@@ -80,6 +80,10 @@ type Model struct {
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
 	sess       *Session
+	// Session-scoped allow/deny rules added via "allow always" or /allow,/deny.
+	// Accessed only from the UI goroutine (Update) to avoid races.
+	sessionAllow []permission.Rule
+	sessionDeny  []permission.Rule
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
@@ -134,10 +138,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case permissionMsg:
+		// Auto-resolve against session rules before prompting.
+		if permission.MatchAny(m.sessionDeny, msg.req.ToolName, msg.req.Specifier) {
+			msg.reply <- permission.Decision{Behavior: permission.Deny, Message: "denied by session rule"}
+			return m, m.waitForEvent()
+		}
+		if permission.MatchAny(m.sessionAllow, msg.req.ToolName, msg.req.Specifier) {
+			msg.reply <- permission.Decision{Behavior: permission.Allow}
+			return m, m.waitForEvent()
+		}
 		m.state = stateAwaitingPermission
 		m.pending = msg.reply
 		m.pendingReq = msg.req
-		m.appendLine(askStyle.Render(fmt.Sprintf("Allow %s? (y)es / (n)o", msg.req.ToolName)))
+		label := msg.req.ToolName
+		if msg.req.Specifier != "" {
+			label += " (" + msg.req.Specifier + ")"
+		}
+		m.appendLine(askStyle.Render(fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", label)))
 		return m, m.waitForEvent()
 
 	case doneMsg:
@@ -172,6 +189,12 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch strings.ToLower(msg.String()) {
 		case "y":
 			m.answer(permission.Decision{Behavior: permission.Allow})
+		case "a":
+			// Remember this tool+specifier for the rest of the session.
+			rule := permission.Rule{Tool: m.pendingReq.ToolName, Specifier: m.pendingReq.Specifier}
+			m.sessionAllow = append(m.sessionAllow, rule)
+			m.appendLine(toolStyle.Render("  → always allow " + permission.FormatRule(rule) + " (this session)"))
+			m.answer(permission.Decision{Behavior: permission.Allow})
 		case "n":
 			m.answer(permission.Decision{Behavior: permission.Deny, Message: "denied by user"})
 		}
@@ -205,6 +228,8 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 const slashHelp = `Available commands:
   /help            Show this help
   /model [name]    Show or set the model (alias: haiku|sonnet|opus, or full ID)
+  /allow <rule>    Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)
+  /deny <rule>     Auto-deny a tool rule this session
   /status          Show the current session settings
   /clear           Clear the screen and conversation history
   /quit, /exit     Exit Klaudia`
@@ -235,6 +260,23 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		} else {
 			m.sess.Model = args[0]
 			m.appendLine(bannerStyle.Render("Model set to " + args[0] + " (applies to the next turn)."))
+		}
+	case "/allow", "/deny":
+		if len(args) == 0 {
+			m.appendLine(errStyle.Render("usage: " + cmd + " <rule>  e.g. " + cmd + " Bash(go test:*)"))
+			break
+		}
+		rule, err := permission.ParseRule(strings.Join(args, " "))
+		if err != nil {
+			m.appendLine(errStyle.Render("invalid rule: " + err.Error()))
+			break
+		}
+		if cmd == "/allow" {
+			m.sessionAllow = append(m.sessionAllow, rule)
+			m.appendLine(bannerStyle.Render("Will auto-allow " + permission.FormatRule(rule) + " this session."))
+		} else {
+			m.sessionDeny = append(m.sessionDeny, rule)
+			m.appendLine(bannerStyle.Render("Will auto-deny " + permission.FormatRule(rule) + " this session."))
 		}
 	case "/status":
 		mode := m.sess.PermissionMode
@@ -343,7 +385,7 @@ func (m *Model) View() string {
 	case stateRunning:
 		bottom = m.spin.View() + " working…"
 	case stateAwaitingPermission:
-		bottom = askStyle.Render(fmt.Sprintf("Allow %s? (y/n)", m.pendingReq.ToolName))
+		bottom = askStyle.Render(fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", m.pendingReq.ToolName))
 	default:
 		bottom = m.input.View()
 	}
