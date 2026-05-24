@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"os/user"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // Credential is the resolved auth used to talk to the Anthropic API.
@@ -61,27 +63,67 @@ type keychainPayload struct {
 // oauthTokenFromKeychain reads the Claude Code OAuth access token from the
 // macOS Keychain via `security find-generic-password`, matching the JS
 // keychain provider (05-app-core.js:99000). Returns ("", false) on any
-// non-darwin platform or when no entry exists.
-//
-// TODO(phase3): handle token refresh when ExpiresAt is in the past.
+// non-darwin platform or when no entry exists. When the token is expired and a
+// refresh token is present, it refreshes and writes the new token back.
 func oauthTokenFromKeychain() (string, bool) {
 	if runtime.GOOS != "darwin" {
 		return "", false
 	}
-	account := keychainAccount()
 	out, err := exec.Command("security", "find-generic-password",
-		"-a", account, "-w", "-s", keychainService).Output()
+		"-a", keychainAccount(), "-w", "-s", keychainService).Output()
 	if err != nil {
 		return "", false
 	}
+	raw := []byte(strings.TrimSpace(string(out)))
 	var p keychainPayload
-	if err := json.Unmarshal([]byte(strings.TrimSpace(string(out))), &p); err != nil {
+	if err := json.Unmarshal(raw, &p); err != nil {
 		return "", false
 	}
 	if p.ClaudeAIOAuth.AccessToken == "" {
 		return "", false
 	}
+
+	// Refresh if expired (60s skew) and we have a refresh token. Best effort:
+	// on any failure, fall back to the existing (possibly stale) token and let
+	// the API surface a clear auth error.
+	expired := p.ClaudeAIOAuth.ExpiresAt > 0 && time.Now().UnixMilli() > p.ClaudeAIOAuth.ExpiresAt-60_000
+	if expired && p.ClaudeAIOAuth.RefreshToken != "" {
+		if t, rerr := refreshOAuth(context.Background(), p.ClaudeAIOAuth.RefreshToken); rerr == nil {
+			_ = writeKeychainOAuth(raw, t) // preserve unknown fields; ignore write error
+			return t.AccessToken, true
+		}
+	}
 	return p.ClaudeAIOAuth.AccessToken, true
+}
+
+// writeKeychainOAuth updates the claudeAiOauth access/refresh/expiry fields in
+// the stored JSON (preserving every other field) and writes it back to the
+// Keychain via `security add-generic-password -U`.
+func writeKeychainOAuth(rawCurrent []byte, t refreshedTokens) error {
+	updated, err := mergeOAuthPayload(rawCurrent, t)
+	if err != nil {
+		return err
+	}
+	return exec.Command("security", "add-generic-password", "-U",
+		"-a", keychainAccount(), "-s", keychainService, "-w", string(updated)).Run()
+}
+
+// mergeOAuthPayload updates only the claudeAiOauth access/refresh/expiry fields
+// in the stored JSON, preserving every other field, and returns the new JSON.
+func mergeOAuthPayload(rawCurrent []byte, t refreshedTokens) ([]byte, error) {
+	var m map[string]any
+	if err := json.Unmarshal(rawCurrent, &m); err != nil {
+		return nil, err
+	}
+	oauth, ok := m["claudeAiOauth"].(map[string]any)
+	if !ok {
+		oauth = map[string]any{}
+	}
+	oauth["accessToken"] = t.AccessToken
+	oauth["refreshToken"] = t.RefreshToken
+	oauth["expiresAt"] = t.ExpiresAt
+	m["claudeAiOauth"] = oauth
+	return json.Marshal(m)
 }
 
 // keychainAccount mirrors lW6() (05-app-core.js:98961): the keychain account is
