@@ -21,24 +21,32 @@ const bashMaxOutput = 30000
 
 // BashInput is the Bash tool's input.
 type BashInput struct {
-	Command     string `json:"command" jsonschema:"description=The shell command to execute"`
-	Description string `json:"description,omitempty" jsonschema:"description=A short description of what the command does"`
-	Timeout     int    `json:"timeout,omitempty" jsonschema:"description=Timeout in milliseconds (default 120000)"`
+	Command         string `json:"command" jsonschema:"description=The shell command to execute"`
+	Description     string `json:"description,omitempty" jsonschema:"description=A short description of what the command does"`
+	Timeout         int    `json:"timeout,omitempty" jsonschema:"description=Timeout in milliseconds (default 120000)"`
+	RunInBackground bool   `json:"run_in_background,omitempty" jsonschema:"description=Run detached and return a shell id immediately; read its output with BashOutput and stop it with KillShell"`
 }
 
-// Bash executes shell commands via a sandbox.Executor.
+// Bash executes shell commands via a sandbox.Executor. When run_in_background is
+// set, it launches a detached shell tracked by the (optional) ShellStore.
 type Bash struct {
 	schema   *schema.Schema
 	executor sandbox.Executor
+	shells   *ShellStore
 }
 
-// NewBash constructs the Bash tool with the given executor.
-func NewBash(executor sandbox.Executor) (*Bash, error) {
+// NewBash constructs the Bash tool with the given executor. The optional
+// ShellStore backs run_in_background (omit it to disable background shells).
+func NewBash(executor sandbox.Executor, shells ...*ShellStore) (*Bash, error) {
 	s, err := schema.For[BashInput]()
 	if err != nil {
 		return nil, fmt.Errorf("bash: build schema: %w", err)
 	}
-	return &Bash{schema: s, executor: executor}, nil
+	b := &Bash{schema: s, executor: executor}
+	if len(shells) > 0 {
+		b.shells = shells[0]
+	}
+	return b, nil
 }
 
 func (b *Bash) Name() string { return "Bash" }
@@ -88,6 +96,18 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 	var in BashInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
+	}
+
+	// Background: launch detached, return a shell id immediately.
+	if in.RunInBackground {
+		if b.shells == nil {
+			return []Result{{Content: "background execution is not available", IsError: true}}, nil
+		}
+		id, err := b.shells.Start(b.executor, sandbox.Request{Command: in.Command, WorkingDir: tctx.WorkingDir})
+		if err != nil {
+			return []Result{{Content: fmt.Sprintf("Failed to start background command: %v", err), IsError: true}}, nil
+		}
+		return []Result{{Content: fmt.Sprintf("Started background shell %s. Read its output with BashOutput(bash_id=%q) and stop it with KillShell(shell_id=%q).", id, id, id)}}, nil
 	}
 
 	timeout := bashDefaultTimeout

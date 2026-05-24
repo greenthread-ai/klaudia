@@ -19,8 +19,13 @@ func NewSeatbelt(writeRoots []string, network string) *Seatbelt {
 
 func (s *Seatbelt) Name() string { return "sandbox-exec" }
 
+func (s *Seatbelt) Argv(req Request) (string, []string) {
+	return "sandbox-exec", []string{"-p", s.profile(req), shellPath, "-c", req.Command}
+}
+
 func (s *Seatbelt) Run(ctx context.Context, req Request) (Response, error) {
-	return runArgv(ctx, req, "sandbox-exec", []string{"-p", s.profile(req), shellPath, "-c", req.Command})
+	name, args := s.Argv(req)
+	return runArgv(ctx, req, name, args)
 }
 
 func (s *Seatbelt) profile(req Request) string {

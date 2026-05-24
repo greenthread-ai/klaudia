@@ -520,7 +520,14 @@ func run(cmd *cobra.Command, opts *options) error {
 	// nothing until a web tool actually runs).
 	browserEngine := browser.NewEngine(ctx, buildBrowserOptions(cfg.Browser))
 	defer browserEngine.Close()
-	base, err := tools.DefaultRegistry(executor, browserEngine)
+	// Background shells (Bash run_in_background) are session-scoped and tied to
+	// the run context; KillAll terminates any still running at session end.
+	shellStore := tools.NewShellStore(ctx)
+	defer shellStore.KillAll()
+	base, err := tools.DefaultRegistry(executor,
+		tools.WithBrowserEngine(browserEngine),
+		tools.WithShellStore(shellStore),
+	)
 	if err != nil {
 		return err
 	}

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 )
 
@@ -41,6 +42,10 @@ type Executor interface {
 	// at all (vs. the command running and exiting non-zero, which is reported
 	// via Response.ExitCode).
 	Run(ctx context.Context, req Request) (Response, error)
+	// Argv returns the program and arguments this executor would run for req
+	// (e.g. the bare shell locally, or the sandbox-exec/bwrap/docker wrapper).
+	// It is the single source of truth shared by Run and StartBackground.
+	Argv(req Request) (name string, args []string)
 }
 
 // shellPath is the shell used to interpret command lines. bash if available,
@@ -63,8 +68,13 @@ func NewLocal() *Local { return &Local{} }
 
 func (l *Local) Name() string { return "local" }
 
+func (l *Local) Argv(req Request) (string, []string) {
+	return shellPath, []string{"-c", req.Command}
+}
+
 func (l *Local) Run(ctx context.Context, req Request) (Response, error) {
-	return runArgv(ctx, req, shellPath, []string{"-c", req.Command})
+	name, args := l.Argv(req)
+	return runArgv(ctx, req, name, args)
 }
 
 func runArgv(ctx context.Context, req Request, name string, args []string) (Response, error) {
@@ -107,4 +117,93 @@ func runArgv(ctx context.Context, req Request, name string, args []string) (Resp
 		return resp, err
 	}
 	return resp, nil
+}
+
+// BackgroundProcess is a detached command whose combined stdout+stderr is
+// buffered and can be read incrementally while it runs. Safe for concurrent use.
+type BackgroundProcess struct {
+	mu       sync.Mutex
+	buf      []byte
+	done     bool
+	exitCode int
+	runErr   error
+	cancel   context.CancelFunc
+}
+
+// Write appends process output to the buffer (cmd.Stdout/Stderr both target it,
+// so output is combined in arrival order).
+func (p *BackgroundProcess) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.buf = append(p.buf, b...)
+	return len(b), nil
+}
+
+// Read returns buffered output from offset onward, the new offset, whether the
+// process has exited, and (once exited) its exit code.
+func (p *BackgroundProcess) Read(offset int) (data string, newOffset int, done bool, exitCode int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if offset < 0 || offset > len(p.buf) {
+		offset = len(p.buf)
+	}
+	return string(p.buf[offset:]), len(p.buf), p.done, p.exitCode
+}
+
+// Running reports whether the process is still executing.
+func (p *BackgroundProcess) Running() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return !p.done
+}
+
+// Kill terminates the process (no-op if already exited).
+func (p *BackgroundProcess) Kill() {
+	if p.cancel != nil {
+		p.cancel()
+	}
+}
+
+func (p *BackgroundProcess) finish(err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.done = true
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			p.exitCode = exitErr.ExitCode()
+		} else {
+			p.exitCode = -1
+			p.runErr = err
+		}
+	}
+}
+
+// StartBackground launches req detached using e's argv, streaming combined
+// output into the returned process. The process is killed if parent is
+// cancelled or BackgroundProcess.Kill is called. A non-nil error means the
+// command could not be started.
+func StartBackground(parent context.Context, e Executor, req Request) (*BackgroundProcess, error) {
+	ctx, cancel := context.WithCancel(parent)
+	name, args := e.Argv(req)
+	cmd := exec.CommandContext(ctx, name, args...)
+	if req.WorkingDir != "" {
+		cmd.Dir = req.WorkingDir
+	}
+	if len(req.Env) > 0 {
+		cmd.Env = append(os.Environ(), req.Env...)
+	}
+	p := &BackgroundProcess{cancel: cancel}
+	cmd.Stdout = p
+	cmd.Stderr = p // same writer ⇒ exec serializes both streams into one pipe
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return nil, err
+	}
+	go func() {
+		err := cmd.Wait()
+		p.finish(err)
+		cancel()
+	}()
+	return p, nil
 }

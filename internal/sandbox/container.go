@@ -63,6 +63,10 @@ func (c *Container) buildArgs(req Request) []string {
 	return args
 }
 
+func (c *Container) Argv(req Request) (string, []string) {
+	return c.Runtime, c.buildArgs(req)
+}
+
 // Run executes the command inside a fresh container.
 func (c *Container) Run(ctx context.Context, req Request) (Response, error) {
 	if c.Image == "" {

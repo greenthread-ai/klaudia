@@ -11,7 +11,7 @@ func TestDefaultRegistryLoadsAllTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DefaultRegistry: %v", err)
 	}
-	want := []string{"Read", "Write", "Edit", "Glob", "Grep", "Bash", "TodoWrite", "TaskCreate", "TaskList", "TaskGet", "TaskUpdate", "NotebookEdit", "AskUserQuestion", "ExitPlanMode", "WebSearch", "WebFetch", "BrowserNavigate", "BrowserSnapshot"}
+	want := []string{"Read", "Write", "Edit", "Glob", "Grep", "Bash", "BashOutput", "KillShell", "TodoWrite", "TaskCreate", "TaskList", "TaskGet", "TaskUpdate", "NotebookEdit", "AskUserQuestion", "ExitPlanMode", "WebSearch", "WebFetch", "BrowserNavigate", "BrowserSnapshot"}
 	for _, name := range want {
 		tool, ok := reg.Lookup(name)
 		if !ok {

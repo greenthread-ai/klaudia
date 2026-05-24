@@ -35,7 +35,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Glob | 05-app-core | `tools/glob.go` | ✅ done | |
 | Grep | 05-app-core | `tools/grep.go` + `native/search` | ✅ done | ripgrep-style; pure-Go backend. |
 | Bash | 05-app-core | `tools/bash.go` + `sandbox/` | ✅ done | local / os-confined / container executors. |
-| BashOutput / KillShell (background shells) | 05-app-core | — | 🔜 planned | No background-shell tool yet; Bash runs to completion. |
+| Bash run_in_background + BashOutput / KillShell | 05-app-core | `tools/bash.go`, `tools/shells.go` + `sandbox` | ✅ done | Bash `run_in_background` returns a shell id; BashOutput reads new output incrementally (optional regex filter); KillShell stops it. Session-scoped store; all shells killed at session end. Works across all executors via `Executor.Argv`. |
 | TodoWrite | 05-app-core | `tools/todowrite.go` | ✅ done | |
 | Task tools (Create/List/Get/Update) | 07-app-features | `tools/task*.go` + `tasks/` | ✅ done | |
 | NotebookEdit | 05-app-core | `tools/notebookedit.go` | ✅ done | |

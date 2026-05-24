@@ -14,8 +14,13 @@ func NewBwrap(writeRoots []string, network string) *Bwrap {
 
 func (b *Bwrap) Name() string { return "bwrap" }
 
+func (b *Bwrap) Argv(req Request) (string, []string) {
+	return "bwrap", b.buildArgs(req)
+}
+
 func (b *Bwrap) Run(ctx context.Context, req Request) (Response, error) {
-	return runArgv(ctx, req, "bwrap", b.buildArgs(req))
+	name, args := b.Argv(req)
+	return runArgv(ctx, req, name, args)
 }
 
 func (b *Bwrap) buildArgs(req Request) []string {

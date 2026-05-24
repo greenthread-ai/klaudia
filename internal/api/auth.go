@@ -48,7 +48,22 @@ func ResolveCredential() (Credential, error) {
 	if tok, ok := oauthTokenFromKeychain(); ok {
 		return Credential{AuthToken: tok}, nil
 	}
-	return Credential{}, fmt.Errorf("no credentials: set ANTHROPIC_API_KEY or sign in with Claude Code (OAuth session in the macOS Keychain)")
+	return Credential{}, fmt.Errorf(`Klaudia needs credentials before it can start.
+
+Choose one:
+  1. Anthropic API key:
+     export ANTHROPIC_API_KEY="sk-ant-..."
+     klaudia
+
+  2. Existing Claude Code login on macOS:
+     claude
+     # sign in there, then run klaudia again
+
+  3. OpenAI-compatible provider:
+     create .klaudia/config.json with provider/baseURL/model/apiKeyEnv,
+     export that API key env var, then run klaudia again.
+
+Tip: after setup, run /doctor inside Klaudia to verify auth and environment status.`)
 }
 
 // keychainPayload is the JSON shape stored in the Keychain entry.

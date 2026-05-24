@@ -6,6 +6,53 @@ original JavaScript reference has been retired (preserved on the `js-reference`
 branch). See [PRD.md](PRD.md) for background and [docs/parity.md](docs/parity.md)
 for the feature map.
 
+## Getting started
+
+```bash
+CGO_ENABLED=0 go build -o klaudia ./cmd/klaudia
+```
+
+Before first run, configure credentials using one of these paths:
+
+**Anthropic API key**
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+./klaudia
+```
+
+**Existing Claude Code login on macOS**
+
+Klaudia can reuse an existing Claude Code OAuth session from the macOS Keychain.
+Sign in with Claude Code first, then run Klaudia:
+
+```bash
+claude
+./klaudia
+```
+
+**OpenAI-compatible provider**
+
+Create `.klaudia/config.json`:
+
+```jsonc
+{
+  "provider": "openai",
+  "model": "openai/gpt-5.5",
+  "baseURL": "https://api.example.com/v1",
+  "apiKeyEnv": "MY_API_KEY"
+}
+```
+
+Then:
+
+```bash
+export MY_API_KEY="..."
+./klaudia
+```
+
+Once the TUI starts, type `/doctor` to verify auth and environment status.
+
 ## Build
 
 Pure Go, no CGO, no system libraries:
@@ -28,6 +75,11 @@ The result is one self-contained binary (Linux + macOS).
 A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
 type-ahead, `@path` file completion (Tab), input history (↑/↓), scrollback
 (PgUp/PgDn), and `Esc` to interrupt a turn. Type `/help` for the full list.
+
+Long-running commands can run detached: `Bash` with `run_in_background` returns a
+shell id, then `BashOutput` reads new output incrementally and `KillShell` stops
+it — so the agent can launch a dev server or watcher and keep working. Background
+shells are terminated when the session ends.
 
 ### Headless (one-shot)
 

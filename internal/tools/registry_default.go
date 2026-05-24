@@ -9,17 +9,36 @@ import (
 	"github.com/greenthread/klaudia/internal/tasks"
 )
 
+// regOptions holds the caller-owned, session-scoped resources the registry's
+// tools share. The caller is responsible for their lifecycle (Close/KillAll).
+type regOptions struct {
+	browser *browser.Engine
+	shells  *ShellStore
+}
+
+// RegOption configures DefaultRegistry.
+type RegOption func(*regOptions)
+
+// WithBrowserEngine supplies the lazy browser engine backing the web tools. The
+// caller Close()s it at session end so any launched Chrome is terminated.
+func WithBrowserEngine(e *browser.Engine) RegOption { return func(o *regOptions) { o.browser = e } }
+
+// WithShellStore supplies the background-shell store backing run_in_background +
+// BashOutput/KillShell. The caller KillAll()s it at session end.
+func WithShellStore(s *ShellStore) RegOption { return func(o *regOptions) { o.shells = s } }
+
 // DefaultRegistry builds the registry of all implemented local tools, with the
 // Bash tool wired to the given executor (local host, or a container sandbox).
-// New tools are added here as they are ported.
-//
-// browserEngine is the (caller-owned) lazy browser engine backing the web
-// tools; the caller is responsible for Close()ing it at session end so Chrome
-// is reliably terminated. When omitted (e.g. tests), a lazy default engine is
-// built — it launches no process unless a web tool actually runs.
-func DefaultRegistry(executor sandbox.Executor, browserEngine ...*browser.Engine) (*Registry, error) {
+// New tools are added here as they are ported. Pass WithBrowserEngine /
+// WithShellStore to share caller-owned, session-scoped resources; sensible
+// defaults are built when omitted (e.g. in tests) and launch nothing until used.
+func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, error) {
 	if executor == nil {
 		executor = sandbox.NewLocal()
+	}
+	var cfg regOptions
+	for _, o := range opts {
+		o(&cfg)
 	}
 	// Per-session todo state shared with the TodoWrite tool.
 	todos := &TodoStore{}
@@ -28,11 +47,14 @@ func DefaultRegistry(executor sandbox.Executor, browserEngine ...*browser.Engine
 
 	// Shared lazy browser engine for local web tools. Chrome launches only when a
 	// browser-backed tool call needs it.
-	var engine *browser.Engine
-	if len(browserEngine) > 0 && browserEngine[0] != nil {
-		engine = browserEngine[0]
-	} else {
+	engine := cfg.browser
+	if engine == nil {
 		engine = browser.DefaultEngine(context.Background())
+	}
+	// Background-shell store for run_in_background / BashOutput / KillShell.
+	shells := cfg.shells
+	if shells == nil {
+		shells = NewShellStore(context.Background())
 	}
 
 	type ctor struct {
@@ -45,7 +67,9 @@ func DefaultRegistry(executor sandbox.Executor, browserEngine ...*browser.Engine
 		{"Edit", func() (Tool, error) { return NewEdit() }},
 		{"Glob", func() (Tool, error) { return NewGlob() }},
 		{"Grep", func() (Tool, error) { return NewGrep() }},
-		{"Bash", func() (Tool, error) { return NewBash(executor) }},
+		{"Bash", func() (Tool, error) { return NewBash(executor, shells) }},
+		{"BashOutput", func() (Tool, error) { return NewBashOutput(shells) }},
+		{"KillShell", func() (Tool, error) { return NewKillShell(shells) }},
 		{"TodoWrite", func() (Tool, error) { return NewTodoWrite(todos) }},
 		{"TaskCreate", func() (Tool, error) { return NewTaskCreate(taskStore) }},
 		{"TaskList", func() (Tool, error) { return NewTaskList(taskStore) }},
