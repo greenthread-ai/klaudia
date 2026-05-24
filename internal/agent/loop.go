@@ -85,13 +85,13 @@ type Result struct {
 
 // Loop drives the agentic loop against an API client and a tool registry.
 type Loop struct {
-	client *api.Client
-	tools  *tools.Registry
+	provider api.Provider
+	tools    *tools.Registry
 }
 
-// New builds a Loop.
-func New(client *api.Client, registry *tools.Registry) *Loop {
-	return &Loop{client: client, tools: registry}
+// New builds a Loop over a model provider (Anthropic, OpenAI-compatible, …).
+func New(provider api.Provider, registry *tools.Registry) *Loop {
+	return &Loop{provider: provider, tools: registry}
 }
 
 // Run executes the loop until the model stops calling tools or MaxTurns is hit.
@@ -237,30 +237,18 @@ func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessage
 	return compaction.ReplaceWithSummary(summary), true
 }
 
-// streamTurn issues one streaming request and accumulates the full assistant
-// message, emitting assistant-text events as deltas arrive.
+// streamTurn issues one streaming request via the provider, emitting
+// assistant-text events as deltas arrive, and returns the assembled message.
 func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, emit Emitter) (anthropic.BetaMessage, string, error) {
-	stream := l.client.Stream(ctx, params)
-
-	var acc anthropic.BetaMessage
-	var text string
-	for stream.Next() {
-		ev := stream.Current()
-		if err := acc.Accumulate(ev); err != nil {
-			return acc, "", fmt.Errorf("accumulate stream event: %w", err)
+	assistant, err := l.provider.StreamTurn(ctx, params, func(delta string) {
+		if emit != nil {
+			emit(Event{Type: "assistant", Text: delta})
 		}
-		// Surface incremental text to the emitter.
-		if d := ev.AsContentBlockDelta(); d.Delta.Text != "" {
-			text += d.Delta.Text
-			if emit != nil {
-				emit(Event{Type: "assistant", Text: d.Delta.Text})
-			}
-		}
+	})
+	if err != nil {
+		return assistant, "", fmt.Errorf("stream: %w", err)
 	}
-	if err := stream.Err(); err != nil {
-		return acc, "", fmt.Errorf("stream: %w", err)
-	}
-	return acc, finalAssistantText(acc), nil
+	return assistant, finalAssistantText(assistant), nil
 }
 
 // dispatch runs one tool_use: lookup → permission → validate → execute, and

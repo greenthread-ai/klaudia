@@ -7,14 +7,12 @@
 package api
 
 import (
-	"context"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 )
 
 // DefaultBetas is the Claude Code default beta set (Cn1 in 03-providers.js).
@@ -97,12 +95,3 @@ func New(cred Credential, baseURL string) *Client {
 
 // IsOAuth reports whether this client authenticates via OAuth bearer token.
 func (c *Client) IsOAuth() bool { return c.cred.IsOAuth() }
-
-// Stream issues a streaming Beta Messages request, injecting the default betas
-// unless the caller already set some.
-func (c *Client) Stream(ctx context.Context, params anthropic.BetaMessageNewParams) *ssestream.Stream[anthropic.BetaRawMessageStreamEventUnion] {
-	if len(params.Betas) == 0 {
-		params.Betas = DefaultBetas
-	}
-	return c.sdk.Beta.Messages.NewStreaming(ctx, params)
-}

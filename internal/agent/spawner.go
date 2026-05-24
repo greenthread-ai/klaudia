@@ -15,7 +15,7 @@ import (
 // Spawner runs sub-agents. It implements tools.Spawner so the Agent tool can
 // launch a child loop with a filtered toolset and the type's system prompt.
 type Spawner struct {
-	client     *api.Client
+	provider   api.Provider
 	base       *tools.Registry
 	model      anthropic.Model
 	permission permission.Context
@@ -27,8 +27,8 @@ type Spawner struct {
 // (typically the local tools without the Agent tool itself, to bound recursion).
 // approver resolves permission asks for sub-agents (inherited from the parent
 // frontend); nil falls back to DenyAll.
-func NewSpawner(client *api.Client, base *tools.Registry, model anthropic.Model, perm permission.Context, approver Approver, maxTurns int) *Spawner {
-	return &Spawner{client: client, base: base, model: model, permission: perm, approver: approver, maxTurns: maxTurns}
+func NewSpawner(provider api.Provider, base *tools.Registry, model anthropic.Model, perm permission.Context, approver Approver, maxTurns int) *Spawner {
+	return &Spawner{provider: provider, base: base, model: model, permission: perm, approver: approver, maxTurns: maxTurns}
 }
 
 // Spawn runs a sub-agent of the named type to completion and returns its final
@@ -38,7 +38,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string) (strin
 	if !ok {
 		return "", fmt.Errorf("unknown subagent_type %q", subagentType)
 	}
-	loop := New(s.client, t.Filter(s.base))
+	loop := New(s.provider, t.Filter(s.base))
 	res, err := loop.Run(ctx, Options{
 		Prompt:        prompt,
 		Model:         s.model,

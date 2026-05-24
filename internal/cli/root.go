@@ -14,6 +14,7 @@ import (
 
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
+	"github.com/greenthread/klaudia/internal/config"
 	"github.com/greenthread/klaudia/internal/mcp"
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/prompt"
@@ -27,8 +28,8 @@ import (
 
 // withAgentTool returns a registry that is the base tools plus the Agent tool,
 // wired to a sub-agent spawner that draws from the base tools.
-func withAgentTool(base *tools.Registry, client *api.Client, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int) (*tools.Registry, error) {
-	spawner := agent.NewSpawner(client, base, model, perm, approver, maxTurns)
+func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int) (*tools.Registry, error) {
+	spawner := agent.NewSpawner(provider, base, model, perm, approver, maxTurns)
 
 	infos := make([]tools.AgentTypeInfo, 0)
 	for _, t := range subagent.Builtin() {
@@ -39,6 +40,29 @@ func withAgentTool(base *tools.Registry, client *api.Client, model anthropic.Mod
 		return nil, err
 	}
 	return tools.NewRegistry(append(base.All(), agentTool)...), nil
+}
+
+// buildProvider selects and constructs the model provider from config. It
+// returns the provider and the provider's default model. Anthropic is the
+// default; "openai" uses an OpenAI-compatible Chat Completions endpoint.
+func buildProvider(cfg config.Config) (api.Provider, string, error) {
+	switch cfg.Provider {
+	case config.ProviderOpenAI:
+		if cfg.BaseURL == "" {
+			return nil, "", fmt.Errorf(".klaudia/config.json: provider \"openai\" requires baseURL")
+		}
+		key := cfg.ResolveAPIKey()
+		if key == "" {
+			return nil, "", fmt.Errorf(".klaudia/config.json: provider \"openai\" needs apiKey or apiKeyEnv")
+		}
+		return api.NewOpenAIProvider(cfg.BaseURL, key), cfg.Model, nil
+	default:
+		cred, err := api.ResolveCredential()
+		if err != nil {
+			return nil, "", err
+		}
+		return api.New(cred, os.Getenv("KLAUDIA_CUSTOM_ENDPOINT")), cfg.Model, nil
+	}
 }
 
 // gitBranch returns the current git branch for dir, or "" if not a repo.
@@ -157,12 +181,12 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 	}
 
-	// Resolve auth and build the API client.
-	cred, err := api.ResolveCredential()
+	// Select the model provider (.klaudia/config.json: anthropic | openai).
+	cfg := config.Load(cwd)
+	provider, providerModel, err := buildProvider(cfg)
 	if err != nil {
 		return err
 	}
-	client := api.New(cred, os.Getenv("KLAUDIA_CUSTOM_ENDPOINT"))
 
 	// Resolve the permission mode (--dangerously-skip-permissions wins).
 	mode := permission.Mode(opts.permissionMode)
@@ -172,7 +196,12 @@ func run(cmd *cobra.Command, opts *options) error {
 	if !mode.Valid() {
 		return fmt.Errorf("invalid permission mode %q", opts.permissionMode)
 	}
-	model := api.ResolveModel(opts.model)
+	// --model overrides the config/provider default.
+	modelStr := opts.model
+	if modelStr == "" {
+		modelStr = providerModel
+	}
+	model := api.ResolveModel(modelStr)
 	permCtx := permission.Context{Mode: mode}
 	// Assemble the full system prompt (base instructions + env context +
 	// CLAUDE.md) once for this run.
@@ -202,7 +231,7 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Headless has no interactive approver, so permission "ask" denies.
 	approver := agent.DenyAll
-	registry, err := withAgentTool(base, client, model, permCtx, approver, opts.maxTurns)
+	registry, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns)
 	if err != nil {
 		return err
 	}
@@ -221,7 +250,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		recorder = tr
 	}
 
-	loop := agent.New(client, registry)
+	loop := agent.New(provider, registry)
 
 	// Interactive TUI: the default when not headless and not stream-json input.
 	// It drives the same loop, prompting the user to resolve permission asks.
