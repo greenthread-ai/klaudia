@@ -23,8 +23,8 @@ import (
 
 // withAgentTool returns a registry that is the base tools plus the Agent tool,
 // wired to a sub-agent spawner that draws from the base tools.
-func withAgentTool(base *tools.Registry, client *api.Client, model anthropic.Model, perm permission.Context, maxTurns int) (*tools.Registry, error) {
-	spawner := agent.NewSpawner(client, base, model, perm, maxTurns)
+func withAgentTool(base *tools.Registry, client *api.Client, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int) (*tools.Registry, error) {
+	spawner := agent.NewSpawner(client, base, model, perm, approver, maxTurns)
 
 	infos := make([]tools.AgentTypeInfo, 0)
 	for _, t := range subagent.Builtin() {
@@ -197,7 +197,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	base = tools.NewRegistry(baseTools...)
 
-	registry, err := withAgentTool(base, client, model, permCtx, opts.maxTurns)
+	// Headless has no interactive approver, so permission "ask" denies.
+	approver := agent.DenyAll
+	registry, err := withAgentTool(base, client, model, permCtx, approver, opts.maxTurns)
 	if err != nil {
 		return err
 	}
@@ -225,7 +227,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		System:          defaultSystemPrompt,
 		MaxTurns:        opts.maxTurns,
 		Permission:      permCtx,
-		Interactive:     false, // headless mode
+		Approver:        approver,
 		InitialMessages: initialMessages,
 		Recorder:        recorder,
 		WebTools:        true,

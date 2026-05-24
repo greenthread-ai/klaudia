@@ -53,9 +53,9 @@ type Options struct {
 	MaxTurns   int   // 0 = unlimited
 	MaxTokens  int64 // 0 = defaultMaxTokens
 	Permission permission.Context
-	// Interactive is true when there is a TTY to prompt on. When false
-	// (headless), an "ask" decision is treated as a denial.
-	Interactive bool
+	// Approver resolves permission "ask" decisions. Supplied by the frontend
+	// (headless/TUI/editor/SDK). If nil, DenyAll is used.
+	Approver Approver
 	// InitialMessages seeds the conversation when resuming a session. The new
 	// Prompt (if any) is appended after them.
 	InitialMessages []anthropic.BetaMessageParam
@@ -286,17 +286,25 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		}
 		return errResult(msg)
 	case permission.Ask:
-		if !opts.Interactive {
-			// Headless: no TTY to prompt on, so "ask" becomes a denial. The
-			// model adapts and reports without modifying anything.
-			msg := decision.Message
+		// Delegate the decision to the frontend's Approver.
+		approver := opts.Approver
+		if approver == nil {
+			approver = DenyAll
+		}
+		ad := approver.Approve(ctx, ApprovalRequest{
+			ToolName:   tu.Name,
+			ToolUseID:  tu.ID,
+			Input:      raw,
+			Specifier:  req.Specifier,
+			Suggestion: decision.Message,
+		})
+		if ad.Behavior != permission.Allow {
+			msg := ad.Message
 			if msg == "" {
-				msg = fmt.Sprintf("Tool %s requires approval, but no interactive prompt is available (headless mode).", tu.Name)
+				msg = fmt.Sprintf("Permission denied for tool %s", tu.Name)
 			}
 			return errResult(msg)
 		}
-		// TODO(phase5): prompt the user via the TUI and honor the response.
-		return errResult(fmt.Sprintf("Interactive approval for %s is not implemented yet.", tu.Name))
 	}
 
 	if err := tool.ValidateInput(raw); err != nil {
