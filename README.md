@@ -1,6 +1,6 @@
 # Klaudia
 
-A locally-buildable, extensible fork of Claude Code, extracted from the v2.1.66 npm package. See [PRD.md](PRD.md) for the full roadmap.
+A locally-buildable, extensible cleanroom of Claude Code, extracted from the v2.1.66 npm package. See [PRD.md](PRD.md) for the full roadmap.
 
 ## Prerequisites
 

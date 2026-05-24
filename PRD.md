@@ -8,7 +8,6 @@ Klaudia is a locally-buildable, extensible agentic coding tool forked from the C
 
 Claude Code is distributed as a single minified JavaScript bundle (`cli.js`, ~600K lines prettified, 11MB). It's built with esbuild, uses React + Ink for terminal UI, and bundles all dependencies inline. There is no public source repo.
 
-We have extracted and prettified the v2.1.66 npm package into `npm-package/`.
 
 ### Go Tools Progress
 
