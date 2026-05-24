@@ -515,7 +515,12 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Build the tool registry. Sub-agents draw from the base tools (incl. any
 	// MCP tools); the top-level registry adds the Agent tool.
 	executor := buildExecutor(cfg.Sandbox, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
-	base, err := tools.DefaultRegistry(executor, buildBrowserOptions(cfg.Browser))
+	// Lazy browser engine for the web tools, tied to the run context and closed
+	// at session end so any launched Chrome is reliably terminated (it launches
+	// nothing until a web tool actually runs).
+	browserEngine := browser.NewEngine(ctx, buildBrowserOptions(cfg.Browser))
+	defer browserEngine.Close()
+	base, err := tools.DefaultRegistry(executor, browserEngine)
 	if err != nil {
 		return err
 	}

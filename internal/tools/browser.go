@@ -73,7 +73,7 @@ func (b *BrowserNavigate) PermissionRequest(raw json.RawMessage) permission.Perm
 }
 
 func (b *BrowserNavigate) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
-	return allowAlways(pctx)
+	return networkClassDecision(pctx)
 }
 
 func (b *BrowserNavigate) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
@@ -110,7 +110,7 @@ func (b *BrowserSnapshot) PermissionRequest(json.RawMessage) permission.Permissi
 }
 
 func (b *BrowserSnapshot) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
-	return allowAlways(pctx)
+	return networkClassDecision(pctx)
 }
 
 func (b *BrowserSnapshot) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {

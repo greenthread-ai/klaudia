@@ -12,7 +12,12 @@ import (
 // DefaultRegistry builds the registry of all implemented local tools, with the
 // Bash tool wired to the given executor (local host, or a container sandbox).
 // New tools are added here as they are ported.
-func DefaultRegistry(executor sandbox.Executor, browserOpts ...browser.Options) (*Registry, error) {
+//
+// browserEngine is the (caller-owned) lazy browser engine backing the web
+// tools; the caller is responsible for Close()ing it at session end so Chrome
+// is reliably terminated. When omitted (e.g. tests), a lazy default engine is
+// built — it launches no process unless a web tool actually runs.
+func DefaultRegistry(executor sandbox.Executor, browserEngine ...*browser.Engine) (*Registry, error) {
 	if executor == nil {
 		executor = sandbox.NewLocal()
 	}
@@ -23,9 +28,11 @@ func DefaultRegistry(executor sandbox.Executor, browserOpts ...browser.Options) 
 
 	// Shared lazy browser engine for local web tools. Chrome launches only when a
 	// browser-backed tool call needs it.
-	browserEngine := browser.DefaultEngine(context.Background())
-	if len(browserOpts) > 0 {
-		browserEngine = browser.NewEngine(context.Background(), browserOpts[0])
+	var engine *browser.Engine
+	if len(browserEngine) > 0 && browserEngine[0] != nil {
+		engine = browserEngine[0]
+	} else {
+		engine = browser.DefaultEngine(context.Background())
 	}
 
 	type ctor struct {
@@ -47,10 +54,10 @@ func DefaultRegistry(executor sandbox.Executor, browserOpts ...browser.Options) 
 		{"NotebookEdit", func() (Tool, error) { return NewNotebookEdit() }},
 		{"AskUserQuestion", func() (Tool, error) { return NewAskUserQuestion() }},
 		{"ExitPlanMode", func() (Tool, error) { return NewExitPlanMode() }},
-		{"WebSearch", func() (Tool, error) { return NewWebSearch(browserEngine) }},
-		{"WebFetch", func() (Tool, error) { return NewWebFetch(browserEngine) }},
-		{"BrowserNavigate", func() (Tool, error) { return NewBrowserNavigate(browserEngine) }},
-		{"BrowserSnapshot", func() (Tool, error) { return NewBrowserSnapshot(browserEngine) }},
+		{"WebSearch", func() (Tool, error) { return NewWebSearch(engine) }},
+		{"WebFetch", func() (Tool, error) { return NewWebFetch(engine) }},
+		{"BrowserNavigate", func() (Tool, error) { return NewBrowserNavigate(engine) }},
+		{"BrowserSnapshot", func() (Tool, error) { return NewBrowserSnapshot(engine) }},
 	}
 
 	ts := make([]Tool, 0, len(ctors))

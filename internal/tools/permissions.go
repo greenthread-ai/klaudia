@@ -38,3 +38,20 @@ func execClassDecision(pctx permission.Context) permission.Decision {
 func allowAlways(permission.Context) permission.Decision {
 	return permission.Decision{Behavior: permission.Allow}
 }
+
+// networkClassDecision is the intrinsic decision for tools that reach the
+// network or drive a real browser with a persistent profile (WebSearch,
+// WebFetch, BrowserNavigate, BrowserSnapshot). These are NOT side-effect-free,
+// so they are blocked in read-only plan mode, denied under dontAsk, and
+// otherwise ask (acceptEdits does not auto-accept — that's only for file
+// edits). Users can pre-approve with an allow rule, e.g. /allow WebSearch.
+func networkClassDecision(pctx permission.Context) permission.Decision {
+	switch pctx.Mode {
+	case permission.ModePlan:
+		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; web/network access is not allowed"}
+	case permission.ModeDontAsk:
+		return permission.Decision{Behavior: permission.Deny, Message: "not pre-approved (dontAsk mode)"}
+	default:
+		return permission.Decision{Behavior: permission.Ask}
+	}
+}

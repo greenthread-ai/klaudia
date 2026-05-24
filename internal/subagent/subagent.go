@@ -31,7 +31,7 @@ func Builtin() []Type {
 			Name: "Explore",
 			Description: "Read-only search agent for broad fan-out searches across many files. " +
 				"It locates code and answers questions but does not modify anything.",
-			Tools: []string{"Read", "Glob", "Grep", "Memory"},
+			Tools: []string{"Read", "Glob", "Grep"},
 			SystemPrompt: "You are a read-only exploration agent for Klaudia. You may ONLY read and search; " +
 				"never modify files or run mutating commands. Thoroughly investigate and return a concise, " +
 				"well-organized summary of your findings with file paths and line references.",
@@ -40,7 +40,7 @@ func Builtin() []Type {
 			Name: "Plan",
 			Description: "Read-only architect agent that designs an implementation plan and returns it. " +
 				"Use to plan a change before implementing.",
-			Tools: []string{"Read", "Glob", "Grep", "Memory"},
+			Tools: []string{"Read", "Glob", "Grep"},
 			SystemPrompt: "You are a software architect agent for Klaudia. Explore the codebase (read-only) and " +
 				"produce a concrete, step-by-step implementation plan. Identify the critical files and trade-offs. " +
 				"Return the plan as your final message; do not modify anything.",

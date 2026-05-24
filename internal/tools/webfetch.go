@@ -63,7 +63,7 @@ func (w *WebFetch) PermissionRequest(raw json.RawMessage) permission.PermissionR
 }
 
 func (w *WebFetch) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
-	return allowAlways(pctx)
+	return networkClassDecision(pctx)
 }
 
 func (w *WebFetch) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {

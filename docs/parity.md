@@ -43,7 +43,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Memory | 07-app-features | `tools/memory.go` + `memory/` | 🔀 divergent | Auto-memory + recall via `.klaudia/memory/`. |
 | ToolSearch (deferred loading) | 07-app-features | `tools/toolsearch.go` | ✅ done | Per-turn `buildToolParams` filter + `Context.Reveal`. |
 | SlashCommand (model-invoked) | 07-app-features | — | 🔜 planned | Skill system (workstream 2) covers this. |
-| WebSearch / WebFetch / browser navigation | 03-providers / 05 | `tools/websearch.go`, `tools/webfetch.go`, `tools/browser.go`, `browser/` | 🟡 partial | Local default tools use lazy Chrome + DDG/Google and rendered markdown; search can relaunch headed Chrome with persistent `~/.klaudia/browser/chrome-profile` for user-assisted challenge handling. Anthropic server-side betas still available via `agent/webtools.go`. |
+| WebSearch / WebFetch / browser navigation | 03-providers / 05 | `tools/websearch.go`, `tools/webfetch.go`, `tools/browser.go`, `browser/` | 🟡 partial | Local default tools use lazy Chrome + DDG/Google and rendered markdown; search can relaunch headed Chrome with persistent `~/.klaudia/browser/chrome-profile` for user-assisted challenge handling. Permission-gated (ask by default; denied in plan/dontAsk); the engine is session-owned and Closed on exit. Anthropic server-side betas still available via `agent/webtools.go`. **Known limitations:** Google HTML parsing is brittle (DDG is the stable default); no network-idle wait, so heavily JS-deferred content may be missed by a snapshot taken right after load. |
 
 ## Agent loop & streaming
 

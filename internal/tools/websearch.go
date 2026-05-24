@@ -65,7 +65,7 @@ func (w *WebSearch) PermissionRequest(raw json.RawMessage) permission.Permission
 }
 
 func (w *WebSearch) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
-	return allowAlways(pctx)
+	return networkClassDecision(pctx)
 }
 
 func (w *WebSearch) Execute(ctx context.Context, _ Context, raw json.RawMessage) ([]Result, error) {

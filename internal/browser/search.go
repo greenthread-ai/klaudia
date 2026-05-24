@@ -221,6 +221,11 @@ func filterResults(results []SearchResult, allowed, blocked []string, max int) [
 	out := make([]SearchResult, 0, min(max, len(results)))
 	seen := map[string]bool{}
 	for _, r := range results {
+		// Only surface http(s) results — never file://, javascript:, chrome://,
+		// data:, etc. that a redirect param or scraped href might decode to.
+		if !isHTTPURL(r.URL) {
+			continue
+		}
 		if seen[r.URL] {
 			continue
 		}
@@ -274,6 +279,12 @@ func domainMatchesSet(domain string, set map[string]bool) bool {
 		}
 	}
 	return false
+}
+
+// isHTTPURL reports whether raw is an absolute http or https URL.
+func isHTTPURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	return err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https")
 }
 
 func resultDomain(raw string) string {
