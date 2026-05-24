@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
@@ -31,6 +33,19 @@ func FriendlyError(err error) string {
 				return fmt.Sprintf("API server error (%d) after retries. Try again shortly.", status)
 			}
 		}
+	}
+	// Connection-level failures (wrong/placeholder baseURL, no network, endpoint
+	// down) surface as raw dial/DNS errors — point the user at the likely cause.
+	var dnsErr *net.DNSError
+	var netErr *net.OpError
+	if errors.As(err, &dnsErr) || errors.As(err, &netErr) {
+		return "Could not reach the model endpoint (network error). Check your internet " +
+			"connection and the baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml.\n" +
+			"Details: " + err.Error()
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "The request to the model endpoint timed out. Check the endpoint is reachable " +
+			"and the baseURL is correct.\nDetails: " + err.Error()
 	}
 	return err.Error()
 }

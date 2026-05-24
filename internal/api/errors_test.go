@@ -1,7 +1,10 @@
 package api
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net"
 	"strings"
 	"testing"
 
@@ -71,6 +74,28 @@ func TestFriendlyErrorPassthrough(t *testing.T) {
 	}
 	if FriendlyError(nil) != "" {
 		t.Errorf("nil error should yield empty string")
+	}
+}
+
+func TestFriendlyErrorNetwork(t *testing.T) {
+	// A DNS failure (e.g. a placeholder/typo'd baseURL) wrapped like the real
+	// stream error should hint at the endpoint, not dump a raw dial error.
+	dns := &net.DNSError{Err: "no such host", Name: "api.example.com"}
+	wrapped := fmt.Errorf("stream: %w", dns)
+	msg := FriendlyError(wrapped)
+	if !strings.Contains(msg, "Could not reach the model endpoint") || !strings.Contains(msg, "baseURL") {
+		t.Errorf("DNS error not made friendly: %q", msg)
+	}
+
+	// A connection refused (*net.OpError) should also be softened.
+	op := &net.OpError{Op: "dial", Err: errors.New("connection refused")}
+	if !strings.Contains(FriendlyError(op), "Could not reach the model endpoint") {
+		t.Errorf("OpError not made friendly: %q", FriendlyError(op))
+	}
+
+	// A timeout maps to the timeout hint.
+	if !strings.Contains(FriendlyError(fmt.Errorf("x: %w", context.DeadlineExceeded)), "timed out") {
+		t.Error("deadline-exceeded not classified as a timeout")
 	}
 }
 
