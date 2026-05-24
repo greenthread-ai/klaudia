@@ -48,13 +48,17 @@ Edit the generated config:
 provider = "openai"
 model = "openai/gpt-5.5"
 baseURL = "https://api.example.com/v1"
+
+# apiKeyEnv is the NAME of the environment variable that holds your key —
+# pick any name you like and export a variable of that name (see below).
+# Prefer this over apiKey = "sk-..." so the key stays out of the file.
 apiKeyEnv = "MY_API_KEY"
 ```
 
-Then:
+Then export the variable you named in `apiKeyEnv` and run:
 
 ```bash
-export MY_API_KEY="..."
+export MY_API_KEY="sk-..."   # same name as apiKeyEnv above
 ./klaudia
 ```
 
@@ -156,7 +160,8 @@ model = "openai/gpt-5.5"
 # OpenAI-compatible endpoint.
 baseURL = "https://api.example.com/v1"
 
-# Or use apiKey = "...". Prefer the env form to keep secrets out of files.
+# apiKeyEnv names the env var holding the key (you then `export MY_API_KEY=...`).
+# Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
 ```
 

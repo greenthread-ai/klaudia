@@ -357,6 +357,11 @@ const starterConfig = `# Klaudia config
 provider = "openai"
 model = "openai/gpt-5.5"
 baseURL = "https://api.example.com/v1"
+
+# apiKeyEnv is the NAME of the environment variable that holds your API key:
+# pick any name, then export a variable of that name, e.g. for the value below:
+#   export MY_API_KEY="sk-..."
+# Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
 
 # Optional examples:
