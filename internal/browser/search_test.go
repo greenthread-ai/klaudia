@@ -1,6 +1,54 @@
 package browser
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/PuerkitoBio/goquery"
+)
+
+func TestIsGoogleInternalURL(t *testing.T) {
+	for _, internal := range []string{
+		"https://www.google.com/search?q=x",
+		"https://accounts.google.com/signin",
+		"https://policies.google.com/privacy",
+		"https://www.gstatic.com/og/x.png",
+	} {
+		if !isGoogleInternalURL(internal) {
+			t.Errorf("%q should be treated as Google-internal", internal)
+		}
+	}
+	for _, ext := range []string{"https://example.com/a", "https://go.dev/doc"} {
+		if isGoogleInternalURL(ext) {
+			t.Errorf("%q is an external result, not internal", ext)
+		}
+	}
+}
+
+func TestParseGoogleResultsDropsInternalLinks(t *testing.T) {
+	// A synthetic SERP: one real result plus Google's own nav/account links.
+	html := `
+	<a href="https://www.google.com/search?q=more"><h3>More Google</h3></a>
+	<a href="https://accounts.google.com/signin"><h3>Sign in</h3></a>
+	<div class="g">
+	  <a href="https://example.com/go-tutorial"><h3>Go Tutorial</h3></a>
+	  <div class="VwiC3b">Learn the Go programming language.</div>
+	</div>`
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := parseGoogleResults(doc)
+	if len(got) != 1 {
+		t.Fatalf("got %d results, want 1 (internal links dropped): %+v", len(got), got)
+	}
+	if got[0].URL != "https://example.com/go-tutorial" || got[0].Title != "Go Tutorial" {
+		t.Errorf("unexpected result: %+v", got[0])
+	}
+	if !strings.Contains(got[0].Snippet, "Go programming language") {
+		t.Errorf("snippet not captured: %q", got[0].Snippet)
+	}
+}
 
 func TestSearchURLEscaping(t *testing.T) {
 	got, err := searchURL("ddg", "hello world & friends")

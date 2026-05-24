@@ -139,9 +139,19 @@ remain available when using the Anthropic provider.
 
 ## MCP
 
-Model Context Protocol stdio servers from `.mcp.json` (project `.klaudia/.mcp.json`
-overrides). Their tools appear as `mcp__<server>__<tool>`, auto-deferred behind
-`ToolSearch`. In the TUI, `/mcp` lists servers and reconnects/disconnects them.
+Model Context Protocol servers from `.mcp.json` (project `.klaudia/.mcp.json`
+overrides). A server is **stdio** (`command` + `args`) or **HTTP** (`url`, with
+`type:"sse"` for the legacy SSE transport):
+
+```jsonc
+{ "mcpServers": {
+  "local":  { "command": "my-server", "args": ["--stdio"] },
+  "remote": { "type": "http", "url": "https://mcp.example.com/v1" }
+} }
+```
+
+Their tools appear as `mcp__<server>__<tool>`, auto-deferred behind `ToolSearch`.
+In the TUI, `/mcp` lists servers and reconnects/disconnects them.
 
 ## Skills
 

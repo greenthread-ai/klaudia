@@ -225,22 +225,22 @@ func TestMarkdownAndFlush(t *testing.T) {
 }
 
 func TestIntro(t *testing.T) {
-	got := intro("openai/gpt-5.5", "go-port")
-	for _, want := range []string{"Klaudia", "openai/gpt-5.5", "go-port", "Esc to interrupt"} {
+	got := intro("openai/gpt-5.5", "go-port", "session-123")
+	for _, want := range []string{"Klaudia", "openai/gpt-5.5", "go-port", "session-123", "klaudia --resume session-123", "Esc to interrupt"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("intro missing %q", want)
 		}
 	}
-	// No model/branch → still renders the logo + tip.
-	if bare := intro("", ""); !strings.Contains(bare, "Klaudia") {
+	// No model/branch/session → still renders the logo + tip.
+	if bare := intro("", "", ""); !strings.Contains(bare, "Klaudia") {
 		t.Errorf("bare intro = %q", bare)
 	}
 }
 
 func TestRenderContext(t *testing.T) {
-	m := &Model{sess: &Session{CWD: "/work/proj", GitBranch: "go-port"}}
+	m := &Model{sess: &Session{SessionID: "session-123", CWD: "/work/proj", GitBranch: "go-port"}}
 	got := m.renderContext()
-	for _, want := range []string{"cwd=/work/proj", "git-branch=go-port", "messages=0"} {
+	for _, want := range []string{"cwd=/work/proj", "git-branch=go-port", "session-id=session-123", "messages=0"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("renderContext missing %q in:\n%s", want, got)
 		}

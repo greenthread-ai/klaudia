@@ -185,17 +185,41 @@ func parseGoogleResults(doc *goquery.Document) []SearchResult {
 	var out []SearchResult
 	doc.Find("a").Each(func(_ int, s *goquery.Selection) {
 		href, _ := s.Attr("href")
-		if !strings.HasPrefix(href, "http") {
+		if !strings.HasPrefix(href, "http") || isGoogleInternalURL(href) {
 			return
 		}
 		title := cleanText(s.Find("h3").First().Text())
 		if title == "" {
 			return
 		}
-		snippet := cleanText(s.Parent().Parent().Text())
+		// Snippet: prefer a sibling/descendant snippet node, else the nearest
+		// ancestor's text minus the title.
+		snippet := cleanText(s.Closest("div").Find("div[data-sncf], .VwiC3b, .yXK7lf").First().Text())
+		if snippet == "" {
+			snippet = strings.TrimSpace(strings.TrimPrefix(cleanText(s.Parent().Parent().Text()), title))
+		}
 		out = append(out, SearchResult{Title: title, URL: href, Snippet: snippet})
 	})
 	return dedupeResults(out)
+}
+
+// isGoogleInternalURL drops Google's own navigation/account/settings links that
+// would otherwise pollute results scraped from the SERP.
+func isGoogleInternalURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return true
+	}
+	host := strings.ToLower(u.Hostname())
+	switch {
+	case host == "google.com" || strings.HasSuffix(host, ".google.com"):
+		return true
+	case host == "gstatic.com" || strings.HasSuffix(host, ".gstatic.com"):
+		return true
+	case host == "googleusercontent.com" || strings.HasSuffix(host, ".googleusercontent.com"):
+		return true
+	}
+	return false
 }
 
 func normalizeDDGURL(href string) string {

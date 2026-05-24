@@ -125,8 +125,59 @@ func (e *Engine) Navigate(url string) error {
 		return fmt.Errorf("url required")
 	}
 	return e.RunWithTimeout(defaultNavigateTimeout, func(ctx context.Context) error {
-		return chromedp.Run(ctx, chromedp.Navigate(url))
+		if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {
+			return err
+		}
+		// chromedp.Navigate returns on the load event, before JS-rendered (SPA)
+		// content appears. Wait for the DOM to settle so snapshots capture it.
+		return waitStable(ctx)
 	})
+}
+
+const (
+	stabilizeTimeout   = 6 * time.Second
+	stabilizePollEvery = 250 * time.Millisecond
+)
+
+// waitStable waits until the document is "complete" and its rendered text has
+// stopped growing across two consecutive polls (so client-rendered content is
+// present), bounded by stabilizeTimeout. It is best-effort: a poll error or the
+// timeout simply proceeds rather than failing the navigation.
+func waitStable(ctx context.Context) error {
+	deadline := time.Now().Add(stabilizeTimeout)
+	lastLen, stable := -1, 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var ready string
+		var textLen int
+		err := chromedp.Run(ctx,
+			chromedp.Evaluate(`document.readyState`, &ready),
+			chromedp.Evaluate(`((document.body&&document.body.innerText)||"").length`, &textLen),
+		)
+		if err != nil {
+			return nil // best-effort; don't fail navigation on a poll hiccup
+		}
+		if ready == "complete" {
+			if textLen == lastLen {
+				if stable++; stable >= 2 {
+					return nil // settled
+				}
+			} else {
+				stable = 0
+			}
+			lastLen = textLen
+		}
+		if time.Now().After(deadline) {
+			return nil // bounded: proceed with whatever has rendered
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(stabilizePollEvery):
+		}
+	}
 }
 
 func (e *Engine) Snapshot(includeHTML, includeMarkdown bool) (*Snapshot, error) {

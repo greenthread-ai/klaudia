@@ -608,6 +608,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		sess := &tui.Session{
 			// Effective model (flag or config default), never "" — otherwise a
 			// non-Anthropic provider would wrongly resolve to the Anthropic default.
+			SessionID:      sessionID,
 			Model:          modelStr,
 			ResolvedModel:  string(model),
 			PermissionMode: string(mode),

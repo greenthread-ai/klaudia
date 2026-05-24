@@ -78,6 +78,34 @@ func TestDisconnectMakesToolFailGracefully(t *testing.T) {
 	}
 }
 
+func TestLoadConfigParsesHTTPServer(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(`{
+		"mcpServers": {
+			"remote": {"type": "http", "url": "https://mcp.example.com/v1"},
+			"local":  {"command": "my-server", "args": ["--stdio"]}
+		}
+	}`), 0o644)
+
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := cfg.MCPServers["remote"]; r.URL != "https://mcp.example.com/v1" || r.Type != "http" {
+		t.Errorf("remote = %+v", r)
+	}
+	if l := cfg.MCPServers["local"]; l.Command != "my-server" || len(l.Args) != 1 {
+		t.Errorf("local = %+v", l)
+	}
+}
+
+func TestConnectServerRejectsEmptyConfig(t *testing.T) {
+	// No command and no url → a clear error, without attempting any connection.
+	if _, err := connectServer(context.Background(), "bad", ServerConfig{}); err == nil {
+		t.Error("expected error for a config with neither command nor url")
+	}
+}
+
 func TestReconnectUnknownServer(t *testing.T) {
 	m := &Manager{cfg: Config{MCPServers: map[string]ServerConfig{}}}
 	if err := m.Reconnect("nope"); err == nil {

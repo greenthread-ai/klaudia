@@ -44,8 +44,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Agent (Task / sub-agents) | 07-app-features | `tools/agent.go` + `subagent/` | ✅ done | Dynamic description from `subagent.Builtin()`. |
 | Memory | 07-app-features | `tools/memory.go` + `memory/` | 🔀 divergent | Auto-memory + recall via `.klaudia/memory/`. |
 | ToolSearch (deferred loading) | 07-app-features | `tools/toolsearch.go` | ✅ done | Per-turn `buildToolParams` filter + `Context.Reveal`. |
-| SlashCommand (model-invoked) | 07-app-features | — | 🔜 planned | Skill system (workstream 2) covers this. |
-| WebSearch / WebFetch / browser navigation | 03-providers / 05 | `tools/websearch.go`, `tools/webfetch.go`, `tools/browser.go`, `browser/` | 🟡 partial | Local default tools use lazy Chrome + DDG/Google and rendered markdown; search can relaunch headed Chrome with persistent `~/.klaudia/browser/chrome-profile` for user-assisted challenge handling. Permission-gated (ask by default; denied in plan/dontAsk); the engine is session-owned and Closed on exit. Anthropic server-side betas still available via `agent/webtools.go`. **Known limitations:** Google HTML parsing is brittle (DDG is the stable default); no network-idle wait, so heavily JS-deferred content may be missed by a snapshot taken right after load. |
+| SlashCommand (model-invoked) | 07-app-features | `tools/skill.go` | 🔀 divergent | Covered by the Skill tool (user-defined skills the model can invoke). |
+| WebSearch / WebFetch / browser navigation | 03-providers / 05 | `tools/websearch.go`, `tools/webfetch.go`, `tools/browser.go`, `browser/` | 🟡 partial | Local default tools use lazy Chrome + DDG/Google and rendered markdown; search can relaunch headed Chrome with persistent `~/.klaudia/browser/chrome-profile` for user-assisted challenge handling. Permission-gated (ask by default; denied in plan/dontAsk); the engine is session-owned and Closed on exit. Navigation waits for the DOM to settle (readyState + text-stable, bounded) so JS-rendered content is captured. Google parsing filters Google's own nav/account links (DDG remains the stable default). Anthropic server-side betas still available via `agent/webtools.go`. |
 
 ## Agent loop & streaming
 
@@ -54,7 +54,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Agentic tool loop | 05-app-core | `agent/loop.go` | ✅ done | Emitter, per-turn tool params, Approver/Asker/Planner seams. |
 | Provider abstraction | 03-providers | `api/provider.go` | 🔀 divergent | Multi-provider interface (Anthropic + OpenAI-compatible); JS was Anthropic-centric. |
 | Anthropic Messages (Beta, streaming, caching) | 02/03 | `api/client.go` | ✅ done | |
-| OpenAI-compatible Chat Completions | — | `api/openai*.go` | 🔀 divergent | Translation shim; SSE stream:true. Image tool_results not yet translated. |
+| OpenAI-compatible Chat Completions | — | `api/openai*.go` | 🔀 divergent | Translation shim; SSE stream:true. Image tool_results translated to `image_url` content parts. |
 | Prompt caching | 03-providers | `api/client.go` | ✅ done | |
 | stream-json output (authoritative envelope) | 08-entry | `streamjson/` + `cli/envelope.go` | ✅ done | |
 | stream-json partial deltas | 08-entry | `cli/partial.go` + `api/StreamSink` | ✅ done | Behind `--include-partial-messages`; emits JS `stream_event` lines. OpenAI shim synthesizes the sequence. |
@@ -85,9 +85,9 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | MCP stdio client | 07-app-features | `mcp/` | ✅ done | `.mcp.json` + `.klaudia/.mcp.json` override. |
 | MCP tools wrapped (`mcp__*`) | 07-app-features | `mcp/` + `cli/` | ✅ done | Auto-deferred behind ToolSearch. |
 | MCP reconnect/disconnect (`/mcp`) | — | `mcp.Manager` + `tui` | 🔀 divergent | Interactive `/mcp` picker; reconnect swaps the live session into the existing tool wrappers so a crashed server's tools resume. |
-| MCP HTTP/SSE transports | 07-app-features | — | 🟡 partial | stdio only so far. |
+| MCP HTTP/SSE transports | 07-app-features | `mcp/mcp.go` | ✅ done | A server with `url` uses the streamable HTTP transport (or `type:"sse"`); `command` stays stdio. Custom auth headers are a growth point. |
 | Built-in sub-agents | 07-app-features | `subagent/` | ✅ done | |
-| Sub-agent tool allowlists (`Type.Filter`) | 07-app-features | `subagent/` | 🟡 partial | Seam present; v1 inherits full toolset. |
+| Sub-agent tool allowlists (`Type.Filter`) | 07-app-features | `subagent/` | ✅ done | Explore/Plan are restricted to read-only Read/Glob/Grep; general-purpose gets the full toolset by design. |
 
 ## TUI & frontends
 

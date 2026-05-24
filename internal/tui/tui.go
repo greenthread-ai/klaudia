@@ -43,6 +43,7 @@ type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMe
 // slash commands like /model can change settings for subsequent turns. The
 // RunFunc should read these fields fresh on each call.
 type Session struct {
+	SessionID      string         // transcript/session id used by --resume
 	Model          string         // model alias or full ID ("" = default)
 	ResolvedModel  string         // concrete model id for display
 	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
@@ -157,9 +158,9 @@ var (
 	suggestStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 )
 
-// intro is the welcoming banner shown at startup. The model name/branch are
-// filled in by the caller.
-func intro(model, branch string) string {
+// intro is the welcoming banner shown at startup. The model name/branch/session
+// id are filled in by the caller.
+func intro(model, branch, sessionID string) string {
 	logo := logoStyle.Render("✦ Klaudia")
 	tag := bannerStyle.Render("  your local coding agent")
 	var meta string
@@ -168,6 +169,9 @@ func intro(model, branch string) string {
 	}
 	if branch != "" {
 		meta += bannerStyle.Render("   ⎇ " + branch)
+	}
+	if sessionID != "" {
+		meta += "\n" + bannerStyle.Render("  session: "+sessionID+"  (resume with: klaudia --resume "+sessionID+")")
 	}
 	tip := hintStyle.Render("\n  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C to quit")
 	return logo + tag + meta + tip + "\n"
@@ -255,12 +259,13 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		history: history,
 		sess:    sess,
 	}
-	model, branch := "", ""
+	model, branch, sessionID := "", "", ""
 	if sess != nil {
-		model, branch = sess.displayModel(), sess.GitBranch
+		model, branch, sessionID = sess.displayModel(), sess.GitBranch, sess.SessionID
 	}
-	m.transcript.WriteString(intro(model, branch))
-	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: intro(model, branch)})
+	introText := intro(model, branch, sessionID)
+	m.transcript.WriteString(introText)
+	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: introText})
 	return m
 }
 
@@ -899,8 +904,12 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		if model == "" {
 			model = "(default)"
 		}
-		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  permissions=%s  messages=%d",
-			model, m.currentMode().Label(), len(m.history))))
+		resume := ""
+		if m.sess.SessionID != "" {
+			resume = "\nresume: klaudia --resume " + m.sess.SessionID
+		}
+		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  permissions=%s  messages=%d%s",
+			model, m.currentMode().Label(), len(m.history), resume)))
 	case "/mode":
 		if len(args) > 0 {
 			want := permission.Mode(args[0])
@@ -1065,7 +1074,11 @@ func (m *Model) renderContext() string {
 	if branch == "" {
 		branch = "(none)"
 	}
-	return fmt.Sprintf("Context:\n  cwd=%s\n  git-branch=%s\n  messages=%d", cwd, branch, len(m.history))
+	sessionID := m.sess.SessionID
+	if sessionID == "" {
+		sessionID = "(unknown)"
+	}
+	return fmt.Sprintf("Context:\n  cwd=%s\n  git-branch=%s\n  session-id=%s\n  messages=%d", cwd, branch, sessionID, len(m.history))
 }
 
 // gitOutput runs `git <args>` in dir and returns combined output. A non-zero

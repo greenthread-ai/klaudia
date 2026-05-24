@@ -1,6 +1,6 @@
-// Package mcp connects to Model Context Protocol servers over stdio and
-// exposes their tools and resources to Klaudia. It wraps the official
-// modelcontextprotocol/go-sdk client.
+// Package mcp connects to Model Context Protocol servers over stdio or HTTP
+// (streamable / SSE) and exposes their tools and resources to Klaudia. It wraps
+// the official modelcontextprotocol/go-sdk client.
 package mcp
 
 import (
@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -18,11 +19,17 @@ import (
 	"github.com/greenthread/klaudia/internal/version"
 )
 
-// ServerConfig defines how to launch a stdio MCP server.
+// ServerConfig defines how to reach an MCP server. A stdio server sets
+// Command (+ Args/Env); an HTTP server sets URL (Type selects the streamable
+// HTTP transport, the default, or "sse" for the legacy SSE transport).
 type ServerConfig struct {
-	Command string            `json:"command"`
+	// stdio transport
+	Command string            `json:"command,omitempty"`
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
+	// HTTP transport
+	Type string `json:"type,omitempty"` // "http" (default when URL set) | "sse"
+	URL  string `json:"url,omitempty"`
 }
 
 // Config is the .mcp.json shape: a map of server name → launch config.
@@ -36,7 +43,7 @@ type Config struct {
 func LoadConfig(dir string) (Config, error) {
 	cfg := Config{MCPServers: map[string]ServerConfig{}}
 	for _, p := range []string{
-		filepath.Join(dir, ".mcp.json"),          // base
+		filepath.Join(dir, ".mcp.json"),             // base
 		filepath.Join(dir, ".klaudia", ".mcp.json"), // local override (wins)
 	} {
 		data, err := os.ReadFile(p)
@@ -68,6 +75,25 @@ func (s *Server) Connected() bool { return s != nil && s.session != nil }
 
 func newClient() *mcpsdk.Client {
 	return mcpsdk.NewClient(&mcpsdk.Implementation{Name: "klaudia", Version: version.Version}, nil)
+}
+
+// connectServer connects to a server using the transport its config implies:
+// HTTP (streamable, or SSE) when URL is set, otherwise stdio.
+func connectServer(ctx context.Context, name string, cfg ServerConfig) (*Server, error) {
+	if url := strings.TrimSpace(cfg.URL); url != "" {
+		var t mcpsdk.Transport
+		switch strings.ToLower(strings.TrimSpace(cfg.Type)) {
+		case "sse":
+			t = &mcpsdk.SSEClientTransport{Endpoint: url}
+		default: // "http" / "streamable" / unset
+			t = &mcpsdk.StreamableClientTransport{Endpoint: url}
+		}
+		return ConnectTransport(ctx, name, t)
+	}
+	if strings.TrimSpace(cfg.Command) == "" {
+		return nil, fmt.Errorf("mcp %q: config has neither command (stdio) nor url (http)", name)
+	}
+	return ConnectCommand(ctx, name, cfg)
 }
 
 // ConnectCommand spawns a stdio MCP server and connects to it.
@@ -113,7 +139,7 @@ func Connect(ctx context.Context, cfg Config) (*Manager, []error) {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		srv, err := ConnectCommand(ctx, name, cfg.MCPServers[name])
+		srv, err := connectServer(ctx, name, cfg.MCPServers[name])
 		if err != nil {
 			errs = append(errs, err)
 			// Keep a disconnected placeholder so it can be reconnected later.
@@ -175,7 +201,7 @@ func (m *Manager) Reconnect(name string) error {
 	// TUI runs this synchronously). On timeout the server stays disconnected.
 	ctx, cancel := context.WithTimeout(m.ctx, reconnectTimeout)
 	defer cancel()
-	fresh, err := ConnectCommand(ctx, name, cfg)
+	fresh, err := connectServer(ctx, name, cfg)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return fmt.Errorf("mcp %q: reconnect timed out after %s", name, reconnectTimeout)
