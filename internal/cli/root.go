@@ -3,17 +3,32 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread/klaudia/internal/session"
 	"github.com/greenthread/klaudia/internal/tools"
 	"github.com/greenthread/klaudia/internal/version"
 )
+
+// gitBranch returns the current git branch for dir, or "" if not a repo.
+func gitBranch(dir string) string {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
 
 // defaultSystemPrompt is the minimal Klaudia/Claude Code identity prompt sent
 // when no override is given. The Claude Code identity is required on the OAuth
@@ -23,14 +38,17 @@ const defaultSystemPrompt = "You are an interactive agent that helps users with 
 // options holds parsed CLI flags, mirroring the JS commander surface
 // (08-entry.js setupCommander). Only the Phase 0 subset is wired so far.
 type options struct {
-	print          bool
-	prompt         string
-	model          string
-	outputFormat   string
-	permissionMode string
+	print           bool
+	prompt          string
+	model           string
+	outputFormat    string
+	permissionMode  string
 	dangerouslySkip bool
-	verbose        bool
-	maxTurns       int
+	verbose         bool
+	maxTurns        int
+	resume          string // --resume <session-id>
+	continueSession bool   // --continue
+	forkSession     bool   // --fork-session
 }
 
 // NewRootCommand builds the top-level `klaudia` command.
@@ -66,6 +84,9 @@ func NewRootCommand() *cobra.Command {
 	f.BoolVar(&opts.dangerouslySkip, "dangerously-skip-permissions", false, "Skip all permission checks (sets bypassPermissions)")
 	f.BoolVar(&opts.verbose, "verbose", false, "Verbose output (required for stream-json)")
 	f.IntVar(&opts.maxTurns, "max-turns", 0, "Limit the number of agentic loop turns (0 = unlimited)")
+	f.StringVarP(&opts.resume, "resume", "r", "", "Resume a session by ID")
+	f.BoolVar(&opts.continueSession, "continue", false, "Resume the most recent session in this directory")
+	f.BoolVar(&opts.forkSession, "fork-session", false, "When resuming, start a new session ID (preserves the original)")
 
 	return cmd
 }
@@ -90,7 +111,33 @@ func run(cmd *cobra.Command, opts *options) error {
 	start := time.Now()
 	ctx := cmd.Context()
 	r := NewRenderer(format, cmd.OutOrStdout())
+	cwd, _ := os.Getwd()
+
+	// Resolve the session: resume by id, continue the most recent, or start new.
+	// --fork-session writes to a fresh id while preserving the original.
+	var initialMessages []anthropic.BetaMessageParam
+	resumeID := opts.resume
+	if opts.continueSession && resumeID == "" {
+		if id, ok := session.MostRecent(cwd); ok {
+			resumeID = id
+		} else {
+			return fmt.Errorf("--continue: no previous session found in this directory")
+		}
+	}
 	sessionID := uuid.NewString()
+	if resumeID != "" {
+		entries, rerr := session.Read(session.Path(cwd, resumeID))
+		if rerr != nil {
+			return fmt.Errorf("resume %s: %w", resumeID, rerr)
+		}
+		initialMessages, rerr = agent.MessagesFromEntries(entries)
+		if rerr != nil {
+			return fmt.Errorf("resume %s: %w", resumeID, rerr)
+		}
+		if !opts.forkSession {
+			sessionID = resumeID // continue appending to the same transcript
+		}
+	}
 
 	// Resolve auth and build the API client.
 	cred, err := api.ResolveCredential()
@@ -114,16 +161,32 @@ func run(cmd *cobra.Command, opts *options) error {
 		return fmt.Errorf("invalid permission mode %q", opts.permissionMode)
 	}
 
+	// Open the transcript for this session (best effort: a transcript failure
+	// should not abort the run).
+	var recorder agent.Recorder
+	if tr, terr := session.NewTranscript(session.Meta{
+		SessionID:      sessionID,
+		CWD:            cwd,
+		Version:        version.Version,
+		GitBranch:      gitBranch(cwd),
+		PermissionMode: string(mode),
+	}); terr == nil {
+		defer tr.Close()
+		recorder = tr
+	}
+
 	// Run the agentic loop.
 	loop := agent.New(client, registry)
 	emit := func(ev agent.Event) { _ = r.Event(ev) }
 	res, err := loop.Run(ctx, agent.Options{
-		Prompt:      opts.prompt,
-		Model:       api.ResolveModel(opts.model),
-		System:      defaultSystemPrompt,
-		MaxTurns:    opts.maxTurns,
-		Permission:  permission.Context{Mode: mode},
-		Interactive: false, // headless mode
+		Prompt:          opts.prompt,
+		Model:           api.ResolveModel(opts.model),
+		System:          defaultSystemPrompt,
+		MaxTurns:        opts.maxTurns,
+		Permission:      permission.Context{Mode: mode},
+		Interactive:     false, // headless mode
+		InitialMessages: initialMessages,
+		Recorder:        recorder,
 	}, emit)
 
 	out := ResultMessage{

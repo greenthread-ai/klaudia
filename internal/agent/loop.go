@@ -37,6 +37,12 @@ type Event struct {
 	IsError    bool   `json:"is_error,omitempty"`    // tool_result error flag
 }
 
+// Recorder persists conversation messages to a transcript as the loop runs.
+// role is "user" or "assistant"; message is the raw Anthropic message JSON.
+type Recorder interface {
+	Record(role string, message json.RawMessage) error
+}
+
 // Options configures a single Run.
 type Options struct {
 	Prompt     string
@@ -48,6 +54,12 @@ type Options struct {
 	// Interactive is true when there is a TTY to prompt on. When false
 	// (headless), an "ask" decision is treated as a denial.
 	Interactive bool
+	// InitialMessages seeds the conversation when resuming a session. The new
+	// Prompt (if any) is appended after them.
+	InitialMessages []anthropic.BetaMessageParam
+	// Recorder, if set, receives each user/assistant message for transcript
+	// persistence. May be nil.
+	Recorder Recorder
 }
 
 // Result is the outcome of a Run.
@@ -87,8 +99,11 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		system = []anthropic.BetaTextBlockParam{{Text: opts.System}}
 	}
 
-	messages := []anthropic.BetaMessageParam{
-		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(opts.Prompt)),
+	messages := append([]anthropic.BetaMessageParam{}, opts.InitialMessages...)
+	if opts.Prompt != "" {
+		userMsg := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(opts.Prompt))
+		messages = append(messages, userMsg)
+		record(opts.Recorder, "user", userMsg)
 	}
 
 	var res Result
@@ -112,6 +127,9 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		res.OutputTokens += assistant.Usage.OutputTokens
 		res.Text = finalText
 
+		// Persist the assistant turn (including the final, tool-less answer).
+		record(opts.Recorder, "assistant", assistant)
+
 		// Collect tool_use blocks from this turn.
 		toolUses := toolUseBlocks(assistant)
 		if len(toolUses) == 0 {
@@ -126,7 +144,9 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			block := l.dispatch(ctx, tu, opts, emit)
 			resultBlocks = append(resultBlocks, block)
 		}
-		messages = append(messages, anthropic.NewBetaUserMessage(resultBlocks...))
+		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
+		record(opts.Recorder, "user", toolResultMsg)
+		messages = append(messages, toolResultMsg)
 
 		if opts.MaxTurns > 0 && res.NumTurns >= opts.MaxTurns {
 			res.StopReason = "max_turns"
@@ -268,6 +288,16 @@ func splitSchema(raw json.RawMessage) (properties any, required []string) {
 		properties = p
 	}
 	return properties, s.Required
+}
+
+// record marshals a message param and hands it to the recorder (best effort).
+func record(r Recorder, role string, msg any) {
+	if r == nil {
+		return
+	}
+	if b, err := json.Marshal(msg); err == nil {
+		_ = r.Record(role, b)
+	}
 }
 
 // toolUseBlocks returns the tool_use blocks in an assistant message.
