@@ -14,6 +14,8 @@ func DefaultRegistry() (*Registry, error) {
 		{"Read", func() (Tool, error) { return NewRead() }},
 		{"Write", func() (Tool, error) { return NewWrite() }},
 		{"Edit", func() (Tool, error) { return NewEdit() }},
+		{"Glob", func() (Tool, error) { return NewGlob() }},
+		{"Grep", func() (Tool, error) { return NewGrep() }},
 	}
 
 	ts := make([]Tool, 0, len(ctors))
