@@ -90,7 +90,15 @@ const (
 	stateAwaitingAnswer
 	stateAwaitingPlan
 	stateAwaitingConfirm
+	stateAwaitingChoice
 )
+
+// choiceItem is one option in a local settings picker (e.g. /mode). apply runs
+// when the user selects it and returns a confirmation line.
+type choiceItem struct {
+	label string
+	apply func() string
+}
 
 // --- messages delivered from the agent goroutine ---
 
@@ -180,6 +188,9 @@ type Model struct {
 	planReply chan bool
 	// Pending /commit-style confirmation: run on "y", returns a result line.
 	confirmAction func() string
+	// Pending local settings picker (e.g. /mode): numbered choices.
+	choiceItems  []choiceItem
+	choicePrompt string
 	// Input history: submitted prompts (newest last), navigated with Up/Down.
 	// histPos == len(inputHistory) means "not navigating" (editing a fresh line).
 	inputHistory []string
@@ -404,6 +415,25 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.state == stateAwaitingChoice {
+		if msg.Type == tea.KeyEsc {
+			m.choiceItems, m.choicePrompt = nil, ""
+			m.state = stateIdle
+			m.appendLine(toolStyle.Render("  → cancelled"))
+			return m, nil
+		}
+		s := msg.String()
+		if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
+			if n := int(s[0] - '0'); n <= len(m.choiceItems) {
+				item := m.choiceItems[n-1]
+				m.choiceItems, m.choicePrompt = nil, ""
+				m.state = stateIdle
+				m.appendLine(bannerStyle.Render("  → " + item.apply()))
+			}
+		}
+		return m, nil
+	}
+
 	if m.state == stateAwaitingAnswer {
 		// Digit keys 1..N select an option.
 		s := msg.String()
@@ -483,6 +513,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 const slashHelp = `Available commands:
   /help            Show this help
   /model [name]    Show or set the model (alias: haiku|sonnet|opus, or full ID)
+  /mode [name]     Change how Klaudia asks permission (no arg = picker)
   /allow <rule>    Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)
   /deny <rule>     Auto-deny a tool rule this session
   /goal [text]     Set/show a standing goal re-stated each turn (/goal clear to stop)
@@ -504,16 +535,18 @@ const slashHelp = `Available commands:
   /quit, /exit     Exit Klaudia
 
 Keys:
-  Tab              Complete an @<path> reference from the working dir
+  /                Type a slash to see matching commands
+  Tab              Complete a /command or an @<path> reference
   ↑ / ↓            Cycle through previous prompts
+  Esc              Interrupt the model mid-turn
   Ctrl+C           Quit`
 
 // builtinCommands is the canonical list of built-in slash commands, used for
 // type-ahead suggestions. Kept in sync with the handleSlash switch.
 var builtinCommands = []string{
-	"/help", "/model", "/allow", "/deny", "/goal", "/memory", "/mcp",
-	"/stats", "/status", "/config", "/agents", "/context", "/compact",
-	"/add-dir", "/plan", "/doctor", "/diff", "/commit", "/export",
+	"/help", "/model", "/mode", "/permissions", "/allow", "/deny", "/goal",
+	"/memory", "/mcp", "/stats", "/status", "/config", "/agents", "/context",
+	"/compact", "/add-dir", "/plan", "/doctor", "/diff", "/commit", "/export",
 	"/clear", "/quit", "/exit",
 }
 
@@ -552,6 +585,47 @@ func (m *Model) slashSuggestionLine() string {
 		sug = append(sug[:8], "…")
 	}
 	return suggestStyle.Render(strings.Join(sug, "  ")) + hintStyle.Render("  (Tab to complete)")
+}
+
+// startChoice opens a numbered settings picker. The selected item's apply runs
+// when the user presses its digit (Esc cancels). Reusable for any quick toggle.
+func (m *Model) startChoice(title string, items []choiceItem) {
+	m.choiceItems = items
+	m.choicePrompt = title
+	m.state = stateAwaitingChoice
+	m.appendLine(askStyle.Render(title))
+	for i, it := range items {
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  %d) %s", i+1, it.label)))
+	}
+}
+
+// currentMode returns the live permission mode, defaulting to ModeDefault.
+func (m *Model) currentMode() permission.Mode {
+	if m.sess != nil && m.sess.PermissionMode != "" {
+		return permission.Mode(m.sess.PermissionMode)
+	}
+	return permission.ModeDefault
+}
+
+// modeChoices builds the permission-mode picker, marking the current mode.
+func (m *Model) modeChoices() []choiceItem {
+	cur := permission.Mode(m.sess.PermissionMode)
+	items := make([]choiceItem, 0, len(permission.SelectableModes()))
+	for _, mode := range permission.SelectableModes() {
+		mode := mode
+		label := mode.Label()
+		if mode == cur {
+			label += "  (current)"
+		}
+		items = append(items, choiceItem{
+			label: label,
+			apply: func() string {
+				m.sess.PermissionMode = string(mode)
+				return "Permission mode: " + mode.Label()
+			},
+		})
+	}
+	return items
 }
 
 // handleSlash dispatches a slash command. Commands run locally and never reach
@@ -646,15 +720,25 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(bannerStyle.Render("Will auto-deny " + permission.FormatRule(rule) + " this session."))
 		}
 	case "/status":
-		mode := m.sess.PermissionMode
-		if mode == "" {
-			mode = "default"
-		}
 		model := m.sess.Model
 		if model == "" {
 			model = "(default)"
 		}
-		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  permission-mode=%s  messages=%d", model, mode, len(m.history))))
+		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  permissions=%s  messages=%d",
+			model, m.currentMode().Label(), len(m.history))))
+	case "/mode", "/permissions":
+		if len(args) > 0 {
+			want := permission.Mode(args[0])
+			if !want.Valid() {
+				m.appendLine(errStyle.Render("unknown mode " + args[0] + ". Try /mode with no argument to pick one."))
+				break
+			}
+			m.sess.PermissionMode = string(want)
+			m.appendLine(bannerStyle.Render("Permission mode: " + want.Label()))
+			break
+		}
+		m.startChoice("Permission mode — choose how Klaudia asks before acting:", m.modeChoices())
+		return m, nil
 	case "/config":
 		m.appendLine(bannerStyle.Render(m.renderConfig()))
 	case "/agents":
@@ -779,12 +863,8 @@ func (m *Model) renderConfig() string {
 	if sandbox == "" {
 		sandbox = "local"
 	}
-	mode := m.sess.PermissionMode
-	if mode == "" {
-		mode = "default"
-	}
-	return fmt.Sprintf("Configuration:\n  provider=%s\n  model=%s\n  sandbox=%s\n  permission-mode=%s",
-		provider, model, sandbox, mode)
+	return fmt.Sprintf("Configuration:\n  provider=%s\n  model=%s\n  sandbox=%s\n  permissions=%s\n\n  /mode to change permissions · /model to change the model",
+		provider, model, sandbox, m.currentMode().Label())
 }
 
 // renderAgents lists the available sub-agent types (Agent tool subagent_type).
@@ -1161,6 +1241,8 @@ func (m *Model) View() string {
 		bottom = askStyle.Render("Approve plan? (y)es / (n)o")
 	case stateAwaitingConfirm:
 		bottom = askStyle.Render("Confirm? (y)es / (n)o")
+	case stateAwaitingChoice:
+		bottom = askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.choiceItems))) + hintStyle.Render("  (esc to cancel)")
 	default:
 		bottom = m.input.View()
 		if sug := m.slashSuggestionLine(); sug != "" {

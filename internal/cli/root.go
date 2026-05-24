@@ -68,7 +68,8 @@ func skillToolInfos(skills []skill.Skill) []tools.SkillInfo {
 // switch handles them before the /<skill> default branch).
 var builtinSlashCommands = map[string]bool{
 	"help": true, "?": true, "quit": true, "exit": true, "clear": true,
-	"model": true, "goal": true, "memory": true, "mcp": true, "stats": true,
+	"model": true, "mode": true, "permissions": true, "goal": true,
+	"memory": true, "mcp": true, "stats": true,
 	"allow": true, "deny": true, "status": true,
 	"config": true, "agents": true, "context": true,
 	"compact": true, "add-dir": true,
@@ -287,7 +288,6 @@ func gitCommit(dir string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
-
 
 // options holds parsed CLI flags, mirroring the JS commander surface
 // (08-entry.js setupCommander). Only the Phase 0 subset is wired so far.

@@ -34,6 +34,32 @@ func (m Mode) Valid() bool {
 	return false
 }
 
+// Label is a human-friendly description of the mode for the UI (no raw
+// identifiers like "default").
+func (m Mode) Label() string {
+	switch m {
+	case ModeDefault:
+		return "Ask before risky operations"
+	case ModeAcceptEdits:
+		return "Auto-accept file edits (still ask for other risky ops)"
+	case ModeBypassPermissions:
+		return "Bypass all permission checks"
+	case ModePlan:
+		return "Plan mode — read-only, mutations blocked"
+	case ModeDontAsk:
+		return "Deny anything not pre-approved"
+	default:
+		return string(m)
+	}
+}
+
+// SelectableModes are the modes a user may switch to interactively, in display
+// order. bypassPermissions is intentionally excluded — it's set only via
+// --dangerously-skip-permissions, not toggled mid-session.
+func SelectableModes() []Mode {
+	return []Mode{ModeDefault, ModeAcceptEdits, ModePlan, ModeDontAsk}
+}
+
 // Behavior is the outcome of a permission check ("allow" | "deny" | "ask"),
 // matching the JS behaviors.
 type Behavior string

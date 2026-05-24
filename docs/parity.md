@@ -112,7 +112,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | /mcp | `tui/tui.go` | ✅ done | |
 | /stats, /status | `tui/tui.go` | ✅ done | |
 | /allow, /deny | `tui/tui.go` | ✅ done | |
-| /config, /agents, /context | `tui/tui.go` | ✅ done | Group A (render-only). |
+| /config, /agents, /context | `tui/tui.go` | ✅ done | Group A (render-only); friendly permission labels. |
+| /mode, /permissions | `tui/tui.go` + `permission.Mode.Label` | ✅ done | Interactive numbered picker (or direct set) to change permission mode mid-session. |
 | /compact, /cost, /add-dir | `tui/tui.go` + `agent.Loop.Compact` | ✅ done | Group B. |
 | /plan, /doctor, /diff, /commit, /export | `tui/tui.go` + `doctor/` | ✅ done | Group C; /commit gated by a y/n confirm. |
 

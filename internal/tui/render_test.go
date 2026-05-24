@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/greenthread/klaudia/internal/permission"
 )
 
 func TestExportMarkdown(t *testing.T) {
@@ -23,7 +25,7 @@ func TestExportMarkdown(t *testing.T) {
 func TestRenderConfigDefaults(t *testing.T) {
 	m := &Model{sess: &Session{}}
 	got := m.renderConfig()
-	for _, want := range []string{"provider=anthropic", "model=(default)", "sandbox=local", "permission-mode=default"} {
+	for _, want := range []string{"provider=anthropic", "model=(default)", "sandbox=local", "Ask before risky operations"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("renderConfig missing %q in:\n%s", want, got)
 		}
@@ -33,10 +35,34 @@ func TestRenderConfigDefaults(t *testing.T) {
 func TestRenderConfigResolved(t *testing.T) {
 	m := &Model{sess: &Session{Provider: "openai", ResolvedModel: "openai/gpt-5.5", SandboxMode: "os", PermissionMode: "acceptEdits"}}
 	got := m.renderConfig()
-	for _, want := range []string{"provider=openai", "model=openai/gpt-5.5", "sandbox=os", "permission-mode=acceptEdits"} {
+	for _, want := range []string{"provider=openai", "model=openai/gpt-5.5", "sandbox=os", "Auto-accept file edits"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("renderConfig missing %q in:\n%s", want, got)
 		}
+	}
+}
+
+func TestModeChoicesMarksCurrent(t *testing.T) {
+	m := &Model{sess: &Session{PermissionMode: "plan"}}
+	items := m.modeChoices()
+	var marked int
+	for _, it := range items {
+		if strings.Contains(it.label, "(current)") {
+			marked++
+			if !strings.Contains(it.label, "Plan mode") {
+				t.Errorf("wrong item marked current: %q", it.label)
+			}
+		}
+	}
+	if marked != 1 {
+		t.Errorf("expected exactly one (current) item, got %d", marked)
+	}
+	// Applying a choice mutates the session mode.
+	if msg := items[0].apply(); !strings.Contains(msg, "Permission mode:") {
+		t.Errorf("apply returned %q", msg)
+	}
+	if m.sess.PermissionMode != string(permission.SelectableModes()[0]) {
+		t.Errorf("apply did not set the mode: %q", m.sess.PermissionMode)
 	}
 }
 
