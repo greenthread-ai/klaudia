@@ -1,11 +1,19 @@
 package tools
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/greenthread/klaudia/internal/sandbox"
+)
 
 // DefaultRegistry builds the registry of all implemented local tools. New tools
 // are added here as they are ported. Each constructor may fail if its input
 // schema can't be generated.
 func DefaultRegistry() (*Registry, error) {
+	// The Bash tool runs through an Executor. Phase 2 uses the unconfined
+	// local host executor; sandbox/container executors swap in later.
+	executor := sandbox.NewLocal()
+
 	type ctor struct {
 		name string
 		make func() (Tool, error)
@@ -16,6 +24,7 @@ func DefaultRegistry() (*Registry, error) {
 		{"Edit", func() (Tool, error) { return NewEdit() }},
 		{"Glob", func() (Tool, error) { return NewGlob() }},
 		{"Grep", func() (Tool, error) { return NewGrep() }},
+		{"Bash", func() (Tool, error) { return NewBash(executor) }},
 	}
 
 	ts := make([]Tool, 0, len(ctors))
