@@ -9,9 +9,23 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/greenthread/klaudia/internal/native/pdf"
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/schema"
 )
+
+// readPDF extracts text from a PDF and returns it with a page-count header.
+func readPDF(path string) ([]Result, error) {
+	text, err := pdf.ExtractText(path)
+	if err != nil {
+		return []Result{{Content: fmt.Sprintf("Error reading PDF: %v", err), IsError: true}}, nil
+	}
+	pages, _ := pdf.PageCount(path)
+	if strings.TrimSpace(text) == "" {
+		return []Result{{Content: fmt.Sprintf("<PDF with %d page(s) and no extractable text (it may be scanned/image-only)>", pages)}}, nil
+	}
+	return []Result{{Content: fmt.Sprintf("[PDF: %d page(s)]\n\n%s", pages, text)}}, nil
+}
 
 // readDefaultLimit is the default number of lines Read returns when no limit is
 // given (the JS Read tool reads up to 2000 lines).
@@ -49,8 +63,8 @@ func (r *Read) Name() string { return "Read" }
 
 func (r *Read) Description(context.Context) (string, error) {
 	return "Reads a file from the local filesystem. file_path must be an absolute path. " +
-		"Returns up to 2000 lines by default in cat -n format (line numbers starting at 1). " +
-		"Use offset and limit to read a specific window of a large file.", nil
+		"Text files return up to 2000 lines in cat -n format (line numbers from 1); use " +
+		"offset and limit to window a large file. PDF files are returned as extracted text.", nil
 }
 
 func (r *Read) InputSchema() json.RawMessage { return r.schema.Raw }
@@ -87,6 +101,11 @@ func (r *Read) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Res
 
 	if info, statErr := os.Stat(in.FilePath); statErr == nil && info.IsDir() {
 		return []Result{{Content: fmt.Sprintf("Path is a directory, not a file: %s. Use Glob or `ls` via Bash to list its contents.", in.FilePath), IsError: true}}, nil
+	}
+
+	// PDFs are read as extracted text (in-process via internal/native/pdf).
+	if strings.EqualFold(filepath.Ext(in.FilePath), ".pdf") {
+		return readPDF(in.FilePath)
 	}
 
 	f, err := os.Open(in.FilePath)
