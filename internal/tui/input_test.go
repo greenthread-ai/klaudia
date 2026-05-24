@@ -3,7 +3,9 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 )
@@ -61,6 +63,63 @@ func TestCommonPrefix(t *testing.T) {
 	}
 	if got := commonPrefix([]string{"abc", "xyz"}); got != "" {
 		t.Errorf("disjoint = %q, want empty", got)
+	}
+}
+
+func TestFmtDuration(t *testing.T) {
+	cases := map[time.Duration]string{
+		500 * time.Millisecond:          "500ms",
+		12300 * time.Millisecond:        "12.3s",
+		(2*time.Minute + 5*time.Second): "2m05s",
+	}
+	for d, want := range cases {
+		if got := fmtDuration(d); got != want {
+			t.Errorf("fmtDuration(%v) = %q, want %q", d, got, want)
+		}
+	}
+}
+
+func TestSlashSuggestions(t *testing.T) {
+	m := newTestModel()
+	m.sess.Skills = []SkillCommand{{Name: "review"}}
+
+	m.input.SetValue("/co")
+	got := m.slashSuggestions()
+	// /compact, /config, /context, /commit all start with /co
+	if len(got) < 3 {
+		t.Errorf("/co suggestions = %v, want several", got)
+	}
+	for _, g := range got {
+		if !strings.HasPrefix(g, "/co") {
+			t.Errorf("suggestion %q does not match /co", g)
+		}
+	}
+
+	// A skill is suggested.
+	m.input.SetValue("/rev")
+	if got := m.slashSuggestions(); len(got) != 1 || got[0] != "/review" {
+		t.Errorf("/rev = %v, want [/review]", got)
+	}
+
+	// No suggestions once a space is typed (args started).
+	m.input.SetValue("/model gpt")
+	if got := m.slashSuggestions(); got != nil {
+		t.Errorf("with args = %v, want nil", got)
+	}
+}
+
+func TestCompleteSlashCommonPrefix(t *testing.T) {
+	m := newTestModel()
+	m.input.SetValue("/co")
+	m.completeSlash() // multiple matches → common prefix (at least "/co")
+	if !strings.HasPrefix(m.input.Value(), "/co") {
+		t.Errorf("completeSlash = %q", m.input.Value())
+	}
+
+	m.input.SetValue("/doc")
+	m.completeSlash() // unique → "/doctor "
+	if m.input.Value() != "/doctor " {
+		t.Errorf("unique completeSlash = %q, want '/doctor '", m.input.Value())
 	}
 }
 

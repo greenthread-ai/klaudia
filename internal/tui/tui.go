@@ -6,6 +6,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/stopwatch"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -46,12 +48,12 @@ type Session struct {
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
 
 	// Render-only context for /config and /context (set once at startup).
-	Provider    string   // resolved provider ("anthropic" | "openai" | …)
-	SandboxMode string   // resolved sandbox mode ("local" | "os" | "container")
-	CWD         string   // working directory
-	GitBranch   string   // current git branch (may be "")
+	Provider    string      // resolved provider ("anthropic" | "openai" | …)
+	SandboxMode string      // resolved sandbox mode ("local" | "os" | "container")
+	CWD         string      // working directory
+	GitBranch   string      // current git branch (may be "")
 	Agents      []AgentInfo // built-in sub-agent types, for /agents
-	ExtraDirs   []string // additional working dirs added via /add-dir
+	ExtraDirs   []string    // additional working dirs added via /add-dir
 
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
@@ -117,28 +119,47 @@ type planMsg struct {
 }
 
 var (
-	userStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	toolStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	askStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11"))
-	bannerStyle = lipgloss.NewStyle().Faint(true)
+	userStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	toolStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	askStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11"))
+	bannerStyle  = lipgloss.NewStyle().Faint(true)
+	logoStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("13"))
+	hintStyle    = lipgloss.NewStyle().Faint(true).Italic(true)
+	suggestStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 )
+
+// intro is the welcoming banner shown at startup. The model name/branch are
+// filled in by the caller.
+func intro(model, branch string) string {
+	logo := logoStyle.Render("✦ Klaudia")
+	tag := bannerStyle.Render("  your local coding agent")
+	var meta string
+	if model != "" {
+		meta = "\n" + bannerStyle.Render("  model: "+model)
+	}
+	if branch != "" {
+		meta += bannerStyle.Render("   ⎇ " + branch)
+	}
+	tip := hintStyle.Render("\n  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C to quit")
+	return logo + tag + meta + tip + "\n"
+}
 
 // Model is the Bubble Tea model for the interactive REPL.
 type Model struct {
-	run     RunFunc
-	events  chan tea.Msg
-	ctx     context.Context
+	run    RunFunc
+	events chan tea.Msg
+	ctx    context.Context
 
-	vp      viewport.Model
-	input   textinput.Model
-	spin    spinner.Model
-	state   uiState
-	ready   bool
-	width   int
-	height  int
+	vp     viewport.Model
+	input  textinput.Model
+	spin   spinner.Model
+	state  uiState
+	ready  bool
+	width  int
+	height int
 
-	transcript strings.Builder        // rendered scrollback
+	transcript strings.Builder // rendered scrollback
 	history    []anthropic.BetaMessageParam
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
@@ -164,6 +185,9 @@ type Model struct {
 	inputHistory []string
 	histPos      int
 	histDraft    string // the in-progress line stashed when navigating up
+	// Elapsed-run stopwatch and per-turn cancel (Esc interrupts the model).
+	sw         stopwatch.Model
+	turnCancel context.CancelFunc
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
@@ -182,17 +206,30 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	sp.Spinner = spinner.Dot
 
 	m := &Model{
-		run:    run,
-		events: make(chan tea.Msg, 256),
-		ctx:    ctx,
+		run:     run,
+		events:  make(chan tea.Msg, 256),
+		ctx:     ctx,
 		input:   in,
 		spin:    sp,
+		sw:      stopwatch.NewWithInterval(100 * time.Millisecond),
 		state:   stateIdle,
 		history: history,
 		sess:    sess,
 	}
-	m.transcript.WriteString(bannerStyle.Render("Klaudia — interactive mode. Type a prompt and press Enter.") + "\n")
+	model, branch := "", ""
+	if sess != nil {
+		model, branch = sess.displayModel(), sess.GitBranch
+	}
+	m.transcript.WriteString(intro(model, branch))
 	return m
+}
+
+// displayModel returns the model name to show in the intro/status.
+func (s *Session) displayModel() string {
+	if s.Model != "" {
+		return s.Model
+	}
+	return s.ResolvedModel
 }
 
 func (m *Model) Init() tea.Cmd {
@@ -267,8 +304,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case doneMsg:
-		if msg.err != nil {
+		elapsed := m.sw.Elapsed()
+		stopSW := m.sw.Stop()
+		m.turnCancel = nil
+		switch {
+		case errors.Is(msg.err, context.Canceled):
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  ⊘ interrupted after %s", fmtDuration(elapsed))))
+		case msg.err != nil:
 			m.appendLine(errStyle.Render("error: " + api.FriendlyError(msg.err)))
+		default:
+			m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ done in %s", fmtDuration(elapsed))))
 		}
 		if msg.res.Messages != nil {
 			m.history = msg.res.Messages
@@ -276,9 +321,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statTurns += msg.res.NumTurns
 		m.statIn += msg.res.InputTokens
 		m.statOut += msg.res.OutputTokens
+		// Drop any approval/ask/plan channels a turn was interrupted mid-prompt.
+		m.pending, m.askReply, m.planReply = nil, nil, nil
 		m.state = stateIdle
 		m.input.Focus()
-		return m, tea.Batch(textinput.Blink, m.waitForEvent())
+		return m, tea.Batch(textinput.Blink, m.waitForEvent(), stopSW)
 
 	case compactDoneMsg:
 		if msg.err != nil {
@@ -295,6 +342,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
 		return m, cmd
+
+	case stopwatch.TickMsg, stopwatch.StartStopMsg, stopwatch.ResetMsg:
+		var cmd tea.Cmd
+		m.sw, cmd = m.sw.Update(msg)
+		return m, cmd
 	}
 
 	var cmd tea.Cmd
@@ -306,6 +358,16 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
+	case tea.KeyEsc:
+		// Interrupt the in-flight turn (and any pending approval/question it is
+		// blocked on). The cancelled context unblocks the agent goroutine, which
+		// then sends doneMsg.
+		if m.turnCancel != nil {
+			m.turnCancel()
+			m.turnCancel = nil
+			m.appendLine(toolStyle.Render("  ⊘ interrupting…"))
+			return m, nil
+		}
 	}
 
 	if m.state == stateAwaitingPlan {
@@ -373,9 +435,14 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// @-path completion on Tab (only when editing an idle line).
+	// Tab completion on an idle line: slash command when the line is a "/token",
+	// otherwise an @<path> reference.
 	if m.state == stateIdle && msg.Type == tea.KeyTab {
-		m.completeAtPath()
+		if strings.HasPrefix(m.input.Value(), "/") && !strings.ContainsAny(m.input.Value(), " \t") {
+			m.completeSlash()
+		} else {
+			m.completeAtPath()
+		}
 		return m, nil
 	}
 
@@ -400,11 +467,11 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		m.state = stateRunning
-		m.startTurn(prompt)
 		// Do NOT arm another waitForEvent here: exactly one channel reader must
 		// be outstanding (Init armed it; each channel-event handler re-arms it).
 		// A second reader would race and deliver streamed deltas out of order.
-		return m, m.spin.Tick
+		// startTurn returns only spinner/stopwatch ticks (separate cmd loops).
+		return m, m.startTurn(prompt)
 	}
 
 	var cmd tea.Cmd
@@ -426,7 +493,6 @@ const slashHelp = `Available commands:
   /config          Show resolved provider/model/sandbox settings
   /agents          List available sub-agent types
   /context         Show working directory, git branch, and message count
-  /cost            Show session token totals and an estimated cost
   /compact         Summarize and compact the conversation history now
   /add-dir <path>  Add a directory to the prompt context
   /plan [off]      Enter (or leave) read-only plan mode
@@ -441,6 +507,52 @@ Keys:
   Tab              Complete an @<path> reference from the working dir
   ↑ / ↓            Cycle through previous prompts
   Ctrl+C           Quit`
+
+// builtinCommands is the canonical list of built-in slash commands, used for
+// type-ahead suggestions. Kept in sync with the handleSlash switch.
+var builtinCommands = []string{
+	"/help", "/model", "/allow", "/deny", "/goal", "/memory", "/mcp",
+	"/stats", "/status", "/config", "/agents", "/context", "/compact",
+	"/add-dir", "/plan", "/doctor", "/diff", "/commit", "/export",
+	"/clear", "/quit", "/exit",
+}
+
+// slashSuggestions returns commands (built-ins + skills) that start with the
+// current "/partial" token, when the user is typing a command on a fresh line.
+func (m *Model) slashSuggestions() []string {
+	value := m.input.Value()
+	if !strings.HasPrefix(value, "/") || strings.ContainsAny(value, " \t") {
+		return nil
+	}
+	var out []string
+	for _, c := range builtinCommands {
+		if strings.HasPrefix(c, value) {
+			out = append(out, c)
+		}
+	}
+	if m.sess != nil {
+		for _, sk := range m.sess.Skills {
+			if name := "/" + sk.Name; strings.HasPrefix(name, value) {
+				out = append(out, name)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// slashSuggestionLine renders up to 8 type-ahead command suggestions, or "" when
+// there is nothing to suggest (or the only match is exactly what's typed).
+func (m *Model) slashSuggestionLine() string {
+	sug := m.slashSuggestions()
+	if len(sug) == 0 || (len(sug) == 1 && sug[0] == m.input.Value()) {
+		return ""
+	}
+	if len(sug) > 8 {
+		sug = append(sug[:8], "…")
+	}
+	return suggestStyle.Render(strings.Join(sug, "  ")) + hintStyle.Render("  (Tab to complete)")
+}
 
 // handleSlash dispatches a slash command. Commands run locally and never reach
 // the model.
@@ -549,8 +661,6 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.appendLine(bannerStyle.Render(m.renderAgents()))
 	case "/context":
 		m.appendLine(bannerStyle.Render(m.renderContext()))
-	case "/cost":
-		m.appendLine(bannerStyle.Render(m.renderCost()))
 	case "/add-dir":
 		if len(args) == 0 {
 			if len(m.sess.ExtraDirs) == 0 {
@@ -645,8 +755,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			rendered := sk.Render(strings.Join(args, " "))
 			m.appendLine(bannerStyle.Render("Running skill /" + sk.Name))
 			m.state = stateRunning
-			m.startTurn(rendered)
-			return m, m.spin.Tick
+			return m, m.startTurn(rendered)
 		}
 		m.appendLine(errStyle.Render("Unknown command " + cmd + ". Try /help."))
 	}
@@ -689,35 +798,6 @@ func (m *Model) renderAgents() string {
 		fmt.Fprintf(&b, "\n  %-16s %s", a.Name, a.Description)
 	}
 	return b.String()
-}
-
-// modelPrice is per-million-token USD pricing (input, output) for cost
-// estimation. Matched by substring against the resolved model id; unknown
-// models report tokens only.
-type modelPrice struct{ in, out float64 }
-
-var priceTable = map[string]modelPrice{
-	"opus":   {15.0, 75.0},
-	"sonnet": {3.0, 15.0},
-	"haiku":  {0.80, 4.0},
-	"gpt-5":  {1.25, 10.0},
-}
-
-// renderCost shows session token totals and a best-effort USD estimate.
-func (m *Model) renderCost() string {
-	model := m.sess.ResolvedModel
-	if model == "" {
-		model = m.sess.Model
-	}
-	base := fmt.Sprintf("Cost: turns=%d  input_tokens=%d  output_tokens=%d",
-		m.statTurns, m.statIn, m.statOut)
-	for key, p := range priceTable {
-		if model != "" && strings.Contains(strings.ToLower(model), key) {
-			usd := float64(m.statIn)/1e6*p.in + float64(m.statOut)/1e6*p.out
-			return base + fmt.Sprintf("\n  estimated cost: $%.4f (model %s)", usd, model)
-		}
-	}
-	return base + "\n  estimated cost: unknown (no pricing for model " + model + ")"
 }
 
 // renderContext shows the working directory, git branch, and model.
@@ -779,6 +859,21 @@ func exportMarkdown(history []anthropic.BetaMessageParam) string {
 		}
 	}
 	return b.String()
+}
+
+// completeSlash fills the input with the unique command completion, or the
+// common prefix when several match.
+func (m *Model) completeSlash() {
+	sug := m.slashSuggestions()
+	if len(sug) == 0 {
+		return
+	}
+	if len(sug) == 1 {
+		m.input.SetValue(sug[0] + " ")
+	} else {
+		m.input.SetValue(commonPrefix(sug))
+	}
+	m.input.CursorEnd()
 }
 
 // completeAtPath completes the trailing "@<partial>" token in the input against
@@ -904,6 +999,20 @@ func (m *Model) navigateHistory(up bool) {
 	m.input.CursorEnd()
 }
 
+// fmtDuration renders a turn duration compactly: "850ms", "12.3s", "2m05s".
+func fmtDuration(d time.Duration) string {
+	switch {
+	case d < time.Second:
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	case d < time.Minute:
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	default:
+		m := int(d.Minutes())
+		s := int(d.Seconds()) - m*60
+		return fmt.Sprintf("%dm%02ds", m, s)
+	}
+}
+
 // capitalize upper-cases the first rune (role headers in the export).
 func capitalize(s string) string {
 	if s == "" {
@@ -957,9 +1066,11 @@ func (m *Model) answer(d permission.Decision) {
 	m.state = stateRunning
 }
 
-// startTurn runs the agent in a goroutine, delivering events via the channel.
-// A standing /goal is re-stated to the model each turn (Ralph-style).
-func (m *Model) startTurn(prompt string) {
+// startTurn runs the agent in a goroutine, delivering events via the channel,
+// and returns the command that drives the spinner + elapsed stopwatch. The turn
+// runs under a cancellable context so Esc can interrupt it. A standing /goal is
+// re-stated to the model each turn (Ralph-style).
+func (m *Model) startTurn(prompt string) tea.Cmd {
 	if m.sess != nil && m.sess.Goal != "" {
 		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
 	}
@@ -967,10 +1078,13 @@ func (m *Model) startTurn(prompt string) {
 	asker := &uiAsker{events: m.events}
 	planner := &uiPlanner{events: m.events}
 	emit := func(ev agent.Event) { m.events <- eventMsg{ev} }
+	ctx, cancel := context.WithCancel(m.ctx)
+	m.turnCancel = cancel
 	go func() {
-		res, err := m.run(m.ctx, prompt, m.history, approver, asker, planner, emit)
+		res, err := m.run(ctx, prompt, m.history, approver, asker, planner, emit)
 		m.events <- doneMsg{res: res, err: err}
 	}()
+	return tea.Batch(m.spin.Tick, m.sw.Reset(), m.sw.Start())
 }
 
 func (m *Model) renderEvent(ev agent.Event) {
@@ -1038,7 +1152,7 @@ func (m *Model) View() string {
 	var bottom string
 	switch m.state {
 	case stateRunning:
-		bottom = m.spin.View() + " working…"
+		bottom = m.spin.View() + " working… " + bannerStyle.Render(m.sw.View()) + hintStyle.Render("  (esc to interrupt)")
 	case stateAwaitingPermission:
 		bottom = askStyle.Render(fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", m.pendingReq.ToolName))
 	case stateAwaitingAnswer:
@@ -1049,6 +1163,9 @@ func (m *Model) View() string {
 		bottom = askStyle.Render("Confirm? (y)es / (n)o")
 	default:
 		bottom = m.input.View()
+		if sug := m.slashSuggestionLine(); sug != "" {
+			bottom += "\n" + sug
+		}
 	}
 	return m.vp.View() + "\n" + bottom
 }

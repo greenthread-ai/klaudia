@@ -71,7 +71,7 @@ var builtinSlashCommands = map[string]bool{
 	"model": true, "goal": true, "memory": true, "mcp": true, "stats": true,
 	"allow": true, "deny": true, "status": true,
 	"config": true, "agents": true, "context": true,
-	"cost": true, "compact": true, "add-dir": true,
+	"compact": true, "add-dir": true,
 	"plan": true, "doctor": true, "diff": true, "commit": true, "export": true,
 }
 

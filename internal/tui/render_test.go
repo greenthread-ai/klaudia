@@ -51,17 +51,16 @@ func TestRenderAgents(t *testing.T) {
 	}
 }
 
-func TestRenderCost(t *testing.T) {
-	// Known model → estimate present; 1M in @ $3 + 1M out @ $15 = $18.
-	m := &Model{sess: &Session{ResolvedModel: "claude-sonnet-4-5"}, statIn: 1_000_000, statOut: 1_000_000}
-	got := m.renderCost()
-	if !strings.Contains(got, "input_tokens=1000000") || !strings.Contains(got, "$18.0000") {
-		t.Errorf("renderCost = %q", got)
+func TestIntro(t *testing.T) {
+	got := intro("openai/gpt-5.5", "go-port")
+	for _, want := range []string{"Klaudia", "openai/gpt-5.5", "go-port", "Esc to interrupt"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("intro missing %q", want)
+		}
 	}
-	// Unknown model → no pricing.
-	u := &Model{sess: &Session{ResolvedModel: "mystery-model"}, statIn: 10}
-	if got := u.renderCost(); !strings.Contains(got, "unknown") {
-		t.Errorf("unknown renderCost = %q", got)
+	// No model/branch → still renders the logo + tip.
+	if bare := intro("", ""); !strings.Contains(bare, "Klaudia") {
+		t.Errorf("bare intro = %q", bare)
 	}
 }
 
