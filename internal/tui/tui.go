@@ -162,7 +162,7 @@ var (
 // id are filled in by the caller.
 func intro(model, branch, sessionID string) string {
 	logo := logoStyle.Render("✦ Klaudia")
-	tag := bannerStyle.Render("  your local coding agent")
+	tag := bannerStyle.Render(" your preferred coding agent")
 	var meta string
 	if model != "" {
 		meta = "\n" + bannerStyle.Render("  model: "+model)
