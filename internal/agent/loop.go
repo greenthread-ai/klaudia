@@ -245,6 +245,24 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 	return messages
 }
 
+// Compact unconditionally summarizes the conversation via the model and returns
+// the replacement history plus the summary text. Used by the TUI's /compact
+// command (the loop's own autocompact runs automatically near the context
+// limit). Returns an error if the summary call fails or yields no text.
+func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model) ([]anthropic.BetaMessageParam, string, error) {
+	req := compaction.BuildSummaryRequest(messages, model, 4096)
+	req.Betas = api.DefaultBetas
+	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	summary := finalAssistantText(assistant)
+	if summary == "" {
+		return nil, "", fmt.Errorf("compaction produced no summary")
+	}
+	return compaction.ReplaceWithSummary(summary), summary, nil
+}
+
 // autocompact summarizes the conversation via the model and replaces history
 // with the summary. Returns (messages, false) if the summary call fails.
 func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options) ([]anthropic.BetaMessageParam, bool) {

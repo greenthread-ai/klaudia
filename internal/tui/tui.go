@@ -45,7 +45,16 @@ type Session struct {
 	CWD         string   // working directory
 	GitBranch   string   // current git branch (may be "")
 	Agents      []AgentInfo // built-in sub-agent types, for /agents
+	ExtraDirs   []string // additional working dirs added via /add-dir
+
+	// Compact, if set, runs a model-based compaction of the given history and
+	// returns the replacement history plus the summary. Backs /compact.
+	Compact CompactFunc
 }
+
+// CompactFunc summarizes the conversation history via the model, returning the
+// replacement history and the summary text.
+type CompactFunc func(ctx context.Context, history []anthropic.BetaMessageParam) (newHistory []anthropic.BetaMessageParam, summary string, err error)
 
 // AgentInfo is the model-facing summary of a sub-agent type, shown by /agents.
 type AgentInfo struct {
@@ -82,6 +91,11 @@ type permissionMsg struct {
 type doneMsg struct {
 	res agent.Result
 	err error
+}
+type compactDoneMsg struct {
+	history []anthropic.BetaMessageParam
+	summary string
+	err     error
 }
 type askMsg struct {
 	question string
@@ -250,6 +264,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.Focus()
 		return m, tea.Batch(textinput.Blink, m.waitForEvent())
 
+	case compactDoneMsg:
+		if msg.err != nil {
+			m.appendLine(errStyle.Render("compact: " + api.FriendlyError(msg.err)))
+		} else {
+			m.history = msg.history
+			m.appendLine(bannerStyle.Render("Compacted conversation. Summary:\n" + strings.TrimSpace(msg.summary)))
+		}
+		m.state = stateIdle
+		m.input.Focus()
+		return m, tea.Batch(textinput.Blink, m.waitForEvent())
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spin, cmd = m.spin.Update(msg)
@@ -355,6 +380,9 @@ const slashHelp = `Available commands:
   /config          Show resolved provider/model/sandbox settings
   /agents          List available sub-agent types
   /context         Show working directory, git branch, and message count
+  /cost            Show session token totals and an estimated cost
+  /compact         Summarize and compact the conversation history now
+  /add-dir <path>  Add a directory to the prompt context
   /clear           Clear the screen and conversation history
   /quit, /exit     Exit Klaudia`
 
@@ -465,6 +493,36 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.appendLine(bannerStyle.Render(m.renderAgents()))
 	case "/context":
 		m.appendLine(bannerStyle.Render(m.renderContext()))
+	case "/cost":
+		m.appendLine(bannerStyle.Render(m.renderCost()))
+	case "/add-dir":
+		if len(args) == 0 {
+			if len(m.sess.ExtraDirs) == 0 {
+				m.appendLine(bannerStyle.Render("No extra directories added. /add-dir <path> to add one."))
+			} else {
+				m.appendLine(bannerStyle.Render("Extra directories:\n  " + strings.Join(m.sess.ExtraDirs, "\n  ")))
+			}
+			break
+		}
+		dir := strings.Join(args, " ")
+		m.sess.ExtraDirs = append(m.sess.ExtraDirs, dir)
+		m.appendLine(bannerStyle.Render("Added directory (referenced in the prompt context next turn): " + dir))
+	case "/compact":
+		if m.sess.Compact == nil {
+			m.appendLine(errStyle.Render("compaction is not available"))
+			break
+		}
+		if len(m.history) == 0 {
+			m.appendLine(bannerStyle.Render("Nothing to compact yet."))
+			break
+		}
+		m.appendLine(bannerStyle.Render("Compacting conversation…"))
+		m.state = stateRunning
+		go func(hist []anthropic.BetaMessageParam) {
+			newHist, summary, err := m.sess.Compact(m.ctx, hist)
+			m.events <- compactDoneMsg{history: newHist, summary: summary, err: err}
+		}(m.history)
+		return m, m.spin.Tick
 	default:
 		// A /<skill> matching a user-defined skill renders its body and submits it
 		// as the turn prompt. Built-in commands above always win (a skill that
@@ -517,6 +575,35 @@ func (m *Model) renderAgents() string {
 		fmt.Fprintf(&b, "\n  %-16s %s", a.Name, a.Description)
 	}
 	return b.String()
+}
+
+// modelPrice is per-million-token USD pricing (input, output) for cost
+// estimation. Matched by substring against the resolved model id; unknown
+// models report tokens only.
+type modelPrice struct{ in, out float64 }
+
+var priceTable = map[string]modelPrice{
+	"opus":   {15.0, 75.0},
+	"sonnet": {3.0, 15.0},
+	"haiku":  {0.80, 4.0},
+	"gpt-5":  {1.25, 10.0},
+}
+
+// renderCost shows session token totals and a best-effort USD estimate.
+func (m *Model) renderCost() string {
+	model := m.sess.ResolvedModel
+	if model == "" {
+		model = m.sess.Model
+	}
+	base := fmt.Sprintf("Cost: turns=%d  input_tokens=%d  output_tokens=%d",
+		m.statTurns, m.statIn, m.statOut)
+	for key, p := range priceTable {
+		if model != "" && strings.Contains(strings.ToLower(model), key) {
+			usd := float64(m.statIn)/1e6*p.in + float64(m.statOut)/1e6*p.out
+			return base + fmt.Sprintf("\n  estimated cost: $%.4f (model %s)", usd, model)
+		}
+	}
+	return base + "\n  estimated cost: unknown (no pricing for model " + model + ")"
 }
 
 // renderContext shows the working directory, git branch, and model.

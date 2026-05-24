@@ -70,6 +70,17 @@ var builtinSlashCommands = map[string]bool{
 	"model": true, "goal": true, "memory": true, "mcp": true, "stats": true,
 	"allow": true, "deny": true, "status": true,
 	"config": true, "agents": true, "context": true,
+	"cost": true, "compact": true, "add-dir": true,
+}
+
+// withExtraDirs appends an "additional working directories" note to the system
+// prompt when /add-dir has registered any (v1: informational context only).
+func withExtraDirs(sys string, dirs []string) string {
+	if len(dirs) == 0 {
+		return sys
+	}
+	return sys + "\n\nAdditional working directories the user has made available:\n- " +
+		strings.Join(dirs, "\n- ")
 }
 
 // providerName returns the resolved provider for display ("anthropic" default).
@@ -475,6 +486,9 @@ func run(cmd *cobra.Command, opts *options) error {
 			CWD:            cwd,
 			GitBranch:      gitBranch(cwd),
 			Agents:         tuiAgents(),
+			Compact: func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
+				return loop.Compact(ctx, history, api.ResolveModel(modelStr))
+			},
 		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
 			// Rebuild the permission context from the live session mode each turn
@@ -483,7 +497,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,
 				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
-				System:          sysPrompt,
+				System:          withExtraDirs(sysPrompt, sess.ExtraDirs),
 				MaxTurns:        opts.maxTurns,
 				Permission:      turnPerm,
 				DeferredTools:   deferredTools,
