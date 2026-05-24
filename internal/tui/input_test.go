@@ -108,6 +108,35 @@ func TestSlashSuggestions(t *testing.T) {
 	}
 }
 
+func TestHelpAndSuggestionsShareSource(t *testing.T) {
+	help := slashHelp()
+	// Every canonical command name appears in /help (single source of truth).
+	for _, name := range builtinCommands() {
+		if !strings.Contains(help, name) {
+			t.Errorf("/help is missing %q", name)
+		}
+	}
+	// The removed /permissions alias should be gone everywhere.
+	for _, name := range builtinCommands() {
+		if name == "/permissions" {
+			t.Error("/permissions alias should have been removed")
+		}
+	}
+	if strings.Contains(help, "/permissions") {
+		t.Error("/help still references /permissions")
+	}
+	// /mode is present.
+	var hasMode bool
+	for _, n := range builtinCommands() {
+		if n == "/mode" {
+			hasMode = true
+		}
+	}
+	if !hasMode {
+		t.Error("/mode missing from commands")
+	}
+}
+
 func TestCompleteSlashCommonPrefix(t *testing.T) {
 	m := newTestModel()
 	m.input.SetValue("/co")

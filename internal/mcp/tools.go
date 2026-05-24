@@ -62,6 +62,9 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 	if len(raw) > 0 {
 		_ = json.Unmarshal(raw, &args)
 	}
+	if !t.server.Connected() {
+		return []tools.Result{{Content: fmt.Sprintf("MCP server %q is disconnected; reconnect it with /mcp.", t.server.Name), IsError: true}}, nil
+	}
 	res, err := t.server.session.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args})
 	if err != nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP call failed: %v", err), IsError: true}}, nil
@@ -74,6 +77,9 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 	var out []tools.Tool
 	for _, srv := range m.servers {
+		if !srv.Connected() {
+			continue
+		}
 		res, err := srv.session.ListTools(ctx, &mcpsdk.ListToolsParams{})
 		if err != nil {
 			continue
@@ -123,6 +129,9 @@ func (m *Manager) findServer(name string) *Server {
 func (m *Manager) formatResourceList(ctx context.Context) string {
 	var b strings.Builder
 	for _, srv := range m.servers {
+		if !srv.Connected() {
+			continue
+		}
 		res, err := srv.session.ListResources(ctx, &mcpsdk.ListResourcesParams{})
 		if err != nil {
 			continue

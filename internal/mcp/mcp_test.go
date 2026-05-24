@@ -45,6 +45,49 @@ func startTestServer(t *testing.T) (*Manager, func()) {
 	return m, func() { m.Close(); _ = ss.Wait() }
 }
 
+func TestDisconnectMakesToolFailGracefully(t *testing.T) {
+	m, cleanup := startTestServer(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	tl := m.Tools(ctx)
+	if len(tl) == 0 {
+		t.Fatal("expected at least one tool")
+	}
+	if !m.Servers()[0].Connected() {
+		t.Fatal("server should start connected")
+	}
+
+	if err := m.Disconnect("testsrv"); err != nil {
+		t.Fatalf("Disconnect: %v", err)
+	}
+	if m.Servers()[0].Connected() {
+		t.Error("server should be disconnected")
+	}
+	// Calling the (still-registered) tool must not panic; it returns an error.
+	res, err := tl[0].Execute(ctx, tools.Context{}, json.RawMessage(`{"message":"hi"}`))
+	if err != nil {
+		t.Fatalf("Execute returned a hard error: %v", err)
+	}
+	if len(res) == 0 || !res[0].IsError {
+		t.Errorf("expected a graceful error result, got %+v", res)
+	}
+	// A disconnected server contributes no tools to the live list.
+	if len(m.Tools(ctx)) != 0 {
+		t.Error("disconnected server should expose no tools")
+	}
+}
+
+func TestReconnectUnknownServer(t *testing.T) {
+	m := &Manager{cfg: Config{MCPServers: map[string]ServerConfig{}}}
+	if err := m.Reconnect("nope"); err == nil {
+		t.Error("expected error reconnecting unknown server")
+	}
+	if err := m.Disconnect("nope"); err == nil {
+		t.Error("expected error disconnecting unknown server")
+	}
+}
+
 func TestManagerToolsWrapsAndCalls(t *testing.T) {
 	m, cleanup := startTestServer(t)
 	defer cleanup()

@@ -43,7 +43,6 @@ type Session struct {
 	ResolvedModel  string         // concrete model id for display
 	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
 	Memory         *memory.Store  // backs /memory (may be nil)
-	MCPSummary     []string       // lines for /mcp ("server: tool1, tool2")
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
 
@@ -60,6 +59,22 @@ type Session struct {
 	Compact CompactFunc
 	// Doctor, if set, returns a rendered environment diagnostic. Backs /doctor.
 	Doctor func() string
+	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
+	MCP MCPController
+}
+
+// MCPController lets the TUI manage MCP servers without owning the manager.
+type MCPController interface {
+	Servers() []MCPServerInfo
+	Reconnect(name string) error
+	Disconnect(name string) error
+}
+
+// MCPServerInfo is one MCP server's status for the /mcp view.
+type MCPServerInfo struct {
+	Name      string
+	Connected bool
+	Tools     int
 }
 
 // CompactFunc summarizes the conversation history via the model, returning the
@@ -381,6 +396,23 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Scrollback works in any state and never reaches the text input. (Up/Down
+	// are reserved for input history, so paging uses PgUp/PgDn and Ctrl+U/D.)
+	switch msg.Type {
+	case tea.KeyPgUp:
+		m.vp.PageUp()
+		return m, nil
+	case tea.KeyPgDown:
+		m.vp.PageDown()
+		return m, nil
+	case tea.KeyCtrlU:
+		m.vp.HalfViewUp()
+		return m, nil
+	case tea.KeyCtrlD:
+		m.vp.HalfViewDown()
+		return m, nil
+	}
+
 	if m.state == stateAwaitingPlan {
 		switch strings.ToLower(msg.String()) {
 		case "y":
@@ -509,45 +541,67 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// slashHelp lists the available slash commands.
-const slashHelp = `Available commands:
-  /help            Show this help
-  /model [name]    Show or set the model (alias: haiku|sonnet|opus, or full ID)
-  /mode [name]     Change how Klaudia asks permission (no arg = picker)
-  /allow <rule>    Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)
-  /deny <rule>     Auto-deny a tool rule this session
-  /goal [text]     Set/show a standing goal re-stated each turn (/goal clear to stop)
-  /memory [add …]  Show recalled memory, or add a note
-  /mcp             List connected MCP servers and tools
-  /stats           Show session stats (turns, tokens)
-  /status          Show the current session settings
-  /config          Show resolved provider/model/sandbox settings
-  /agents          List available sub-agent types
-  /context         Show working directory, git branch, and message count
-  /compact         Summarize and compact the conversation history now
-  /add-dir <path>  Add a directory to the prompt context
-  /plan [off]      Enter (or leave) read-only plan mode
-  /doctor          Run environment diagnostics
-  /diff [args]     Show git diff of the working tree
-  /commit <msg>    Stage all changes and commit (asks first)
-  /export          Export the conversation to a Markdown file
-  /clear           Clear the screen and conversation history
-  /quit, /exit     Exit Klaudia
+// cmdInfo describes one slash command — the single source of truth for both
+// /help and the type-ahead suggestions, so the two can never drift.
+type cmdInfo struct{ name, args, desc string }
 
-Keys:
+var commandList = []cmdInfo{
+	{"/help", "", "Show this help"},
+	{"/model", "[name]", "Show or set the model (alias: haiku|sonnet|opus, or full ID)"},
+	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
+	{"/allow", "<rule>", "Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)"},
+	{"/deny", "<rule>", "Auto-deny a tool rule this session"},
+	{"/goal", "[text]", "Set/show a standing goal re-stated each turn (/goal clear to stop)"},
+	{"/memory", "[add …]", "Show recalled memory, or add a note"},
+	{"/mcp", "", "List MCP servers; reconnect or disconnect them"},
+	{"/stats", "", "Show session stats (turns, tokens)"},
+	{"/status", "", "Show the current session settings"},
+	{"/config", "", "Show resolved provider/model/sandbox settings"},
+	{"/agents", "", "List available sub-agent types"},
+	{"/context", "", "Show working directory, git branch, and message count"},
+	{"/compact", "", "Summarize and compact the conversation history now"},
+	{"/add-dir", "<path>", "Add a directory to the prompt context"},
+	{"/plan", "[off]", "Enter (or leave) read-only plan mode"},
+	{"/doctor", "", "Run environment diagnostics"},
+	{"/diff", "[args]", "Show git diff of the working tree"},
+	{"/commit", "<msg>", "Stage all changes and commit (asks first)"},
+	{"/export", "", "Export the conversation to a Markdown file"},
+	{"/clear", "", "Clear the screen and conversation history"},
+	{"/quit", "", "Exit Klaudia (alias /exit)"},
+}
+
+// keyHints documents the non-command key bindings shown in /help.
+const keyHints = `Keys:
   /                Type a slash to see matching commands
   Tab              Complete a /command or an @<path> reference
   ↑ / ↓            Cycle through previous prompts
+  PgUp / PgDn      Scroll the conversation history
   Esc              Interrupt the model mid-turn
   Ctrl+C           Quit`
 
-// builtinCommands is the canonical list of built-in slash commands, used for
-// type-ahead suggestions. Kept in sync with the handleSlash switch.
-var builtinCommands = []string{
-	"/help", "/model", "/mode", "/permissions", "/allow", "/deny", "/goal",
-	"/memory", "/mcp", "/stats", "/status", "/config", "/agents", "/context",
-	"/compact", "/add-dir", "/plan", "/doctor", "/diff", "/commit", "/export",
-	"/clear", "/quit", "/exit",
+// slashHelp renders the command reference from commandList + keyHints.
+func slashHelp() string {
+	var b strings.Builder
+	b.WriteString("Available commands:")
+	for _, c := range commandList {
+		left := c.name
+		if c.args != "" {
+			left += " " + c.args
+		}
+		fmt.Fprintf(&b, "\n  %-16s %s", left, c.desc)
+	}
+	b.WriteString("\n\n")
+	b.WriteString(keyHints)
+	return b.String()
+}
+
+// builtinCommands returns the canonical command names for type-ahead.
+func builtinCommands() []string {
+	out := make([]string, len(commandList))
+	for i, c := range commandList {
+		out[i] = c.name
+	}
+	return out
 }
 
 // slashSuggestions returns commands (built-ins + skills) that start with the
@@ -558,7 +612,7 @@ func (m *Model) slashSuggestions() []string {
 		return nil
 	}
 	var out []string
-	for _, c := range builtinCommands {
+	for _, c := range builtinCommands() {
 		if strings.HasPrefix(c, value) {
 			out = append(out, c)
 		}
@@ -637,7 +691,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 
 	switch cmd {
 	case "/help", "/?":
-		m.appendLine(bannerStyle.Render(slashHelp + m.skillHelpLines()))
+		m.appendLine(bannerStyle.Render(slashHelp() + m.skillHelpLines()))
 	case "/quit", "/exit":
 		return m, tea.Quit
 	case "/clear":
@@ -694,11 +748,43 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "/mcp":
-		if len(m.sess.MCPSummary) == 0 {
-			m.appendLine(bannerStyle.Render("No MCP servers connected. Configure them in .mcp.json or .klaudia/.mcp.json."))
-		} else {
-			m.appendLine(bannerStyle.Render("MCP servers:\n" + strings.Join(m.sess.MCPSummary, "\n")))
+		var servers []MCPServerInfo
+		if m.sess.MCP != nil {
+			servers = m.sess.MCP.Servers()
 		}
+		if len(servers) == 0 {
+			m.appendLine(bannerStyle.Render("No MCP servers configured. Add them in .mcp.json or .klaudia/.mcp.json."))
+			break
+		}
+		var b strings.Builder
+		b.WriteString("MCP servers:")
+		items := make([]choiceItem, 0, len(servers))
+		for _, s := range servers {
+			s := s
+			status := "● connected"
+			if !s.Connected {
+				status = "○ disconnected"
+			}
+			fmt.Fprintf(&b, "\n  %s  %s (%d tools)", status, s.Name, s.Tools)
+			if s.Connected {
+				items = append(items, choiceItem{label: "Disconnect " + s.Name, apply: func() string {
+					if err := m.sess.MCP.Disconnect(s.Name); err != nil {
+						return "disconnect failed: " + err.Error()
+					}
+					return "Disconnected " + s.Name
+				}})
+			} else {
+				items = append(items, choiceItem{label: "Reconnect " + s.Name, apply: func() string {
+					if err := m.sess.MCP.Reconnect(s.Name); err != nil {
+						return "reconnect failed: " + err.Error()
+					}
+					return "Reconnected " + s.Name + " (its tools work again this session)"
+				}})
+			}
+		}
+		m.appendLine(bannerStyle.Render(b.String()))
+		m.startChoice("Manage MCP servers (Esc to leave as-is):", items)
+		return m, nil
 	case "/stats":
 		m.appendLine(bannerStyle.Render(fmt.Sprintf("Session: turns=%d  input_tokens=%d  output_tokens=%d",
 			m.statTurns, m.statIn, m.statOut)))
@@ -726,7 +812,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  permissions=%s  messages=%d",
 			model, m.currentMode().Label(), len(m.history))))
-	case "/mode", "/permissions":
+	case "/mode":
 		if len(args) > 0 {
 			want := permission.Mode(args[0])
 			if !want.Valid() {
@@ -1204,11 +1290,16 @@ func (m *Model) syncViewport() {
 	if !m.ready {
 		return
 	}
+	// Auto-scroll to follow new output only when the user is already at the
+	// bottom; if they've scrolled up to read history, leave their position put.
+	stick := m.vp.AtBottom()
 	// The viewport does not wrap; wrap the content to its width (lipgloss
 	// preserves ANSI styling across the wrap).
 	wrapped := lipgloss.NewStyle().Width(m.vp.Width).Render(m.transcript.String())
 	m.vp.SetContent(wrapped)
-	m.vp.GotoBottom()
+	if stick {
+		m.vp.GotoBottom()
+	}
 }
 
 func (m *Model) resize(w, h int) {

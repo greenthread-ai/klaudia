@@ -43,7 +43,7 @@ func (m Mode) Label() string {
 	case ModeAcceptEdits:
 		return "Auto-accept file edits (still ask for other risky ops)"
 	case ModeBypassPermissions:
-		return "Bypass all permission checks"
+		return "Bypass ALL permission checks (dangerous — tools run without asking)"
 	case ModePlan:
 		return "Plan mode — read-only, mutations blocked"
 	case ModeDontAsk:
@@ -54,10 +54,10 @@ func (m Mode) Label() string {
 }
 
 // SelectableModes are the modes a user may switch to interactively, in display
-// order. bypassPermissions is intentionally excluded — it's set only via
-// --dangerously-skip-permissions, not toggled mid-session.
+// order, safest first. bypassPermissions is included (users ask for it) but its
+// label flags it as bypassing every check.
 func SelectableModes() []Mode {
-	return []Mode{ModeDefault, ModeAcceptEdits, ModePlan, ModeDontAsk}
+	return []Mode{ModeDefault, ModeAcceptEdits, ModePlan, ModeDontAsk, ModeBypassPermissions}
 }
 
 // Behavior is the outcome of a permission check ("allow" | "deny" | "ask"),

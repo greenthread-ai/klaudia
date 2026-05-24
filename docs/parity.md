@@ -82,6 +82,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | --- | --- | --- | --- | --- |
 | MCP stdio client | 07-app-features | `mcp/` | ✅ done | `.mcp.json` + `.klaudia/.mcp.json` override. |
 | MCP tools wrapped (`mcp__*`) | 07-app-features | `mcp/` + `cli/` | ✅ done | Auto-deferred behind ToolSearch. |
+| MCP reconnect/disconnect (`/mcp`) | — | `mcp.Manager` + `tui` | 🔀 divergent | Interactive `/mcp` picker; reconnect swaps the live session into the existing tool wrappers so a crashed server's tools resume. |
 | MCP HTTP/SSE transports | 07-app-features | — | 🟡 partial | stdio only so far. |
 | Built-in sub-agents | 07-app-features | `subagent/` | ✅ done | |
 | Sub-agent tool allowlists (`Type.Filter`) | 07-app-features | `subagent/` | 🟡 partial | Seam present; v1 inherits full toolset. |
@@ -96,7 +97,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | @ file autocomplete | 06-app-ui | `tui/tui.go` | 🔀 divergent | Tab-completes the trailing @<path> token (robust completion vs. JS live overlay). |
 | Slash command type-ahead | 06-app-ui | `tui/tui.go` | ✅ done | Live suggestions as you type `/…`; Tab completes (unique → fill, many → common prefix). |
 | Bracketed paste / drag-drop | 06-app-ui | bubbletea default | ✅ done | Bracketed paste on by default (multi-line pastes atomic). |
-| Help bar / keymap / input history | 06-app-ui | `tui/tui.go` | ✅ done | Up/Down ring-buffer history, Tab completion, key hints in /help. |
+| Help bar / keymap / input history | 06-app-ui | `tui/tui.go` | ✅ done | Up/Down ring-buffer history, Tab completion, key hints; /help generated from one command table. |
+| Scrollback | 06-app-ui | `tui` + bubbles/viewport | ✅ done | PgUp/PgDn + Ctrl+U/D; auto-follow only when already at the bottom. |
 | Interrupt the model (Esc) | 06-app-ui | `tui/tui.go` + per-turn ctx | ✅ done | Esc cancels the in-flight turn (and any pending approval); loop-level test confirms cancellation propagates. |
 | Elapsed-time indicator | 06-app-ui | `tui` + bubbles/stopwatch | 🔀 divergent | Live stopwatch while running + "done in"/"interrupted after" duration (replaces the removed /cost). |
 | Welcome intro | 06-app-ui | `tui.intro` | 🔀 divergent | Coloured logo + model/branch + key hints at startup. |

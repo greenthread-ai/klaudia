@@ -68,7 +68,7 @@ func skillToolInfos(skills []skill.Skill) []tools.SkillInfo {
 // switch handles them before the /<skill> default branch).
 var builtinSlashCommands = map[string]bool{
 	"help": true, "?": true, "quit": true, "exit": true, "clear": true,
-	"model": true, "mode": true, "permissions": true, "goal": true,
+	"model": true, "mode": true, "goal": true,
 	"memory": true, "mcp": true, "stats": true,
 	"allow": true, "deny": true, "status": true,
 	"config": true, "agents": true, "context": true,
@@ -241,31 +241,35 @@ func buildContainerExecutor(sb config.Sandbox, warn func(string)) sandbox.Execut
 	return sandbox.NewLocal()
 }
 
-// mcpSummary builds "/mcp" display lines: one per server with its tool names.
-func mcpSummary(ctx context.Context, mgr *mcp.Manager) []string {
-	servers := mgr.Servers()
-	if len(servers) == 0 {
-		return nil
-	}
-	// Group wrapped tool names (mcp__<server>__<tool>) by server.
-	byServer := map[string][]string{}
-	for _, t := range mgr.Tools(ctx) {
+// mcpController adapts the mcp.Manager to the TUI's MCPController so /mcp can
+// inspect and reconnect/disconnect servers without the TUI owning the manager.
+type mcpController struct {
+	mgr *mcp.Manager
+	ctx context.Context
+}
+
+func (c mcpController) Servers() []tui.MCPServerInfo {
+	// Count live tools per server (mcp__<server>__<tool>).
+	counts := map[string]int{}
+	for _, t := range c.mgr.Tools(c.ctx) {
 		n := t.Name()
 		const pfx = "mcp__"
 		if !strings.HasPrefix(n, pfx) {
 			continue
 		}
-		rest := n[len(pfx):]
-		if i := strings.Index(rest, "__"); i >= 0 {
-			byServer[rest[:i]] = append(byServer[rest[:i]], rest[i+2:])
+		if i := strings.Index(n[len(pfx):], "__"); i >= 0 {
+			counts[n[len(pfx):len(pfx)+i]]++
 		}
 	}
-	var lines []string
-	for _, s := range servers {
-		lines = append(lines, fmt.Sprintf("  %s: %s", s.Name, strings.Join(byServer[s.Name], ", ")))
+	out := make([]tui.MCPServerInfo, 0)
+	for _, s := range c.mgr.Servers() {
+		out = append(out, tui.MCPServerInfo{Name: s.Name, Connected: s.Connected(), Tools: counts[s.Name]})
 	}
-	return lines
+	return out
 }
+
+func (c mcpController) Reconnect(name string) error  { return c.mgr.Reconnect(name) }
+func (c mcpController) Disconnect(name string) error { return c.mgr.Disconnect(name) }
 
 // gitBranch returns the current git branch for dir, or "" if not a repo.
 func gitBranch(dir string) string {
@@ -546,7 +550,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			ResolvedModel:  string(model),
 			PermissionMode: string(mode),
 			Memory:         memStore,
-			MCPSummary:     mcpSummary(ctx, mcpMgr),
+			MCP:            mcpController{mgr: mcpMgr, ctx: ctx},
 			Skills:         tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 			Provider:       providerName(cfg),
 			SandboxMode:    sandboxMode(cfg.Sandbox),

@@ -86,6 +86,9 @@ func (t *readResourceTool) Execute(ctx context.Context, _ tools.Context, raw jso
 	if srv == nil {
 		return []tools.Result{{Content: fmt.Sprintf("Unknown MCP server %q", in.Server), IsError: true}}, nil
 	}
+	if !srv.Connected() {
+		return []tools.Result{{Content: fmt.Sprintf("MCP server %q is disconnected; reconnect it with /mcp.", in.Server), IsError: true}}, nil
+	}
 	res, err := srv.session.ReadResource(ctx, &mcpsdk.ReadResourceParams{URI: in.URI})
 	if err != nil {
 		return []tools.Result{{Content: fmt.Sprintf("Read failed: %v", err), IsError: true}}, nil
