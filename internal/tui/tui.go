@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/memory"
+	"github.com/greenthread/klaudia/internal/native/search"
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/tools"
 )
@@ -157,6 +159,11 @@ type Model struct {
 	planReply chan bool
 	// Pending /commit-style confirmation: run on "y", returns a result line.
 	confirmAction func() string
+	// Input history: submitted prompts (newest last), navigated with Up/Down.
+	// histPos == len(inputHistory) means "not navigating" (editing a fresh line).
+	inputHistory []string
+	histPos      int
+	histDraft    string // the in-progress line stashed when navigating up
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
@@ -366,12 +373,25 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// @-path completion on Tab (only when editing an idle line).
+	if m.state == stateIdle && msg.Type == tea.KeyTab {
+		m.completeAtPath()
+		return m, nil
+	}
+
+	// Input history navigation (only on a fresh idle line).
+	if m.state == stateIdle && (msg.Type == tea.KeyUp || msg.Type == tea.KeyDown) {
+		m.navigateHistory(msg.Type == tea.KeyUp)
+		return m, nil
+	}
+
 	if msg.Type == tea.KeyEnter && m.state == stateIdle {
 		prompt := strings.TrimSpace(m.input.Value())
 		if prompt == "" {
 			return m, nil
 		}
 		m.input.Reset()
+		m.pushHistory(prompt)
 		m.appendLine(userStyle.Render("› ") + prompt)
 
 		// Slash commands are handled locally, not sent to the model.
@@ -415,7 +435,12 @@ const slashHelp = `Available commands:
   /commit <msg>    Stage all changes and commit (asks first)
   /export          Export the conversation to a Markdown file
   /clear           Clear the screen and conversation history
-  /quit, /exit     Exit Klaudia`
+  /quit, /exit     Exit Klaudia
+
+Keys:
+  Tab              Complete an @<path> reference from the working dir
+  ↑ / ↓            Cycle through previous prompts
+  Ctrl+C           Quit`
 
 // handleSlash dispatches a slash command. Commands run locally and never reach
 // the model.
@@ -754,6 +779,129 @@ func exportMarkdown(history []anthropic.BetaMessageParam) string {
 		}
 	}
 	return b.String()
+}
+
+// completeAtPath completes the trailing "@<partial>" token in the input against
+// files under the working directory. A unique match is filled in; multiple
+// matches fill the common prefix and list candidates as a banner.
+func (m *Model) completeAtPath() {
+	value := m.input.Value()
+	at := strings.LastIndex(value, "@")
+	if at < 0 {
+		return
+	}
+	partial := value[at+1:]
+	if strings.ContainsAny(partial, " \t") {
+		return // the @token has already been closed by whitespace
+	}
+	cands := matchPaths(m.sess.CWD, partial)
+	if len(cands) == 0 {
+		return
+	}
+	completion := cands[0]
+	if len(cands) > 1 {
+		completion = commonPrefix(cands)
+		// Show up to 12 candidates so the user can keep typing.
+		show := cands
+		if len(show) > 12 {
+			show = show[:12]
+		}
+		m.appendLine(bannerStyle.Render("candidates: " + strings.Join(show, "  ")))
+	}
+	m.input.SetValue(value[:at+1] + completion)
+	m.input.CursorEnd()
+}
+
+// matchPaths returns working-dir-relative file paths that start with partial
+// (case-insensitive), sorted, capped. A blank partial lists top entries.
+func matchPaths(cwd, partial string) []string {
+	root := cwd
+	if root == "" {
+		root = "."
+	}
+	files, err := search.Glob(search.GlobOptions{Root: root})
+	if err != nil {
+		return nil
+	}
+	lower := strings.ToLower(partial)
+	seen := map[string]bool{}
+	var out []string
+	for _, f := range files {
+		rel, err := filepath.Rel(root, f)
+		if err != nil {
+			rel = f
+		}
+		if partial == "" || strings.HasPrefix(strings.ToLower(rel), lower) {
+			if !seen[rel] {
+				seen[rel] = true
+				out = append(out, rel)
+			}
+		}
+	}
+	sort.Strings(out)
+	if len(out) > 200 {
+		out = out[:200]
+	}
+	return out
+}
+
+// commonPrefix returns the longest shared leading substring of the inputs.
+func commonPrefix(ss []string) string {
+	if len(ss) == 0 {
+		return ""
+	}
+	p := ss[0]
+	for _, s := range ss[1:] {
+		for !strings.HasPrefix(s, p) {
+			p = p[:len(p)-1]
+			if p == "" {
+				return ""
+			}
+		}
+	}
+	return p
+}
+
+// maxInputHistory caps the remembered prompts (ring buffer).
+const maxInputHistory = 200
+
+// pushHistory appends a submitted prompt (dropping an immediate duplicate) and
+// resets the navigation cursor to "not navigating".
+func (m *Model) pushHistory(prompt string) {
+	if n := len(m.inputHistory); n == 0 || m.inputHistory[n-1] != prompt {
+		m.inputHistory = append(m.inputHistory, prompt)
+		if len(m.inputHistory) > maxInputHistory {
+			m.inputHistory = m.inputHistory[len(m.inputHistory)-maxInputHistory:]
+		}
+	}
+	m.histPos = len(m.inputHistory)
+	m.histDraft = ""
+}
+
+// navigateHistory moves through prior prompts: up = older, down = newer. The
+// in-progress line is stashed on first up and restored past the newest entry.
+func (m *Model) navigateHistory(up bool) {
+	if len(m.inputHistory) == 0 {
+		return
+	}
+	if up {
+		if m.histPos == len(m.inputHistory) {
+			m.histDraft = m.input.Value() // stash the fresh line
+		}
+		if m.histPos > 0 {
+			m.histPos--
+		}
+	} else {
+		if m.histPos < len(m.inputHistory) {
+			m.histPos++
+		}
+	}
+	if m.histPos >= len(m.inputHistory) {
+		m.input.SetValue(m.histDraft)
+	} else {
+		m.input.SetValue(m.inputHistory[m.histPos])
+	}
+	m.input.CursorEnd()
 }
 
 // capitalize upper-cases the first rune (role headers in the export).

@@ -92,9 +92,9 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Interactive TUI | 04/06 | `tui/` | 🔀 divergent | Bubble Tea (JS was React+Ink). Single-reader invariant. |
 | Headless `-p` / `--print` | 08-entry | `cli/` | ✅ done | text / json / stream-json. |
 | stream-json input (embedding frontend) | 08-entry | `cli/` + `streamjson/` | ✅ done | `--input-format stream-json`. |
-| @ file autocomplete | 06-app-ui | — | 🔜 planned | Workstream 4. |
-| Bracketed paste / drag-drop | 06-app-ui | — | 🔜 planned | Workstream 4. |
-| Help bar / keymap / input history | 06-app-ui | `tui/` | 🟡 partial | `/help` text exists; bubbles help/key + ring buffer planned. |
+| @ file autocomplete | 06-app-ui | `tui/tui.go` | 🔀 divergent | Tab-completes the trailing @<path> token (robust completion vs. JS live overlay). |
+| Bracketed paste / drag-drop | 06-app-ui | bubbletea default | ✅ done | Bracketed paste on by default (multi-line pastes atomic). |
+| Help bar / keymap / input history | 06-app-ui | `tui/tui.go` | ✅ done | Up/Down ring-buffer history, Tab completion, key hints in /help. |
 
 ## Slash commands (TUI)
 
