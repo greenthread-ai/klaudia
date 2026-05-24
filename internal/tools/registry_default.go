@@ -29,6 +29,7 @@ func DefaultRegistry(executor sandbox.Executor) (*Registry, error) {
 		{"Bash", func() (Tool, error) { return NewBash(executor) }},
 		{"TodoWrite", func() (Tool, error) { return NewTodoWrite(todos) }},
 		{"NotebookEdit", func() (Tool, error) { return NewNotebookEdit() }},
+		{"AskUserQuestion", func() (Tool, error) { return NewAskUserQuestion() }},
 	}
 
 	ts := make([]Tool, 0, len(ctors))

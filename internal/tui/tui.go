@@ -20,11 +20,12 @@ import (
 	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/memory"
 	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread/klaudia/internal/tools"
 )
 
 // RunFunc drives one user turn against the agent core, threading conversation
-// history and using the supplied approver/emitter.
-type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, emit agent.Emitter) (agent.Result, error)
+// history and using the supplied approver, asker, and emitter.
+type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, emit agent.Emitter) (agent.Result, error)
 
 // Session is mutable state shared between the TUI and the RunFunc closure, so
 // slash commands like /model can change settings for subsequent turns. The
@@ -44,6 +45,7 @@ const (
 	stateIdle uiState = iota
 	stateRunning
 	stateAwaitingPermission
+	stateAwaitingAnswer
 )
 
 // --- messages delivered from the agent goroutine ---
@@ -56,6 +58,11 @@ type permissionMsg struct {
 type doneMsg struct {
 	res agent.Result
 	err error
+}
+type askMsg struct {
+	question string
+	options  []tools.AskOption
+	reply    chan string
 }
 
 var (
@@ -93,6 +100,10 @@ type Model struct {
 	statTurns int
 	statIn    int64
 	statOut   int64
+	// Pending AskUserQuestion.
+	askReply    chan string
+	askOptions  []tools.AskOption
+	askQuestion string
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
@@ -166,6 +177,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.appendLine(askStyle.Render(fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", label)))
 		return m, m.waitForEvent()
 
+	case askMsg:
+		m.state = stateAwaitingAnswer
+		m.askReply = msg.reply
+		m.askOptions = msg.options
+		m.askQuestion = msg.question
+		m.appendLine(askStyle.Render("? " + msg.question))
+		for i, o := range msg.options {
+			line := fmt.Sprintf("  %d) %s", i+1, o.Label)
+			if o.Description != "" {
+				line += " — " + o.Description
+			}
+			m.appendLine(toolStyle.Render(line))
+		}
+		return m, m.waitForEvent()
+
 	case doneMsg:
 		if msg.err != nil {
 			m.appendLine(errStyle.Render("error: " + api.FriendlyError(msg.err)))
@@ -195,6 +221,21 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
+	}
+
+	if m.state == stateAwaitingAnswer {
+		// Digit keys 1..N select an option.
+		s := msg.String()
+		if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
+			if n := int(s[0] - '0'); n <= len(m.askOptions) {
+				choice := m.askOptions[n-1].Label
+				m.askReply <- choice
+				m.askReply = nil
+				m.appendLine(toolStyle.Render("  → " + choice))
+				m.state = stateRunning
+			}
+		}
+		return m, nil
 	}
 
 	if m.state == stateAwaitingPermission {
@@ -378,9 +419,10 @@ func (m *Model) startTurn(prompt string) {
 		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
 	}
 	approver := &uiApprover{events: m.events}
+	asker := &uiAsker{events: m.events}
 	emit := func(ev agent.Event) { m.events <- eventMsg{ev} }
 	go func() {
-		res, err := m.run(m.ctx, prompt, m.history, approver, emit)
+		res, err := m.run(m.ctx, prompt, m.history, approver, asker, emit)
 		m.events <- doneMsg{res: res, err: err}
 	}()
 }
@@ -453,6 +495,8 @@ func (m *Model) View() string {
 		bottom = m.spin.View() + " working…"
 	case stateAwaitingPermission:
 		bottom = askStyle.Render(fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", m.pendingReq.ToolName))
+	case stateAwaitingAnswer:
+		bottom = askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions)))
 	default:
 		bottom = m.input.View()
 	}
@@ -473,6 +517,23 @@ func (a *uiApprover) Approve(ctx context.Context, req agent.ApprovalRequest) per
 		return permission.Decision{Behavior: permission.Deny, Message: "cancelled"}
 	case d := <-reply:
 		return d
+	}
+}
+
+// uiAsker implements tools.Asker by prompting the user in the UI and blocking
+// for their choice.
+type uiAsker struct {
+	events chan tea.Msg
+}
+
+func (a *uiAsker) Ask(ctx context.Context, question string, options []tools.AskOption) (string, error) {
+	reply := make(chan string, 1)
+	a.events <- askMsg{question: question, options: options, reply: reply}
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case choice := <-reply:
+		return choice, nil
 	}
 }
 

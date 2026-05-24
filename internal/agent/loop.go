@@ -65,6 +65,8 @@ type Options struct {
 	// WebTools enables the server-side web_search and web_fetch tools (executed
 	// by the Anthropic API, not locally).
 	WebTools bool
+	// Asker, if set, lets interactive tools (AskUserQuestion) prompt the user.
+	Asker tools.Asker
 	// ContextWindow is the model's context size, used for autocompact
 	// thresholds. 0 uses the package default.
 	ContextWindow int
@@ -306,7 +308,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		return errResult(fmt.Sprintf("Input validation error: %v", err))
 	}
 
-	results, err := tool.Execute(ctx, tools.Context{}, raw)
+	results, err := tool.Execute(ctx, tools.Context{Ask: opts.Asker}, raw)
 	if err != nil {
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))
 	}

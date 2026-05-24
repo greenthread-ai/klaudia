@@ -25,13 +25,28 @@ type Result struct {
 	Data map[string]any
 }
 
+// AskOption is one choice presented to the user by AskUserQuestion.
+type AskOption struct {
+	Label       string `json:"label" jsonschema:"description=The short answer label the user picks"`
+	Description string `json:"description,omitempty" jsonschema:"description=Optional clarifying detail for this option"`
+}
+
+// Asker lets a tool put a multiple-choice question to the user and await the
+// answer. Provided by the frontend (the TUI prompts; headless has none, so the
+// tool reports it cannot ask). Returns the chosen option's label.
+type Asker interface {
+	Ask(ctx context.Context, question string, options []AskOption) (string, error)
+}
+
 // Context carries per-invocation state into a tool. It is intentionally small
-// in Phase 0 and grows as the agent loop, sessions, and permission system land.
+// and grows as features land.
 type Context struct {
 	// WorkingDir is the resolved cwd the tool operates relative to.
 	WorkingDir string
 	// AbortCh is closed when the turn is aborted; tools should stop promptly.
 	AbortCh <-chan struct{}
+	// Ask, if non-nil, lets interactive tools (AskUserQuestion) prompt the user.
+	Ask Asker
 }
 
 // Tool is the contract implemented by every local tool (Read, Write, Bash, …).

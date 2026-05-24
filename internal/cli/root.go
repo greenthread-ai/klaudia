@@ -335,7 +335,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Memory:         memStore,
 			MCPSummary:     mcpSummary(ctx, mcpMgr),
 		}
-		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
+		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, emit agent.Emitter) (agent.Result, error) {
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,
 				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
@@ -343,6 +343,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				MaxTurns:        opts.maxTurns,
 				Permission:      permCtx,
 				Approver:        ap,
+				Asker:           asker,
 				InitialMessages: history,
 				Recorder:        recorder,
 				WebTools:        true,
