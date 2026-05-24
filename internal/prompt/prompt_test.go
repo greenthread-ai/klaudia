@@ -41,6 +41,22 @@ func TestSystemLoadsProjectClaudeMd(t *testing.T) {
 	}
 }
 
+func TestSystemRecallsMemory(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	memDir := filepath.Join(dir, ".klaudia", "memory")
+	os.MkdirAll(memDir, 0o755)
+	os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("# Memory\n\n- 2026 prefer doublestar\n"), 0o644)
+
+	p := System(dir, "")
+	if !strings.Contains(p, "# Recalled memory") || !strings.Contains(p, "prefer doublestar") {
+		t.Errorf("system prompt should include recalled memory")
+	}
+	if !strings.Contains(p, "Memory tool") {
+		t.Errorf("recall section should mention the Memory tool")
+	}
+}
+
 func TestSystemNoClaudeMd(t *testing.T) {
 	t.Setenv("HOME", t.TempDir()) // isolate from a real ~/.claude/CLAUDE.md
 	p := System(t.TempDir(), "")

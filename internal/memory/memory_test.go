@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -68,5 +69,90 @@ func TestAddEmptyStringReturnsError(t *testing.T) {
 
 	if err := store.Add(" \t\n "); err == nil {
 		t.Fatal("Add() error = nil, want error")
+	}
+}
+
+func TestEntriesMissingFileReturnsEmpty(t *testing.T) {
+	store := New(t.TempDir())
+
+	entries, err := store.Entries()
+	if err != nil {
+		t.Fatalf("Entries() error = %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("Entries() = %q, want empty slice", entries)
+	}
+}
+
+func TestEntriesAfterAddingThreeNotesReturnsThree(t *testing.T) {
+	store := New(t.TempDir())
+	addNotes(t, store, "first", "second", "third")
+
+	entries, err := store.Entries()
+	if err != nil {
+		t.Fatalf("Entries() error = %v", err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("len(Entries()) = %d, want 3; entries = %q", len(entries), entries)
+	}
+	for i, want := range []string{"first", "second", "third"} {
+		if !strings.Contains(entries[i], want) {
+			t.Fatalf("Entries()[%d] = %q, want to contain %q", i, entries[i], want)
+		}
+		if strings.HasPrefix(entries[i], "- ") {
+			t.Fatalf("Entries()[%d] = %q, want bullet prefix stripped", i, entries[i])
+		}
+	}
+}
+
+func TestSearchMatchesCaseInsensitively(t *testing.T) {
+	store := New(t.TempDir())
+	addNotes(t, store, "Alpha Note", "beta note", "gamma")
+
+	matches, err := store.Search("alpha")
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(matches) != 1 || !strings.Contains(matches[0], "Alpha Note") {
+		t.Fatalf("Search() = %q, want Alpha Note", matches)
+	}
+}
+
+func TestSearchMultipleTermsRequiresAllTerms(t *testing.T) {
+	store := New(t.TempDir())
+	addNotes(t, store, "alpha beta", "alpha gamma", "beta gamma")
+
+	matches, err := store.Search("alpha beta")
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(matches) != 1 || !strings.Contains(matches[0], "alpha beta") {
+		t.Fatalf("Search() = %q, want only alpha beta", matches)
+	}
+}
+
+func TestSearchEmptyQueryReturnsAll(t *testing.T) {
+	store := New(t.TempDir())
+	addNotes(t, store, "first", "second", "third")
+
+	entries, err := store.Entries()
+	if err != nil {
+		t.Fatalf("Entries() error = %v", err)
+	}
+	matches, err := store.Search(" \t\n ")
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if !reflect.DeepEqual(matches, entries) {
+		t.Fatalf("Search(empty) = %q, want %q", matches, entries)
+	}
+}
+
+func addNotes(t *testing.T, store *Store, notes ...string) {
+	t.Helper()
+	for _, note := range notes {
+		if err := store.Add(note); err != nil {
+			t.Fatalf("Add(%q) error = %v", note, err)
+		}
 	}
 }

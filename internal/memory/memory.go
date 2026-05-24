@@ -39,6 +39,54 @@ func (s *Store) Index() (string, error) {
 	return string(contents), nil
 }
 
+// Entries returns the individual memory notes from MEMORY.md.
+func (s *Store) Entries() ([]string, error) {
+	contents, err := os.ReadFile(s.Path())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	var entries []string
+	for _, line := range strings.Split(string(contents), "\n") {
+		if entry, ok := strings.CutPrefix(line, "- "); ok {
+			entries = append(entries, entry)
+		}
+	}
+	return entries, nil
+}
+
+// Search returns entries containing all whitespace-separated query terms.
+func (s *Store) Search(query string) ([]string, error) {
+	entries, err := s.Entries()
+	if err != nil {
+		return nil, err
+	}
+
+	terms := strings.Fields(strings.ToLower(query))
+	if len(terms) == 0 {
+		return entries, nil
+	}
+
+	var matches []string
+	for _, entry := range entries {
+		entryLower := strings.ToLower(entry)
+		matched := true
+		for _, term := range terms {
+			if !strings.Contains(entryLower, term) {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			matches = append(matches, entry)
+		}
+	}
+	return matches, nil
+}
+
 // Add appends a timestamped bullet to MEMORY.md, creating the directory and a
 // header on first write. Empty (whitespace-only) text is rejected.
 func (s *Store) Add(text string) error {

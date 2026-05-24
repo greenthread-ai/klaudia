@@ -56,7 +56,22 @@ func System(cwd, model string) string {
 		b.WriteString("\n\n# Project instructions (from CLAUDE.md)\n")
 		b.WriteString(instr)
 	}
+	if mem := recalledMemory(cwd); mem != "" {
+		b.WriteString("\n\n# Recalled memory\n")
+		b.WriteString("These are notes you saved in earlier sessions. Use the Memory tool to search for more or to add new ones.\n\n")
+		b.WriteString(mem)
+	}
 	return b.String()
+}
+
+// recalledMemory returns the project memory index for priming the model, or ""
+// if there is none. Mirrors the JS auto-memory recall.
+func recalledMemory(cwd string) string {
+	data, err := os.ReadFile(filepath.Join(cwd, ".klaudia", "memory", "MEMORY.md"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // envBlock renders the <env> context the model sees each session.

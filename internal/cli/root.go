@@ -293,6 +293,12 @@ func run(cmd *cobra.Command, opts *options) error {
 	if rts, rerr := mcpMgr.ResourceTools(); rerr == nil && len(mcpMgr.Servers()) > 0 {
 		baseTools = append(baseTools, rts...)
 	}
+	// Persistent memory: one store shared by the Memory tool (agent + sub-agents)
+	// and the /memory command.
+	memStore := memory.New(filepath.Join(cwd, ".klaudia", "memory"))
+	if memTool, merr := tools.NewMemory(memStore); merr == nil {
+		baseTools = append(baseTools, memTool)
+	}
 	base = tools.NewRegistry(baseTools...)
 
 	// Headless has no interactive approver, so permission "ask" denies.
@@ -326,7 +332,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Model:          opts.model,
 			ResolvedModel:  string(model),
 			PermissionMode: string(mode),
-			Memory:         memory.New(filepath.Join(cwd, ".klaudia", "memory")),
+			Memory:         memStore,
 			MCPSummary:     mcpSummary(ctx, mcpMgr),
 		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
