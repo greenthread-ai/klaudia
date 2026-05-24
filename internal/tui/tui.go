@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/greenthread/klaudia/internal/agent"
+	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/permission"
 )
 
@@ -127,7 +128,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case doneMsg:
 		if msg.err != nil {
-			m.appendLine(errStyle.Render("error: " + msg.err.Error()))
+			m.appendLine(errStyle.Render("error: " + api.FriendlyError(msg.err)))
 		}
 		if msg.res.Messages != nil {
 			m.history = msg.res.Messages

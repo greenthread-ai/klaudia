@@ -296,7 +296,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	if err != nil {
 		out.Subtype = "error_during_execution"
-		out.Result = fmt.Sprintf("Error: %v", err)
+		out.Result = "Error: " + api.FriendlyError(err)
 	}
 	if rerr := r.Result(out); rerr != nil {
 		return rerr

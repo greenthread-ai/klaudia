@@ -18,7 +18,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"sync"
 
@@ -26,6 +25,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greenthread/klaudia/internal/agent"
+	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/permission"
 )
 
@@ -224,7 +224,7 @@ func resultEvent(res agent.Result, err error) map[string]any {
 	}
 	if err != nil {
 		m["subtype"] = "error_during_execution"
-		m["result"] = fmt.Sprintf("Error: %v", err)
+		m["result"] = "Error: " + api.FriendlyError(err)
 	}
 	return m
 }

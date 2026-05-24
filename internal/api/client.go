@@ -8,6 +8,8 @@ package api
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -60,11 +62,27 @@ type Client struct {
 	cred Credential
 }
 
+// defaultMaxRetries is higher than the SDK default (2) so transient 429s — common
+// when an OAuth token is shared with another active session — recover
+// transparently. The SDK uses exponential backoff and honors Retry-After.
+const defaultMaxRetries = 5
+
+// maxRetries resolves the retry count, overridable via KLAUDIA_MAX_RETRIES.
+func maxRetries() int {
+	if v := os.Getenv("KLAUDIA_MAX_RETRIES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return defaultMaxRetries
+}
+
 // New builds a Client from the resolved credential and optional custom base URL
 // (--custom-endpoint). baseURL == "" uses the Anthropic production API.
 func New(cred Credential, baseURL string) *Client {
 	opts := []option.RequestOption{
 		option.WithHeader("x-app", "cli"),
+		option.WithMaxRetries(maxRetries()),
 	}
 	if cred.IsOAuth() {
 		opts = append(opts, option.WithAuthToken(cred.AuthToken))
