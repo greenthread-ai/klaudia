@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/greenthread/klaudia/internal/sandbox"
+	"github.com/greenthread/klaudia/internal/tasks"
 )
 
 // DefaultRegistry builds the registry of all implemented local tools, with the
@@ -15,6 +16,8 @@ func DefaultRegistry(executor sandbox.Executor) (*Registry, error) {
 	}
 	// Per-session todo state shared with the TodoWrite tool.
 	todos := &TodoStore{}
+	// Per-session task state shared with task tools.
+	taskStore := tasks.New()
 
 	type ctor struct {
 		name string
@@ -28,6 +31,10 @@ func DefaultRegistry(executor sandbox.Executor) (*Registry, error) {
 		{"Grep", func() (Tool, error) { return NewGrep() }},
 		{"Bash", func() (Tool, error) { return NewBash(executor) }},
 		{"TodoWrite", func() (Tool, error) { return NewTodoWrite(todos) }},
+		{"TaskCreate", func() (Tool, error) { return NewTaskCreate(taskStore) }},
+		{"TaskList", func() (Tool, error) { return NewTaskList(taskStore) }},
+		{"TaskGet", func() (Tool, error) { return NewTaskGet(taskStore) }},
+		{"TaskUpdate", func() (Tool, error) { return NewTaskUpdate(taskStore) }},
 		{"NotebookEdit", func() (Tool, error) { return NewNotebookEdit() }},
 		{"AskUserQuestion", func() (Tool, error) { return NewAskUserQuestion() }},
 		{"ExitPlanMode", func() (Tool, error) { return NewExitPlanMode() }},
