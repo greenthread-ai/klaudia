@@ -55,7 +55,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | OpenAI-compatible Chat Completions | — | `api/openai*.go` | 🔀 divergent | Translation shim; SSE stream:true. Image tool_results not yet translated. |
 | Prompt caching | 03-providers | `api/client.go` | ✅ done | |
 | stream-json output (authoritative envelope) | 08-entry | `streamjson/` + `cli/envelope.go` | ✅ done | |
-| stream-json partial deltas | 08-entry | — | 🔜 planned | Workstream 1b, behind `--include-partial-messages`. |
+| stream-json partial deltas | 08-entry | `cli/partial.go` + `api/StreamSink` | ✅ done | Behind `--include-partial-messages`; emits JS `stream_event` lines. OpenAI shim synthesizes the sequence. |
 
 ## Sessions, compaction, persistence
 
@@ -134,12 +134,18 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 
 ## Retire-JS readiness
 
-Blocking items before removing the JS tree from `main`:
+All differential-testing dependencies on the JS tree are now cleared:
 
-1. **1b — stream-json partial deltas** (last differential-testing dependency on
-   the JS `--include-partial-messages` output).
-2. A final differential pass comparing Klaudia vs `node dist/cli.js` on the
-   golden cases listed under each ⛔/🔀 row to confirm divergences are deliberate.
+1. ~~**1b — stream-json partial deltas**~~ — ✅ done (`--include-partial-messages`
+   emits JS-shaped `stream_event` lines).
+2. The remaining step before removing the JS tree is a **final differential
+   pass** comparing Klaudia vs `node dist/cli.js` on the golden cases under each
+   ⛔/🔀 row, to confirm the divergences are deliberate.
 
 Everything else is either ✅ done, a deliberate 🔀 divergence, or a 🔜 planned
 post-parity enhancement that does not require the JS reference to build.
+
+**Retirement is gated on explicit sign-off** — removing `src/sections/*.js`
+(~571K lines) is irreversible from `main`. Plan: `git branch js-reference` to
+preserve it, then drop the tree from `main` in one commit. Not done
+autonomously.
