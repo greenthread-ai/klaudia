@@ -379,8 +379,15 @@ func run(cmd *cobra.Command, opts *options) error {
 		return driver.Run(ctx, cmd.InOrStdin(), runFn)
 	}
 
-	// Single-shot headless run.
+	// Single-shot headless run. For stream-json output, emit JS-compatible
+	// message envelopes (assistant/user) via an envelope recorder alongside the
+	// transcript; the simplified delta events are not used in that mode.
+	var runRecorder agent.Recorder = recorder
 	emit := func(ev agent.Event) { _ = r.Event(ev) }
+	if format == FormatStreamJSON {
+		runRecorder = multiRecorder{recorder, newEnvelopeRecorder(cmd.OutOrStdout(), sessionID)}
+		emit = func(agent.Event) {}
+	}
 	res, err := loop.Run(ctx, agent.Options{
 		Prompt:          opts.prompt,
 		Model:           model,
@@ -389,7 +396,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		Permission:      permCtx,
 		Approver:        approver,
 		InitialMessages: initialMessages,
-		Recorder:        recorder,
+		Recorder:        runRecorder,
 		WebTools:        true,
 	}, emit)
 
