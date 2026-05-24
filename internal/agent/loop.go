@@ -15,6 +15,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread/klaudia/internal/api"
+	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/tools"
 )
 
@@ -38,11 +39,15 @@ type Event struct {
 
 // Options configures a single Run.
 type Options struct {
-	Prompt    string
-	Model     anthropic.Model
-	System    string
-	MaxTurns  int   // 0 = unlimited
-	MaxTokens int64 // 0 = defaultMaxTokens
+	Prompt     string
+	Model      anthropic.Model
+	System     string
+	MaxTurns   int   // 0 = unlimited
+	MaxTokens  int64 // 0 = defaultMaxTokens
+	Permission permission.Context
+	// Interactive is true when there is a TTY to prompt on. When false
+	// (headless), an "ask" decision is treated as a denial.
+	Interactive bool
 }
 
 // Result is the outcome of a Run.
@@ -118,7 +123,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		messages = append(messages, assistant.ToParam())
 		resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
 		for _, tu := range toolUses {
-			block := l.dispatch(ctx, tu, emit)
+			block := l.dispatch(ctx, tu, opts, emit)
 			resultBlocks = append(resultBlocks, block)
 		}
 		messages = append(messages, anthropic.NewBetaUserMessage(resultBlocks...))
@@ -158,7 +163,7 @@ func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewPa
 
 // dispatch runs one tool_use: lookup → permission → validate → execute, and
 // returns the tool_result block to append to the conversation.
-func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, emit Emitter) anthropic.BetaContentBlockParamUnion {
+func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter) anthropic.BetaContentBlockParamUnion {
 	raw, _ := json.Marshal(tu.Input)
 	if emit != nil {
 		emit(Event{Type: "tool_use", ToolName: tu.Name, ToolUseID: tu.ID, Input: tu.Input})
@@ -176,17 +181,27 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, emit
 		return errResult(fmt.Sprintf("No such tool available: %s", tu.Name))
 	}
 
-	decision, err := tool.CheckPermissions(ctx, raw)
-	if err != nil {
-		return errResult(fmt.Sprintf("Permission check failed: %v", err))
-	}
-	if decision.Behavior == tools.PermissionDeny || decision.Behavior == tools.PermissionAsk {
-		// Phase 1 headless: anything not auto-allowed is denied (no TTY to ask).
+	req := tool.PermissionRequest(raw)
+	decision := permission.Check(opts.Permission, tool, req)
+	switch decision.Behavior {
+	case permission.Deny:
 		msg := decision.Message
 		if msg == "" {
 			msg = fmt.Sprintf("Permission denied for tool %s", tu.Name)
 		}
 		return errResult(msg)
+	case permission.Ask:
+		if !opts.Interactive {
+			// Headless: no TTY to prompt on, so "ask" becomes a denial. The
+			// model adapts and reports without modifying anything.
+			msg := decision.Message
+			if msg == "" {
+				msg = fmt.Sprintf("Tool %s requires approval, but no interactive prompt is available (headless mode).", tu.Name)
+			}
+			return errResult(msg)
+		}
+		// TODO(phase5): prompt the user via the TUI and honor the response.
+		return errResult(fmt.Sprintf("Interactive approval for %s is not implemented yet.", tu.Name))
 	}
 
 	if err := tool.ValidateInput(raw); err != nil {

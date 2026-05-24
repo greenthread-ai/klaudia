@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/schema"
 )
 
@@ -68,9 +69,14 @@ func (r *Read) ValidateInput(raw json.RawMessage) error {
 	return nil
 }
 
+// PermissionRequest: Read needs no specifier (read-only, always allowed).
+func (r *Read) PermissionRequest(json.RawMessage) permission.PermissionRequest {
+	return permission.PermissionRequest{}
+}
+
 // CheckPermissions: Read is read-only and always allowed.
-func (r *Read) CheckPermissions(context.Context, json.RawMessage) (PermissionDecision, error) {
-	return PermissionDecision{Behavior: PermissionAllow}, nil
+func (r *Read) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
+	return allowAlways(pctx)
 }
 
 func (r *Read) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {

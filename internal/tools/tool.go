@@ -9,27 +9,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/greenthread/klaudia/internal/permission"
 )
-
-// PermissionBehavior is the outcome of a permission check, matching the JS
-// behaviors emitted by checkToolPermissions ("allow" | "deny" | "ask").
-type PermissionBehavior string
-
-const (
-	PermissionAllow PermissionBehavior = "allow"
-	PermissionDeny  PermissionBehavior = "deny"
-	PermissionAsk   PermissionBehavior = "ask"
-)
-
-// PermissionDecision is returned by a tool's CheckPermissions. When Behavior is
-// PermissionDeny or PermissionAsk, Message explains why (shown to the user/model).
-type PermissionDecision struct {
-	Behavior PermissionBehavior
-	Message  string
-	// UpdatedInput optionally replaces the tool input (e.g. after the user
-	// edits it at an "ask" prompt). Nil means "use the original input".
-	UpdatedInput json.RawMessage
-}
 
 // Result is a single tool_result content block produced by a tool execution.
 // A tool may yield multiple (e.g. text + image) — Execute returns a slice.
@@ -71,9 +53,15 @@ type Tool interface {
 	// tool-specific rules, returning a human-readable error if invalid.
 	ValidateInput(raw json.RawMessage) error
 
-	// CheckPermissions decides whether this invocation may proceed, given the
-	// current permission context (filled in by the permission package).
-	CheckPermissions(ctx context.Context, raw json.RawMessage) (PermissionDecision, error)
+	// PermissionRequest derives the rule-matchable action (specifier) from raw
+	// input, e.g. the file path for Edit or the command line for Bash.
+	PermissionRequest(raw json.RawMessage) permission.PermissionRequest
+
+	// CheckPermissions returns the tool's intrinsic permission decision for the
+	// current mode. It is consulted by permission.Check after deny/allow rules
+	// and the bypass short-circuit. Read-only tools allow; mutating tools ask
+	// (unless the mode auto-accepts).
+	CheckPermissions(pctx permission.Context, req permission.PermissionRequest) permission.Decision
 
 	// Execute runs the tool and returns one or more tool_result blocks.
 	Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
+	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/tools"
 	"github.com/greenthread/klaudia/internal/version"
 )
@@ -98,21 +99,31 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	client := api.New(cred, os.Getenv("KLAUDIA_CUSTOM_ENDPOINT"))
 
-	// Build the tool registry (Phase 1: Read only).
-	read, err := tools.NewRead()
+	// Build the tool registry.
+	registry, err := tools.DefaultRegistry()
 	if err != nil {
 		return err
 	}
-	registry := tools.NewRegistry(read)
+
+	// Resolve the permission mode (--dangerously-skip-permissions wins).
+	mode := permission.Mode(opts.permissionMode)
+	if opts.dangerouslySkip {
+		mode = permission.ModeBypassPermissions
+	}
+	if !mode.Valid() {
+		return fmt.Errorf("invalid permission mode %q", opts.permissionMode)
+	}
 
 	// Run the agentic loop.
 	loop := agent.New(client, registry)
 	emit := func(ev agent.Event) { _ = r.Event(ev) }
 	res, err := loop.Run(ctx, agent.Options{
-		Prompt:   opts.prompt,
-		Model:    api.ResolveModel(opts.model),
-		System:   defaultSystemPrompt,
-		MaxTurns: opts.maxTurns,
+		Prompt:      opts.prompt,
+		Model:       api.ResolveModel(opts.model),
+		System:      defaultSystemPrompt,
+		MaxTurns:    opts.maxTurns,
+		Permission:  permission.Context{Mode: mode},
+		Interactive: false, // headless mode
 	}, emit)
 
 	out := ResultMessage{
