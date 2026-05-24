@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/config"
 	"github.com/greenthread/klaudia/internal/mcp"
+	"github.com/greenthread/klaudia/internal/memory"
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/prompt"
 	"github.com/greenthread/klaudia/internal/sandbox"
@@ -86,6 +88,32 @@ func buildExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {
 		return sandbox.NewContainer(runtime, sb.Image, sb.MountCWDOr(true), sb.ReadOnly, sb.Network)
 	}
 	return sandbox.NewLocal()
+}
+
+// mcpSummary builds "/mcp" display lines: one per server with its tool names.
+func mcpSummary(ctx context.Context, mgr *mcp.Manager) []string {
+	servers := mgr.Servers()
+	if len(servers) == 0 {
+		return nil
+	}
+	// Group wrapped tool names (mcp__<server>__<tool>) by server.
+	byServer := map[string][]string{}
+	for _, t := range mgr.Tools(ctx) {
+		n := t.Name()
+		const pfx = "mcp__"
+		if !strings.HasPrefix(n, pfx) {
+			continue
+		}
+		rest := n[len(pfx):]
+		if i := strings.Index(rest, "__"); i >= 0 {
+			byServer[rest[:i]] = append(byServer[rest[:i]], rest[i+2:])
+		}
+	}
+	var lines []string
+	for _, s := range servers {
+		lines = append(lines, fmt.Sprintf("  %s: %s", s.Name, strings.Join(byServer[s.Name], ", ")))
+	}
+	return lines
 }
 
 // gitBranch returns the current git branch for dir, or "" if not a repo.
@@ -293,8 +321,14 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Interactive TUI: the default when not headless and not stream-json input.
 	// It drives the same loop, prompting the user to resolve permission asks.
 	if interactive {
-		// Shared settings so /model can change the model between turns.
-		sess := &tui.Session{Model: opts.model, PermissionMode: string(mode)}
+		// Shared settings so slash commands can read/change them between turns.
+		sess := &tui.Session{
+			Model:          opts.model,
+			ResolvedModel:  string(model),
+			PermissionMode: string(mode),
+			Memory:         memory.New(filepath.Join(cwd, ".klaudia", "memory")),
+			MCPSummary:     mcpSummary(ctx, mcpMgr),
+		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,

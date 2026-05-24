@@ -30,18 +30,28 @@ type Config struct {
 }
 
 // LoadConfig reads .mcp.json from dir. A missing file yields an empty config
-// (not an error).
+// (not an error). A project .klaudia/.mcp.json overrides ./.mcp.json per server,
+// so MCP servers can be locally overridden in the .klaudia folder.
 func LoadConfig(dir string) (Config, error) {
-	var cfg Config
-	data, err := os.ReadFile(filepath.Join(dir, ".mcp.json"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, nil
+	cfg := Config{MCPServers: map[string]ServerConfig{}}
+	for _, p := range []string{
+		filepath.Join(dir, ".mcp.json"),          // base
+		filepath.Join(dir, ".klaudia", ".mcp.json"), // local override (wins)
+	} {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return cfg, err
 		}
-		return cfg, err
-	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return cfg, fmt.Errorf(".mcp.json: %w", err)
+		var c Config
+		if err := json.Unmarshal(data, &c); err != nil {
+			return cfg, fmt.Errorf("%s: %w", filepath.Base(p), err)
+		}
+		for name, sc := range c.MCPServers {
+			cfg.MCPServers[name] = sc
+		}
 	}
 	return cfg, nil
 }

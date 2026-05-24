@@ -3,6 +3,8 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -81,6 +83,28 @@ func TestLoadConfigMissingIsEmpty(t *testing.T) {
 	}
 	if len(cfg.MCPServers) != 0 {
 		t.Errorf("expected empty config, got %v", cfg.MCPServers)
+	}
+}
+
+func TestLoadConfigKlaudiaOverride(t *testing.T) {
+	dir := t.TempDir()
+	// Base ./.mcp.json defines two servers.
+	os.WriteFile(filepath.Join(dir, ".mcp.json"),
+		[]byte(`{"mcpServers":{"a":{"command":"a-base"},"b":{"command":"b"}}}`), 0o644)
+	// .klaudia/.mcp.json overrides "a" and adds "c".
+	os.MkdirAll(filepath.Join(dir, ".klaudia"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".klaudia", ".mcp.json"),
+		[]byte(`{"mcpServers":{"a":{"command":"a-override"},"c":{"command":"c"}}}`), 0o644)
+
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MCPServers["a"].Command != "a-override" {
+		t.Errorf("a = %q, want a-override (.klaudia wins)", cfg.MCPServers["a"].Command)
+	}
+	if cfg.MCPServers["b"].Command != "b" || cfg.MCPServers["c"].Command != "c" {
+		t.Errorf("expected base b and override c: %+v", cfg.MCPServers)
 	}
 }
 

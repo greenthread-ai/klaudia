@@ -18,6 +18,7 @@ import (
 
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
+	"github.com/greenthread/klaudia/internal/memory"
 	"github.com/greenthread/klaudia/internal/permission"
 )
 
@@ -29,8 +30,12 @@ type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMe
 // slash commands like /model can change settings for subsequent turns. The
 // RunFunc should read these fields fresh on each call.
 type Session struct {
-	Model          string // model alias or full ID ("" = default)
-	PermissionMode string // for display
+	Model          string         // model alias or full ID ("" = default)
+	ResolvedModel  string         // concrete model id for display
+	PermissionMode string         // for display
+	Memory         *memory.Store  // backs /memory (may be nil)
+	MCPSummary     []string       // lines for /mcp ("server: tool1, tool2")
+	Goal           string         // standing goal re-injected each turn (Ralph-style)
 }
 
 type uiState int
@@ -84,6 +89,10 @@ type Model struct {
 	// Accessed only from the UI goroutine (Update) to avoid races.
 	sessionAllow []permission.Rule
 	sessionDeny  []permission.Rule
+	// Cumulative session stats for /stats.
+	statTurns int
+	statIn    int64
+	statOut   int64
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
@@ -164,6 +173,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.res.Messages != nil {
 			m.history = msg.res.Messages
 		}
+		m.statTurns += msg.res.NumTurns
+		m.statIn += msg.res.InputTokens
+		m.statOut += msg.res.OutputTokens
 		m.state = stateIdle
 		m.input.Focus()
 		return m, tea.Batch(textinput.Blink, m.waitForEvent())
@@ -230,6 +242,10 @@ const slashHelp = `Available commands:
   /model [name]    Show or set the model (alias: haiku|sonnet|opus, or full ID)
   /allow <rule>    Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)
   /deny <rule>     Auto-deny a tool rule this session
+  /goal [text]     Set/show a standing goal re-stated each turn (/goal clear to stop)
+  /memory [add …]  Show recalled memory, or add a note
+  /mcp             List connected MCP servers and tools
+  /stats           Show session stats (turns, tokens)
   /status          Show the current session settings
   /clear           Clear the screen and conversation history
   /quit, /exit     Exit Klaudia`
@@ -254,6 +270,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		if len(args) == 0 {
 			cur := m.sess.Model
 			if cur == "" {
+				cur = m.sess.ResolvedModel // show the concrete default, by name
+			}
+			if cur == "" {
 				cur = "(default)"
 			}
 			m.appendLine(bannerStyle.Render("Model: " + cur))
@@ -261,6 +280,50 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.sess.Model = args[0]
 			m.appendLine(bannerStyle.Render("Model set to " + args[0] + " (applies to the next turn)."))
 		}
+	case "/goal":
+		switch {
+		case len(args) == 0:
+			if m.sess.Goal == "" {
+				m.appendLine(bannerStyle.Render("No standing goal set. /goal <text> to set one."))
+			} else {
+				m.appendLine(bannerStyle.Render("Goal: " + m.sess.Goal))
+			}
+		case strings.ToLower(args[0]) == "clear":
+			m.sess.Goal = ""
+			m.appendLine(bannerStyle.Render("Standing goal cleared."))
+		default:
+			m.sess.Goal = strings.Join(args, " ")
+			m.appendLine(bannerStyle.Render("Standing goal set; it will be re-stated each turn:\n" + m.sess.Goal))
+		}
+	case "/memory":
+		if m.sess.Memory == nil {
+			m.appendLine(errStyle.Render("memory is not available"))
+			break
+		}
+		if len(args) > 0 && strings.ToLower(args[0]) == "add" {
+			note := strings.TrimSpace(strings.TrimPrefix(strings.Join(args, " "), args[0]))
+			if err := m.sess.Memory.Add(note); err != nil {
+				m.appendLine(errStyle.Render("memory: " + err.Error()))
+			} else {
+				m.appendLine(bannerStyle.Render("Saved to memory."))
+			}
+		} else {
+			idx, _ := m.sess.Memory.Index()
+			if strings.TrimSpace(idx) == "" {
+				m.appendLine(bannerStyle.Render("No memory yet. /memory add <note> to save one."))
+			} else {
+				m.appendLine(bannerStyle.Render(strings.TrimSpace(idx)))
+			}
+		}
+	case "/mcp":
+		if len(m.sess.MCPSummary) == 0 {
+			m.appendLine(bannerStyle.Render("No MCP servers connected. Configure them in .mcp.json or .klaudia/.mcp.json."))
+		} else {
+			m.appendLine(bannerStyle.Render("MCP servers:\n" + strings.Join(m.sess.MCPSummary, "\n")))
+		}
+	case "/stats":
+		m.appendLine(bannerStyle.Render(fmt.Sprintf("Session: turns=%d  input_tokens=%d  output_tokens=%d",
+			m.statTurns, m.statIn, m.statOut)))
 	case "/allow", "/deny":
 		if len(args) == 0 {
 			m.appendLine(errStyle.Render("usage: " + cmd + " <rule>  e.g. " + cmd + " Bash(go test:*)"))
@@ -309,7 +372,11 @@ func (m *Model) answer(d permission.Decision) {
 }
 
 // startTurn runs the agent in a goroutine, delivering events via the channel.
+// A standing /goal is re-stated to the model each turn (Ralph-style).
 func (m *Model) startTurn(prompt string) {
+	if m.sess != nil && m.sess.Goal != "" {
+		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
+	}
 	approver := &uiApprover{events: m.events}
 	emit := func(ev agent.Event) { m.events <- eventMsg{ev} }
 	go func() {
