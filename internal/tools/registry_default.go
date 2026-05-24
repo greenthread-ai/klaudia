@@ -13,6 +13,8 @@ func DefaultRegistry() (*Registry, error) {
 	// The Bash tool runs through an Executor. Phase 2 uses the unconfined
 	// local host executor; sandbox/container executors swap in later.
 	executor := sandbox.NewLocal()
+	// Per-session todo state shared with the TodoWrite tool.
+	todos := &TodoStore{}
 
 	type ctor struct {
 		name string
@@ -25,6 +27,8 @@ func DefaultRegistry() (*Registry, error) {
 		{"Glob", func() (Tool, error) { return NewGlob() }},
 		{"Grep", func() (Tool, error) { return NewGrep() }},
 		{"Bash", func() (Tool, error) { return NewBash(executor) }},
+		{"TodoWrite", func() (Tool, error) { return NewTodoWrite(todos) }},
+		{"NotebookEdit", func() (Tool, error) { return NewNotebookEdit() }},
 	}
 
 	ts := make([]Tool, 0, len(ctors))
