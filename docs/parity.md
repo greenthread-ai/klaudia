@@ -1,8 +1,10 @@
 # Klaudia Parity Audit
 
 Tracks the JS→Go port. The JS reference (`src/sections/*.js`, extracted from
-Claude Code v2.1.66) is the golden reference for differential testing until
-parity is reached, then retired to a `js-reference` branch.
+Claude Code v2.1.66) was the golden reference for differential testing during
+the port and has now been **retired to the `js-reference` branch** — the Go
+binary is the product. This table is the record of what was ported and where it
+deliberately diverges.
 
 **Status legend**
 
@@ -142,20 +144,19 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 
 ---
 
-## Retire-JS readiness
+## JS retirement (done)
 
-All differential-testing dependencies on the JS tree are now cleared:
+All differential-testing dependencies on the JS tree were cleared (the last was
+stream-json partial deltas, now emitted behind `--include-partial-messages`).
+The Go build and full test suite pass with the JS tree removed — definitive
+proof nothing in it was load-bearing.
 
-1. ~~**1b — stream-json partial deltas**~~ — ✅ done (`--include-partial-messages`
-   emits JS-shaped `stream_event` lines).
-2. The remaining step before removing the JS tree is a **final differential
-   pass** comparing Klaudia vs `node dist/cli.js` on the golden cases under each
-   ⛔/🔀 row, to confirm the divergences are deliberate.
+The JavaScript reference (`src/sections/*.js`), its build (`build.mjs`,
+`package.json`), the pre-`native` Go sidecar tools (`tools/`, `vendor/`,
+`*.wasm`), and the differential test scripts (`test-*.sh`) were removed from this
+branch and **preserved on `js-reference`**. Consult them with
+`git checkout js-reference`.
 
-Everything else is either ✅ done, a deliberate 🔀 divergence, or a 🔜 planned
-post-parity enhancement that does not require the JS reference to build.
-
-**Retirement is gated on explicit sign-off** — removing `src/sections/*.js`
-(~571K lines) is irreversible from `main`. Plan: `git branch js-reference` to
-preserve it, then drop the tree from `main` in one commit. Not done
-autonomously.
+Everything in the tables above is ✅ done, a deliberate 🔀 divergence, a 🟡
+partial with noted gaps, or a 🔜 planned post-parity enhancement that does not
+require the JS reference.

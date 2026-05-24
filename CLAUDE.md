@@ -11,23 +11,29 @@ go test ./internal/...
 
 ## Internal Package Layout
 
-- **agent** - Main event loop and orchestration
-- **api** - Anthropic API client
+- **agent** - Main event loop, orchestration, and sub-agent spawning
+- **api** - Provider abstraction: Anthropic client + OpenAI-compatible shim
 - **tools** - Local tool implementations
-- **permission** - Permission/authorization checks
-- **session** - Session and state management
-- **compaction** - Context/history compression
+- **browser** - Lazy headless-Chrome engine + web search
+- **permission** - Permission/authorization checks (5 modes + allow/deny rules)
+- **session** - Transcripts, resume, persisted compaction summaries
+- **compaction** - Context/history compression (micro + auto)
 - **mcp** - Model Context Protocol support
-- **subagent** - Sub-agent launching
-- **streamjson** - JSON streaming parser
-- **tui** - Terminal UI components
+- **subagent** - Built-in sub-agent types
+- **skill** - User-defined skills (`.klaudia/skills`)
+- **memory** - Auto-memory store
+- **doctor** - `/doctor` environment diagnostics
+- **streamjson** - Bidirectional stream-json frontend
+- **tui** - Terminal UI (Bubble Tea)
 - **prompt** - Prompt construction
-- **cli** - CLI entry point
-- **native** - Native bindings
-- **sandbox** - Sandboxed execution
+- **cli** - CLI entry point and wiring
+- **native** - Pure-Go search / bash-parsing / PDF
+- **sandbox** - Local / OS-confined / container Bash execution
 - **schema** - Type/schema definitions
 - **version** - Version info
 
 ## Rules
 
-- `src/sections/` (JS reference implementation) is read-only
+- Pure Go: builds must stay `CGO_ENABLED=0`-clean (no cgo, no system libs).
+- The retired JavaScript reference lives on the `js-reference` branch; consult it
+  with `git checkout js-reference` (not present on this branch).

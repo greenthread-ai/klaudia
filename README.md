@@ -1,221 +1,203 @@
 # Klaudia
 
-A locally-buildable, extensible cleanroom of Claude Code, extracted from the v2.1.66 npm package. See [PRD.md](PRD.md) for the full roadmap.
+A locally-buildable, extensible coding agent — a single static Go binary. Klaudia
+began as a cleanroom of Claude Code (v2.1.66) and has been ported to Go; the
+original JavaScript reference has been retired (preserved on the `js-reference`
+branch). See [PRD.md](PRD.md) for background and [docs/parity.md](docs/parity.md)
+for the feature map.
 
-## Prerequisites
+## Build
 
-- Node.js >= 18
-- npm
-- Anthropic API key or existing Claude Code OAuth session
-
-## Setup
+Pure Go, no CGO, no system libraries:
 
 ```bash
-cd klaudia
-npm install
-node build.mjs          # Concatenates sections → dist/cli.js
+CGO_ENABLED=0 go build -o klaudia ./cmd/klaudia
+go test ./internal/...
 ```
+
+The result is one self-contained binary (Linux + macOS).
 
 ## Usage
 
-### Interactive (REPL)
+### Interactive (TUI)
 
 ```bash
-node dist/cli.js
+./klaudia
 ```
+
+A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
+type-ahead, `@path` file completion (Tab), input history (↑/↓), scrollback
+(PgUp/PgDn), and `Esc` to interrupt a turn. Type `/help` for the full list.
 
 ### Headless (one-shot)
 
 ```bash
-# Basic — waits for all turns, prints final result
-node dist/cli.js -p "What files are in this directory?"
+# Print the final result and exit
+./klaudia -p "What files are in this directory?"
 
-# With full autonomy (skips all permission prompts)
-node dist/cli.js -p "Create hello.py" --dangerously-skip-permissions
+# Full autonomy (skip permission prompts)
+./klaudia -p "Create hello.py" --dangerously-skip-permissions
 
-# Stream events as they happen (see tool calls in real-time)
-node dist/cli.js -p "Explain the build system" --output-format stream-json --verbose
+# Stream events as JSON (tool calls, results) as they happen
+./klaudia -p "Explain the build" --output-format stream-json --verbose
 
-# JSON output with full metadata
-node dist/cli.js -p "What is 2+2?" --output-format json
-
-# To Spy on your running session
-ls -t ~/.claude/projects/*/*.jsonl | head -1 | xargs tail -20
+# Partial message deltas, JS-compatible (only with --print + stream-json)
+./klaudia -p "…" --output-format stream-json --verbose --include-partial-messages
 ```
 
-**Note:** You must unset `CLAUDECODE` when running inside a Claude Code session, otherwise it blocks with a "nested sessions" error.
+### Embedding (stream-json over stdin)
 
-### Watching progress in headless mode
-
-In text mode (`-p`), output only appears after all turns complete. To monitor:
+A persistent agent driven by newline-delimited JSON over stdin/stdout — the
+channel for editor/SDK integrations (no terminal needed):
 
 ```bash
-# Watch the live session transcript
-ls -t ~/.claude/projects/*/*.jsonl | head -1 | xargs tail -f
-
-# Or use stream-json to see events as they arrive
-node dist/cli.js -p "..." --output-format stream-json --verbose 2>/dev/null \
-  | jq -r 'select(.type == "assistant") | .message.content[] | select(.type == "text") | .text'
+./klaudia --input-format stream-json --verbose
 ```
 
-### Permission modes
+### Resuming
+
+```bash
+./klaudia --continue                 # resume the most recent session here
+./klaudia -r <session-id>            # resume a specific session
+./klaudia -r <session-id> --full     # replay the whole transcript (not the summary)
+```
+
+Sessions are JSONL transcripts under `~/.klaudia/projects/<encoded-cwd>/`
+(override the base with `KLAUDIA_CONFIG_DIR`). When a session has a persisted
+compaction summary, `--resume` seeds from it (token-saving) unless `--full`.
+
+## Permission modes
 
 | Flag | Mode | Behavior |
 |------|------|----------|
-| *(default)* | `default` | Prompts for dangerous operations (interactive only) |
-| `--permission-mode acceptEdits` | `acceptEdits` | Auto-accepts file edits |
-| `--dangerously-skip-permissions` | `bypassPermissions` | Allows everything |
-| `--permission-mode plan` | `plan` | Read-only exploration, no modifications |
-| `--permission-mode dontAsk` | `dontAsk` | Denies anything not pre-approved |
+| *(default)* | `default` | Ask before risky operations (interactive only) |
+| `--permission-mode acceptEdits` | `acceptEdits` | Auto-accept file edits |
+| `--dangerously-skip-permissions` | `bypassPermissions` | Allow everything |
+| `--permission-mode plan` | `plan` | Read-only; mutations and network blocked |
+| `--permission-mode dontAsk` | `dontAsk` | Deny anything not pre-approved |
 
-In headless mode (`-p`) without `--dangerously-skip-permissions`, tools needing
-approval are **denied** (no TTY to prompt). The model adapts and reports what it
-found without modifying anything.
+In the TUI, `/mode` switches modes interactively. Headless `-p` without
+`--dangerously-skip-permissions` denies anything that would prompt (no TTY).
+Session allow/deny rules: `--allowedTools 'Bash(go test:*)'`, `--disallowedTools …`,
+or `/allow` / `/deny` at runtime.
 
-### Model selection
+## Model & provider
 
-```bash
-node dist/cli.js --model haiku       # Fast/cheap
-node dist/cli.js --model sonnet      # Default
-node dist/cli.js --model opus        # Most capable
+Klaudia defaults to the Anthropic Messages API. A project or user
+`.klaudia/config.json` selects the provider and model:
+
+```jsonc
+{
+  "provider": "openai",                 // "anthropic" (default) | "openai"
+  "model": "openai/gpt-5.5",
+  "baseURL": "https://api.example.com/v1", // OpenAI-compatible endpoint
+  "apiKeyEnv": "MY_API_KEY"             // or "apiKey" (prefer the env form)
+}
 ```
 
-### Custom model and endpoint
+`--model haiku|sonnet|opus` (or a full model ID) overrides per-run. The
+OpenAI-compatible provider translates the Anthropic message shape to Chat
+Completions (including image tool-results → `image_url`).
 
-For inference against a custom endpoint (e.g. a dev model on a local network), use CLI flags or env vars. Server-side calls (telemetry, auth, token counting metadata) always go to the Anthropic prod API — only inference calls are routed to the custom endpoint.
-
-**CLI flags:**
-
-```bash
-node dist/cli.js \
-  --custom-model moonshotai/Kimi-VL-A3B-Thinking-2506 \
-  --custom-endpoint http://122.252.4.33:8000
-```
-
-**Environment variables (ideal for galph/subshell usage):**
-
-```bash
-export KLAUDIA_CUSTOM_MODEL=moonshotai/Kimi-VL-A3B-Thinking-2506
-export KLAUDIA_CUSTOM_ENDPOINT=http://122.252.4.33:8000
-node dist/cli.js
-```
-
-You can also select "Custom endpoint" from the interactive `/model` picker at runtime.
+`~/.klaudia/config.json` is the user default; a project `./.klaudia/config.json`
+overlays it (project wins). Settings merge per field.
 
 ### Auth
 
-Klaudia uses the same auth as Claude Code. Either:
-- Set `ANTHROPIC_API_KEY` in your environment, or
-- Use an existing Claude Code OAuth session (tokens in `~/.claude/`)
+- `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`), or
+- an existing Claude Code OAuth session in the macOS Keychain (Klaudia refreshes
+  expired tokens and writes them back), or
+- a provider key via `apiKey` / `apiKeyEnv` in `.klaudia/config.json`.
 
-Auth is used for both prod Anthropic API calls and custom endpoint calls (the same API key/token is sent to both).
+## Sandboxing the Bash tool
 
-## Build
+`.klaudia/config.json` → `sandbox.mode`:
 
-```bash
-node build.mjs            # One-shot build
-node build.mjs --watch    # Watch mode (rebuilds on section changes)
+- `local` (default) — run on the host, unconfined.
+- `os` — host confinement: `sandbox-exec` (macOS) / `bubblewrap` (Linux). Reads
+  are unrestricted; writes limited to cwd + temp (+ `writeRoots`); `network`
+  configurable. Falls back to local with a warning if the tool is absent.
+- `container` — run inside docker/podman (`runtime`, `image`, `mountCwd`,
+  `readOnly`, `network`).
+
+## Web search & browsing
+
+Built-in, permission-gated tools backed by a lazily-launched **headless Chrome**
+(nothing spawns until a web tool runs; the browser is closed at session end):
+
+- `WebSearch` — DuckDuckGo (default) or Google; returns titles/URLs/snippets.
+- `WebFetch` / `BrowserNavigate` / `BrowserSnapshot` — render a page and return
+  Markdown.
+
+Requires a Chrome/Chromium install (auto-discovered; set `KLAUDIA_CHROME_PATH`
+on Linux/Windows if not on `PATH`). Tunable via `.klaudia/config.json` →
+`browser` (`engine`, `headless`, `chromePath`, `userDataDir`, `headedFallback`,
+…) or `KLAUDIA_*` env vars. When a search hits a bot-challenge page, Klaudia can
+relaunch a **headed** Chrome with a persistent profile (`~/.klaudia/browser/…`)
+so you can solve it once. Anthropic's server-side `web_search`/`web_fetch` betas
+remain available when using the Anthropic provider.
+
+## MCP
+
+Model Context Protocol stdio servers from `.mcp.json` (project `.klaudia/.mcp.json`
+overrides). Their tools appear as `mcp__<server>__<tool>`, auto-deferred behind
+`ToolSearch`. In the TUI, `/mcp` lists servers and reconnects/disconnects them.
+
+## Skills
+
+Drop Markdown files with YAML frontmatter in `~/.claude/skills` or
+`.klaudia/skills/` (project wins). They become a `Skill` tool the model can
+invoke and `/＜name＞` commands in the TUI. Body supports `$ARGUMENTS`.
+
+```markdown
+---
+name: review
+description: Structured review of the current diff
+---
+Review the staged changes carefully. $ARGUMENTS
 ```
 
-### Go tools
+## Memory & project knowledge
 
-All Go tools are built with `CGO_ENABLED=0` (pure Go, no C dependencies):
+- **Auto-memory** — the `Memory` tool reads/writes notes under
+  `.klaudia/memory/`; the index is recalled into the system prompt.
+- **Project knowledge** — `.klaudia/KNOWLEDGE.md` (curated, durable lessons) is
+  injected into the system prompt when present.
 
-```bash
-CGO_ENABLED=0 go build -o vendor/klaudia-search ./tools/search/
-CGO_ENABLED=0 go build -o vendor/klaudia-pdf ./tools/pdf/
-CGO_ENABLED=0 go build -o vendor/klaudia-bash-parser ./tools/bash-parser/
-cd tools/screenshot && CGO_ENABLED=0 go build -o ../../vendor/klaudia-screenshot . && cd ../..
-```
+## Internal package layout
 
-## Test
-
-```bash
-bash test-harness.sh                  # 5 core tests
-bash test-harness.sh --with-websearch # 6 tests (includes web search)
-```
-
-| # | Test | What it checks |
-|---|------|----------------|
-| 1 | Version | `--version` outputs `2.1.66-klaudia` |
-| 2 | Simple prompt | `-p` returns expected response |
-| 3 | Model override | `--model claude-haiku-4-5` selects correct model |
-| 4 | JSON output | `--output-format json` produces valid JSON |
-| 5 | Help | `--help` shows usage info |
-| 6 | Web search | Server-side `web_search` tool works (optional) |
-
-## Architecture
-
-The app is split into 9 section files in `src/sections/`, concatenated by `build.mjs` into `dist/cli.js`.
-
-| File | Contents |
-|------|----------|
-| `00-runtime.js` | esbuild helpers (`E()`, `C()`, `s1()`) |
-| `01-zod-state.js` | Zod validation, i18n locales, session state, MCP transport |
-| `02-network.js` | WebSocket, AJV, Axios |
-| `03-providers.js` | OpenTelemetry, gRPC |
-| `04-react-ink.js` | React, Ink, yoga-layout, tool name constants |
-| `05-app-core.js` | Tools, permissions, MCP, compaction |
-| `06-app-ui.js` | UI, API client, tool dispatch, server-side tools |
-| `07-app-features.js` | Tree-sitter, screenshot, voice, headless mode |
-| `08-entry.js` | CLI bootstrap, Commander setup |
-
-### Removed providers
-
-Bedrock (AWS), Vertex (Google), and Foundry (Microsoft) provider code paths have been removed. `getProvider()` always returns `"firstParty"` (Anthropic direct API). Custom model endpoints are supported via `--custom-model` / `--custom-endpoint`.
-
-### Key renamed functions
-
-We've renamed ~75 mangled identifiers to readable names. Key ones:
-
-| Name | File | Purpose |
-|------|------|---------|
-| `cliMain` | 08-entry.js | CLI entry point |
-| `setupCommander` | 08-entry.js | Commander CLI parser |
-| `runHeadless` | 07-app-features.js | Headless mode executor |
-| `agentLoop` | 06-app-ui.js | Core stream→tools→repeat loop |
-| `callModel` | 06-app-ui.js | SDK entry point |
-| `streamApiRequest` | 06-app-ui.js | API request builder |
-| `dispatchToolUse` | 06-app-ui.js | Tool executor |
-| `checkToolPermissions` | 07-app-features.js | Permission checker |
-| `createApiClient` | 05-app-core.js | API client factory (supports custom `baseURL`) |
-| `getProvider` | 03-providers.js | Provider router (always `"firstParty"`) |
-| `getModelOverride` | 07-app-features.js | Model override retrieval |
-| `getCurrentModel` | 07-app-features.js | Current model getter |
-| `getCustomEndpoint` | 07-app-features.js | Custom endpoint URL resolver |
-| `getModelDisplayName` | 07-app-features.js | Model display name formatter |
-| `ModelPickerUI` | 06-app-ui.js | Interactive model selection component |
-| `buildModelOptions` | 06-app-ui.js | Model option list builder |
-| `microcompact` | 05-app-core.js | Fast client-side compaction |
-| `autocompactFn` | 05-app-core.js | Model-based compaction |
-| `buildToolSchema` | 06-app-ui.js | Tool → API schema |
-| `onAppStateChange` | 07-app-features.js | App state change handler |
-
-### Go tool status
-
-| Tool | Binary | Replaces | Wired In |
-|------|--------|----------|----------|
-| `tools/search/` | `vendor/klaudia-search` | ripgrep | Yes |
-| `tools/pdf/` | `vendor/klaudia-pdf` | pdfinfo + pdftoppm | Yes |
-| `tools/bash-parser/` | `vendor/klaudia-bash-parser` | tree-sitter-bash.wasm | Yes (fallback) |
-| `tools/screenshot/` | `vendor/klaudia-screenshot` | resvg.wasm | Yes (fallback) |
-
-Go tools are preferred at runtime; the app falls back to originals if missing.
+| Package | Responsibility |
+|---------|----------------|
+| `agent` | the agentic loop + sub-agent spawning |
+| `api` | provider abstraction (Anthropic client + OpenAI-compatible shim) |
+| `tools` | local tool implementations |
+| `browser` | lazy headless-Chrome engine + web search |
+| `permission` | the 5-mode permission system + allow/deny rules |
+| `session` | JSONL transcripts, resume, persisted summaries |
+| `compaction` | micro + auto context compaction |
+| `mcp` | Model Context Protocol client |
+| `subagent` | built-in sub-agent types |
+| `skill` | user-defined skills |
+| `memory` | auto-memory store |
+| `doctor` | `/doctor` environment diagnostics |
+| `sandbox` | local / OS-confined / container Bash execution |
+| `streamjson` | bidirectional stream-json frontend |
+| `tui` | Bubble Tea terminal UI |
+| `cli` | command entry, flags, wiring |
+| `native` | pure-Go search / bash-parsing / PDF |
+| `prompt`, `schema`, `config`, `version`, `tasks` | supporting packages |
 
 ## Documentation
 
-- [PRD.md](PRD.md) — Product roadmap and phase tracking
-- [docs/agent-calling-usage.md](docs/agent-calling-usage.md) — Full CLI → agent → tool execution flow
-- [docs/compaction.md](docs/compaction.md) — Context window management (microcompact + autocompact)
-- [docs/server-side-tools.md](docs/server-side-tools.md) — WebSearch, WebFetch, Code Execution, MCP schemas
+- [PRD.md](PRD.md) — background and goals
+- [docs/parity.md](docs/parity.md) — JS→Go feature map and divergences
+- [docs/agent-calling-usage.md](docs/agent-calling-usage.md) — CLI → agent → tool flow
+- [docs/compaction.md](docs/compaction.md) — context-window management
+- [docs/server-side-tools.md](docs/server-side-tools.md) — Anthropic server-side tool schemas
 
-## Origins
+## History
 
-Extracted from the `@anthropic-ai/claude-code` npm package v2.1.66:
-
-```bash
-# How this was created (for reference, don't re-run)
-curl -sL https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.66.tgz | tar xz
-npx prettier --write package/cli.js
-# Then split into sections and moved into this directory structure
-```
+The original JavaScript reference (extracted and prettified from the
+`@anthropic-ai/claude-code` v2.1.66 npm package, split into `src/sections/*.js`)
+served as the golden reference during the port and now lives on the
+`js-reference` branch. `git checkout js-reference` to consult it.
