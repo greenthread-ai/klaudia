@@ -14,6 +14,7 @@ require (
 	github.com/razvandimescu/gopdf v0.9.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/cobra v1.10.2
+	gopkg.in/yaml.v3 v3.0.1
 	mvdan.cc/sh/v3 v3.13.1
 )
 
@@ -57,5 +58,4 @@ require (
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

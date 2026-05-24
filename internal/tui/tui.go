@@ -37,6 +37,16 @@ type Session struct {
 	Memory         *memory.Store  // backs /memory (may be nil)
 	MCPSummary     []string       // lines for /mcp ("server: tool1, tool2")
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
+	Skills         []SkillCommand // user-defined skills dispatched as /<name>
+}
+
+// SkillCommand is a user-defined skill exposed as a /<name> command in the TUI.
+// Render returns the skill body with $ARGUMENTS substituted; the TUI submits the
+// rendered text as the turn's prompt.
+type SkillCommand struct {
+	Name        string
+	Description string
+	Render      func(arguments string) string
 }
 
 type uiState int
@@ -341,7 +351,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 
 	switch cmd {
 	case "/help", "/?":
-		m.appendLine(bannerStyle.Render(slashHelp))
+		m.appendLine(bannerStyle.Render(slashHelp + m.skillHelpLines()))
 	case "/quit", "/exit":
 		return m, tea.Quit
 	case "/clear":
@@ -434,9 +444,50 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  permission-mode=%s  messages=%d", model, mode, len(m.history))))
 	default:
+		// A /<skill> matching a user-defined skill renders its body and submits it
+		// as the turn prompt. Built-in commands above always win (a skill that
+		// shadows one is unreachable here).
+		if sk, ok := m.lookupSkill(strings.TrimPrefix(cmd, "/")); ok {
+			rendered := sk.Render(strings.Join(args, " "))
+			m.appendLine(bannerStyle.Render("Running skill /" + sk.Name))
+			m.state = stateRunning
+			m.startTurn(rendered)
+			return m, m.spin.Tick
+		}
 		m.appendLine(errStyle.Render("Unknown command " + cmd + ". Try /help."))
 	}
 	return m, nil
+}
+
+// lookupSkill finds a loaded skill by name (case-sensitive).
+func (m *Model) lookupSkill(name string) (SkillCommand, bool) {
+	if m.sess == nil {
+		return SkillCommand{}, false
+	}
+	for _, sk := range m.sess.Skills {
+		if sk.Name == name {
+			return sk, true
+		}
+	}
+	return SkillCommand{}, false
+}
+
+// skillHelpLines renders the user-defined skills section of /help (empty when
+// none are loaded).
+func (m *Model) skillHelpLines() string {
+	if m.sess == nil || len(m.sess.Skills) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\nSkills:")
+	for _, sk := range m.sess.Skills {
+		desc := sk.Description
+		if desc == "" {
+			desc = "(user-defined skill)"
+		}
+		fmt.Fprintf(&b, "\n  /%-14s %s", sk.Name, desc)
+	}
+	return b.String()
 }
 
 // answer resolves the pending permission ask.

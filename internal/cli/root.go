@@ -24,6 +24,7 @@ import (
 	"github.com/greenthread/klaudia/internal/prompt"
 	"github.com/greenthread/klaudia/internal/sandbox"
 	"github.com/greenthread/klaudia/internal/session"
+	"github.com/greenthread/klaudia/internal/skill"
 	"github.com/greenthread/klaudia/internal/streamjson"
 	"github.com/greenthread/klaudia/internal/subagent"
 	"github.com/greenthread/klaudia/internal/tools"
@@ -45,6 +46,44 @@ func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.
 		return nil, err
 	}
 	return tools.NewRegistry(append(base.All(), agentTool)...), nil
+}
+
+// skillToolInfos adapts loaded skills into the tools package's SkillInfo,
+// binding each skill's Render so the tools package stays decoupled from skill.
+func skillToolInfos(skills []skill.Skill) []tools.SkillInfo {
+	infos := make([]tools.SkillInfo, 0, len(skills))
+	for _, sk := range skills {
+		sk := sk
+		infos = append(infos, tools.SkillInfo{
+			Name:        sk.Name,
+			Description: sk.Description,
+			Render:      sk.Render,
+		})
+	}
+	return infos
+}
+
+// builtinSlashCommands are the TUI commands a skill cannot override (the slash
+// switch handles them before the /<skill> default branch).
+var builtinSlashCommands = map[string]bool{
+	"help": true, "?": true, "quit": true, "exit": true, "clear": true,
+	"model": true, "goal": true, "memory": true, "mcp": true, "stats": true,
+	"allow": true, "deny": true, "status": true,
+}
+
+// tuiSkills adapts loaded skills into TUI /<name> commands, warning when a skill
+// name shadows a built-in command (the built-in wins, so the skill is
+// unreachable as a slash command but remains callable via the Skill tool).
+func tuiSkills(skills []skill.Skill, warn func(string)) []tui.SkillCommand {
+	out := make([]tui.SkillCommand, 0, len(skills))
+	for _, sk := range skills {
+		sk := sk
+		if builtinSlashCommands[sk.Name] {
+			warn(fmt.Sprintf("skill %q shadows built-in /%s; reachable only via the Skill tool", sk.Name, sk.Name))
+		}
+		out = append(out, tui.SkillCommand{Name: sk.Name, Description: sk.Description, Render: sk.Render})
+	}
+	return out
 }
 
 // buildProvider selects and constructs the model provider from config. It
@@ -339,6 +378,14 @@ func run(cmd *cobra.Command, opts *options) error {
 		baseTools = append(baseTools, memTool)
 	}
 
+	// User-defined skills (~/.claude/skills overlaid by .klaudia/skills) become a
+	// single Skill tool the model can invoke; the TUI also dispatches /<skill>.
+	skills := skill.Load(cwd, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
+	skillInfos := skillToolInfos(skills)
+	if skillTool, serr := tools.NewSkill(skillInfos); serr == nil && skillTool != nil {
+		baseTools = append(baseTools, skillTool)
+	}
+
 	// Deferred tool loading: MCP tools can be numerous, so withhold them from
 	// the initial request behind a ToolSearch tool that loads them on demand.
 	deferredTools := map[string]bool{}
@@ -394,6 +441,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			PermissionMode: string(mode),
 			Memory:         memStore,
 			MCPSummary:     mcpSummary(ctx, mcpMgr),
+			Skills:         tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
 			// Rebuild the permission context from the live session mode each turn
