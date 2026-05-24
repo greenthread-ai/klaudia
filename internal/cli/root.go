@@ -277,6 +277,17 @@ func gitBranch(dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// gitCommit returns the short HEAD commit hash, or "" outside a repo.
+func gitCommit(dir string) string {
+	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 
 // options holds parsed CLI flags, mirroring the JS commander surface
 // (08-entry.js setupCommander). Only the Phase 0 subset is wired so far.
@@ -293,6 +304,7 @@ type options struct {
 	resume          string // --resume <session-id>
 	continueSession bool   // --continue
 	forkSession     bool   // --fork-session
+	fullResume      bool   // --full (replay entire transcript, not the summary)
 	allowedTools    []string
 	disallowedTools []string
 	partialMessages bool // --include-partial-messages
@@ -335,6 +347,7 @@ func NewRootCommand() *cobra.Command {
 	f.StringVarP(&opts.resume, "resume", "r", "", "Resume a session by ID")
 	f.BoolVar(&opts.continueSession, "continue", false, "Resume the most recent session in this directory")
 	f.BoolVar(&opts.forkSession, "fork-session", false, "When resuming, start a new session ID (preserves the original)")
+	f.BoolVar(&opts.fullResume, "full", false, "When resuming, replay the entire transcript instead of the compacted summary")
 	f.StringSliceVar(&opts.allowedTools, "allowedTools", nil, "Auto-allow tool rules, e.g. 'Edit' or 'Bash(git status:*)' (repeatable, comma-separated)")
 	f.StringSliceVar(&opts.disallowedTools, "disallowedTools", nil, "Deny tool rules (same format as --allowedTools)")
 	f.BoolVar(&opts.partialMessages, "include-partial-messages", false, "Include partial message chunks as they arrive (only with --print and --output-format=stream-json)")
@@ -378,13 +391,24 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	sessionID := uuid.NewString()
 	if resumeID != "" {
-		entries, rerr := session.Read(session.Path(cwd, resumeID))
-		if rerr != nil {
-			return fmt.Errorf("resume %s: %w", resumeID, rerr)
-		}
-		initialMessages, rerr = agent.MessagesFromEntries(entries)
-		if rerr != nil {
-			return fmt.Errorf("resume %s: %w", resumeID, rerr)
+		// Token-saving resume: if a persisted compaction summary exists and the
+		// user didn't ask for a --full replay, seed from the summary instead of
+		// the entire transcript. Falls back to full replay when no summary exists.
+		if summary, ok := session.ReadSummary(cwd, resumeID); ok && !opts.fullResume {
+			initialMessages = []anthropic.BetaMessageParam{
+				anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(
+					"Summary of the earlier conversation in this session:\n\n" + summary)),
+			}
+			fmt.Fprintln(cmd.ErrOrStderr(), "resuming from compacted summary (--full for the entire transcript)")
+		} else {
+			entries, rerr := session.Read(session.Path(cwd, resumeID))
+			if rerr != nil {
+				return fmt.Errorf("resume %s: %w", resumeID, rerr)
+			}
+			initialMessages, rerr = agent.MessagesFromEntries(entries)
+			if rerr != nil {
+				return fmt.Errorf("resume %s: %w", resumeID, rerr)
+			}
 		}
 		if !opts.forkSession {
 			sessionID = resumeID // continue appending to the same transcript
@@ -506,6 +530,11 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	loop := agent.New(provider, registry)
 
+	// Persist compaction summaries for token-saving resume (a Klaudia divergence).
+	onSummary := func(summary string) {
+		_ = session.WriteSummary(cwd, sessionID, summary, gitCommit(cwd))
+	}
+
 	// Interactive TUI: the default when not headless and not stream-json input.
 	// It drives the same loop, prompting the user to resolve permission asks.
 	if interactive {
@@ -548,6 +577,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				InitialMessages: history,
 				Recorder:        recorder,
 				WebTools:        true,
+				OnSummary:       onSummary,
 			}, emit)
 		}
 		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages, sess)
@@ -570,6 +600,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				InitialMessages: history,
 				Recorder:        recorder,
 				WebTools:        true,
+				OnSummary:       onSummary,
 			}, emit)
 		}
 		return driver.Run(ctx, cmd.InOrStdin(), runFn)
@@ -602,6 +633,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		InitialMessages: initialMessages,
 		Recorder:        runRecorder,
 		WebTools:        true,
+		OnSummary:       onSummary,
 		PartialMessages: partial,
 	}, emit)
 

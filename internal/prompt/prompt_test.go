@@ -57,6 +57,19 @@ func TestSystemRecallsMemory(t *testing.T) {
 	}
 }
 
+func TestSystemRecallsKnowledge(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".klaudia"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".klaudia", "KNOWLEDGE.md"),
+		[]byte("# Knowledge\n\n- The build uses CGO_ENABLED=0\n"), 0o644)
+
+	p := System(dir, "")
+	if !strings.Contains(p, "# Project knowledge") || !strings.Contains(p, "CGO_ENABLED=0") {
+		t.Errorf("system prompt should include recalled project knowledge")
+	}
+}
+
 func TestSystemNoClaudeMd(t *testing.T) {
 	t.Setenv("HOME", t.TempDir()) // isolate from a real ~/.claude/CLAUDE.md
 	p := System(t.TempDir(), "")

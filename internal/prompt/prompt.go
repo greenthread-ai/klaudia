@@ -61,7 +61,23 @@ func System(cwd, model string) string {
 		b.WriteString("These are notes you saved in earlier sessions. Use the Memory tool to search for more or to add new ones.\n\n")
 		b.WriteString(mem)
 	}
+	if kn := recalledKnowledge(cwd); kn != "" {
+		b.WriteString("\n\n# Project knowledge\n")
+		b.WriteString("Curated, durable lessons about this project (from .klaudia/KNOWLEDGE.md). Treat these as established facts.\n\n")
+		b.WriteString(kn)
+	}
 	return b.String()
+}
+
+// recalledKnowledge returns the curated project-knowledge file for priming the
+// model, or "" if there is none. Sibling of recalledMemory; KNOWLEDGE.md holds
+// hand-curated, durable lessons distinct from the free-form memory index.
+func recalledKnowledge(cwd string) string {
+	data, err := os.ReadFile(filepath.Join(cwd, ".klaudia", "KNOWLEDGE.md"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // recalledMemory returns the project memory index for priming the model, or ""

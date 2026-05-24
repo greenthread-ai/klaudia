@@ -80,6 +80,10 @@ type Options struct {
 	// stream_event emitter when --include-partial-messages is set. Nil by
 	// default and for the TUI, so its single-reader invariant is untouched.
 	PartialMessages func(anthropic.BetaRawMessageStreamEventUnion)
+	// OnSummary, if set, is called with each compaction summary the loop
+	// produces (autocompact). The CLI persists it to .klaudia/sessions for
+	// token-saving resume. May be nil.
+	OnSummary func(summary string)
 }
 
 // Result is the outcome of a Run.
@@ -275,6 +279,9 @@ func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessage
 	summary := finalAssistantText(assistant)
 	if summary == "" {
 		return messages, false
+	}
+	if opts.OnSummary != nil {
+		opts.OnSummary(summary)
 	}
 	return compaction.ReplaceWithSummary(summary), true
 }

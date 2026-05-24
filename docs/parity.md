@@ -65,7 +65,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Resume / continue / fork | 07/08 | `session/` + `cli/` | ✅ done | `-r/--resume`, `--continue`, `--fork-session`. |
 | Microcompaction (local) | 07-app-features | `compaction/` | ✅ done | |
 | Autocompaction (model summary) | 07-app-features | `compaction/` | ✅ done | |
-| Persisted summaries + KNOWLEDGE.md | — | — | 🔜 planned | Workstream 5 (divergence). |
+| Persisted summaries + resume seeding | — | `session/summary.go` + `agent.OnSummary` | 🔀 divergent | Compaction summaries persisted to `.klaudia/sessions/<id>.summary.md`; `--resume` seeds from them (token-saving), `--full` replays the transcript. |
+| Project knowledge recall (KNOWLEDGE.md) | — | `prompt.recalledKnowledge` | 🔀 divergent | `.klaudia/KNOWLEDGE.md` injected into the system prompt; curated, distinct from free-form memory. |
 
 ## Permissions
 
