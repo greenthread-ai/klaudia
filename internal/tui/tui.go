@@ -147,6 +147,12 @@ func (m *Model) Init() tea.Cmd {
 }
 
 // waitForEvent yields the next message from the agent goroutine.
+//
+// INVARIANT: exactly one waitForEvent command must be outstanding at any time.
+// Bubble Tea runs commands in their own goroutines, so two outstanding readers
+// would race on the events channel and deliver streamed deltas out of order.
+// Init arms the single reader; every channel-event case in Update re-arms it
+// one-for-one. Do not arm an extra one from a KeyMsg path (e.g. submit).
 func (m *Model) waitForEvent() tea.Cmd {
 	return func() tea.Msg { return <-m.events }
 }
@@ -301,7 +307,10 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		m.state = stateRunning
 		m.startTurn(prompt)
-		return m, tea.Batch(m.spin.Tick, m.waitForEvent())
+		// Do NOT arm another waitForEvent here: exactly one channel reader must
+		// be outstanding (Init armed it; each channel-event handler re-arms it).
+		// A second reader would race and deliver streamed deltas out of order.
+		return m, m.spin.Tick
 	}
 
 	var cmd tea.Cmd
