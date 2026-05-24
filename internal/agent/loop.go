@@ -11,10 +11,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread/klaudia/internal/api"
+	"github.com/greenthread/klaudia/internal/compaction"
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/tools"
 )
@@ -63,6 +65,9 @@ type Options struct {
 	// WebTools enables the server-side web_search and web_fetch tools (executed
 	// by the Anthropic API, not locally).
 	WebTools bool
+	// ContextWindow is the model's context size, used for autocompact
+	// thresholds. 0 uses the package default.
+	ContextWindow int
 }
 
 // Result is the outcome of a Run.
@@ -121,6 +126,11 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	for {
 		res.NumTurns++
 
+		// Compaction runs at the top of every turn (docs/compaction.md):
+		// microcompact first (cheap, local), then autocompact (model-based) if
+		// near the context limit.
+		messages = l.compact(ctx, messages, opts, emit)
+
 		params := anthropic.BetaMessageNewParams{
 			Model:     opts.Model,
 			MaxTokens: maxTokens,
@@ -173,6 +183,51 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			return res, nil
 		}
 	}
+}
+
+// compact applies microcompact then (if near the limit) autocompact to the
+// message list. Honors DISABLE_COMPACT / DISABLE_MICROCOMPACT /
+// DISABLE_AUTO_COMPACT, matching the JS env switches.
+func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, emit Emitter) []anthropic.BetaMessageParam {
+	if os.Getenv("DISABLE_COMPACT") != "" {
+		return messages
+	}
+
+	if os.Getenv("DISABLE_MICROCOMPACT") == "" {
+		if out, res := compaction.Microcompact(messages); res.Compacted {
+			messages = out
+			if emit != nil {
+				emit(Event{Type: "compaction", Content: fmt.Sprintf("microcompact: elided %d old tool results (~%d tokens saved)", res.ElidedCount, res.TokensSaved)})
+			}
+		}
+	}
+
+	if os.Getenv("DISABLE_AUTO_COMPACT") == "" &&
+		compaction.ShouldAutocompact(compaction.EstimateTokens(messages), opts.ContextWindow) {
+		if out, ok := l.autocompact(ctx, messages, opts); ok {
+			messages = out
+			if emit != nil {
+				emit(Event{Type: "compaction", Content: "autocompact: summarized prior conversation"})
+			}
+		}
+	}
+	return messages
+}
+
+// autocompact summarizes the conversation via the model and replaces history
+// with the summary. Returns (messages, false) if the summary call fails.
+func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options) ([]anthropic.BetaMessageParam, bool) {
+	req := compaction.BuildSummaryRequest(messages, opts.Model, 4096)
+	req.Betas = api.DefaultBetas
+	assistant, _, err := l.streamTurn(ctx, req, nil)
+	if err != nil {
+		return messages, false
+	}
+	summary := finalAssistantText(assistant)
+	if summary == "" {
+		return messages, false
+	}
+	return compaction.ReplaceWithSummary(summary), true
 }
 
 // streamTurn issues one streaming request and accumulates the full assistant
