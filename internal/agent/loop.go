@@ -315,20 +315,55 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))
 	}
 
-	// Phase 1: collapse multiple result blocks into one text result.
+	// Collapse the result text, and collect any image blocks (vision).
 	var content string
 	isErr := false
+	var images []tools.ResultImage
 	for i, r := range results {
-		if i > 0 {
+		if i > 0 && r.Content != "" {
 			content += "\n"
 		}
 		content += r.Content
 		isErr = isErr || r.IsError
+		images = append(images, r.Images...)
 	}
 	if emit != nil {
 		emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr})
 	}
-	return anthropic.NewBetaToolResultBlock(tu.ID, content, isErr)
+	if len(images) == 0 {
+		return anthropic.NewBetaToolResultBlock(tu.ID, content, isErr)
+	}
+	return toolResultWithImages(tu.ID, content, isErr, images)
+}
+
+// toolResultWithImages builds a tool_result block carrying text plus one or
+// more base64 image blocks (for Read of image files).
+func toolResultWithImages(toolUseID, text string, isErr bool, images []tools.ResultImage) anthropic.BetaContentBlockParamUnion {
+	content := make([]anthropic.BetaToolResultBlockParamContentUnion, 0, len(images)+1)
+	if text != "" {
+		content = append(content, anthropic.BetaToolResultBlockParamContentUnion{
+			OfText: &anthropic.BetaTextBlockParam{Text: text},
+		})
+	}
+	for _, img := range images {
+		content = append(content, anthropic.BetaToolResultBlockParamContentUnion{
+			OfImage: &anthropic.BetaImageBlockParam{
+				Source: anthropic.BetaImageBlockParamSourceUnion{
+					OfBase64: &anthropic.BetaBase64ImageSourceParam{
+						Data:      img.Base64,
+						MediaType: anthropic.BetaBase64ImageSourceMediaType(img.MediaType),
+					},
+				},
+			},
+		})
+	}
+	return anthropic.BetaContentBlockParamUnion{
+		OfToolResult: &anthropic.BetaToolResultBlockParam{
+			ToolUseID: toolUseID,
+			IsError:   anthropic.Bool(isErr),
+			Content:   content,
+		},
+	}
 }
 
 // buildToolParams converts the registry's tools into API tool params.

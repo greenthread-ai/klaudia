@@ -20,9 +20,18 @@ type Result struct {
 	Content string
 	// IsError marks the result as an error tool_result (is_error: true).
 	IsError bool
-	// Data carries structured output (images, metadata) when Content alone is
+	// Images are vision content blocks returned to the model (e.g. Read of an
+	// image file). The agent loop emits them as image blocks in the tool_result.
+	Images []ResultImage
+	// Data carries structured output (metadata) when Content alone is
 	// insufficient; serialized by the API layer as needed.
 	Data map[string]any
+}
+
+// ResultImage is a base64-encoded image returned to the model for vision.
+type ResultImage struct {
+	MediaType string // e.g. "image/png", "image/jpeg", "image/gif", "image/webp"
+	Base64    string // base64-encoded image bytes
 }
 
 // AskOption is one choice presented to the user by AskUserQuestion.

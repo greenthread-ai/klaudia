@@ -3,6 +3,7 @@ package tools
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -27,6 +28,42 @@ func readPDF(path string) ([]Result, error) {
 	return []Result{{Content: fmt.Sprintf("[PDF: %d page(s)]\n\n%s", pages, text)}}, nil
 }
 
+func readImage(path string) ([]Result, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	mediaType := ""
+	switch ext {
+	case ".png":
+		mediaType = "image/png"
+	case ".jpg", ".jpeg":
+		mediaType = "image/jpeg"
+	case ".gif":
+		mediaType = "image/gif"
+	case ".webp":
+		mediaType = "image/webp"
+	default:
+		return []Result{{Content: fmt.Sprintf("Unsupported image type: %s", ext), IsError: true}}, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return []Result{{Content: fmt.Sprintf("Error reading image: %v", err), IsError: true}}, nil
+	}
+
+	return []Result{{
+		Content: fmt.Sprintf("[image: %s]", path),
+		Images:  []ResultImage{{MediaType: mediaType, Base64: base64.StdEncoding.EncodeToString(data)}},
+	}}, nil
+}
+
+func isImageExt(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
+		return true
+	default:
+		return false
+	}
+}
+
 // readDefaultLimit is the default number of lines Read returns when no limit is
 // given (the JS Read tool reads up to 2000 lines).
 const readDefaultLimit = 2000
@@ -44,8 +81,7 @@ type ReadInput struct {
 }
 
 // Read reads a file from the local filesystem and returns it in cat -n format
-// (line numbers starting at 1), mirroring the JS Read tool. PDF/image/notebook
-// handling is deferred to a later phase.
+// (line numbers starting at 1), mirroring the JS Read tool.
 type Read struct {
 	schema *schema.Schema
 }
@@ -64,7 +100,9 @@ func (r *Read) Name() string { return "Read" }
 func (r *Read) Description(context.Context) (string, error) {
 	return "Reads a file from the local filesystem. file_path must be an absolute path. " +
 		"Text files return up to 2000 lines in cat -n format (line numbers from 1); use " +
-		"offset and limit to window a large file. PDF files are returned as extracted text.", nil
+		"offset and limit to window a large file. PDF files are returned as extracted text. " +
+		"Image files (png, jpg, jpeg, gif, webp) are returned as viewable image blocks — use " +
+		"Read to look at an image; do not assume you cannot see it.", nil
 }
 
 func (r *Read) InputSchema() json.RawMessage { return r.schema.Raw }
@@ -106,6 +144,10 @@ func (r *Read) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Res
 	// PDFs are read as extracted text (in-process via internal/native/pdf).
 	if strings.EqualFold(filepath.Ext(in.FilePath), ".pdf") {
 		return readPDF(in.FilePath)
+	}
+
+	if isImageExt(in.FilePath) {
+		return readImage(in.FilePath)
 	}
 
 	f, err := os.Open(in.FilePath)
