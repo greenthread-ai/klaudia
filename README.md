@@ -33,7 +33,15 @@ claude
 
 **OpenAI-compatible provider**
 
-Create `.klaudia/config.json`:
+Create a starter config globally or just for the current project:
+
+```bash
+./klaudia --create-config=global   # writes ~/.klaudia/config.json
+# or:
+./klaudia --create-config=local    # writes ./.klaudia/config.json
+```
+
+Edit the generated config:
 
 ```jsonc
 {
@@ -50,6 +58,9 @@ Then:
 export MY_API_KEY="..."
 ./klaudia
 ```
+
+`~/.klaudia/config.json` is loaded automatically for every run; a project-local
+`./.klaudia/config.json` overlays it when present.
 
 Once the TUI starts, type `/doctor` to verify auth and environment status.
 
@@ -146,6 +157,10 @@ Klaudia defaults to the Anthropic Messages API. A project or user
   "apiKeyEnv": "MY_API_KEY"             // or "apiKey" (prefer the env form)
 }
 ```
+
+Create a starter config with `./klaudia --create-config=global` for
+`~/.klaudia/config.json`, or `./klaudia --create-config=local` for
+`./.klaudia/config.json`.
 
 `--model haiku|sonnet|opus` (or a full model ID) overrides per-run. The
 OpenAI-compatible provider translates the Anthropic message shape to Chat
@@ -251,11 +266,10 @@ Review the staged changes carefully. $ARGUMENTS
 
 ## Documentation
 
-- [PRD.md](PRD.md) — background and goals
+- [PRD.md](PRD.md) — vision, status, and roadmap
 - [docs/parity.md](docs/parity.md) — JS→Go feature map and divergences
-- [docs/agent-calling-usage.md](docs/agent-calling-usage.md) — CLI → agent → tool flow
 - [docs/compaction.md](docs/compaction.md) — context-window management
-- [docs/server-side-tools.md](docs/server-side-tools.md) — Anthropic server-side tool schemas
+- [docs/server-side-tools.md](docs/server-side-tools.md) — Anthropic server-side tool schemas (reference)
 
 ## History
 

@@ -1,9 +1,13 @@
-# Server-Side Tools Inventory
+# Anthropic Server-Side Tools (reference)
 
-Tools that Anthropic's API executes server-side. These are sent in the `tools` array
-of Messages API requests and their results stream back as special content block types.
+Tools the Anthropic Messages API executes server-side: sent in the `tools` array
+of a request, with results streamed back as special content-block types.
 
-To make Klaudia standalone with custom models, these would need local implementations.
+This is a wire-format reference for the Anthropic provider. Klaudia ships its own
+**local** web search/fetch/browse tools (lazy headless Chrome — see the README),
+so it does not depend on these. On the Anthropic provider it can still enable the
+server-side `web_search` / `web_fetch` betas (`internal/agent/webtools.go`); the
+shapes below document what those return.
 
 ---
 
@@ -68,11 +72,6 @@ Content block type: `web_search_tool_result`
 }
 ```
 
-### Key code locations
-
-- Tool definition construction: `06-app-ui.js` ~L30632
-- Response handling: `06-app-ui.js` ~L30613
-- Validation rules: `04-react-ink.js` (rejects wildcards)
 
 ---
 
@@ -123,10 +122,6 @@ Content block type: `web_fetch_tool_result`
 **Redirect handling:** For 301/307/308, returns redirect target URL and asks
 the model to re-fetch with the new URL.
 
-### Key code locations
-
-- Schema definition: `06-app-ui.js` ~L29542
-- Response handling: `06-app-ui.js` ~L29713
 
 ---
 
@@ -181,10 +176,6 @@ Server-side file create/view/edit operations within the sandbox.
 
 **Response type:** `text_editor_code_execution_tool_result`
 
-### Key code locations
-
-- Tool examples: `07-app-features.js` ~L25402
-- Response structure: `07-app-features.js` ~L26089
 
 ---
 
@@ -270,11 +261,6 @@ Local MCP servers are configured in settings:
 }
 ```
 
-### Key code locations
-
-- MCP tool handling: `05-app-core.js` ~L115738
-- Tool use tracking: `06-app-ui.js` ~L103393
-- MCP server discovery: `05-app-core.js` (search for `mcp_servers`)
 
 ---
 
@@ -325,21 +311,15 @@ Server-side features are gated behind beta headers sent as `anthropic-beta`:
 
 ---
 
-## Replacement Priority
+## How Klaudia covers these locally
 
-For standalone Klaudia with custom models:
+| Server-side tool | Klaudia equivalent |
+| --- | --- |
+| Web Search | local `WebSearch` (lazy headless Chrome, DDG/Google) — `internal/browser` |
+| Web Fetch | local `WebFetch` / `BrowserNavigate` / `BrowserSnapshot` → Markdown |
+| MCP | local stdio + HTTP/SSE MCP servers — `internal/mcp` |
+| Code Execution | container sandbox for the Bash tool (`sandbox.mode = "container"`) |
+| Browser Automation | the local browser tools above; an MCP browser server can be registered for richer control |
 
-### Must replace (tools the model actively uses)
-1. **Web Search** — local search implementation (e.g., Brave Search API, SearXNG)
-2. **Web Fetch** — local HTTP fetch + content extraction (already partially possible)
-3. **MCP** — keep as-is, works locally via stdio servers
-
-### Nice to have
-4. **Code Execution** — local sandboxed execution (Docker/nsjail)
-5. **Browser Automation** — local browser bridge (Playwright)
-
-### Can skip
-- Telemetry endpoints (disable)
-- Analytics (disable)
-- Session transcripts (disable)
-- VCS account linking (not needed)
+The Anthropic server-side `web_search` / `web_fetch` betas remain available when
+running on the Anthropic provider (`internal/agent/webtools.go`).
