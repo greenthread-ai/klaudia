@@ -112,14 +112,14 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 	return in
 }
 
-// configFileExists reports whether a home or project .klaudia/config.json exists.
+// configFileExists reports whether a home or project .klaudia/config.toml exists.
 func configFileExists(cwd string) bool {
 	if home, err := os.UserHomeDir(); err == nil {
-		if _, err := os.Stat(filepath.Join(home, ".klaudia", "config.json")); err == nil {
+		if _, err := os.Stat(filepath.Join(home, ".klaudia", "config.toml")); err == nil {
 			return true
 		}
 	}
-	_, err := os.Stat(filepath.Join(cwd, ".klaudia", "config.json"))
+	_, err := os.Stat(config.ProjectPath(cwd))
 	return err == nil
 }
 
@@ -172,11 +172,11 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 	switch cfg.Provider {
 	case config.ProviderOpenAI:
 		if cfg.BaseURL == "" {
-			return nil, "", fmt.Errorf(".klaudia/config.json: provider \"openai\" requires baseURL")
+			return nil, "", fmt.Errorf("provider \"openai\" requires baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml (try --create-config=global or --create-config=local)")
 		}
 		key := cfg.ResolveAPIKey()
 		if key == "" {
-			return nil, "", fmt.Errorf(".klaudia/config.json: provider \"openai\" needs apiKey or apiKeyEnv")
+			return nil, "", fmt.Errorf("provider \"openai\" needs apiKey or apiKeyEnv in ~/.klaudia/config.toml or ./.klaudia/config.toml; if using apiKeyEnv, export that variable before running")
 		}
 		return api.NewOpenAIProvider(cfg.BaseURL, key), cfg.Model, nil
 	default:
@@ -350,6 +350,56 @@ func gitCommit(dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
+const starterConfig = `# Klaudia config
+# Global: ~/.klaudia/config.toml
+# Local:  ./.klaudia/config.toml (overrides global settings)
+
+provider = "openai"
+model = "openai/gpt-5.5"
+baseURL = "https://api.example.com/v1"
+apiKeyEnv = "MY_API_KEY"
+
+# Optional examples:
+# [sandbox]
+# mode = "local" # local | os | container
+#
+# [browser]
+# searchEngine = "ddg" # ddg | google
+# headless = true
+#
+# [permissions]
+# allow = ["Bash(go test:*)"]
+# deny = ["Bash(rm:*)"]
+`
+
+func createConfig(scope, cwd string) (string, error) {
+	var path string
+	switch scope {
+	case "global":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("find home directory: %w", err)
+		}
+		path = filepath.Join(home, ".klaudia", "config.toml")
+	case "local":
+		path = config.ProjectPath(cwd)
+	default:
+		return "", fmt.Errorf("--create-config must be global or local")
+	}
+	if _, err := os.Stat(path); err == nil {
+		return "", fmt.Errorf("config already exists: %s", path)
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(starterConfig), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 // options holds parsed CLI flags, mirroring the JS commander surface
 // (08-entry.js setupCommander). Only the Phase 0 subset is wired so far.
 type options struct {
@@ -368,7 +418,8 @@ type options struct {
 	fullResume      bool   // --full (replay entire transcript, not the summary)
 	allowedTools    []string
 	disallowedTools []string
-	partialMessages bool // --include-partial-messages
+	partialMessages bool   // --include-partial-messages
+	createConfig    string // --create-config global|local
 }
 
 // NewRootCommand builds the top-level `klaudia` command.
@@ -412,6 +463,7 @@ func NewRootCommand() *cobra.Command {
 	f.StringSliceVar(&opts.allowedTools, "allowedTools", nil, "Auto-allow tool rules, e.g. 'Edit' or 'Bash(git status:*)' (repeatable, comma-separated)")
 	f.StringSliceVar(&opts.disallowedTools, "disallowedTools", nil, "Deny tool rules (same format as --allowedTools)")
 	f.BoolVar(&opts.partialMessages, "include-partial-messages", false, "Include partial message chunks as they arrive (only with --print and --output-format=stream-json)")
+	f.StringVar(&opts.createConfig, "create-config", "", "Create a starter TOML config and exit: global (~/.klaudia/config.toml) or local (./.klaudia/config.toml)")
 
 	return cmd
 }
@@ -423,6 +475,16 @@ func run(cmd *cobra.Command, opts *options) error {
 	format, err := ParseOutputFormat(opts.outputFormat)
 	if err != nil {
 		return err
+	}
+
+	cwd, _ := os.Getwd()
+	if opts.createConfig != "" {
+		path, err := createConfig(opts.createConfig, cwd)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Created %s\n\nEdit it with your provider/baseURL/model/apiKeyEnv, then export the named API key env var and run klaudia.\n", path)
+		return nil
 	}
 
 	// Mode: stream-json input (embedding) | headless -p | interactive TUI.
@@ -437,7 +499,6 @@ func run(cmd *cobra.Command, opts *options) error {
 	start := time.Now()
 	ctx := cmd.Context()
 	r := NewRenderer(format, cmd.OutOrStdout())
-	cwd, _ := os.Getwd()
 
 	// Resolve the session: resume by id, continue the most recent, or start new.
 	// --fork-session writes to a fresh id while preserving the original.
@@ -476,7 +537,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 	}
 
-	// Select the model provider (.klaudia/config.json: anthropic | openai).
+	// Select the model provider (.klaudia/config.toml: anthropic | openai).
 	cfg := config.Load(cwd)
 	provider, providerModel, err := buildProvider(cfg)
 	if err != nil {

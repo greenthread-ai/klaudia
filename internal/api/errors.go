@@ -23,7 +23,7 @@ func FriendlyError(err error) string {
 				"session — wait a moment and try again. (Set KLAUDIA_MAX_RETRIES to retry more.)"
 		case 401, 403:
 			return fmt.Sprintf("Authentication failed (%d): check your API key / sign-in "+
-				"(or .klaudia/config.json for a custom provider).", status)
+				"(or .klaudia/config.toml for a custom provider).", status)
 		case 529:
 			return "The API is overloaded (529) and retries were exhausted. Try again shortly."
 		default:

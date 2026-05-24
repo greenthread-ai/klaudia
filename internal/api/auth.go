@@ -59,9 +59,13 @@ Choose one:
      claude
      # sign in there, then run klaudia again
 
-  3. OpenAI-compatible provider:
-     create .klaudia/config.json with provider/baseURL/model/apiKeyEnv,
-     export that API key env var, then run klaudia again.
+  3. OpenAI-compatible provider config:
+     klaudia --create-config=global   # writes ~/.klaudia/config.toml
+     # or: klaudia --create-config=local  # writes ./.klaudia/config.toml
+     # edit provider/baseURL/model/apiKeyEnv, export that env var, then run klaudia
+
+Global config (~/.klaudia/config.toml) is loaded automatically; local project config
+(./.klaudia/config.toml) overlays it when present.
 
 Tip: after setup, run /doctor inside Klaudia to verify auth and environment status.`)
 }

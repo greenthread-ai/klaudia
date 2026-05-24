@@ -1442,7 +1442,7 @@ func oneLine(s string, limit int) string {
 }
 
 // rememberPermission records a permission rule for the current UI session and,
-// when the project has a .klaudia directory, persists it to .klaudia/config.json.
+// when the project has a .klaudia directory, persists it to .klaudia/config.toml.
 func (m *Model) rememberPermission(kind string, rule permission.Rule) {
 	formatted := permission.FormatRule(rule)
 	verb := "allow"
@@ -1462,7 +1462,7 @@ func (m *Model) rememberPermission(kind string, rule permission.Rule) {
 	if err != nil {
 		msg += "; config save failed: " + err.Error()
 	} else if persisted {
-		msg += "; saved to .klaudia/config.json"
+		msg += "; saved to .klaudia/config.toml"
 	}
 	m.appendLine(toolStyle.Render(msg))
 }

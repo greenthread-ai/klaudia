@@ -12,7 +12,7 @@ func writeConfig(t *testing.T, dir, body string) {
 	if err := os.MkdirAll(kd, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(kd, "config.json"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(kd, "config.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -20,10 +20,14 @@ func writeConfig(t *testing.T, dir, body string) {
 func TestLoadProjectOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	writeConfig(t, home, `{"provider":"anthropic","model":"sonnet"}`)
+	writeConfig(t, home, `provider = "anthropic"
+model = "sonnet"
+`)
 
 	cwd := t.TempDir()
-	writeConfig(t, cwd, `{"provider":"openai","baseURL":"https://x/v1"}`)
+	writeConfig(t, cwd, `provider = "openai"
+baseURL = "https://x/v1"
+`)
 
 	cfg := Load(cwd)
 	if cfg.Provider != "openai" {
@@ -41,10 +45,26 @@ func TestLoadProjectOverridesHome(t *testing.T) {
 func TestLoadBrowserProjectOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	writeConfig(t, home, `{"browser":{"engine":"chrome","headless":false,"chromePath":"/home/chrome","remoteUrl":"http://home:9222","userDataDir":"/home/profile","headedFallback":false,"searchEngine":"google"}}`)
+	writeConfig(t, home, `
+[browser]
+engine = "chrome"
+headless = false
+chromePath = "/home/chrome"
+remoteUrl = "http://home:9222"
+userDataDir = "/home/profile"
+headedFallback = false
+searchEngine = "google"
+`)
 
 	cwd := t.TempDir()
-	writeConfig(t, cwd, `{"browser":{"headless":true,"chromePath":"/project/chrome","userDataDir":"/project/profile","headedFallback":true,"searchEngine":"ddg"}}`)
+	writeConfig(t, cwd, `
+[browser]
+headless = true
+chromePath = "/project/chrome"
+userDataDir = "/project/profile"
+headedFallback = true
+searchEngine = "ddg"
+`)
 
 	cfg := Load(cwd)
 	if cfg.Browser.Engine != "chrome" {
@@ -86,9 +106,16 @@ func TestResolveAPIKey(t *testing.T) {
 func TestLoadPermissionsAccumulate(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	writeConfig(t, home, `{"permissions":{"allow":["Edit"],"deny":["Bash(rm:*)"]}}`)
+	writeConfig(t, home, `
+[permissions]
+allow = ["Edit"]
+deny = ["Bash(rm:*)"]
+`)
 	cwd := t.TempDir()
-	writeConfig(t, cwd, `{"permissions":{"allow":["Bash(go test:*)"]}}`)
+	writeConfig(t, cwd, `
+[permissions]
+allow = ["Bash(go test:*)"]
+`)
 
 	cfg := Load(cwd)
 	if len(cfg.Permissions.Allow) != 2 {

@@ -29,7 +29,7 @@ type Input struct {
 	Provider    string // resolved provider ("anthropic" | "openai" | …)
 	Model       string // resolved model id
 	SandboxMode string // configured sandbox mode ("local" | "os" | "container")
-	ConfigFound bool   // a .klaudia/config.json was loaded
+	ConfigFound bool   // a .klaudia/config.toml was loaded
 	AuthOK      bool   // a usable credential resolved
 	AuthKind    string // "oauth" | "api-key" | "none"
 	MCPServers  int    // configured MCP server count
@@ -70,9 +70,9 @@ func Run(in Input) []Check {
 
 	// Config presence.
 	if in.ConfigFound {
-		add("config", StatusOK, ".klaudia/config.json loaded")
+		add("config", StatusOK, ".klaudia/config.toml loaded")
 	} else {
-		add("config", StatusInfo, "no .klaudia/config.json (using defaults)")
+		add("config", StatusInfo, "no .klaudia/config.toml (using defaults)")
 	}
 
 	// Sandbox: report on the configured mode's required backend.

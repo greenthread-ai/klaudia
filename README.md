@@ -36,20 +36,19 @@ claude
 Create a starter config globally or just for the current project:
 
 ```bash
-./klaudia --create-config=global   # writes ~/.klaudia/config.json
+./klaudia --create-config=global   # writes ~/.klaudia/config.toml
 # or:
-./klaudia --create-config=local    # writes ./.klaudia/config.json
+./klaudia --create-config=local    # writes ./.klaudia/config.toml
 ```
 
 Edit the generated config:
 
-```jsonc
-{
-  "provider": "openai",
-  "model": "openai/gpt-5.5",
-  "baseURL": "https://api.example.com/v1",
-  "apiKeyEnv": "MY_API_KEY"
-}
+```toml
+# Comments are supported.
+provider = "openai"
+model = "openai/gpt-5.5"
+baseURL = "https://api.example.com/v1"
+apiKeyEnv = "MY_API_KEY"
 ```
 
 Then:
@@ -59,8 +58,8 @@ export MY_API_KEY="..."
 ./klaudia
 ```
 
-`~/.klaudia/config.json` is loaded automatically for every run; a project-local
-`./.klaudia/config.json` overlays it when present.
+`~/.klaudia/config.toml` is loaded automatically for every run; a project-local
+`./.klaudia/config.toml` overlays it when present.
 
 Once the TUI starts, type `/doctor` to verify auth and environment status.
 
@@ -147,26 +146,29 @@ or `/allow` / `/deny` at runtime.
 ## Model & provider
 
 Klaudia defaults to the Anthropic Messages API. A project or user
-`.klaudia/config.json` selects the provider and model:
+`.klaudia/config.toml` selects the provider and model:
 
-```jsonc
-{
-  "provider": "openai",                 // "anthropic" (default) | "openai"
-  "model": "openai/gpt-5.5",
-  "baseURL": "https://api.example.com/v1", // OpenAI-compatible endpoint
-  "apiKeyEnv": "MY_API_KEY"             // or "apiKey" (prefer the env form)
-}
+```toml
+# "anthropic" (default) | "openai"
+provider = "openai"
+model = "openai/gpt-5.5"
+
+# OpenAI-compatible endpoint.
+baseURL = "https://api.example.com/v1"
+
+# Or use apiKey = "...". Prefer the env form to keep secrets out of files.
+apiKeyEnv = "MY_API_KEY"
 ```
 
-Create a starter config with `./klaudia --create-config=global` for
-`~/.klaudia/config.json`, or `./klaudia --create-config=local` for
-`./.klaudia/config.json`.
+Create a commented starter config with `./klaudia --create-config=global` for
+`~/.klaudia/config.toml`, or `./klaudia --create-config=local` for
+`./.klaudia/config.toml`.
 
 `--model haiku|sonnet|opus` (or a full model ID) overrides per-run. The
 OpenAI-compatible provider translates the Anthropic message shape to Chat
 Completions (including image tool-results → `image_url`).
 
-`~/.klaudia/config.json` is the user default; a project `./.klaudia/config.json`
+`~/.klaudia/config.toml` is the user default; a project `./.klaudia/config.toml`
 overlays it (project wins). Settings merge per field.
 
 ### Auth
@@ -174,11 +176,11 @@ overlays it (project wins). Settings merge per field.
 - `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`), or
 - an existing Claude Code OAuth session in the macOS Keychain (Klaudia refreshes
   expired tokens and writes them back), or
-- a provider key via `apiKey` / `apiKeyEnv` in `.klaudia/config.json`.
+- a provider key via `apiKey` / `apiKeyEnv` in `.klaudia/config.toml`.
 
 ## Sandboxing the Bash tool
 
-`.klaudia/config.json` → `sandbox.mode`:
+`.klaudia/config.toml` → `sandbox.mode`:
 
 - `local` (default) — run on the host, unconfined.
 - `os` — host confinement: `sandbox-exec` (macOS) / `bubblewrap` (Linux). Reads
@@ -197,7 +199,7 @@ Built-in, permission-gated tools backed by a lazily-launched **headless Chrome**
   Markdown.
 
 Requires a Chrome/Chromium install (auto-discovered; set `KLAUDIA_CHROME_PATH`
-on Linux/Windows if not on `PATH`). Tunable via `.klaudia/config.json` →
+on Linux/Windows if not on `PATH`). Tunable via `.klaudia/config.toml` →
 `browser` (`engine`, `headless`, `chromePath`, `userDataDir`, `headedFallback`,
 …) or `KLAUDIA_*` env vars. When a search hits a bot-challenge page, Klaudia can
 relaunch a **headed** Chrome with a persistent profile (`~/.klaudia/browser/…`)

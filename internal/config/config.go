@@ -1,14 +1,15 @@
-// Package config loads Klaudia settings from .klaudia/config.json — a project
+// Package config loads Klaudia settings from .klaudia/config.toml — a project
 // .klaudia/ (in the working directory) overlaid on the user's ~/.klaudia/.
 // This selects the model provider/endpoint, e.g. an OpenAI-compatible cloud.
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 // Provider names.
@@ -17,31 +18,31 @@ const (
 	ProviderOpenAI    = "openai"    // OpenAI-compatible Chat Completions endpoint
 )
 
-// Config is the .klaudia/config.json schema.
+// Config is the .klaudia/config.toml schema.
 type Config struct {
 	// Provider selects the backend: "anthropic" (default) or "openai".
-	Provider string `json:"provider,omitempty"`
+	Provider string `toml:"provider,omitempty"`
 	// Model is the default model (e.g. "openai/gpt-5.5"); --model overrides it.
-	Model string `json:"model,omitempty"`
+	Model string `toml:"model,omitempty"`
 	// BaseURL is the OpenAI-compatible endpoint (including /v1), if provider=openai.
-	BaseURL string `json:"baseURL,omitempty"`
+	BaseURL string `toml:"baseURL,omitempty"`
 	// APIKey is the bearer token. Prefer APIKeyEnv to keep secrets out of files.
-	APIKey string `json:"apiKey,omitempty"`
+	APIKey string `toml:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable holding the key.
-	APIKeyEnv string `json:"apiKeyEnv,omitempty"`
+	APIKeyEnv string `toml:"apiKeyEnv,omitempty"`
 	// Sandbox configures how the Bash tool executes commands.
-	Sandbox Sandbox `json:"sandbox,omitempty"`
+	Sandbox Sandbox `toml:"sandbox,omitempty"`
 	// Browser configures local browser-backed tools (WebSearch/WebFetch and browser tools).
-	Browser Browser `json:"browser,omitempty"`
+	Browser Browser `toml:"browser,omitempty"`
 	// Permissions holds persisted allow/deny rules for this project.
-	Permissions Permissions `json:"permissions,omitempty"`
+	Permissions Permissions `toml:"permissions,omitempty"`
 }
 
 // Permissions persists allow/deny rule strings (e.g. "Bash(git status:*)",
 // "Edit") loaded into the permission context at startup.
 type Permissions struct {
-	Allow []string `json:"allow,omitempty"`
-	Deny  []string `json:"deny,omitempty"`
+	Allow []string `toml:"allow,omitempty"`
+	Deny  []string `toml:"deny,omitempty"`
 }
 
 // Sandbox modes.
@@ -54,20 +55,20 @@ const (
 // Sandbox configures Bash command execution.
 type Sandbox struct {
 	// Mode is "local" (default), "os" (sandbox-exec/bwrap), or "container".
-	Mode string `json:"mode,omitempty"`
+	Mode string `toml:"mode,omitempty"`
 	// WriteRoots are extra directories writable under "os" mode (cwd + temp are
 	// always writable).
-	WriteRoots []string `json:"writeRoots,omitempty"`
+	WriteRoots []string `toml:"writeRoots,omitempty"`
 	// Runtime is "docker" (default) or "podman" for container mode.
-	Runtime string `json:"runtime,omitempty"`
+	Runtime string `toml:"runtime,omitempty"`
 	// Image is the container image to run, e.g. "python:3.12-slim".
-	Image string `json:"image,omitempty"`
+	Image string `toml:"image,omitempty"`
 	// MountCWD bind-mounts the working directory into the container (default true).
-	MountCWD *bool `json:"mountCwd,omitempty"`
+	MountCWD *bool `toml:"mountCwd,omitempty"`
 	// ReadOnly mounts the working directory read-only.
-	ReadOnly bool `json:"readOnly,omitempty"`
+	ReadOnly bool `toml:"readOnly,omitempty"`
 	// Network is the container's --network value (e.g. "none" to isolate).
-	Network string `json:"network,omitempty"`
+	Network string `toml:"network,omitempty"`
 }
 
 // Browser engines.
@@ -78,19 +79,19 @@ const (
 // Browser configures local browser-backed tools.
 type Browser struct {
 	// Engine selects the browser engine. Currently only "chrome" is supported.
-	Engine string `json:"engine,omitempty"`
+	Engine string `toml:"engine,omitempty"`
 	// Headless controls Chrome headless mode. Defaults to true when unset.
-	Headless *bool `json:"headless,omitempty"`
+	Headless *bool `toml:"headless,omitempty"`
 	// ChromePath overrides the Chrome executable path for launch mode.
-	ChromePath string `json:"chromePath,omitempty"`
+	ChromePath string `toml:"chromePath,omitempty"`
 	// RemoteURL attaches to an existing Chrome DevTools endpoint instead of launching.
-	RemoteURL string `json:"remoteUrl,omitempty"`
+	RemoteURL string `toml:"remoteUrl,omitempty"`
 	// UserDataDir stores Chrome profile state/cookies. Defaults to ~/.klaudia/browser/chrome-profile.
-	UserDataDir string `json:"userDataDir,omitempty"`
+	UserDataDir string `toml:"userDataDir,omitempty"`
 	// HeadedFallback relaunches headed Chrome for user-assisted search challenge handling.
-	HeadedFallback *bool `json:"headedFallback,omitempty"`
+	HeadedFallback *bool `toml:"headedFallback,omitempty"`
 	// SearchEngine selects the default WebSearch engine: "ddg" or "google".
-	SearchEngine string `json:"searchEngine,omitempty"`
+	SearchEngine string `toml:"searchEngine,omitempty"`
 }
 
 // MountCWDOr returns MountCWD or the default when unset.
@@ -106,9 +107,9 @@ func ProjectDir(cwd string) string {
 	return filepath.Join(cwd, ".klaudia")
 }
 
-// ProjectPath returns cwd/.klaudia/config.json.
+// ProjectPath returns cwd/.klaudia/config.toml.
 func ProjectPath(cwd string) string {
-	return filepath.Join(ProjectDir(cwd), "config.json")
+	return filepath.Join(ProjectDir(cwd), "config.toml")
 }
 
 // ProjectDirExists reports whether cwd/.klaudia exists and is a directory.
@@ -117,7 +118,7 @@ func ProjectDirExists(cwd string) bool {
 	return err == nil && st.IsDir()
 }
 
-// AppendProjectPermission appends rule to cwd/.klaudia/config.json under
+// AppendProjectPermission appends rule to cwd/.klaudia/config.toml under
 // permissions.allow or permissions.deny. It is a no-op when cwd/.klaudia does
 // not exist, so users opt into project-local persistence by creating the folder.
 func AppendProjectPermission(cwd, kind, rule string) (bool, error) {
@@ -143,11 +144,10 @@ func AppendProjectPermission(cwd, kind, rule string) (bool, error) {
 	default:
 		return false, errors.New("permission kind must be allow or deny")
 	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	data, err := toml.Marshal(cfg)
 	if err != nil {
 		return false, err
 	}
-	data = append(data, '\n')
 	return true, os.WriteFile(path, data, 0o644)
 }
 
@@ -160,12 +160,12 @@ func contains(ss []string, s string) bool {
 	return false
 }
 
-// Load reads ~/.klaudia/config.json then overlays ./.klaudia/config.json
+// Load reads ~/.klaudia/config.toml then overlays ./.klaudia/config.toml
 // (project settings win). Missing files are ignored.
 func Load(cwd string) Config {
 	var cfg Config
 	if home, err := os.UserHomeDir(); err == nil {
-		merge(&cfg, read(filepath.Join(home, ".klaudia", "config.json")))
+		merge(&cfg, read(filepath.Join(home, ".klaudia", "config.toml")))
 	}
 	merge(&cfg, read(ProjectPath(cwd)))
 	return cfg
@@ -188,7 +188,7 @@ func readProject(path string) (Config, error) {
 	if strings.TrimSpace(string(data)) == "" {
 		return c, nil
 	}
-	if err := json.Unmarshal(data, &c); err != nil {
+	if err := toml.Unmarshal(data, &c); err != nil {
 		return c, err
 	}
 	return c, nil
