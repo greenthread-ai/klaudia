@@ -33,9 +33,13 @@ type toolAccum struct {
 	args strings.Builder
 }
 
-// consumeStream reads the SSE response, emits text deltas via onText, and
-// assembles the result into an anthropic.BetaMessage.
-func (p *OpenAIProvider) consumeStream(body io.Reader, model string, onText func(string)) (anthropic.BetaMessage, error) {
+// consumeStream reads the SSE response, forwards text deltas and a synthesized
+// Anthropic-shaped raw-event sequence to sink, and assembles the result into an
+// anthropic.BetaMessage. The synthesized events (message_start →
+// content_block_delta… → message_stop) are best-effort — there is no native
+// Anthropic SSE to forward — but they let partial-message consumers (SDKs,
+// editors) receive incremental chunks regardless of provider.
+func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink StreamSink) (anthropic.BetaMessage, error) {
 	sc := bufio.NewScanner(body)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
@@ -43,6 +47,32 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, onText func
 	tools := map[int]*toolAccum{}
 	finish := ""
 	var inTok, outTok int64
+
+	// Synthesize the opening events for a single text content block. We emit a
+	// message_start with a placeholder message, then a text content_block_start;
+	// text deltas follow as content_block_delta. Tool-call blocks are not
+	// streamed incrementally (assembled at the end), matching the shim's
+	// existing non-streaming assembly of tool_use.
+	msgID := "msg_" + uuid.NewString()
+	started := false
+	startBlocks := func() {
+		if started {
+			return
+		}
+		started = true
+		sink.raw(synthEvent(map[string]any{
+			"type": "message_start",
+			"message": map[string]any{
+				"id": msgID, "type": "message", "role": "assistant",
+				"model": model, "content": []any{}, "stop_reason": nil,
+				"usage": map[string]any{"input_tokens": 0, "output_tokens": 0},
+			},
+		}))
+		sink.raw(synthEvent(map[string]any{
+			"type": "content_block_start", "index": 0,
+			"content_block": map[string]any{"type": "text", "text": ""},
+		}))
+	}
 
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -63,10 +93,13 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, onText func
 		}
 		for _, ch := range chunk.Choices {
 			if ch.Delta.Content != "" {
+				startBlocks()
 				text.WriteString(ch.Delta.Content)
-				if onText != nil {
-					onText(ch.Delta.Content)
-				}
+				sink.text(ch.Delta.Content)
+				sink.raw(synthEvent(map[string]any{
+					"type": "content_block_delta", "index": 0,
+					"delta": map[string]any{"type": "text_delta", "text": ch.Delta.Content},
+				}))
 			}
 			for _, tc := range ch.Delta.ToolCalls {
 				acc := tools[tc.Index]
@@ -91,7 +124,29 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, onText func
 		return anthropic.BetaMessage{}, err
 	}
 
+	// Close out the synthesized event sequence (only if we opened it — a
+	// tool-only turn with no text never emits a text block).
+	if started {
+		sink.raw(synthEvent(map[string]any{"type": "content_block_stop", "index": 0}))
+		sink.raw(synthEvent(map[string]any{
+			"type":  "message_delta",
+			"delta": map[string]any{"stop_reason": mapFinishReason(finish, len(tools) > 0)},
+			"usage": map[string]any{"output_tokens": outTok},
+		}))
+		sink.raw(synthEvent(map[string]any{"type": "message_stop"}))
+	}
+
 	return assembleMessage(model, text.String(), tools, finish, inTok, outTok)
+}
+
+// synthEvent builds a BetaRawMessageStreamEventUnion from a payload map by
+// marshaling then unmarshaling it, which populates the union's JSON.raw so
+// downstream RawJSON() (used by the partial-message emitter) works.
+func synthEvent(payload map[string]any) anthropic.BetaRawMessageStreamEventUnion {
+	var ev anthropic.BetaRawMessageStreamEventUnion
+	b, _ := json.Marshal(payload)
+	_ = ev.UnmarshalJSON(b)
+	return ev
 }
 
 // assembleMessage builds an anthropic.BetaMessage from the accumulated stream

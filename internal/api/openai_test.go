@@ -1,6 +1,7 @@
 package api
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -92,12 +93,27 @@ func TestConsumeStreamAssembles(t *testing.T) {
 
 	p := NewOpenAIProvider("https://x/v1", "k")
 	var streamed strings.Builder
-	msg, err := p.consumeStream(strings.NewReader(sse), "openai/gpt-5.5", func(s string) { streamed.WriteString(s) })
+	var rawTypes []string
+	sink := StreamSink{
+		OnText:     func(s string) { streamed.WriteString(s) },
+		OnRawEvent: func(ev anthropic.BetaRawMessageStreamEventUnion) { rawTypes = append(rawTypes, ev.Type) },
+	}
+	msg, err := p.consumeStream(strings.NewReader(sse), "openai/gpt-5.5", sink)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if streamed.String() != "Hello world" {
 		t.Errorf("streamed text = %q", streamed.String())
+	}
+	// Synthesized partial sequence: opens with message_start + content_block_start,
+	// a content_block_delta per text chunk, and closes with stop events.
+	want := []string{
+		"message_start", "content_block_start",
+		"content_block_delta", "content_block_delta",
+		"content_block_stop", "message_delta", "message_stop",
+	}
+	if !slices.Equal(rawTypes, want) {
+		t.Errorf("raw event types = %v, want %v", rawTypes, want)
 	}
 	if string(msg.StopReason) != "tool_use" {
 		t.Errorf("stop_reason = %q, want tool_use", msg.StopReason)

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -178,6 +179,7 @@ type options struct {
 	forkSession     bool   // --fork-session
 	allowedTools    []string
 	disallowedTools []string
+	partialMessages bool // --include-partial-messages
 }
 
 // NewRootCommand builds the top-level `klaudia` command.
@@ -219,6 +221,7 @@ func NewRootCommand() *cobra.Command {
 	f.BoolVar(&opts.forkSession, "fork-session", false, "When resuming, start a new session ID (preserves the original)")
 	f.StringSliceVar(&opts.allowedTools, "allowedTools", nil, "Auto-allow tool rules, e.g. 'Edit' or 'Bash(git status:*)' (repeatable, comma-separated)")
 	f.StringSliceVar(&opts.disallowedTools, "disallowedTools", nil, "Deny tool rules (same format as --allowedTools)")
+	f.BoolVar(&opts.partialMessages, "include-partial-messages", false, "Include partial message chunks as they arrive (only with --print and --output-format=stream-json)")
 
 	return cmd
 }
@@ -236,6 +239,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	interactive := !opts.print && opts.inputFormat != "stream-json"
 	if opts.print && format == FormatStreamJSON && !opts.verbose {
 		return fmt.Errorf("--output-format stream-json requires --verbose")
+	}
+	if opts.partialMessages && !(opts.print && format == FormatStreamJSON) {
+		return fmt.Errorf("--include-partial-messages only works with --print and --output-format=stream-json")
 	}
 
 	start := time.Now()
@@ -438,9 +444,16 @@ func run(cmd *cobra.Command, opts *options) error {
 	// transcript; the simplified delta events are not used in that mode.
 	var runRecorder agent.Recorder = recorder
 	emit := func(ev agent.Event) { _ = r.Event(ev) }
+	var partial func(anthropic.BetaRawMessageStreamEventUnion)
 	if format == FormatStreamJSON {
-		runRecorder = multiRecorder{recorder, newEnvelopeRecorder(cmd.OutOrStdout(), sessionID)}
+		// Serialize envelope + partial writes to the same stream.
+		var writeMu sync.Mutex
+		out := cmd.OutOrStdout()
+		runRecorder = multiRecorder{recorder, newEnvelopeRecorder(out, sessionID)}
 		emit = func(agent.Event) {}
+		if opts.partialMessages {
+			partial = newPartialEmitter(out, sessionID, &writeMu).emit
+		}
 	}
 	res, err := loop.Run(ctx, agent.Options{
 		Prompt:          opts.prompt,
@@ -453,6 +466,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		InitialMessages: initialMessages,
 		Recorder:        runRecorder,
 		WebTools:        true,
+		PartialMessages: partial,
 	}, emit)
 
 	out := ResultMessage{

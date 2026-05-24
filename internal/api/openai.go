@@ -93,7 +93,7 @@ type oaTool struct {
 }
 
 // StreamTurn implements Provider.
-func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, onText func(string)) (anthropic.BetaMessage, error) {
+func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, sink StreamSink) (anthropic.BetaMessage, error) {
 	reqBody, err := p.translateRequest(params)
 	if err != nil {
 		return anthropic.BetaMessage{}, err
@@ -118,7 +118,7 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 		return anthropic.BetaMessage{}, &OpenAIError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(b)}
 	}
 
-	return p.consumeStream(resp.Body, string(params.Model), onText)
+	return p.consumeStream(resp.Body, string(params.Model), sink)
 }
 
 // translateRequest converts the Anthropic params into an OpenAI chat request.

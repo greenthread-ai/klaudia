@@ -75,6 +75,11 @@ type Options struct {
 	// ContextWindow is the model's context size, used for autocompact
 	// thresholds. 0 uses the package default.
 	ContextWindow int
+	// PartialMessages, if set, receives raw model stream events during the main
+	// answer turn (not compaction summaries). The CLI wires this to a
+	// stream_event emitter when --include-partial-messages is set. Nil by
+	// default and for the TUI, so its single-reader invariant is untouched.
+	PartialMessages func(anthropic.BetaRawMessageStreamEventUnion)
 }
 
 // Result is the outcome of a Run.
@@ -157,7 +162,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			Betas:     betas,
 		}
 
-		assistant, finalText, err := l.streamTurn(ctx, params, emit)
+		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages)
 		if err != nil {
 			res.Messages = messages
 			return res, err
@@ -245,7 +250,7 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options) ([]anthropic.BetaMessageParam, bool) {
 	req := compaction.BuildSummaryRequest(messages, opts.Model, 4096)
 	req.Betas = api.DefaultBetas
-	assistant, _, err := l.streamTurn(ctx, req, nil)
+	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
 	if err != nil {
 		return messages, false
 	}
@@ -258,12 +263,18 @@ func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessage
 
 // streamTurn issues one streaming request via the provider, emitting
 // assistant-text events as deltas arrive, and returns the assembled message.
-func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, emit Emitter) (anthropic.BetaMessage, string, error) {
-	assistant, err := l.provider.StreamTurn(ctx, params, func(delta string) {
-		if emit != nil {
-			emit(Event{Type: "assistant", Text: delta})
-		}
-	})
+// rawSink, if non-nil, receives the raw stream events for partial-message
+// output; it is nil for compaction summary turns.
+func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, emit Emitter, rawSink func(anthropic.BetaRawMessageStreamEventUnion)) (anthropic.BetaMessage, string, error) {
+	sink := api.StreamSink{
+		OnText: func(delta string) {
+			if emit != nil {
+				emit(Event{Type: "assistant", Text: delta})
+			}
+		},
+		OnRawEvent: rawSink,
+	}
+	assistant, err := l.provider.StreamTurn(ctx, params, sink)
 	if err != nil {
 		return assistant, "", fmt.Errorf("stream: %w", err)
 	}
