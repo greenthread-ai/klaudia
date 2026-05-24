@@ -8,8 +8,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"github.com/greenthread/klaudia/internal/agent"
+	"github.com/greenthread/klaudia/internal/api"
+	"github.com/greenthread/klaudia/internal/tools"
 	"github.com/greenthread/klaudia/internal/version"
 )
+
+// defaultSystemPrompt is the minimal Klaudia/Claude Code identity prompt sent
+// when no override is given. The Claude Code identity is required on the OAuth
+// auth path. The full system-prompt assembly lands in a later phase.
+const defaultSystemPrompt = "You are an interactive agent that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user."
 
 // options holds parsed CLI flags, mirroring the JS commander surface
 // (08-entry.js setupCommander). Only the Phase 0 subset is wired so far.
@@ -74,29 +82,81 @@ func run(cmd *cobra.Command, opts *options) error {
 		return fmt.Errorf("interactive (TUI) mode is not implemented yet; use -p \"<prompt>\" for headless mode")
 	}
 
-	start := time.Now()
-	r := NewRenderer(format, cmd.OutOrStdout())
-
-	// TODO(phase1): replace this stub with the real agent loop (api + agent pkgs).
-	res := ResultMessage{
-		Type:         "result",
-		Subtype:      "success",
-		IsError:      false,
-		DurationMS:   time.Since(start).Milliseconds(),
-		NumTurns:     0,
-		Result:       fmt.Sprintf("[phase0 stub] received prompt: %q", opts.prompt),
-		StopReason:   "end_turn",
-		SessionID:    uuid.NewString(),
-		TotalCostUSD: 0,
-		UUID:         uuid.NewString(),
+	if format == FormatStreamJSON && !opts.verbose {
+		return fmt.Errorf("--output-format stream-json requires --verbose")
 	}
-	return r.Result(res)
+
+	start := time.Now()
+	ctx := cmd.Context()
+	r := NewRenderer(format, cmd.OutOrStdout())
+	sessionID := uuid.NewString()
+
+	// Resolve auth and build the API client.
+	cred, err := api.ResolveCredential()
+	if err != nil {
+		return err
+	}
+	client := api.New(cred, os.Getenv("KLAUDIA_CUSTOM_ENDPOINT"))
+
+	// Build the tool registry (Phase 1: Read only).
+	read, err := tools.NewRead()
+	if err != nil {
+		return err
+	}
+	registry := tools.NewRegistry(read)
+
+	// Run the agentic loop.
+	loop := agent.New(client, registry)
+	emit := func(ev agent.Event) { _ = r.Event(ev) }
+	res, err := loop.Run(ctx, agent.Options{
+		Prompt:   opts.prompt,
+		Model:    api.ResolveModel(opts.model),
+		System:   defaultSystemPrompt,
+		MaxTurns: opts.maxTurns,
+	}, emit)
+
+	out := ResultMessage{
+		Type:          "result",
+		Subtype:       "success",
+		IsError:       err != nil,
+		DurationMS:    time.Since(start).Milliseconds(),
+		DurationAPIMS: time.Since(start).Milliseconds(),
+		NumTurns:      res.NumTurns,
+		Result:        res.Text,
+		StopReason:    res.StopReason,
+		SessionID:     sessionID,
+		TotalCostUSD:  0, // Phase 3: derive from usage + pricing.
+		Usage: map[string]any{
+			"input_tokens":  res.InputTokens,
+			"output_tokens": res.OutputTokens,
+		},
+		UUID: uuid.NewString(),
+	}
+	if err != nil {
+		out.Subtype = "error_during_execution"
+		out.Result = fmt.Sprintf("Error: %v", err)
+	}
+	if rerr := r.Result(out); rerr != nil {
+		return rerr
+	}
+	if err != nil {
+		// The error is already rendered into the result payload; signal a
+		// non-zero exit without printing it again to stderr.
+		return errRendered
+	}
+	return nil
 }
+
+// errRendered marks a run error that has already been emitted in the result
+// output, so Execute exits non-zero without re-printing it.
+var errRendered = fmt.Errorf("run failed")
 
 // Execute runs the root command, returning the process exit code.
 func Execute() int {
 	if err := NewRootCommand().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
+		if err != errRendered {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+		}
 		return 1
 	}
 	return 0
