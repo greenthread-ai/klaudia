@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -74,6 +75,43 @@ func TestRenderAgents(t *testing.T) {
 	empty := &Model{sess: &Session{}}
 	if got := empty.renderAgents(); !strings.Contains(got, "No sub-agent types") {
 		t.Errorf("empty renderAgents = %q", got)
+	}
+}
+
+func TestThroughput(t *testing.T) {
+	if got := throughput(1240, 10*time.Second); !strings.Contains(got, "1.2k tokens") || !strings.Contains(got, "124 tok/s") {
+		t.Errorf("throughput = %q", got)
+	}
+	if got := throughput(0, 10*time.Second); got != "" {
+		t.Errorf("zero tokens should yield empty, got %q", got)
+	}
+	if got := humanTokens(980); got != "980" {
+		t.Errorf("humanTokens(980) = %q", got)
+	}
+}
+
+func TestMarkdownAndFlush(t *testing.T) {
+	m := newTestModel()
+	m.buildGlamour(80)
+	// markdown renders (output differs from raw source and is non-empty).
+	out := m.markdown("# Title\n\nsome **bold** text")
+	if strings.TrimSpace(out) == "" || out == "# Title\n\nsome **bold** text" {
+		t.Errorf("markdown did not render: %q", out)
+	}
+	// flushAssistant moves the buffered stream into the transcript and clears it.
+	m.streamBuf.WriteString("hello world")
+	m.flushAssistant()
+	if m.streamBuf.Len() != 0 {
+		t.Error("streamBuf should be empty after flush")
+	}
+	if !strings.Contains(m.transcript.String(), "hello world") {
+		t.Errorf("transcript missing flushed text: %q", m.transcript.String())
+	}
+	// A second flush with nothing buffered is a no-op.
+	before := m.transcript.Len()
+	m.flushAssistant()
+	if m.transcript.Len() != before {
+		t.Error("empty flush should not change the transcript")
 	}
 }
 

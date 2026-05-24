@@ -102,6 +102,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Interrupt the model (Esc) | 06-app-ui | `tui/tui.go` + per-turn ctx | ✅ done | Esc cancels the in-flight turn (and any pending approval); loop-level test confirms cancellation propagates. |
 | Elapsed-time indicator | 06-app-ui | `tui` + bubbles/stopwatch | 🔀 divergent | Live stopwatch while running + "done in"/"interrupted after" duration (replaces the removed /cost). |
 | Welcome intro | 06-app-ui | `tui.intro` | 🔀 divergent | Coloured logo + model/branch + key hints at startup. |
+| Markdown rendering | 06-app-ui | `tui` + glamour | ✅ done | Assistant answers stream raw, then render through glamour (headings, bold, syntax-highlighted code) on completion. |
+| Throughput readout | 06-app-ui | `tui` | 🔀 divergent | "✓ done in 12.3s · 1.2k tokens · 98 tok/s" from real Usage data. |
 
 ## Slash commands (TUI)
 

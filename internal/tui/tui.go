@@ -21,6 +21,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/greenthread/klaudia/internal/agent"
@@ -214,6 +215,11 @@ type Model struct {
 	// Elapsed-run stopwatch and per-turn cancel (Esc interrupts the model).
 	sw         stopwatch.Model
 	turnCancel context.CancelFunc
+	// streamBuf holds the in-progress assistant message (shown raw as it
+	// streams); on completion it's flushed through glamour into the transcript.
+	streamBuf strings.Builder
+	glam      *glamour.TermRenderer
+	glamWidth int
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
@@ -333,13 +339,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		elapsed := m.sw.Elapsed()
 		stopSW := m.sw.Stop()
 		m.turnCancel = nil
+		m.flushAssistant() // prettify the final answer through glamour
 		switch {
 		case errors.Is(msg.err, context.Canceled):
 			m.appendLine(toolStyle.Render(fmt.Sprintf("  ⊘ interrupted after %s", fmtDuration(elapsed))))
 		case msg.err != nil:
 			m.appendLine(errStyle.Render("error: " + api.FriendlyError(msg.err)))
 		default:
-			m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ done in %s", fmtDuration(elapsed))))
+			m.appendLine(bannerStyle.Render("  ✓ done in " + fmtDuration(elapsed) + throughput(msg.res.OutputTokens, elapsed)))
 		}
 		if msg.res.Messages != nil {
 			m.history = msg.res.Messages
@@ -1179,6 +1186,27 @@ func fmtDuration(d time.Duration) string {
 	}
 }
 
+// throughput renders the token count and tokens/sec for a completed turn, or ""
+// when no output tokens were reported (e.g. some OpenAI-compatible endpoints).
+func throughput(outTokens int64, d time.Duration) string {
+	if outTokens <= 0 {
+		return ""
+	}
+	s := " · " + humanTokens(outTokens) + " tokens"
+	if d > 0 {
+		s += fmt.Sprintf(" · %.0f tok/s", float64(outTokens)/d.Seconds())
+	}
+	return s
+}
+
+// humanTokens renders a token count compactly: 980 → "980", 1240 → "1.2k".
+func humanTokens(n int64) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	return fmt.Sprintf("%.1fk", float64(n)/1000)
+}
+
 // capitalize upper-cases the first rune (role headers in the export).
 func capitalize(s string) string {
 	if s == "" {
@@ -1256,10 +1284,12 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 func (m *Model) renderEvent(ev agent.Event) {
 	switch ev.Type {
 	case "assistant":
-		m.appendText(ev.Text) // streamed deltas
+		m.appendText(ev.Text) // streamed deltas (raw until flushed)
 	case "tool_use":
+		m.flushAssistant() // the assistant message before a tool call is complete
 		m.appendLine(toolStyle.Render(fmt.Sprintf("⚙ %s", ev.ToolName)))
 	case "tool_result":
+		m.flushAssistant()
 		s := ev.Content
 		if len(s) > 240 {
 			s = s[:240] + "…"
@@ -1270,17 +1300,54 @@ func (m *Model) renderEvent(ev agent.Event) {
 		}
 		m.appendLine(style.Render("  " + strings.ReplaceAll(s, "\n", "\n  ")))
 	case "compaction":
+		m.flushAssistant()
 		m.appendLine(bannerStyle.Render("· " + ev.Content))
 	}
 }
 
-// appendText appends inline (for streamed assistant deltas).
+// appendText buffers a streamed assistant delta (rendered raw live, then
+// prettified through glamour on flush).
 func (m *Model) appendText(s string) {
-	m.transcript.WriteString(s)
+	m.streamBuf.WriteString(s)
 	m.syncViewport()
 }
 
-// appendLine appends a full line.
+// flushAssistant commits the buffered assistant message to the transcript,
+// rendered as Markdown via glamour. No-op when nothing is buffered.
+func (m *Model) flushAssistant() {
+	if m.streamBuf.Len() == 0 {
+		return
+	}
+	m.transcript.WriteString(m.markdown(m.streamBuf.String()) + "\n")
+	m.streamBuf.Reset()
+}
+
+// markdown renders s through glamour, falling back to the raw text on error or
+// before the renderer is built.
+func (m *Model) markdown(s string) string {
+	if m.glam == nil {
+		return s
+	}
+	out, err := m.glam.Render(s)
+	if err != nil {
+		return s
+	}
+	return strings.TrimRight(out, "\n")
+}
+
+// buildGlamour (re)builds the Markdown renderer for the given viewport width.
+func (m *Model) buildGlamour(width int) {
+	w := width - 2
+	if w < 20 {
+		w = 20
+	}
+	if r, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(w)); err == nil {
+		m.glam = r
+		m.glamWidth = width
+	}
+}
+
+// appendLine appends a full, already-styled line.
 func (m *Model) appendLine(s string) {
 	m.transcript.WriteString(s + "\n")
 	m.syncViewport()
@@ -1293,9 +1360,14 @@ func (m *Model) syncViewport() {
 	// Auto-scroll to follow new output only when the user is already at the
 	// bottom; if they've scrolled up to read history, leave their position put.
 	stick := m.vp.AtBottom()
-	// The viewport does not wrap; wrap the content to its width (lipgloss
-	// preserves ANSI styling across the wrap).
-	wrapped := lipgloss.NewStyle().Width(m.vp.Width).Render(m.transcript.String())
+	// Committed transcript (glamour-rendered answers + styled lines) plus the
+	// in-progress assistant message shown raw as it streams. Wrap to width;
+	// lipgloss preserves ANSI and won't re-wrap lines already within width.
+	content := m.transcript.String()
+	if m.streamBuf.Len() > 0 {
+		content += m.streamBuf.String()
+	}
+	wrapped := lipgloss.NewStyle().Width(m.vp.Width).Render(content)
 	m.vp.SetContent(wrapped)
 	if stick {
 		m.vp.GotoBottom()
@@ -1313,6 +1385,9 @@ func (m *Model) resize(w, h int) {
 		m.vp.Height = h - inputH
 	}
 	m.input.Width = w - 4
+	if m.glam == nil || m.glamWidth != w {
+		m.buildGlamour(w)
+	}
 	m.syncViewport()
 }
 
