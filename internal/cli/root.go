@@ -18,6 +18,7 @@ import (
 	"github.com/greenthread/klaudia/internal/mcp"
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/prompt"
+	"github.com/greenthread/klaudia/internal/sandbox"
 	"github.com/greenthread/klaudia/internal/session"
 	"github.com/greenthread/klaudia/internal/streamjson"
 	"github.com/greenthread/klaudia/internal/subagent"
@@ -63,6 +64,28 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 		}
 		return api.New(cred, os.Getenv("KLAUDIA_CUSTOM_ENDPOINT")), cfg.Model, nil
 	}
+}
+
+// buildExecutor selects the Bash execution backend from config. Container mode
+// degrades gracefully to the local executor when misconfigured or when the
+// runtime isn't installed (warn explains why).
+func buildExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {
+	if sb.Mode != config.SandboxContainer {
+		return sandbox.NewLocal()
+	}
+	runtime := sb.Runtime
+	if runtime == "" {
+		runtime = "docker"
+	}
+	switch {
+	case sb.Image == "":
+		warn("sandbox mode \"container\" has no image set; falling back to local execution")
+	case !sandbox.RuntimeAvailable(runtime):
+		warn(runtime + " is not installed; falling back to local execution")
+	default:
+		return sandbox.NewContainer(runtime, sb.Image, sb.MountCWDOr(true), sb.ReadOnly, sb.Network)
+	}
+	return sandbox.NewLocal()
 }
 
 // gitBranch returns the current git branch for dir, or "" if not a repo.
@@ -209,7 +232,8 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Build the tool registry. Sub-agents draw from the base tools (incl. any
 	// MCP tools); the top-level registry adds the Agent tool.
-	base, err := tools.DefaultRegistry()
+	executor := buildExecutor(cfg.Sandbox, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
+	base, err := tools.DefaultRegistry(executor)
 	if err != nil {
 		return err
 	}

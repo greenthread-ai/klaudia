@@ -6,13 +6,13 @@ import (
 	"github.com/greenthread/klaudia/internal/sandbox"
 )
 
-// DefaultRegistry builds the registry of all implemented local tools. New tools
-// are added here as they are ported. Each constructor may fail if its input
-// schema can't be generated.
-func DefaultRegistry() (*Registry, error) {
-	// The Bash tool runs through an Executor. Phase 2 uses the unconfined
-	// local host executor; sandbox/container executors swap in later.
-	executor := sandbox.NewLocal()
+// DefaultRegistry builds the registry of all implemented local tools, with the
+// Bash tool wired to the given executor (local host, or a container sandbox).
+// New tools are added here as they are ported.
+func DefaultRegistry(executor sandbox.Executor) (*Registry, error) {
+	if executor == nil {
+		executor = sandbox.NewLocal()
+	}
 	// Per-session todo state shared with the TodoWrite tool.
 	todos := &TodoStore{}
 

@@ -19,7 +19,7 @@ func TestBuiltinLookup(t *testing.T) {
 }
 
 func TestFilterAllVsRestricted(t *testing.T) {
-	base, err := tools.DefaultRegistry()
+	base, err := tools.DefaultRegistry(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

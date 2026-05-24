@@ -7,7 +7,7 @@ import (
 )
 
 func TestDefaultRegistryLoadsAllTools(t *testing.T) {
-	reg, err := DefaultRegistry()
+	reg, err := DefaultRegistry(nil)
 	if err != nil {
 		t.Fatalf("DefaultRegistry: %v", err)
 	}
