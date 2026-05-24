@@ -15,9 +15,26 @@ import (
 	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/session"
+	"github.com/greenthread/klaudia/internal/subagent"
 	"github.com/greenthread/klaudia/internal/tools"
 	"github.com/greenthread/klaudia/internal/version"
 )
+
+// withAgentTool returns a registry that is the base tools plus the Agent tool,
+// wired to a sub-agent spawner that draws from the base tools.
+func withAgentTool(base *tools.Registry, client *api.Client, model anthropic.Model, perm permission.Context, maxTurns int) (*tools.Registry, error) {
+	spawner := agent.NewSpawner(client, base, model, perm, maxTurns)
+
+	infos := make([]tools.AgentTypeInfo, 0)
+	for _, t := range subagent.Builtin() {
+		infos = append(infos, tools.AgentTypeInfo{Name: t.Name, Description: t.Description})
+	}
+	agentTool, err := tools.NewAgent(spawner, infos)
+	if err != nil {
+		return nil, err
+	}
+	return tools.NewRegistry(append(base.All(), agentTool)...), nil
+}
 
 // gitBranch returns the current git branch for dir, or "" if not a repo.
 func gitBranch(dir string) string {
@@ -146,12 +163,6 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	client := api.New(cred, os.Getenv("KLAUDIA_CUSTOM_ENDPOINT"))
 
-	// Build the tool registry.
-	registry, err := tools.DefaultRegistry()
-	if err != nil {
-		return err
-	}
-
 	// Resolve the permission mode (--dangerously-skip-permissions wins).
 	mode := permission.Mode(opts.permissionMode)
 	if opts.dangerouslySkip {
@@ -159,6 +170,19 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	if !mode.Valid() {
 		return fmt.Errorf("invalid permission mode %q", opts.permissionMode)
+	}
+	model := api.ResolveModel(opts.model)
+	permCtx := permission.Context{Mode: mode}
+
+	// Build the tool registry. Sub-agents draw from the base tools; the
+	// top-level registry adds the Agent tool (which spawns sub-agents).
+	base, err := tools.DefaultRegistry()
+	if err != nil {
+		return err
+	}
+	registry, err := withAgentTool(base, client, model, permCtx, opts.maxTurns)
+	if err != nil {
+		return err
 	}
 
 	// Open the transcript for this session (best effort: a transcript failure
@@ -180,10 +204,10 @@ func run(cmd *cobra.Command, opts *options) error {
 	emit := func(ev agent.Event) { _ = r.Event(ev) }
 	res, err := loop.Run(ctx, agent.Options{
 		Prompt:          opts.prompt,
-		Model:           api.ResolveModel(opts.model),
+		Model:           model,
 		System:          defaultSystemPrompt,
 		MaxTurns:        opts.maxTurns,
-		Permission:      permission.Context{Mode: mode},
+		Permission:      permCtx,
 		Interactive:     false, // headless mode
 		InitialMessages: initialMessages,
 		Recorder:        recorder,
