@@ -1,0 +1,144 @@
+// Package doctor produces a diagnostic report of Klaudia's environment: which
+// sandbox backends are available, whether authentication is configured, and the
+// resolved provider/model/MCP setup. It backs the /doctor command.
+package doctor
+
+import (
+	"fmt"
+	"os/exec"
+	"runtime"
+)
+
+// Status values for a Check.
+const (
+	StatusOK   = "ok"
+	StatusWarn = "warn"
+	StatusInfo = "info"
+)
+
+// Check is one diagnostic line.
+type Check struct {
+	Name   string
+	Status string // StatusOK | StatusWarn | StatusInfo
+	Detail string
+}
+
+// Input carries facts the CLI already resolved, so doctor stays pure and
+// testable. doctor adds OS/binary detection itself.
+type Input struct {
+	Provider    string // resolved provider ("anthropic" | "openai" | …)
+	Model       string // resolved model id
+	SandboxMode string // configured sandbox mode ("local" | "os" | "container")
+	ConfigFound bool   // a .klaudia/config.json was loaded
+	AuthOK      bool   // a usable credential resolved
+	AuthKind    string // "oauth" | "api-key" | "none"
+	MCPServers  int    // configured MCP server count
+}
+
+// lookPath is indirected for testing.
+var lookPath = exec.LookPath
+
+// Run builds the diagnostic report.
+func Run(in Input) []Check {
+	var checks []Check
+	add := func(name, status, detail string) {
+		checks = append(checks, Check{Name: name, Status: status, Detail: detail})
+	}
+
+	add("platform", StatusInfo, runtime.GOOS+"/"+runtime.GOARCH)
+
+	// Authentication.
+	switch {
+	case in.AuthOK && in.AuthKind != "":
+		add("auth", StatusOK, "credential resolved ("+in.AuthKind+")")
+	case in.AuthOK:
+		add("auth", StatusOK, "credential resolved")
+	default:
+		add("auth", StatusWarn, "no credential resolved (set an API key or run an OAuth login)")
+	}
+
+	// Provider / model.
+	provider := in.Provider
+	if provider == "" {
+		provider = "anthropic"
+	}
+	model := in.Model
+	if model == "" {
+		model = "(default)"
+	}
+	add("provider", StatusInfo, provider+" — model "+model)
+
+	// Config presence.
+	if in.ConfigFound {
+		add("config", StatusOK, ".klaudia/config.json loaded")
+	} else {
+		add("config", StatusInfo, "no .klaudia/config.json (using defaults)")
+	}
+
+	// Sandbox: report on the configured mode's required backend.
+	checks = append(checks, sandboxCheck(in.SandboxMode))
+
+	// Container runtimes (informational, useful regardless of mode).
+	for _, rt := range []string{"docker", "podman"} {
+		if _, err := lookPath(rt); err == nil {
+			add("runtime:"+rt, StatusOK, "available")
+		} else {
+			add("runtime:"+rt, StatusInfo, "not found")
+		}
+	}
+
+	// MCP.
+	if in.MCPServers > 0 {
+		add("mcp", StatusOK, fmt.Sprintf("%d server(s) configured", in.MCPServers))
+	} else {
+		add("mcp", StatusInfo, "no MCP servers configured")
+	}
+
+	return checks
+}
+
+// sandboxCheck reports whether the backend required by the configured sandbox
+// mode is present.
+func sandboxCheck(mode string) Check {
+	switch mode {
+	case "os":
+		bin, label := osSandboxBinary()
+		if bin == "" {
+			return Check{"sandbox", StatusInfo, "mode \"os\" unsupported on " + runtime.GOOS}
+		}
+		if _, err := lookPath(bin); err == nil {
+			return Check{"sandbox", StatusOK, "mode \"os\" via " + label}
+		}
+		return Check{"sandbox", StatusWarn, "mode \"os\" needs " + bin + " (not found); falls back to local"}
+	case "container":
+		return Check{"sandbox", StatusInfo, "mode \"container\" (see runtime checks below)"}
+	default:
+		return Check{"sandbox", StatusInfo, "mode \"local\" (unconfined host execution)"}
+	}
+}
+
+// osSandboxBinary returns the confinement binary and label for the current OS.
+func osSandboxBinary() (bin, label string) {
+	switch runtime.GOOS {
+	case "darwin":
+		return "sandbox-exec", "sandbox-exec (Seatbelt)"
+	case "linux":
+		return "bwrap", "bubblewrap"
+	default:
+		return "", ""
+	}
+}
+
+// Format renders the report as aligned lines for display.
+func Format(checks []Check) string {
+	icon := map[string]string{StatusOK: "✓", StatusWarn: "!", StatusInfo: "·"}
+	out := "Klaudia doctor:"
+	for _, c := range checks {
+		mark := icon[c.Status]
+		if mark == "" {
+			mark = "·"
+		}
+		out += fmt.Sprintf("\n  %s %-16s %s", mark, c.Name, c.Detail)
+	}
+	return out
+}

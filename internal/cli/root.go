@@ -18,6 +18,7 @@ import (
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/config"
+	"github.com/greenthread/klaudia/internal/doctor"
 	"github.com/greenthread/klaudia/internal/mcp"
 	"github.com/greenthread/klaudia/internal/memory"
 	"github.com/greenthread/klaudia/internal/permission"
@@ -71,6 +72,7 @@ var builtinSlashCommands = map[string]bool{
 	"allow": true, "deny": true, "status": true,
 	"config": true, "agents": true, "context": true,
 	"cost": true, "compact": true, "add-dir": true,
+	"plan": true, "doctor": true, "diff": true, "commit": true, "export": true,
 }
 
 // withExtraDirs appends an "additional working directories" note to the system
@@ -81,6 +83,42 @@ func withExtraDirs(sys string, dirs []string) string {
 	}
 	return sys + "\n\nAdditional working directories the user has made available:\n- " +
 		strings.Join(dirs, "\n- ")
+}
+
+// buildDoctorInput gathers the facts /doctor reports, without prompting.
+func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpServers int) doctor.Input {
+	in := doctor.Input{
+		Provider:    providerName(cfg),
+		Model:       string(model),
+		SandboxMode: sandboxMode(cfg.Sandbox),
+		ConfigFound: configFileExists(cwd),
+		MCPServers:  mcpServers,
+		AuthKind:    "none",
+	}
+	if cfg.Provider == config.ProviderOpenAI {
+		if cfg.ResolveAPIKey() != "" {
+			in.AuthOK, in.AuthKind = true, "api-key"
+		}
+	} else if cred, err := api.ResolveCredential(); err == nil {
+		in.AuthOK = true
+		if cred.IsOAuth() {
+			in.AuthKind = "oauth"
+		} else {
+			in.AuthKind = "api-key"
+		}
+	}
+	return in
+}
+
+// configFileExists reports whether a home or project .klaudia/config.json exists.
+func configFileExists(cwd string) bool {
+	if home, err := os.UserHomeDir(); err == nil {
+		if _, err := os.Stat(filepath.Join(home, ".klaudia", "config.json")); err == nil {
+			return true
+		}
+	}
+	_, err := os.Stat(filepath.Join(cwd, ".klaudia", "config.json"))
+	return err == nil
 }
 
 // providerName returns the resolved provider for display ("anthropic" default).
@@ -488,6 +526,9 @@ func run(cmd *cobra.Command, opts *options) error {
 			Agents:         tuiAgents(),
 			Compact: func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 				return loop.Compact(ctx, history, api.ResolveModel(modelStr))
+			},
+			Doctor: func() string {
+				return doctor.Format(doctor.Run(buildDoctorInput(cfg, model, cwd, len(mcpCfg.MCPServers))))
 			},
 		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {

@@ -3,7 +3,22 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/anthropics/anthropic-sdk-go"
 )
+
+func TestExportMarkdown(t *testing.T) {
+	history := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hello there")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("hi back")}},
+	}
+	got := exportMarkdown(history)
+	for _, want := range []string{"# Klaudia conversation", "## User", "hello there", "## Assistant", "hi back"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("exportMarkdown missing %q in:\n%s", want, got)
+		}
+	}
+}
 
 func TestRenderConfigDefaults(t *testing.T) {
 	m := &Model{sess: &Session{}}

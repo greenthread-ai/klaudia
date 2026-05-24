@@ -108,8 +108,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | /stats, /status | `tui/tui.go` | ✅ done | |
 | /allow, /deny | `tui/tui.go` | ✅ done | |
 | /config, /agents, /context | `tui/tui.go` | ✅ done | Group A (render-only). |
-| /compact, /cost, /add-dir | — | 🔜 planned | Group B. |
-| /plan, /doctor, /diff, /commit, /export | — | 🔜 planned | Group C. |
+| /compact, /cost, /add-dir | `tui/tui.go` + `agent.Loop.Compact` | ✅ done | Group B. |
+| /plan, /doctor, /diff, /commit, /export | `tui/tui.go` + `doctor/` | ✅ done | Group C; /commit gated by a y/n confirm. |
 
 ## Auth & infra
 

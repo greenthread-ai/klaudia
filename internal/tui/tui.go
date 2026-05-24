@@ -7,7 +7,11 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -50,6 +54,8 @@ type Session struct {
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
 	Compact CompactFunc
+	// Doctor, if set, returns a rendered environment diagnostic. Backs /doctor.
+	Doctor func() string
 }
 
 // CompactFunc summarizes the conversation history via the model, returning the
@@ -79,6 +85,7 @@ const (
 	stateAwaitingPermission
 	stateAwaitingAnswer
 	stateAwaitingPlan
+	stateAwaitingConfirm
 )
 
 // --- messages delivered from the agent goroutine ---
@@ -148,6 +155,8 @@ type Model struct {
 	askQuestion string
 	// Pending ExitPlanMode approval.
 	planReply chan bool
+	// Pending /commit-style confirmation: run on "y", returns a result line.
+	confirmAction func() string
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
@@ -309,6 +318,23 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.state == stateAwaitingConfirm {
+		switch strings.ToLower(msg.String()) {
+		case "y":
+			action := m.confirmAction
+			m.confirmAction = nil
+			m.state = stateIdle
+			if action != nil {
+				m.appendLine(bannerStyle.Render(action()))
+			}
+		case "n":
+			m.confirmAction = nil
+			m.state = stateIdle
+			m.appendLine(toolStyle.Render("  → cancelled"))
+		}
+		return m, nil
+	}
+
 	if m.state == stateAwaitingAnswer {
 		// Digit keys 1..N select an option.
 		s := msg.String()
@@ -383,6 +409,11 @@ const slashHelp = `Available commands:
   /cost            Show session token totals and an estimated cost
   /compact         Summarize and compact the conversation history now
   /add-dir <path>  Add a directory to the prompt context
+  /plan [off]      Enter (or leave) read-only plan mode
+  /doctor          Run environment diagnostics
+  /diff [args]     Show git diff of the working tree
+  /commit <msg>    Stage all changes and commit (asks first)
+  /export          Export the conversation to a Markdown file
   /clear           Clear the screen and conversation history
   /quit, /exit     Exit Klaudia`
 
@@ -523,6 +554,64 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.events <- compactDoneMsg{history: newHist, summary: summary, err: err}
 		}(m.history)
 		return m, m.spin.Tick
+	case "/plan":
+		if len(args) > 0 && strings.ToLower(args[0]) == "off" {
+			m.sess.PermissionMode = string(permission.ModeDefault)
+			m.appendLine(bannerStyle.Render("Left plan mode (default permissions)."))
+		} else {
+			m.sess.PermissionMode = string(permission.ModePlan)
+			m.appendLine(bannerStyle.Render("Entered plan mode: read-only exploration; mutations are blocked. /plan off to leave."))
+		}
+	case "/doctor":
+		if m.sess.Doctor == nil {
+			m.appendLine(errStyle.Render("doctor is not available"))
+		} else {
+			m.appendLine(bannerStyle.Render(m.sess.Doctor()))
+		}
+	case "/diff":
+		out, err := gitOutput(m.sess.CWD, append([]string{"diff"}, args...)...)
+		switch {
+		case err != nil:
+			m.appendLine(errStyle.Render("git diff: " + err.Error()))
+		case strings.TrimSpace(out) == "":
+			m.appendLine(bannerStyle.Render("No changes."))
+		default:
+			m.appendLine(out)
+		}
+	case "/export":
+		path, err := m.exportTranscript()
+		if err != nil {
+			m.appendLine(errStyle.Render("export: " + err.Error()))
+		} else {
+			m.appendLine(bannerStyle.Render("Exported transcript to " + path))
+		}
+	case "/commit":
+		if len(args) == 0 {
+			m.appendLine(errStyle.Render("usage: /commit <message>"))
+			break
+		}
+		message := strings.Join(args, " ")
+		status, err := gitOutput(m.sess.CWD, "status", "--short")
+		if err != nil {
+			m.appendLine(errStyle.Render("git: " + err.Error()))
+			break
+		}
+		if strings.TrimSpace(status) == "" {
+			m.appendLine(bannerStyle.Render("Nothing to commit (working tree clean)."))
+			break
+		}
+		cwd := m.sess.CWD
+		m.confirmAction = func() string {
+			if _, err := gitOutput(cwd, "add", "-A"); err != nil {
+				return "git add failed: " + err.Error()
+			}
+			if out, err := gitOutput(cwd, "commit", "-m", message); err != nil {
+				return "git commit failed: " + strings.TrimSpace(out) + " " + err.Error()
+			}
+			return "Committed."
+		}
+		m.state = stateAwaitingConfirm
+		m.appendLine(askStyle.Render("Stage all changes and commit?\n" + strings.TrimRight(status, "\n") + "\n(y)es / (n)o"))
 	default:
 		// A /<skill> matching a user-defined skill renders its body and submits it
 		// as the turn prompt. Built-in commands above always win (a skill that
@@ -617,6 +706,62 @@ func (m *Model) renderContext() string {
 		branch = "(none)"
 	}
 	return fmt.Sprintf("Context:\n  cwd=%s\n  git-branch=%s\n  messages=%d", cwd, branch, len(m.history))
+}
+
+// gitOutput runs `git <args>` in dir and returns combined output. A non-zero
+// exit returns the output plus the error so callers can surface git's message.
+func gitOutput(dir string, args ...string) (string, error) {
+	c := exec.Command("git", args...)
+	if dir != "" {
+		c.Dir = dir
+	}
+	out, err := c.CombinedOutput()
+	return string(out), err
+}
+
+// exportTranscript writes the conversation history to a timestamped Markdown
+// file in the working directory and returns its path.
+func (m *Model) exportTranscript() (string, error) {
+	dir := m.sess.CWD
+	if dir == "" {
+		dir = "."
+	}
+	name := fmt.Sprintf("klaudia-export-%s.md", time.Now().Format("20060102-150405"))
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(exportMarkdown(m.history)), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// exportMarkdown renders the conversation history as Markdown (role headers +
+// text blocks; tool calls/results are summarized).
+func exportMarkdown(history []anthropic.BetaMessageParam) string {
+	var b strings.Builder
+	b.WriteString("# Klaudia conversation\n\n")
+	b.WriteString("_Exported " + time.Now().Format(time.RFC3339) + "_\n")
+	for _, msg := range history {
+		fmt.Fprintf(&b, "\n## %s\n\n", capitalize(string(msg.Role)))
+		for _, block := range msg.Content {
+			switch {
+			case block.OfText != nil:
+				b.WriteString(block.OfText.Text + "\n")
+			case block.OfToolUse != nil:
+				fmt.Fprintf(&b, "_→ tool: %s_\n", block.OfToolUse.Name)
+			case block.OfToolResult != nil:
+				b.WriteString("_← tool result_\n")
+			}
+		}
+	}
+	return b.String()
+}
+
+// capitalize upper-cases the first rune (role headers in the export).
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // lookupSkill finds a loaded skill by name (case-sensitive).
@@ -752,6 +897,8 @@ func (m *Model) View() string {
 		bottom = askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions)))
 	case stateAwaitingPlan:
 		bottom = askStyle.Render("Approve plan? (y)es / (n)o")
+	case stateAwaitingConfirm:
+		bottom = askStyle.Render("Confirm? (y)es / (n)o")
 	default:
 		bottom = m.input.View()
 	}
