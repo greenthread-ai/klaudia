@@ -77,6 +77,10 @@ type Result struct {
 	StopReason   string
 	InputTokens  int64
 	OutputTokens int64
+	// Messages is the full conversation after the run (initial + this turn's
+	// exchanges), so a caller can carry it forward as InitialMessages for the
+	// next turn (used by the stream-json embedding frontend).
+	Messages []anthropic.BetaMessageParam
 }
 
 // Loop drives the agentic loop against an API client and a tool registry.
@@ -142,6 +146,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 
 		assistant, finalText, err := l.streamTurn(ctx, params, emit)
 		if err != nil {
+			res.Messages = messages
 			return res, err
 		}
 		res.StopReason = string(assistant.StopReason)
@@ -149,13 +154,14 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		res.OutputTokens += assistant.Usage.OutputTokens
 		res.Text = finalText
 
-		// Persist the assistant turn (including the final, tool-less answer).
+		// Persist the assistant turn (including the final, tool-less answer) and
+		// add it to the running conversation.
 		record(opts.Recorder, "assistant", assistant)
+		messages = append(messages, assistant.ToParam())
 
 		// pause_turn: the API paused a long-running server-side tool (e.g. web
 		// search). Re-send the accumulated turn to let it continue.
 		if assistant.StopReason == "pause_turn" {
-			messages = append(messages, assistant.ToParam())
 			continue
 		}
 
@@ -164,11 +170,11 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		if len(toolUses) == 0 {
 			// No tools requested → the model is done (server-side tool results,
 			// if any, were already resolved inline by the API).
+			res.Messages = messages
 			return res, nil
 		}
 
-		// Append the assistant turn, then dispatch tools and append their results.
-		messages = append(messages, assistant.ToParam())
+		// Dispatch tools and append their results.
 		resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
 		for _, tu := range toolUses {
 			block := l.dispatch(ctx, tu, opts, emit)
@@ -180,6 +186,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 
 		if opts.MaxTurns > 0 && res.NumTurns >= opts.MaxTurns {
 			res.StopReason = "max_turns"
+			res.Messages = messages
 			return res, nil
 		}
 	}

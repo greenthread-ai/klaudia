@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,6 +17,7 @@ import (
 	"github.com/greenthread/klaudia/internal/mcp"
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/session"
+	"github.com/greenthread/klaudia/internal/streamjson"
 	"github.com/greenthread/klaudia/internal/subagent"
 	"github.com/greenthread/klaudia/internal/tools"
 	"github.com/greenthread/klaudia/internal/version"
@@ -60,6 +62,7 @@ type options struct {
 	prompt          string
 	model           string
 	outputFormat    string
+	inputFormat     string
 	permissionMode  string
 	dangerouslySkip bool
 	verbose         bool
@@ -98,6 +101,7 @@ func NewRootCommand() *cobra.Command {
 	f.BoolVarP(&opts.print, "print", "p", false, "Non-interactive mode: print result to stdout and exit")
 	f.StringVar(&opts.model, "model", "", "Model alias (haiku|sonnet|opus) or full model ID")
 	f.StringVar(&opts.outputFormat, "output-format", "text", "Output format: text|json|stream-json")
+	f.StringVar(&opts.inputFormat, "input-format", "text", "Input format: text|stream-json (stream-json drives a persistent agent over stdin)")
 	f.StringVar(&opts.permissionMode, "permission-mode", "default", "Permission mode: default|acceptEdits|bypassPermissions|plan|dontAsk")
 	f.BoolVar(&opts.dangerouslySkip, "dangerously-skip-permissions", false, "Skip all permission checks (sets bypassPermissions)")
 	f.BoolVar(&opts.verbose, "verbose", false, "Verbose output (required for stream-json)")
@@ -118,8 +122,8 @@ func run(cmd *cobra.Command, opts *options) error {
 		return err
 	}
 
-	if !opts.print {
-		return fmt.Errorf("interactive (TUI) mode is not implemented yet; use -p \"<prompt>\" for headless mode")
+	if !opts.print && opts.inputFormat != "stream-json" {
+		return fmt.Errorf("interactive (TUI) mode is not implemented yet; use -p \"<prompt>\" for headless mode, or --input-format stream-json to drive over stdin")
 	}
 
 	if format == FormatStreamJSON && !opts.verbose {
@@ -218,8 +222,30 @@ func run(cmd *cobra.Command, opts *options) error {
 		recorder = tr
 	}
 
-	// Run the agentic loop.
 	loop := agent.New(client, registry)
+
+	// Stream-json input: drive a persistent agent over stdin/stdout (the
+	// embedding channel). Each user message is a turn; permission asks are
+	// surfaced as control_request and answered by the peer.
+	if opts.inputFormat == "stream-json" {
+		driver := streamjson.NewDriver(cmd.OutOrStdout())
+		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
+			return loop.Run(ctx, agent.Options{
+				Prompt:          prompt,
+				Model:           model,
+				System:          defaultSystemPrompt,
+				MaxTurns:        opts.maxTurns,
+				Permission:      permCtx,
+				Approver:        ap,
+				InitialMessages: history,
+				Recorder:        recorder,
+				WebTools:        true,
+			}, emit)
+		}
+		return driver.Run(ctx, cmd.InOrStdin(), runFn)
+	}
+
+	// Single-shot headless run.
 	emit := func(ev agent.Event) { _ = r.Event(ev) }
 	res, err := loop.Run(ctx, agent.Options{
 		Prompt:          opts.prompt,
