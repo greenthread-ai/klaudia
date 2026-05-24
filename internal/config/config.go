@@ -44,13 +44,17 @@ type Permissions struct {
 // Sandbox modes.
 const (
 	SandboxLocal     = "local"     // unconfined host process (default)
+	SandboxOS        = "os"        // OS confinement: sandbox-exec (macOS) / bwrap (Linux)
 	SandboxContainer = "container" // run inside a docker/podman container
 )
 
 // Sandbox configures Bash command execution.
 type Sandbox struct {
-	// Mode is "local" (default) or "container".
+	// Mode is "local" (default), "os" (sandbox-exec/bwrap), or "container".
 	Mode string `json:"mode,omitempty"`
+	// WriteRoots are extra directories writable under "os" mode (cwd + temp are
+	// always writable).
+	WriteRoots []string `json:"writeRoots,omitempty"`
 	// Runtime is "docker" (default) or "podman" for container mode.
 	Runtime string `json:"runtime,omitempty"`
 	// Image is the container image to run, e.g. "python:3.12-slim".
@@ -126,6 +130,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Sandbox.Network != "" {
 		dst.Sandbox.Network = src.Sandbox.Network
+	}
+	if len(src.Sandbox.WriteRoots) > 0 {
+		dst.Sandbox.WriteRoots = append(dst.Sandbox.WriteRoots, src.Sandbox.WriteRoots...)
 	}
 	// Permission rules accumulate (home rules + project rules).
 	dst.Permissions.Allow = append(dst.Permissions.Allow, src.Permissions.Allow...)

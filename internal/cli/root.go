@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"time"
 
@@ -68,13 +69,45 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 	}
 }
 
-// buildExecutor selects the Bash execution backend from config. Container mode
-// degrades gracefully to the local executor when misconfigured or when the
-// runtime isn't installed (warn explains why).
+// buildExecutor selects the Bash execution backend from config. Both "os"
+// (host confinement via sandbox-exec/bwrap) and "container" modes degrade
+// gracefully to the local executor when the required tool is absent or the
+// config is incomplete (warn explains why).
 func buildExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {
-	if sb.Mode != config.SandboxContainer {
+	switch sb.Mode {
+	case config.SandboxOS:
+		return buildOSExecutor(sb, warn)
+	case config.SandboxContainer:
+		return buildContainerExecutor(sb, warn)
+	default:
 		return sandbox.NewLocal()
 	}
+}
+
+// buildOSExecutor picks the OS-native confinement tool for the current
+// platform: sandbox-exec on macOS, bubblewrap on Linux. Falls back to local
+// (unconfined) execution with a warning when the tool isn't available.
+func buildOSExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {
+	switch goruntime.GOOS {
+	case "darwin":
+		if _, err := exec.LookPath("sandbox-exec"); err != nil {
+			warn("sandbox mode \"os\": sandbox-exec not found; falling back to local execution")
+			return sandbox.NewLocal()
+		}
+		return sandbox.NewSeatbelt(sb.WriteRoots, sb.Network)
+	case "linux":
+		if _, err := exec.LookPath("bwrap"); err != nil {
+			warn("sandbox mode \"os\": bwrap (bubblewrap) not found; falling back to local execution")
+			return sandbox.NewLocal()
+		}
+		return sandbox.NewBwrap(sb.WriteRoots, sb.Network)
+	default:
+		warn("sandbox mode \"os\" is unsupported on " + goruntime.GOOS + "; falling back to local execution")
+		return sandbox.NewLocal()
+	}
+}
+
+func buildContainerExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {
 	runtime := sb.Runtime
 	if runtime == "" {
 		runtime = "docker"

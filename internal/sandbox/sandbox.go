@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"time"
 )
@@ -63,18 +64,22 @@ func NewLocal() *Local { return &Local{} }
 func (l *Local) Name() string { return "local" }
 
 func (l *Local) Run(ctx context.Context, req Request) (Response, error) {
+	return runArgv(ctx, req, shellPath, []string{"-c", req.Command})
+}
+
+func runArgv(ctx context.Context, req Request, name string, args []string) (Response, error) {
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, shellPath, "-c", req.Command)
+	cmd := exec.CommandContext(ctx, name, args...)
 	if req.WorkingDir != "" {
 		cmd.Dir = req.WorkingDir
 	}
 	if len(req.Env) > 0 {
-		cmd.Env = append(cmd.Environ(), req.Env...)
+		cmd.Env = append(os.Environ(), req.Env...)
 	}
 
 	var stdout, stderr bytes.Buffer
