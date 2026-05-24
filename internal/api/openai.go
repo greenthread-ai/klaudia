@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
@@ -106,14 +108,14 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
 
-	resp, err := p.http.Do(httpReq)
+	resp, err := p.doWithRetry(httpReq, body)
 	if err != nil {
 		return anthropic.BetaMessage{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		b, _ := readAll(resp.Body, 4096)
-		return anthropic.BetaMessage{}, fmt.Errorf("openai endpoint %d: %s", resp.StatusCode, b)
+		return anthropic.BetaMessage{}, &OpenAIError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(b)}
 	}
 
 	return p.consumeStream(resp.Body, string(params.Model), onText)
@@ -239,4 +241,63 @@ func readAll(r interface{ Read([]byte) (int, error) }, max int) (string, error) 
 	buf := make([]byte, max)
 	n, _ := r.Read(buf)
 	return string(buf[:n]), nil
+}
+
+// OpenAIError is a non-2xx response from the OpenAI-compatible endpoint. It
+// carries the status so FriendlyError can classify it like an Anthropic error.
+type OpenAIError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *OpenAIError) Error() string {
+	if e.Body != "" {
+		return fmt.Sprintf("openai endpoint %d: %s", e.StatusCode, e.Body)
+	}
+	return fmt.Sprintf("openai endpoint %d", e.StatusCode)
+}
+
+// doWithRetry issues the request, retrying transient failures (connection
+// errors and 429/5xx) with exponential backoff that honors Retry-After. The
+// request body is re-created from bodyBytes for each attempt. It mirrors the
+// Anthropic SDK's retry behavior for parity across providers.
+func (p *OpenAIProvider) doWithRetry(req *http.Request, bodyBytes []byte) (*http.Response, error) {
+	max := maxRetries()
+	var lastErr error
+	for attempt := 0; attempt <= max; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-req.Context().Done():
+				return nil, req.Context().Err()
+			case <-time.After(backoff(attempt)):
+			}
+		}
+		clone := req.Clone(req.Context())
+		clone.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		clone.ContentLength = int64(len(bodyBytes))
+
+		resp, err := p.http.Do(clone)
+		if err != nil {
+			lastErr = err
+			continue // connection error → retry
+		}
+		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+			if attempt < max {
+				resp.Body.Close()
+				lastErr = &OpenAIError{StatusCode: resp.StatusCode}
+				continue
+			}
+		}
+		return resp, nil
+	}
+	return nil, lastErr
+}
+
+// backoff returns an exponential delay for the given (1-based) attempt.
+func backoff(attempt int) time.Duration {
+	d := time.Duration(1<<uint(attempt-1)) * 500 * time.Millisecond
+	if d > 8*time.Second {
+		d = 8 * time.Second
+	}
+	return d
 }

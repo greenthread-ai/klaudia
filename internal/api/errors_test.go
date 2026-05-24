@@ -35,6 +35,27 @@ func TestFriendlyErrorUnwrapsThroughWrapper(t *testing.T) {
 	}
 }
 
+func TestFriendlyErrorOpenAI(t *testing.T) {
+	// The OpenAI-compatible provider's error must classify like Anthropic's.
+	msg := FriendlyError(&OpenAIError{StatusCode: 429, Body: "rate limited"})
+	if !strings.Contains(msg, "Rate limited (429)") {
+		t.Errorf("OpenAI 429 not classified: %q", msg)
+	}
+	if FriendlyError(&OpenAIError{StatusCode: 401}) == "" ||
+		!strings.Contains(FriendlyError(&OpenAIError{StatusCode: 401}), "Authentication failed") {
+		t.Error("OpenAI 401 not classified as auth failure")
+	}
+}
+
+func TestBackoffGrows(t *testing.T) {
+	if backoff(1) >= backoff(2) {
+		t.Error("backoff should grow with attempt")
+	}
+	if backoff(20) > 8*1e9 { // capped at 8s
+		t.Error("backoff should be capped")
+	}
+}
+
 func TestFriendlyErrorAuth(t *testing.T) {
 	for _, code := range []int{401, 403} {
 		msg := FriendlyError(&anthropic.Error{StatusCode: code})
