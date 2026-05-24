@@ -20,6 +20,7 @@ import (
 	"github.com/greenthread/klaudia/internal/streamjson"
 	"github.com/greenthread/klaudia/internal/subagent"
 	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread/klaudia/internal/tui"
 	"github.com/greenthread/klaudia/internal/version"
 )
 
@@ -122,11 +123,9 @@ func run(cmd *cobra.Command, opts *options) error {
 		return err
 	}
 
-	if !opts.print && opts.inputFormat != "stream-json" {
-		return fmt.Errorf("interactive (TUI) mode is not implemented yet; use -p \"<prompt>\" for headless mode, or --input-format stream-json to drive over stdin")
-	}
-
-	if format == FormatStreamJSON && !opts.verbose {
+	// Mode: stream-json input (embedding) | headless -p | interactive TUI.
+	interactive := !opts.print && opts.inputFormat != "stream-json"
+	if opts.print && format == FormatStreamJSON && !opts.verbose {
 		return fmt.Errorf("--output-format stream-json requires --verbose")
 	}
 
@@ -223,6 +222,25 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 
 	loop := agent.New(client, registry)
+
+	// Interactive TUI: the default when not headless and not stream-json input.
+	// It drives the same loop, prompting the user to resolve permission asks.
+	if interactive {
+		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
+			return loop.Run(ctx, agent.Options{
+				Prompt:          prompt,
+				Model:           model,
+				System:          defaultSystemPrompt,
+				MaxTurns:        opts.maxTurns,
+				Permission:      permCtx,
+				Approver:        ap,
+				InitialMessages: history,
+				Recorder:        recorder,
+				WebTools:        true,
+			}, emit)
+		}
+		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages)
+	}
 
 	// Stream-json input: drive a persistent agent over stdin/stdout (the
 	// embedding channel). Each user message is a turn; permission asks are
