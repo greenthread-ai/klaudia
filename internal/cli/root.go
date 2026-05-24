@@ -299,6 +299,25 @@ func run(cmd *cobra.Command, opts *options) error {
 	if memTool, merr := tools.NewMemory(memStore); merr == nil {
 		baseTools = append(baseTools, memTool)
 	}
+
+	// Deferred tool loading: MCP tools can be numerous, so withhold them from
+	// the initial request behind a ToolSearch tool that loads them on demand.
+	deferredTools := map[string]bool{}
+	for _, t := range baseTools {
+		if strings.HasPrefix(t.Name(), "mcp__") {
+			deferredTools[t.Name()] = true
+		}
+	}
+	if len(deferredTools) > 0 {
+		catalog := make([]tools.ToolInfo, 0, len(baseTools))
+		for _, t := range baseTools {
+			desc, _ := t.Description(ctx)
+			catalog = append(catalog, tools.ToolInfo{Name: t.Name(), Description: desc})
+		}
+		if ts, terr := tools.NewToolSearch(catalog); terr == nil {
+			baseTools = append(baseTools, ts)
+		}
+	}
 	base = tools.NewRegistry(baseTools...)
 
 	// Headless has no interactive approver, so permission "ask" denies.
@@ -347,6 +366,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				System:          sysPrompt,
 				MaxTurns:        opts.maxTurns,
 				Permission:      turnPerm,
+				DeferredTools:   deferredTools,
 				Approver:        ap,
 				Asker:           asker,
 				Planner:         planner,
@@ -371,6 +391,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				MaxTurns:        opts.maxTurns,
 				Permission:      permCtx,
 				Approver:        ap,
+				DeferredTools:   deferredTools,
 				InitialMessages: history,
 				Recorder:        recorder,
 				WebTools:        true,
@@ -395,6 +416,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		MaxTurns:        opts.maxTurns,
 		Permission:      permCtx,
 		Approver:        approver,
+		DeferredTools:   deferredTools,
 		InitialMessages: initialMessages,
 		Recorder:        runRecorder,
 		WebTools:        true,

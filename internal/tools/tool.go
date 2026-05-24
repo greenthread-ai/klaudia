@@ -65,6 +65,9 @@ type Context struct {
 	Ask Asker
 	// Plan, if non-nil, handles ExitPlanMode approval.
 	Plan Planner
+	// Reveal, if non-nil, marks deferred tools active for the rest of the run
+	// (used by ToolSearch to load tools on demand).
+	Reveal func(names ...string)
 }
 
 // Tool is the contract implemented by every local tool (Read, Write, Bash, …).

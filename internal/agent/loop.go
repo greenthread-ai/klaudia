@@ -69,6 +69,9 @@ type Options struct {
 	Asker tools.Asker
 	// Planner, if set, handles ExitPlanMode approval.
 	Planner tools.Planner
+	// DeferredTools names tools withheld from the initial request (loaded on
+	// demand once ToolSearch reveals them). Typically the MCP tools.
+	DeferredTools map[string]bool
 	// ContextWindow is the model's context size, used for autocompact
 	// thresholds. 0 uses the package default.
 	ContextWindow int
@@ -105,18 +108,12 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		maxTokens = defaultMaxTokens
 	}
 
-	toolParams, err := l.buildToolParams(ctx)
-	if err != nil {
-		return Result{}, err
-	}
-
-	// Server-side web tools are appended to the tool list and executed by the
-	// API; they require their own betas.
+	// Deferred tools are withheld from the request until ToolSearch reveals them.
 	betas := api.DefaultBetas
 	if opts.WebTools {
-		toolParams = append(toolParams, webToolParams()...)
 		betas = append(append([]string{}, betas...), api.WebToolBetas...)
 	}
+	revealed := map[string]bool{}
 
 	var system []anthropic.BetaTextBlockParam
 	if opts.System != "" {
@@ -138,6 +135,18 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// microcompact first (cheap, local), then autocompact (model-based) if
 		// near the context limit.
 		messages = l.compact(ctx, messages, opts, emit)
+
+		// Build the tool list for this turn: eager tools plus any deferred tools
+		// revealed so far (via ToolSearch). Rebuilt per turn so reveals take
+		// effect on the next request.
+		toolParams, terr := l.buildToolParams(ctx, opts.DeferredTools, revealed)
+		if terr != nil {
+			res.Messages = messages
+			return res, terr
+		}
+		if opts.WebTools {
+			toolParams = append(toolParams, webToolParams()...)
+		}
 
 		params := anthropic.BetaMessageNewParams{
 			Model:     opts.Model,
@@ -178,10 +187,16 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			return res, nil
 		}
 
-		// Dispatch tools and append their results.
+		// Dispatch tools and append their results. reveal lets ToolSearch mark
+		// deferred tools active for subsequent turns.
+		reveal := func(names ...string) {
+			for _, n := range names {
+				revealed[n] = true
+			}
+		}
 		resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
 		for _, tu := range toolUses {
-			block := l.dispatch(ctx, tu, opts, emit)
+			block := l.dispatch(ctx, tu, opts, emit, reveal)
 			resultBlocks = append(resultBlocks, block)
 		}
 		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
@@ -257,7 +272,7 @@ func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewPa
 
 // dispatch runs one tool_use: lookup → permission → validate → execute, and
 // returns the tool_result block to append to the conversation.
-func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter) anthropic.BetaContentBlockParamUnion {
+func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string)) anthropic.BetaContentBlockParamUnion {
 	raw, _ := json.Marshal(tu.Input)
 	if emit != nil {
 		emit(Event{Type: "tool_use", ToolName: tu.Name, ToolUseID: tu.ID, Input: tu.Input})
@@ -310,7 +325,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		return errResult(fmt.Sprintf("Input validation error: %v", err))
 	}
 
-	results, err := tool.Execute(ctx, tools.Context{Ask: opts.Asker, Plan: opts.Planner}, raw)
+	results, err := tool.Execute(ctx, tools.Context{Ask: opts.Asker, Plan: opts.Planner, Reveal: reveal}, raw)
 	if err != nil {
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))
 	}
@@ -366,11 +381,16 @@ func toolResultWithImages(toolUseID, text string, isErr bool, images []tools.Res
 	}
 }
 
-// buildToolParams converts the registry's tools into API tool params.
-func (l *Loop) buildToolParams(ctx context.Context) ([]anthropic.BetaToolUnionParam, error) {
+// buildToolParams converts the registry's tools into API tool params. Deferred
+// tools are omitted unless they've been revealed (ToolSearch); ToolSearch itself
+// is always included so the model can discover the deferred ones.
+func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[string]bool) ([]anthropic.BetaToolUnionParam, error) {
 	names := l.tools.Names()
 	out := make([]anthropic.BetaToolUnionParam, 0, len(names))
 	for _, name := range names {
+		if deferred[name] && !revealed[name] && name != "ToolSearch" {
+			continue
+		}
 		t, _ := l.tools.Lookup(name)
 		desc, err := t.Description(ctx)
 		if err != nil {
