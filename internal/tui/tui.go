@@ -25,6 +25,14 @@ import (
 // history and using the supplied approver/emitter.
 type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, emit agent.Emitter) (agent.Result, error)
 
+// Session is mutable state shared between the TUI and the RunFunc closure, so
+// slash commands like /model can change settings for subsequent turns. The
+// RunFunc should read these fields fresh on each call.
+type Session struct {
+	Model          string // model alias or full ID ("" = default)
+	PermissionMode string // for display
+}
+
 type uiState int
 
 const (
@@ -71,11 +79,16 @@ type Model struct {
 	history    []anthropic.BetaMessageParam
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
+	sess       *Session
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
-// history seeds the conversation when resuming a session (may be nil).
-func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam) *Model {
+// history seeds the conversation when resuming a session (may be nil). sess is
+// shared mutable settings (may be nil).
+func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam, sess *Session) *Model {
+	if sess == nil {
+		sess = &Session{}
+	}
 	in := textinput.New()
 	in.Placeholder = "Ask Klaudia… (Ctrl+C to quit)"
 	in.Focus()
@@ -92,6 +105,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam)
 		spin:    sp,
 		state:   stateIdle,
 		history: history,
+		sess:    sess,
 	}
 	m.transcript.WriteString(bannerStyle.Render("Klaudia — interactive mode. Type a prompt and press Enter.") + "\n")
 	return m
@@ -171,6 +185,12 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.input.Reset()
 		m.appendLine(userStyle.Render("› ") + prompt)
+
+		// Slash commands are handled locally, not sent to the model.
+		if strings.HasPrefix(prompt, "/") {
+			return m.handleSlash(prompt)
+		}
+
 		m.state = stateRunning
 		m.startTurn(prompt)
 		return m, tea.Batch(m.spin.Tick, m.waitForEvent())
@@ -179,6 +199,57 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	return m, cmd
+}
+
+// slashHelp lists the available slash commands.
+const slashHelp = `Available commands:
+  /help            Show this help
+  /model [name]    Show or set the model (alias: haiku|sonnet|opus, or full ID)
+  /status          Show the current session settings
+  /clear           Clear the screen and conversation history
+  /quit, /exit     Exit Klaudia`
+
+// handleSlash dispatches a slash command. Commands run locally and never reach
+// the model.
+func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
+	fields := strings.Fields(input)
+	cmd := fields[0]
+	args := fields[1:]
+
+	switch cmd {
+	case "/help", "/?":
+		m.appendLine(bannerStyle.Render(slashHelp))
+	case "/quit", "/exit":
+		return m, tea.Quit
+	case "/clear":
+		m.transcript.Reset()
+		m.history = nil
+		m.appendLine(bannerStyle.Render("Cleared conversation and screen."))
+	case "/model":
+		if len(args) == 0 {
+			cur := m.sess.Model
+			if cur == "" {
+				cur = "(default)"
+			}
+			m.appendLine(bannerStyle.Render("Model: " + cur))
+		} else {
+			m.sess.Model = args[0]
+			m.appendLine(bannerStyle.Render("Model set to " + args[0] + " (applies to the next turn)."))
+		}
+	case "/status":
+		mode := m.sess.PermissionMode
+		if mode == "" {
+			mode = "default"
+		}
+		model := m.sess.Model
+		if model == "" {
+			model = "(default)"
+		}
+		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  permission-mode=%s  messages=%d", model, mode, len(m.history))))
+	default:
+		m.appendLine(errStyle.Render("Unknown command " + cmd + ". Try /help."))
+	}
+	return m, nil
 }
 
 // answer resolves the pending permission ask.
@@ -242,7 +313,10 @@ func (m *Model) syncViewport() {
 	if !m.ready {
 		return
 	}
-	m.vp.SetContent(m.transcript.String())
+	// The viewport does not wrap; wrap the content to its width (lipgloss
+	// preserves ANSI styling across the wrap).
+	wrapped := lipgloss.NewStyle().Width(m.vp.Width).Render(m.transcript.String())
+	m.vp.SetContent(wrapped)
 	m.vp.GotoBottom()
 }
 
@@ -294,9 +368,10 @@ func (a *uiApprover) Approve(ctx context.Context, req agent.ApprovalRequest) per
 }
 
 // Run starts the interactive program and blocks until the user quits. history
-// seeds a resumed conversation (may be nil).
-func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam) error {
-	p := tea.NewProgram(New(ctx, run, history), tea.WithAltScreen())
+// seeds a resumed conversation (may be nil); sess holds mutable settings shared
+// with the RunFunc closure (may be nil).
+func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam, sess *Session) error {
+	p := tea.NewProgram(New(ctx, run, history, sess), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }

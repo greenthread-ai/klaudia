@@ -226,10 +226,12 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Interactive TUI: the default when not headless and not stream-json input.
 	// It drives the same loop, prompting the user to resolve permission asks.
 	if interactive {
+		// Shared settings so /model can change the model between turns.
+		sess := &tui.Session{Model: opts.model, PermissionMode: string(mode)}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,
-				Model:           model,
+				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
 				System:          defaultSystemPrompt,
 				MaxTurns:        opts.maxTurns,
 				Permission:      permCtx,
@@ -239,7 +241,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				WebTools:        true,
 			}, emit)
 		}
-		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages)
+		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages, sess)
 	}
 
 	// Stream-json input: drive a persistent agent over stdin/stdout (the
