@@ -73,6 +73,19 @@ func TestReadMissingFileIsErrorResult(t *testing.T) {
 	}
 }
 
+func TestReadDirectoryIsCleanError(t *testing.T) {
+	r := mustRead(t)
+	dir := t.TempDir()
+	raw, _ := json.Marshal(ReadInput{FilePath: dir})
+	res, err := r.Execute(context.Background(), Context{}, raw)
+	if err != nil {
+		t.Fatalf("Execute returned hard error: %v", err)
+	}
+	if !res[0].IsError || !strings.Contains(res[0].Content, "is a directory") {
+		t.Errorf("expected a clean 'is a directory' error, got %+v", res[0])
+	}
+}
+
 func TestRegistryLookup(t *testing.T) {
 	r := mustRead(t)
 	reg := NewRegistry(r)

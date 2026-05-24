@@ -85,6 +85,10 @@ func (r *Read) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Res
 		return nil, err
 	}
 
+	if info, statErr := os.Stat(in.FilePath); statErr == nil && info.IsDir() {
+		return []Result{{Content: fmt.Sprintf("Path is a directory, not a file: %s. Use Glob or `ls` via Bash to list its contents.", in.FilePath), IsError: true}}, nil
+	}
+
 	f, err := os.Open(in.FilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
