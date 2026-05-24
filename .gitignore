@@ -1,4 +1,11 @@
 .DS_Store
+
+# Local Klaudia config (may contain API keys)
+.klaudia/
+
+# Stray local build artifact (build with: go build -o /tmp/klaudia ./cmd/klaudia)
+/klaudia
+
+# Legacy JS artifacts (the JS reference lives on the js-reference branch)
 /node_modules
 /dist
-/vendor/klaudia-*

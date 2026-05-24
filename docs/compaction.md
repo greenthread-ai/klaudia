@@ -1,218 +1,61 @@
 # Context Compaction
 
-How Klaudia manages conversation length to stay within the model's context window.
+How Klaudia keeps a conversation within the model's context window.
+Implemented in `internal/compaction` and driven from `internal/agent/loop.go`.
 
----
+## Two stages, every turn
 
-## Overview
+At the top of each agent turn:
 
-Two-stage compaction runs at the top of every `agentLoop` turn:
+1. **Microcompact** — fast, local, no model call. Elides old tool results when
+   they dominate the context.
+2. **Autocompact** — model-based summarization, only when nearing the window
+   limit. Replaces the history with a summary.
 
+Both can be disabled by env var (matching the JS reference):
+
+```bash
+DISABLE_COMPACT=1        # disable both stages
+DISABLE_MICROCOMPACT=1   # disable only microcompact
+DISABLE_AUTO_COMPACT=1   # disable only autocompact
 ```
-agentLoop turn N:
-├── 1. microcompact(messages)   — fast, local, no model call
-├── 2. autocompact(messages)    — model-based summarization (if token threshold hit)
-└── 3. callModel(messages)      — proceed with (possibly compacted) messages
-```
 
-Both are injected via dependency injection (`$3q()` in `06-app-ui.js:37696`),
-making them mockable for testing.
+Token counts are estimates (~4 chars/token for text, a flat per-item estimate
+for images/documents) — close enough to drive the thresholds without a real
+tokenizer. See `EstimateTokens` in `internal/compaction`.
 
----
+## Microcompact
 
-## Stage 1: Microcompact (`microcompact`)
-
-**File:** `05-app-core.js:113773`
-
-Fast, client-side content removal. **Does not call the model.**
-
-### What it does
-
-1. Finds tool results older than the last 3 (`KEEP_LAST_N_RESULTS = 3`)
-2. If total tool result tokens exceed 40K (`TOOL_RESULT_TOKEN_THRESHOLD`), removes old results
-3. Replaces images/documents with `[image]` / `[document]` placeholders
-4. Only acts if savings >= 20K tokens (`MIN_TOKENS_TO_SAVE`)
-
-### Constants
+Drops the content of tool results older than the most recent few when they
+dominate the context, replacing each with a short placeholder. It only acts when
+the saving is worthwhile, so it's cheap and rarely disruptive.
 
 | Constant | Value | Purpose |
-|----------|-------|---------|
-| `KEEP_LAST_N_RESULTS` | 3 | Keep last N tool results untouched |
-| `TOOL_RESULT_TOKEN_THRESHOLD` | 40000 | Tool result token threshold |
-| `MIN_TOKENS_TO_SAVE` | 20000 | Minimum tokens to save before acting |
-| `ESTIMATED_TOKENS_PER_IMAGE` | 2000 | Estimated tokens per image/document |
+| --- | --- | --- |
+| `KeepLastNResults` | 3 | Recent tool results left untouched |
+| `ToolResultTokenThreshold` | 40000 | Act only when tool-result tokens exceed this |
+| `MinTokensToSave` | 20000 | Minimum saving before eliding |
+| `EstimatedTokensPerImage` | 2000 | Flat estimate per image/document |
 
-### Output
+## Autocompact
 
-Returns `{ messages, compactionInfo }`. If compaction occurred, `compactionInfo`
-contains a `microcompact_boundary` system message that gets yielded into the
-conversation.
-
-### Disable
-
-```bash
-DISABLE_MICROCOMPACT=1 node dist/cli.js ...
-```
-
----
-
-## Stage 2: Autocompact (`autocompactFn`)
-
-**File:** `05-app-core.js:117432`
-
-Model-based conversation summarization. **Calls the model** to generate a
-summary of the full conversation, then replaces messages with the summary.
-
-### When it triggers
-
-Checked every turn via `shouldAutocompact()` (`05-app-core.js:117422`):
+When the estimated token count exceeds the compaction threshold, Klaudia asks
+the model to summarize the conversation and replaces the history with that
+summary. Thresholds (`ComputeThresholds`):
 
 ```
-Token count > compactThreshold?
-  compactThreshold = contextWindow - reserveTokens - 13000
-  reserveTokens = min(modelReserve, 20000)
+reserve          = min(20000, contextWindow)         // halved for tiny windows
+effectiveWindow  = contextWindow - reserve
+compactThreshold = effectiveWindow - 13000           // autocompact triggers above this
+blockingLimit    = effectiveWindow - 3000            // hard ceiling
 ```
 
-Roughly triggers at **~80% of context window utilization**.
+`DefaultContextWindow` (200000) is assumed when the model's window is unknown.
 
-### Token budget calculation (`calculateTokenThresholds`)
+### Divergence: persisted summaries
 
-**File:** `05-app-core.js:117395`
-
-```
-effectiveWindow  = contextWindow - reserve (max 20K)
-compactThreshold = effectiveWindow - 13000      ← autocompact triggers here
-warningThreshold = effectiveWindow - 20000      ← UI warning shown
-errorThreshold   = effectiveWindow - 20000      ← UI error shown
-blockingLimit    = effectiveWindow - 3000       ← hard stop
-```
-
-### Constants
-
-| Constant | Value | Purpose |
-|----------|-------|---------|
-| `MAX_RESERVED_TOKENS` | 20000 | Max reserved tokens |
-| `COMPACT_BUFFER_TOKENS` | 13000 | Buffer before compact threshold |
-| `WARNING_THRESHOLD_OFFSET` | 20000 | Warning threshold offset |
-| `ERROR_THRESHOLD_OFFSET` | 20000 | Error threshold offset |
-| `BLOCKING_LIMIT_OFFSET` | 3000 | Blocking limit offset |
-
-### How it compresses
-
-Core implementation in `compactConversation()` (`05-app-core.js:115995`):
-
-1. Run pre-compact hooks (`CP1()`)
-2. Build a summarization request with compaction instructions
-3. Call the model (`TD4()`) to generate a summary
-4. Replace entire conversation history with:
-   - **Boundary marker** — system message with `compact_boundary` subtype
-   - **Summary** — assistant message(s) from the model (flagged `isCompactSummary: true`)
-   - **Preserved attachments** — file attachments carried forward
-   - **Hook results** — from pre-compact hooks
-5. Clear all caches (`le()`, `se()`)
-
-### Compaction result structure
-
-```javascript
-{
-  boundaryMarker,           // System message with metadata
-  summaryMessages,          // Assistant message(s) containing summary
-  attachments,              // Preserved file attachments
-  hookResults,              // Pre-compact hook results
-  messagesToKeep,           // For partial compaction
-  preCompactTokenCount,     // Tokens before
-  postCompactTokenCount,    // Tokens after
-  compactionUsage: {        // API usage for the summary call
-    input_tokens,
-    output_tokens,
-    cache_read_input_tokens,
-    cache_creation_input_tokens,
-  },
-}
-```
-
-### Cache interaction
-
-- Autocompact **invalidates all prompt caches** — the message content changes
-  completely, breaking cache chains
-- The compaction call itself can use prompt caching (`tengu_compact_cache_prefix`
-  feature flag) for the summarization request
-- After compaction: `le()` clears microcompact tracking, `se()` clears
-  comprehensive caches including model context state
-
-### Disable
-
-```bash
-DISABLE_COMPACT=1 node dist/cli.js ...        # Disable all compaction
-DISABLE_AUTO_COMPACT=1 node dist/cli.js ...   # Disable only autocompact
-```
-
-### Override threshold
-
-```bash
-CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=90 node dist/cli.js ...  # Trigger at 90% instead of ~80%
-```
-
----
-
-## Integration in `agentLoop`
-
-**File:** `06-app-ui.js:37808-37862`
-
-```javascript
-// Step 1: Microcompact
-let h = await H.microcompact(messages, toolUseContext, querySource);
-messages = h.messages;
-if (h.compactionInfo?.boundaryMessage) yield h.compactionInfo.boundaryMessage;
-
-// Step 2: Autocompact
-let { compactionResult } = await H.autocompact(
-  messages, toolUseContext,
-  { systemPrompt, userContext, systemContext, toolUseContext, forkContextMessages },
-  querySource,
-);
-
-if (compactionResult) {
-  // Log metrics (pre/post token counts, cache stats)
-  let expanded = re(compactionResult);  // Expand to message array
-  for (let msg of expanded) yield msg;  // Yield each message
-  messages = expanded;                  // Replace messages
-}
-
-// Step 3: Proceed with (possibly compacted) messages
-for await (let event of callModel({ messages, ... })) { ... }
-```
-
----
-
-## Key functions
-
-| Name | Purpose | File | Line |
-|------|---------|------|------|
-| `microcompact` | Microcompact (was `Lg`) | 05-app-core.js | 113773 |
-| `autocompactFn` | Autocompact (was `JX4`) | 05-app-core.js | 117432 |
-| `shouldAutocompact` | Should autocompact trigger? (was `x5Y`) | 05-app-core.js | 117422 |
-| `calculateTokenThresholds` | Token threshold calculator (was `tc`) | 05-app-core.js | 117395 |
-| `effectiveContextWindow` | Effective context window (was `I96`) | 05-app-core.js | 117378 |
-| `compactThreshold` | Compact threshold (was `PQ6`) | 05-app-core.js | 117382 |
-| `compactConversation` | Core autocompact, calls model (was `SG6`) | 05-app-core.js | 115995 |
-| `partialCompact` | Partial/selective compaction (was `ZD4`) | 05-app-core.js | 116130 |
-| `sessionMemoryCompact` | Session memory compaction (was `uP1`) | 05-app-core.js | 116980 |
-| `re` | Expand compaction result | 05-app-core.js | 115986 |
-| `processMicrocompactBoundaries` | Process microcompact boundaries (was `cv8`) | 05-app-core.js | 113727 |
-| `countMessageTokens` | Count tokens in messages (was `ak`) | 05-app-core.js | 115045 |
-| `le` | Clear microcompact caches | 05-app-core.js | 113717 |
-| `se` | Clear all compaction caches | 05-app-core.js | 117365 |
-
----
-
-## Remaining rename candidates
-
-These short identifiers are reused across many scopes in the esbuild output,
-making bulk rename unsafe. Manual per-line edits would be needed.
-
-| Current | Suggested | Occurrences | Status |
-|---------|-----------|-------------|--------|
-| `re` | `expandCompactionResult` | 5 (but 100+ `re` identifiers in other scopes) | Deferred |
-| `le` | `clearMicrocompactCaches` | 4 (but 26+ `le` identifiers in other scopes) | Deferred |
-| `se` | `clearCompactionCaches` | 6 (but 24+ `se` identifiers in other scopes) | Deferred |
+Beyond the JS scheme, each autocompact summary is offered to the CLI via
+`agent.Options.OnSummary` and written to `.klaudia/sessions/<id>.summary.md`. On
+`--resume`, Klaudia seeds the conversation from that summary instead of replaying
+the whole transcript (token-saving); `--full` forces a full replay. See
+`internal/session/summary.go`.
