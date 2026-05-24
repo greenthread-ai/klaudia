@@ -16,6 +16,7 @@ import (
 	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/mcp"
 	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread/klaudia/internal/prompt"
 	"github.com/greenthread/klaudia/internal/session"
 	"github.com/greenthread/klaudia/internal/streamjson"
 	"github.com/greenthread/klaudia/internal/subagent"
@@ -51,10 +52,6 @@ func gitBranch(dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// defaultSystemPrompt is the minimal Klaudia/Claude Code identity prompt sent
-// when no override is given. The Claude Code identity is required on the OAuth
-// auth path. The full system-prompt assembly lands in a later phase.
-const defaultSystemPrompt = "You are an interactive agent that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user."
 
 // options holds parsed CLI flags, mirroring the JS commander surface
 // (08-entry.js setupCommander). Only the Phase 0 subset is wired so far.
@@ -177,6 +174,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	model := api.ResolveModel(opts.model)
 	permCtx := permission.Context{Mode: mode}
+	// Assemble the full system prompt (base instructions + env context +
+	// CLAUDE.md) once for this run.
+	sysPrompt := prompt.System(cwd, string(model))
 
 	// Build the tool registry. Sub-agents draw from the base tools (incl. any
 	// MCP tools); the top-level registry adds the Agent tool.
@@ -232,7 +232,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,
 				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
-				System:          defaultSystemPrompt,
+				System:          sysPrompt,
 				MaxTurns:        opts.maxTurns,
 				Permission:      permCtx,
 				Approver:        ap,
@@ -253,7 +253,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,
 				Model:           model,
-				System:          defaultSystemPrompt,
+				System:          sysPrompt,
 				MaxTurns:        opts.maxTurns,
 				Permission:      permCtx,
 				Approver:        ap,
@@ -270,7 +270,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	res, err := loop.Run(ctx, agent.Options{
 		Prompt:          opts.prompt,
 		Model:           model,
-		System:          defaultSystemPrompt,
+		System:          sysPrompt,
 		MaxTurns:        opts.maxTurns,
 		Permission:      permCtx,
 		Approver:        approver,
