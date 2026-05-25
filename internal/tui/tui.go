@@ -336,30 +336,20 @@ func (m *Model) inputHeight() int {
 	return h
 }
 
+// syncInputHeight (re)sizes the viewport to exactly fill the space above the
+// bottom area, measured from the rendered bottom block so the reservation can
+// never drift from what View actually draws. (View = viewport + "\n" + bottom,
+// so viewportHeight = terminalHeight - bottomHeight.)
 func (m *Model) syncInputHeight() {
 	if !m.ready {
 		return
 	}
-	inputH := m.inputHeight() + 2 // +1 separator, +1 persistent status bar
-	switch m.state {
-	case stateRunning:
-		inputH++ // the "working…" line above the input
-		if m.queued != "" {
-			inputH++ // the queued-message hint
-		}
-	case stateIdle:
-		if sug := m.slashSuggestionLine(); sug != "" {
-			inputH += strings.Count(sug, "\n") + 1
-		}
-	}
-	if inputH > m.height-1 {
-		inputH = m.height - 1
-	}
-	if inputH < 1 {
-		inputH = 1
-	}
-	m.vp.Height = m.height - inputH
 	m.input.SetHeight(m.inputHeight())
+	h := m.height - lipgloss.Height(m.bottomView())
+	if h < 1 {
+		h = 1
+	}
+	m.vp.Height = h
 	m.syncViewport()
 }
 
@@ -1760,6 +1750,13 @@ func (m *Model) View() string {
 	if !m.ready {
 		return "initializing…"
 	}
+	return m.vp.View() + "\n" + m.bottomView()
+}
+
+// bottomView renders everything below the scrollback: the state-specific prompt
+// or input area, then the persistent status bar. Its measured height is what
+// relayout reserves, so the two can never drift.
+func (m *Model) bottomView() string {
 	var bottom string
 	switch m.state {
 	case stateRunning:
@@ -1786,8 +1783,8 @@ func (m *Model) View() string {
 			bottom += "\n" + sug
 		}
 	}
-	// Persistent status bar (#4) at the very bottom, in every state.
-	return m.vp.View() + "\n" + bottom + "\n" + m.statusLine()
+	// Persistent status bar at the very bottom, in every state.
+	return bottom + "\n" + m.statusLine()
 }
 
 // uiApprover implements agent.Approver by asking the UI and blocking for the
@@ -1848,6 +1845,11 @@ func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	p := tea.NewProgram(
 		New(ctx, run, history, sess),
 		tea.WithAltScreen(),
+		// Capture the mouse so the wheel scrolls the viewport. Without this the
+		// terminal's alternate-scroll mode turns the wheel into ↑/↓ arrow keys,
+		// which would hijack input history / queued-message editing instead of
+		// scrolling. (Shift+drag still selects text in most terminals.)
+		tea.WithMouseCellMotion(),
 	)
 	_, err := p.Run()
 	return err
