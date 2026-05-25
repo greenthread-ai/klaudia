@@ -46,6 +46,9 @@ type Config struct {
 // Permissions persists allow/deny rule strings (e.g. "Bash(git status:*)",
 // "Edit") loaded into the permission context at startup.
 type Permissions struct {
+	// Mode is the default permission mode when no --permission-mode flag is
+	// given: default | acceptEdits | bypassPermissions | plan | dontAsk.
+	Mode  string   `toml:"mode,omitempty"`
 	Allow []string `toml:"allow,omitempty"`
 	Deny  []string `toml:"deny,omitempty"`
 }
@@ -267,6 +270,10 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Browser.SearchEngine != "" {
 		dst.Browser.SearchEngine = src.Browser.SearchEngine
+	}
+	// Permission default mode: project overrides home.
+	if src.Permissions.Mode != "" {
+		dst.Permissions.Mode = src.Permissions.Mode
 	}
 	// Permission rules accumulate (home rules + project rules).
 	dst.Permissions.Allow = append(dst.Permissions.Allow, src.Permissions.Allow...)

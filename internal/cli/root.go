@@ -399,6 +399,7 @@ apiKeyEnv = "MY_API_KEY"
 # headless = true
 #
 # [permissions]
+# mode = "default" # default(ask) | acceptEdits | plan | dontAsk | bypassPermissions
 # allow = ["Bash(go test:*)"]
 # deny = ["Bash(rm:*)"]
 `
@@ -483,7 +484,7 @@ func NewRootCommand() *cobra.Command {
 	f.StringVar(&opts.model, "model", "", "Model alias (haiku|sonnet|opus) or full model ID")
 	f.StringVar(&opts.outputFormat, "output-format", "text", "Output format: text|json|stream-json")
 	f.StringVar(&opts.inputFormat, "input-format", "text", "Input format: text|stream-json (stream-json drives a persistent agent over stdin)")
-	f.StringVar(&opts.permissionMode, "permission-mode", "default", "Permission mode: default|acceptEdits|bypassPermissions|plan|dontAsk")
+	f.StringVar(&opts.permissionMode, "permission-mode", "", "Permission mode: default|acceptEdits|bypassPermissions|plan|dontAsk (default: config [permissions] mode, else \"default\")")
 	f.BoolVar(&opts.dangerouslySkip, "dangerously-skip-permissions", false, "Skip all permission checks (sets bypassPermissions)")
 	f.BoolVar(&opts.verbose, "verbose", false, "Verbose output (required for stream-json)")
 	f.IntVar(&opts.maxTurns, "max-turns", 0, "Limit the number of agentic loop turns (0 = unlimited)")
@@ -575,13 +576,21 @@ func run(cmd *cobra.Command, opts *options) error {
 		return err
 	}
 
-	// Resolve the permission mode (--dangerously-skip-permissions wins).
-	mode := permission.Mode(opts.permissionMode)
+	// Resolve the permission mode: --permission-mode flag wins, else the config
+	// default ([permissions] mode), else "default". --dangerously-skip wins over all.
+	modeStr := opts.permissionMode
+	if modeStr == "" {
+		modeStr = cfg.Permissions.Mode
+	}
+	if modeStr == "" {
+		modeStr = string(permission.ModeDefault)
+	}
+	mode := permission.Mode(modeStr)
+	if !mode.Valid() {
+		return fmt.Errorf("invalid permission mode %q (default|acceptEdits|bypassPermissions|plan|dontAsk)", modeStr)
+	}
 	if opts.dangerouslySkip {
 		mode = permission.ModeBypassPermissions
-	}
-	if !mode.Valid() {
-		return fmt.Errorf("invalid permission mode %q", opts.permissionMode)
 	}
 	// --model overrides the config/provider default.
 	modelStr := opts.model

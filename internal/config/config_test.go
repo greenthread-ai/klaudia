@@ -60,6 +60,23 @@ func TestLoadThemeProjectOverridesHome(t *testing.T) {
 	}
 }
 
+func TestLoadPermissionModeOverridesHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "[permissions]\nmode = \"acceptEdits\"\n")
+
+	// Global-only → inherited.
+	if cfg := Load(t.TempDir()); cfg.Permissions.Mode != "acceptEdits" {
+		t.Errorf("mode = %q, want acceptEdits (from home)", cfg.Permissions.Mode)
+	}
+	// Project overrides global.
+	cwd := t.TempDir()
+	writeConfig(t, cwd, "[permissions]\nmode = \"plan\"\n")
+	if cfg := Load(cwd); cfg.Permissions.Mode != "plan" {
+		t.Errorf("mode = %q, want plan (project wins)", cfg.Permissions.Mode)
+	}
+}
+
 func TestLoadBrowserProjectOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
