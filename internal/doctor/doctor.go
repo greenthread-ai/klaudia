@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
 )
 
 // Status values for a Check.
@@ -26,13 +27,14 @@ type Check struct {
 // Input carries facts the CLI already resolved, so doctor stays pure and
 // testable. doctor adds OS/binary detection itself.
 type Input struct {
-	Provider    string // resolved provider ("anthropic" | "openai" | …)
-	Model       string // resolved model id
-	SandboxMode string // configured sandbox mode ("local" | "os" | "container")
-	ConfigFound bool   // a .klaudia/config.toml was loaded
-	AuthOK      bool   // a usable credential resolved
-	AuthKind    string // "oauth" | "api-key" | "none"
-	MCPServers  int    // configured MCP server count
+	Provider    string   // resolved provider ("anthropic" | "openai" | …)
+	Model       string   // resolved model id
+	SandboxMode string   // configured sandbox mode ("local" | "os" | "container")
+	ConfigFound bool     // a .klaudia/config.toml was loaded
+	AuthOK      bool     // a usable credential resolved
+	AuthKind    string   // "oauth" | "api-key" | "none"
+	MCPServers  int      // configured MCP server count
+	LSPServers  []string // detected language servers, e.g. "go (gopls)"
 }
 
 // lookPath is indirected for testing.
@@ -92,6 +94,13 @@ func Run(in Input) []Check {
 		add("mcp", StatusOK, fmt.Sprintf("%d server(s) configured", in.MCPServers))
 	} else {
 		add("mcp", StatusInfo, "no MCP servers configured")
+	}
+
+	// LSP code-intel servers (detected, not downloaded).
+	if len(in.LSPServers) > 0 {
+		add("lsp", StatusOK, strings.Join(in.LSPServers, ", "))
+	} else {
+		add("lsp", StatusInfo, "no language servers detected (install gopls, rust-analyzer, …)")
 	}
 
 	return checks

@@ -20,6 +20,7 @@ import (
 	"github.com/greenthread/klaudia/internal/browser"
 	"github.com/greenthread/klaudia/internal/config"
 	"github.com/greenthread/klaudia/internal/doctor"
+	"github.com/greenthread/klaudia/internal/lsp"
 	"github.com/greenthread/klaudia/internal/mcp"
 	"github.com/greenthread/klaudia/internal/memory"
 	"github.com/greenthread/klaudia/internal/permission"
@@ -95,6 +96,7 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 		SandboxMode: sandboxMode(cfg.Sandbox),
 		ConfigFound: configFileExists(cwd),
 		MCPServers:  mcpServers,
+		LSPServers:  detectedLSPServers(),
 		AuthKind:    "none",
 	}
 	if cfg.Provider == config.ProviderOpenAI {
@@ -110,6 +112,16 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 		}
 	}
 	return in
+}
+
+// detectedLSPServers lists the installed language servers for /doctor, as
+// "language (binary)" entries.
+func detectedLSPServers() []string {
+	var out []string
+	for _, s := range lsp.DetectAll() {
+		out = append(out, fmt.Sprintf("%s (%s)", s.Language, s.Bin))
+	}
+	return out
 }
 
 // configFileExists reports whether a home or project .klaudia/config.toml exists.
@@ -603,9 +615,15 @@ func run(cmd *cobra.Command, opts *options) error {
 	// the run context; KillAll terminates any still running at session end.
 	shellStore := tools.NewShellStore(ctx)
 	defer shellStore.KillAll()
+	// Lazy language-server pool for code-intel tools (Diagnostics/Definition/
+	// References). Servers are detected on PATH + toolchain dirs, spawned on
+	// first use, and shut down at session end. Not downloaded.
+	lspPool := lsp.NewPool(ctx, cwd, cfg.LSP.Disabled, nil)
+	defer lspPool.Close()
 	base, err := tools.DefaultRegistry(executor,
 		tools.WithBrowserEngine(browserEngine),
 		tools.WithShellStore(shellStore),
+		tools.WithLSP(lspPool),
 	)
 	if err != nil {
 		return err

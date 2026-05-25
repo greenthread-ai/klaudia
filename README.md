@@ -231,6 +231,29 @@ overrides). A server is **stdio** (`command` + `args`) or **HTTP** (`url`, with
 Their tools appear as `mcp__<server>__<tool>`, auto-deferred behind `ToolSearch`.
 In the TUI, `/mcp` lists servers and reconnects/disconnects them.
 
+## Code intelligence (LSP)
+
+Klaudia talks to **language servers you already have installed** to give the
+agent real code intelligence:
+
+- `Diagnostics` — compiler/linter errors for a file (the edit → check → fix
+  loop).
+- `Definition` / `References` — jump to a symbol's definition or find its uses.
+
+Servers are **detected, never downloaded** — looked up on `$PATH` *and* in the
+usual toolchain locations (so `gopls` in `~/go/bin`, `rust-analyzer` in
+`~/.cargo/bin`, global-npm bins, etc. are found even when not on `PATH`).
+Recognised today: `gopls` (Go), `rust-analyzer` (Rust),
+`typescript-language-server` (TS/JS), `pyright-langserver` (Python), `clangd`
+(C/C++). They're launched lazily on first use and shut down at session end.
+
+`/doctor` lists which servers it found. Turn one off with:
+
+```toml
+[lsp]
+disabled = ["python"]
+```
+
 ## Skills
 
 Drop Markdown files with YAML frontmatter in `~/.claude/skills` or
@@ -260,6 +283,7 @@ Review the staged changes carefully. $ARGUMENTS
 | `api` | provider abstraction (Anthropic client + OpenAI-compatible shim) |
 | `tools` | local tool implementations |
 | `browser` | lazy headless-Chrome engine + web search |
+| `lsp` | language-server client for code intelligence (Diagnostics/Definition/References) |
 | `permission` | the 5-mode permission system + allow/deny rules |
 | `session` | JSONL transcripts, resume, persisted summaries |
 | `compaction` | micro + auto context compaction |

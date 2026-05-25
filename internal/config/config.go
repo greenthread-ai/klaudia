@@ -37,6 +37,8 @@ type Config struct {
 	Sandbox Sandbox `toml:"sandbox,omitempty"`
 	// Browser configures local browser-backed tools (WebSearch/WebFetch and browser tools).
 	Browser Browser `toml:"browser,omitempty"`
+	// LSP configures language-server code-intelligence tools.
+	LSP LSP `toml:"lsp,omitempty"`
 	// Permissions holds persisted allow/deny rules for this project.
 	Permissions Permissions `toml:"permissions,omitempty"`
 }
@@ -95,6 +97,13 @@ type Browser struct {
 	HeadedFallback *bool `toml:"headedFallback,omitempty"`
 	// SearchEngine selects the default WebSearch engine: "ddg" or "google".
 	SearchEngine string `toml:"searchEngine,omitempty"`
+}
+
+// LSP configures the language-server code-intelligence tools.
+type LSP struct {
+	// Disabled lists languages to skip even if a server is installed
+	// (e.g. ["python", "typescript"]).
+	Disabled []string `toml:"disabled,omitempty"`
 }
 
 // MountCWDOr returns MountCWD or the default when unset.
@@ -262,6 +271,8 @@ func merge(dst *Config, src Config) {
 	// Permission rules accumulate (home rules + project rules).
 	dst.Permissions.Allow = append(dst.Permissions.Allow, src.Permissions.Allow...)
 	dst.Permissions.Deny = append(dst.Permissions.Deny, src.Permissions.Deny...)
+	// Disabled LSP languages accumulate (union of home + project).
+	dst.LSP.Disabled = append(dst.LSP.Disabled, src.LSP.Disabled...)
 }
 
 // ResolveAPIKey returns the inline key, or the value of the named env var.

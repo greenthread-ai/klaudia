@@ -36,6 +36,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Grep | 05-app-core | `tools/grep.go` + `native/search` | ✅ done | ripgrep-style; pure-Go backend. |
 | Bash | 05-app-core | `tools/bash.go` + `sandbox/` | ✅ done | local / os-confined / container executors. |
 | Bash run_in_background + BashOutput / KillShell | 05-app-core | `tools/bash.go`, `tools/shells.go` + `sandbox` | ✅ done | Bash `run_in_background` returns a shell id; BashOutput reads new output incrementally (optional regex filter); KillShell stops it. Session-scoped store; all shells killed at session end. Works across all executors via `Executor.Argv`. |
+| Code intelligence (LSP) | — | `lsp/` + `tools/lsp_tools.go` | 🔀 divergent | New capability with no JS analogue: Diagnostics/Definition/References via language servers detected on PATH + toolchain dirs (gopls/rust-analyzer/tsserver/pyright/clangd). Lazy-spawned, session-scoped, never downloaded. |
 | TodoWrite | 05-app-core | `tools/todowrite.go` | ✅ done | |
 | Task tools (Create/List/Get/Update) | 07-app-features | `tools/task*.go` + `tasks/` | ✅ done | |
 | NotebookEdit | 05-app-core | `tools/notebookedit.go` | ✅ done | |

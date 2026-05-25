@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/greenthread/klaudia/internal/browser"
+	"github.com/greenthread/klaudia/internal/lsp"
 	"github.com/greenthread/klaudia/internal/sandbox"
 	"github.com/greenthread/klaudia/internal/tasks"
 )
@@ -14,6 +15,7 @@ import (
 type regOptions struct {
 	browser *browser.Engine
 	shells  *ShellStore
+	lsp     *lsp.Pool
 }
 
 // RegOption configures DefaultRegistry.
@@ -26,6 +28,11 @@ func WithBrowserEngine(e *browser.Engine) RegOption { return func(o *regOptions)
 // WithShellStore supplies the background-shell store backing run_in_background +
 // BashOutput/KillShell. The caller KillAll()s it at session end.
 func WithShellStore(s *ShellStore) RegOption { return func(o *regOptions) { o.shells = s } }
+
+// WithLSP supplies the language-server pool backing Diagnostics/Definition/
+// References. The caller Close()s it at session end. When omitted, the LSP tools
+// are not registered.
+func WithLSP(p *lsp.Pool) RegOption { return func(o *regOptions) { o.lsp = p } }
 
 // DefaultRegistry builds the registry of all implemented local tools, with the
 // Bash tool wired to the given executor (local host, or a container sandbox).
@@ -82,6 +89,16 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 		{"WebFetch", func() (Tool, error) { return NewWebFetch(engine) }},
 		{"BrowserNavigate", func() (Tool, error) { return NewBrowserNavigate(engine) }},
 		{"BrowserSnapshot", func() (Tool, error) { return NewBrowserSnapshot(engine) }},
+	}
+	// LSP code-intel tools are registered only when a language-server pool is
+	// supplied (i.e. the interactive/headless CLI, not bare tests).
+	if cfg.lsp != nil {
+		pool := cfg.lsp
+		ctors = append(ctors,
+			ctor{"Diagnostics", func() (Tool, error) { return NewDiagnostics(pool) }},
+			ctor{"Definition", func() (Tool, error) { return NewDefinition(pool) }},
+			ctor{"References", func() (Tool, error) { return NewReferences(pool) }},
+		)
 	}
 
 	ts := make([]Tool, 0, len(ctors))
