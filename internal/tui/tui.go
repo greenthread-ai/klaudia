@@ -181,9 +181,9 @@ func applyChromeTheme(p themePalette) {
 
 // intro is the welcoming banner shown at startup. The model name/branch/session
 // id are filled in by the caller.
-func intro(model, branch, sessionID string) string {
+func intro(model, branch, sessionID, tagline string) string {
 	logo := logoStyle.Render("✦ Klaudia")
-	tag := bannerStyle.Render(" your preferred coding agent")
+	tag := bannerStyle.Render(" " + tagline)
 	var meta string
 	if model != "" {
 		meta = "\n" + bannerStyle.Render("  model: "+model)
@@ -251,8 +251,9 @@ type Model struct {
 	glam      *glamour.TermRenderer
 	glamWidth int
 	// Intro banner inputs, so it can be regenerated (recoloured) on theme change.
-	introModel, introBranch, introSession string
-	hasIntro                              bool
+	// introTagline is chosen once so it stays stable across regenerations.
+	introModel, introBranch, introSession, introTagline string
+	hasIntro                                            bool
 }
 
 type transcriptBlock struct {
@@ -289,8 +290,9 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	if sess != nil {
 		model, branch, sessionID = sess.displayModel(), sess.GitBranch, sess.SessionID
 	}
-	m.introModel, m.introBranch, m.introSession, m.hasIntro = model, branch, sessionID, true
-	introText := intro(model, branch, sessionID)
+	m.introModel, m.introBranch, m.introSession = model, branch, sessionID
+	m.introTagline, m.hasIntro = randomTagline(), true
+	introText := intro(model, branch, sessionID, m.introTagline)
 	m.transcript.WriteString(introText)
 	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: introText})
 	return m
@@ -1625,7 +1627,7 @@ func (m *Model) rerenderTranscript() {
 	}
 	// Regenerate the intro banner so it picks up the new theme's chrome colours.
 	if m.hasIntro && len(m.rawBlocks) > 0 {
-		m.rawBlocks[0].text = intro(m.introModel, m.introBranch, m.introSession)
+		m.rawBlocks[0].text = intro(m.introModel, m.introBranch, m.introSession, m.introTagline)
 	}
 	m.transcript.Reset()
 	for _, block := range m.rawBlocks {
