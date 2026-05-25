@@ -39,6 +39,38 @@ func TestRunNoAuthWarns(t *testing.T) {
 	}
 }
 
+func TestRunLSPDetection(t *testing.T) {
+	input := Input{
+		LSPServers: []LSPServer{
+			{Name: "gopls", Language: "go", Version: "v0.15.2"},
+			{Name: "pyright", Language: "python", Version: "v1.1.773"},
+		},
+		MissingLSPHints: []string{"install gopls for Go support"},
+	}
+
+	checks := Run(input)
+
+	// Check for individual LSP entries
+	if c, ok := find(checks, "lsp:go"); !ok || c.Detail != "gopls (v0.15.2)" {
+		t.Errorf("lsp:go = %+v (expected gopls (v0.15.2))", c)
+	}
+	if c, ok := find(checks, "lsp:python"); !ok || c.Detail != "pyright (v1.1.773)" {
+		t.Errorf("lsp:python = %+v (expected pyright (v1.1.773))", c)
+	}
+
+	// Check for missing LSP hints
+	if c, ok := find(checks, "lsp"); !ok || c.Status != StatusWarn || !strings.Contains(c.Detail, "install gopls") {
+		t.Errorf("lsp hint = %+v (expected warn with hint)", c)
+	}
+}
+
+func TestRunNoLSPs(t *testing.T) {
+	checks := Run(Input{})
+	if c, ok := find(checks, "lsp"); !ok || c.Status != StatusInfo {
+		t.Errorf("lsp without servers should be info, got %+v", c)
+	}
+}
+
 func TestSandboxOSMissingBinaryWarns(t *testing.T) {
 	orig := lookPath
 	defer func() { lookPath = orig }()

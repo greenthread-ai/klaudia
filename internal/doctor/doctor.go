@@ -27,14 +27,24 @@ type Check struct {
 // Input carries facts the CLI already resolved, so doctor stays pure and
 // testable. doctor adds OS/binary detection itself.
 type Input struct {
-	Provider    string   // resolved provider ("anthropic" | "openai" | …)
-	Model       string   // resolved model id
-	SandboxMode string   // configured sandbox mode ("local" | "os" | "container")
-	ConfigFound bool     // a .klaudia/config.toml was loaded
-	AuthOK      bool     // a usable credential resolved
-	AuthKind    string   // "oauth" | "api-key" | "none"
-	MCPServers  int      // configured MCP server count
-	LSPServers  []string // detected language servers, e.g. "go (gopls)"
+	Provider    string      // resolved provider ("anthropic" | "openai" | …)
+	Model       string      // resolved model id
+	SandboxMode string      // configured sandbox mode ("local" | "os" | "container")
+	ConfigFound bool        // a .klaudia/config.toml was loaded
+	AuthOK      bool        // a usable credential resolved
+	AuthKind    string      // "oauth" | "api-key" | "none"
+	MCPServers  int         // configured MCP server count
+	LSPServers  []LSPServer // detected language servers
+	// MissingLSPHints are actionable suggestions for languages present in the
+	// project but lacking a server (e.g. "install gopls for go support").
+	MissingLSPHints []string
+}
+
+// LSPServer is a detected language server for the /doctor report.
+type LSPServer struct {
+	Name     string // binary, e.g. "gopls"
+	Language string // e.g. "go"
+	Version  string // best-effort, e.g. "v0.15.2"; "" if unknown
 }
 
 // lookPath is indirected for testing.
@@ -96,10 +106,21 @@ func Run(in Input) []Check {
 		add("mcp", StatusInfo, "no MCP servers configured")
 	}
 
-	// LSP code-intel servers (detected, not downloaded).
-	if len(in.LSPServers) > 0 {
-		add("lsp", StatusOK, strings.Join(in.LSPServers, ", "))
-	} else {
+	// LSP code-intel servers (detected, not downloaded): one line per language,
+	// then a summary — actionable warning when a project language lacks a server.
+	for _, s := range in.LSPServers {
+		detail := s.Name
+		if s.Version != "" {
+			detail += " (" + s.Version + ")"
+		}
+		add("lsp:"+s.Language, StatusOK, detail)
+	}
+	switch {
+	case len(in.MissingLSPHints) > 0:
+		add("lsp", StatusWarn, strings.Join(in.MissingLSPHints, "; "))
+	case len(in.LSPServers) > 0:
+		add("lsp", StatusOK, fmt.Sprintf("%d language server(s) detected", len(in.LSPServers)))
+	default:
 		add("lsp", StatusInfo, "no language servers detected (install gopls, rust-analyzer, …)")
 	}
 

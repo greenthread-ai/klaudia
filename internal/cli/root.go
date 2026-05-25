@@ -91,14 +91,20 @@ func withExtraDirs(sys string, dirs []string) string {
 
 // buildDoctorInput gathers the facts /doctor reports, without prompting.
 func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpServers int) doctor.Input {
+	servers, hints := lsp.Survey(cwd)
+	lspServers := make([]doctor.LSPServer, 0, len(servers))
+	for _, s := range servers {
+		lspServers = append(lspServers, doctor.LSPServer{Name: s.Bin, Language: s.Language, Version: s.Version})
+	}
 	in := doctor.Input{
-		Provider:    providerName(cfg),
-		Model:       string(model),
-		SandboxMode: sandboxMode(cfg.Sandbox),
-		ConfigFound: configFileExists(cwd),
-		MCPServers:  mcpServers,
-		LSPServers:  detectedLSPServers(),
-		AuthKind:    "none",
+		Provider:        providerName(cfg),
+		Model:           string(model),
+		SandboxMode:     sandboxMode(cfg.Sandbox),
+		ConfigFound:     configFileExists(cwd),
+		MCPServers:      mcpServers,
+		LSPServers:      lspServers,
+		MissingLSPHints: hints,
+		AuthKind:        "none",
 	}
 	if cfg.Provider == config.ProviderOpenAI {
 		if cfg.ResolveAPIKey() != "" {
@@ -113,16 +119,6 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 		}
 	}
 	return in
-}
-
-// detectedLSPServers lists the installed language servers for /doctor, as
-// "language (binary)" entries.
-func detectedLSPServers() []string {
-	var out []string
-	for _, s := range lsp.DetectAll() {
-		out = append(out, fmt.Sprintf("%s (%s)", s.Language, s.Bin))
-	}
-	return out
 }
 
 // configFileExists reports whether a home or project .klaudia/config.toml exists.
