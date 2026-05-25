@@ -19,7 +19,7 @@ var taglines = []string{
 	"your coding agent, allegedly",
 	"doing the needful, my man",
 	"your overqualified rubber duck",
-	"it's giving senior engineer",
+	"vibes at scale",
 	"turning coffee into commits",
 	"your goblin in the machine",
 	"shipping bugs at the speed of thought",
