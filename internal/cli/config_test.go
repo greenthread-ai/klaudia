@@ -66,3 +66,24 @@ func TestCreateConfigRejectsInvalidScope(t *testing.T) {
 		t.Fatalf("createConfig invalid scope error = %v", err)
 	}
 }
+
+func TestThemeOrWarn(t *testing.T) {
+	var warned []string
+	warn := func(m string) { warned = append(warned, m) }
+
+	// Empty → passes through, no warning.
+	if got := themeOrWarn("", warn); got != "" || len(warned) != 0 {
+		t.Errorf("empty theme: got %q, warnings %v", got, warned)
+	}
+	// Known theme → passes through, no warning.
+	if got := themeOrWarn("nord", warn); got != "nord" || len(warned) != 0 {
+		t.Errorf("known theme: got %q, warnings %v", got, warned)
+	}
+	// Unknown → falls back to default ("") and warns.
+	if got := themeOrWarn("bogus", warn); got != "" {
+		t.Errorf("unknown theme: got %q, want fallback to default", got)
+	}
+	if len(warned) != 1 || !strings.Contains(warned[0], "unknown theme") {
+		t.Errorf("expected an unknown-theme warning, got %v", warned)
+	}
+}

@@ -104,6 +104,15 @@ func normalizeThemeName(s string) string {
 	return s
 }
 
+// IsTheme reports whether name resolves to a known theme (id/name/alias).
+func IsTheme(name string) bool {
+	_, ok := lookupTheme(name)
+	return ok
+}
+
+// ThemeNames returns the available theme ids, comma-separated.
+func ThemeNames() string { return themeNames() }
+
 func themeNames() string {
 	names := make([]string, 0, len(renderThemes))
 	for _, theme := range renderThemes {

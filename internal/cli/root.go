@@ -139,6 +139,16 @@ func sandboxMode(sb config.Sandbox) string {
 	return config.SandboxLocal
 }
 
+// themeOrWarn passes a configured theme through, warning (and falling back to
+// the default) when it names an unknown theme so a typo isn't silent.
+func themeOrWarn(theme string, warn func(string)) string {
+	if theme == "" || tui.IsTheme(theme) {
+		return theme
+	}
+	warn(fmt.Sprintf("unknown theme %q in config; using default (valid: %s)", theme, tui.ThemeNames()))
+	return ""
+}
+
 // tuiAgents adapts the built-in sub-agent types into the TUI's AgentInfo for
 // the /agents command.
 func tuiAgents() []tui.AgentInfo {
@@ -363,6 +373,9 @@ baseURL = "https://api.example.com/v1"
 #   export MY_API_KEY="sk-..."
 # Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
+
+# TUI theme (Markdown + chrome). /theme switches it for a session.
+# theme = "nord" # dracula | gruvbox | tokyo-night | nord | catppuccin
 
 # Optional examples:
 # [sandbox]
@@ -684,6 +697,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			SessionID:      sessionID,
 			Model:          modelStr,
 			ResolvedModel:  string(model),
+			Theme:          themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
 			PermissionMode: string(mode),
 			Memory:         memStore,
 			MCP:            mcpController{mgr: mcpMgr, ctx: ctx},

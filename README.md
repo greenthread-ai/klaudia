@@ -90,6 +90,10 @@ A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
 type-ahead, `@path` file completion (Tab), input history (↑/↓), scrollback
 (PgUp/PgDn), and `Esc` to interrupt a turn. Type `/help` for the full list.
 
+`/theme` switches the colour theme (Markdown + chrome) for the session; set a
+durable default with `theme = "nord"` in `.klaudia/config.toml` (dracula |
+gruvbox | tokyo-night | nord | catppuccin).
+
 Long-running commands can run detached: `Bash` with `run_in_background` returns a
 shell id, then `BashOutput` reads new output incrementally and `KillShell` stops
 it — so the agent can launch a dev server or watcher and keep working. Background

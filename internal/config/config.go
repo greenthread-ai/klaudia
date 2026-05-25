@@ -24,6 +24,9 @@ type Config struct {
 	Provider string `toml:"provider,omitempty"`
 	// Model is the default model (e.g. "openai/gpt-5.5"); --model overrides it.
 	Model string `toml:"model,omitempty"`
+	// Theme is the TUI theme for Markdown + chrome (e.g. "nord", "dracula").
+	// "" uses the default; /theme overrides it for the current session.
+	Theme string `toml:"theme,omitempty"`
 	// BaseURL is the OpenAI-compatible endpoint (including /v1), if provider=openai.
 	BaseURL string `toml:"baseURL,omitempty"`
 	// APIKey is the bearer token. Prefer APIKeyEnv to keep secrets out of files.
@@ -201,6 +204,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Model != "" {
 		dst.Model = src.Model
+	}
+	if src.Theme != "" {
+		dst.Theme = src.Theme
 	}
 	if src.BaseURL != "" {
 		dst.BaseURL = src.BaseURL

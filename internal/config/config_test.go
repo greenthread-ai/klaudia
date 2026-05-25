@@ -42,6 +42,24 @@ baseURL = "https://x/v1"
 	}
 }
 
+func TestLoadThemeProjectOverridesHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, `theme = "nord"`)
+
+	// Global-only: inherited.
+	if cfg := Load(t.TempDir()); cfg.Theme != "nord" {
+		t.Errorf("theme = %q, want nord (from home)", cfg.Theme)
+	}
+
+	// Project overrides global.
+	cwd := t.TempDir()
+	writeConfig(t, cwd, `theme = "dracula"`)
+	if cfg := Load(cwd); cfg.Theme != "dracula" {
+		t.Errorf("theme = %q, want dracula (project wins)", cfg.Theme)
+	}
+}
+
 func TestLoadBrowserProjectOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
