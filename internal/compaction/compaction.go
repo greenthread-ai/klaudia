@@ -13,7 +13,7 @@ import "github.com/anthropics/anthropic-sdk-go"
 
 // Microcompact constants (05-app-core.js).
 const (
-	KeepLastNResults        = 3
+	KeepLastNResults         = 3
 	ToolResultTokenThreshold = 40000
 	MinTokensToSave          = 20000
 	EstimatedTokensPerImage  = 2000
@@ -78,9 +78,9 @@ func charTokens(s string) int { return (len(s) + 3) / 4 }
 
 // Result reports what a microcompact pass did.
 type Result struct {
-	Compacted    bool
-	TokensSaved  int
-	ElidedCount  int
+	Compacted   bool
+	TokensSaved int
+	ElidedCount int
 }
 
 // Microcompact elides the content of tool results older than the most recent

@@ -55,7 +55,9 @@ func TestWriteReadRoundTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := Read(w.Path())
 	if err != nil {
@@ -78,9 +80,16 @@ func TestMostRecent(t *testing.T) {
 	if _, ok := MostRecent(cwd); ok {
 		t.Error("expected no session initially")
 	}
-	w, _ := NewWriter(cwd, "only-session")
-	w.Append(Entry{Type: "user", Message: json.RawMessage(`{}`)})
-	w.Close()
+	w, err := NewWriter(cwd, "only-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Append(Entry{Type: "user", Message: json.RawMessage(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if id, ok := MostRecent(cwd); !ok || id != "only-session" {
 		t.Errorf("MostRecent = %q,%v", id, ok)
 	}

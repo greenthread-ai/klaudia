@@ -71,6 +71,9 @@ func (w *WebFetch) Execute(_ context.Context, _ Context, raw json.RawMessage) ([
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	if w.engine == nil {
+		return []Result{{Content: "Error: browser engine is not configured", IsError: true}}, nil
+	}
 	if err := w.engine.Navigate(in.URL); err != nil {
 		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil
 	}

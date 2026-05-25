@@ -127,8 +127,8 @@ func (d *Driver) write(v any) {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.out.Write(b)
-	d.out.Write([]byte("\n"))
+	_, _ = d.out.Write(b)
+	_, _ = d.out.Write([]byte("\n"))
 }
 
 // deliverControlResponse resolves a pending permission request.

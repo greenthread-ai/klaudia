@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -528,7 +529,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	if opts.print && format == FormatStreamJSON && !opts.verbose {
 		return fmt.Errorf("--output-format stream-json requires --verbose")
 	}
-	if opts.partialMessages && !(opts.print && format == FormatStreamJSON) {
+	if opts.partialMessages && (!opts.print || format != FormatStreamJSON) {
 		return fmt.Errorf("--include-partial-messages only works with --print and --output-format=stream-json")
 	}
 
@@ -708,7 +709,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		GitBranch:      gitBranch(cwd),
 		PermissionMode: string(mode),
 	}); terr == nil {
-		defer tr.Close()
+		defer func() { _ = tr.Close() }()
 		recorder = tr
 	}
 
@@ -798,7 +799,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Single-shot headless run. For stream-json output, emit JS-compatible
 	// message envelopes (assistant/user) via an envelope recorder alongside the
 	// transcript; the simplified delta events are not used in that mode.
-	var runRecorder agent.Recorder = recorder
+	runRecorder := agent.Recorder(recorder)
 	emit := func(ev agent.Event) { _ = r.Event(ev) }
 	var partial func(anthropic.BetaRawMessageStreamEventUnion)
 	if format == FormatStreamJSON {
@@ -865,7 +866,7 @@ var errRendered = fmt.Errorf("run failed")
 // Execute runs the root command, returning the process exit code.
 func Execute() int {
 	if err := NewRootCommand().Execute(); err != nil {
-		if err != errRendered {
+		if !errors.Is(err, errRendered) {
 			fmt.Fprintln(os.Stderr, "Error:", err)
 		}
 		return 1

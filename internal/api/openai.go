@@ -123,7 +123,7 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 	if err != nil {
 		return anthropic.BetaMessage{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		b, _ := readAll(resp.Body, 4096)
 		return anthropic.BetaMessage{}, &OpenAIError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(b)}
@@ -341,7 +341,7 @@ func (p *OpenAIProvider) doWithRetry(req *http.Request, bodyBytes []byte) (*http
 		}
 		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
 			if attempt < max {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				lastErr = &OpenAIError{StatusCode: resp.StatusCode}
 				continue
 			}

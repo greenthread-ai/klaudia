@@ -81,6 +81,9 @@ func (b *BrowserNavigate) Execute(_ context.Context, _ Context, raw json.RawMess
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	if b.engine == nil {
+		return []Result{{Content: "Error: browser engine is not configured", IsError: true}}, nil
+	}
 	if err := b.engine.Navigate(in.URL); err != nil {
 		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil
 	}
@@ -117,6 +120,9 @@ func (b *BrowserSnapshot) Execute(_ context.Context, _ Context, raw json.RawMess
 	var in BrowserSnapshotInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
+	}
+	if b.engine == nil {
+		return []Result{{Content: "Error: browser engine is not configured", IsError: true}}, nil
 	}
 	snap, err := b.engine.Snapshot(in.IncludeHTML, in.IncludeMarkdown)
 	if err != nil {

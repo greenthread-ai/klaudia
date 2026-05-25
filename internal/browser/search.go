@@ -56,7 +56,7 @@ func (e *Engine) Search(ctx context.Context, opts SearchOptions) ([]SearchResult
 	}
 	if len(results) == 0 {
 		snap, snapErr := e.Snapshot(true, false)
-		if snapErr == nil && isSearchChallengePage(engine, snap.HTML) && e.browserOpts.HeadedFallback && e.browserOpts.RemoteURL == "" {
+		if snapErr == nil && shouldUseHeadedFallback(engine, snap.HTML) && e.browserOpts.HeadedFallback && e.browserOpts.RemoteURL == "" {
 			results, err = e.searchWithHeadedFallback(ctx, engine, searchURL)
 			if err != nil {
 				return nil, err
@@ -161,6 +161,41 @@ func isSearchChallengePage(engine, html string) bool {
 		return strings.Contains(lower, "/sorry/index") ||
 			strings.Contains(lower, "our systems have detected unusual traffic") ||
 			strings.Contains(lower, "g-recaptcha")
+	default:
+		return false
+	}
+}
+
+func shouldUseHeadedFallback(engine, html string) bool {
+	if isSearchChallengePage(engine, html) {
+		return true
+	}
+	return isEmptySearchProviderPage(engine, html) && !isNoResultsPage(engine, html)
+}
+
+func isEmptySearchProviderPage(engine, html string) bool {
+	lower := strings.ToLower(html)
+	switch engine {
+	case "ddg", "duckduckgo", "duckduckgo-html":
+		return strings.Contains(lower, "duckduckgo") &&
+			(strings.Contains(lower, "result__") || strings.Contains(lower, "anomaly") || strings.Contains(lower, "html.duckduckgo.com") || strings.Contains(lower, "duckduckgo.com"))
+	case "google":
+		return strings.Contains(lower, "google") &&
+			(strings.Contains(lower, "/search?") || strings.Contains(lower, "id=\"search\"") || strings.Contains(lower, "name=\"q\"") || strings.Contains(lower, "g-recaptcha"))
+	default:
+		return false
+	}
+}
+
+func isNoResultsPage(engine, html string) bool {
+	lower := strings.ToLower(html)
+	switch engine {
+	case "ddg", "duckduckgo", "duckduckgo-html":
+		return strings.Contains(lower, "no results found") ||
+			strings.Contains(lower, "no more results")
+	case "google":
+		return strings.Contains(lower, "did not match any documents") ||
+			strings.Contains(lower, "your search") && strings.Contains(lower, "did not match")
 	default:
 		return false
 	}

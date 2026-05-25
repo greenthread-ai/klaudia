@@ -47,7 +47,7 @@ func refreshOAuth(ctx context.Context, refreshToken string) (refreshedTokens, er
 	if err != nil {
 		return refreshedTokens{}, fmt.Errorf("refresh oauth token: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		snippet, _ := readAll(resp.Body, 1024)

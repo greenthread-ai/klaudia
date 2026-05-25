@@ -3,6 +3,7 @@ package streamjson
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"sync"
@@ -47,7 +48,7 @@ func TestDriverPermissionRoundTrip(t *testing.T) {
 
 	// A pipe lets the test write control responses after the request appears.
 	pr, pw := io.Pipe()
-	defer pw.Close()
+	defer func() { _ = pw.Close() }()
 
 	decisionCh := make(chan permission.Decision, 1)
 	runFn := func(ctx context.Context, prompt string, _ []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
@@ -59,7 +60,7 @@ func TestDriverPermissionRoundTrip(t *testing.T) {
 
 	// Feed a user message, then watch out for the control_request and answer it.
 	go func() {
-		pw.Write([]byte(`{"type":"user","message":{"role":"user","content":"run ls"}}` + "\n"))
+		_, _ = pw.Write([]byte(`{"type":"user","message":{"role":"user","content":"run ls"}}` + "\n"))
 		// Wait for the control_request to be emitted, then grab its id and allow.
 		id := waitForRequestID(out)
 		resp := map[string]any{
@@ -71,15 +72,15 @@ func TestDriverPermissionRoundTrip(t *testing.T) {
 			},
 		}
 		b, _ := json.Marshal(resp)
-		pw.Write(append(b, '\n'))
+		_, _ = pw.Write(append(b, '\n'))
 		// Give the turn a moment to finish, then close stdin to end the driver.
 		<-decisionCh
-		pw.Close()
+		_ = pw.Close()
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := d.Run(ctx, pr, runFn); err != nil && err != context.DeadlineExceeded {
+	if err := d.Run(ctx, pr, runFn); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("driver run: %v", err)
 	}
 

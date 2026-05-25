@@ -36,9 +36,9 @@ type mcpTool struct {
 	server        *Server
 }
 
-func (t *mcpTool) Name() string                              { return t.qualifiedName }
+func (t *mcpTool) Name() string                                { return t.qualifiedName }
 func (t *mcpTool) Description(context.Context) (string, error) { return t.description, nil }
-func (t *mcpTool) InputSchema() json.RawMessage              { return t.inputSchema }
+func (t *mcpTool) InputSchema() json.RawMessage                { return t.inputSchema }
 
 // ValidateInput is a no-op beyond JSON well-formedness; the server validates
 // against its own schema.

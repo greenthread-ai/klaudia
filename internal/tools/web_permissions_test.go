@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/greenthread/klaudia/internal/permission"
@@ -32,5 +34,47 @@ func TestWebToolsArePermissionGated(t *testing.T) {
 				t.Errorf("%s in %s: behavior = %q, want %q", tool.Name(), c.mode, got.Behavior, c.want)
 			}
 		}
+	}
+}
+
+func TestWebToolsReturnErrorWhenBrowserEngineMissing(t *testing.T) {
+	ws, err := NewWebSearch(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wf, err := NewWebFetch(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bn, err := NewBrowserNavigate(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs, err := NewBrowserSnapshot(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name string
+		tool Tool
+		raw  json.RawMessage
+	}{
+		{"WebSearch", ws, json.RawMessage(`{"query":"example"}`)},
+		{"WebFetch", wf, json.RawMessage(`{"url":"https://example.com"}`)},
+		{"BrowserNavigate", bn, json.RawMessage(`{"url":"https://example.com"}`)},
+		{"BrowserSnapshot", bs, json.RawMessage(`{}`)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := tc.tool.Execute(context.Background(), Context{}, tc.raw)
+			if err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if len(res) != 1 || !res[0].IsError {
+				t.Fatalf("Execute() = %+v, want one error result", res)
+			}
+		})
 	}
 }

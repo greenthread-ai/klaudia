@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/chromedp/chromedp"
 )
@@ -64,6 +65,21 @@ func New(parent context.Context, opts Options) (*Browser, error) {
 }
 
 func newLaunched(parent context.Context, opts Options) (*Browser, error) {
+	b, err := newLaunchedWithOptions(parent, opts)
+	if err == nil || opts.UserDataDir == "" || !isProfileInUseError(err) {
+		return b, err
+	}
+
+	fallback := opts
+	fallback.UserDataDir = ""
+	b, fallbackErr := newLaunchedWithOptions(parent, fallback)
+	if fallbackErr != nil {
+		return nil, fmt.Errorf("%w; retry with temporary chrome profile also failed: %w", err, fallbackErr)
+	}
+	return b, nil
+}
+
+func newLaunchedWithOptions(parent context.Context, opts Options) (*Browser, error) {
 	flags := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
 	flags = append(flags,
 		chromedp.Flag("headless", opts.Headless),
@@ -91,6 +107,18 @@ func newLaunched(parent context.Context, opts Options) (*Browser, error) {
 		return nil, fmt.Errorf("launch chrome: %w", err)
 	}
 	return &Browser{allocCancel: allocCancel, ctx: ctx, cancel: cancel}, nil
+}
+
+func isProfileInUseError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "singletonlock") ||
+		strings.Contains(msg, "processsingleton") ||
+		strings.Contains(msg, "profile directory") ||
+		strings.Contains(msg, "profile appears to be in use") ||
+		strings.Contains(msg, "user data directory is already in use")
 }
 
 func newAttached(parent context.Context, opts Options) (*Browser, error) {

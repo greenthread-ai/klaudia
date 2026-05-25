@@ -123,11 +123,14 @@ type choiceItem struct {
 
 // --- messages delivered from the agent goroutine ---
 
-type eventMsg struct{ ev agent.Event }
-type permissionMsg struct {
-	req   agent.ApprovalRequest
-	reply chan permission.Decision
-}
+type (
+	eventMsg      struct{ ev agent.Event }
+	permissionMsg struct {
+		req   agent.ApprovalRequest
+		reply chan permission.Decision
+	}
+)
+
 type doneMsg struct {
 	res agent.Result
 	err error

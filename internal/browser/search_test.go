@@ -1,11 +1,59 @@
 package browser
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
 )
+
+func TestIsProfileInUseError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"singleton lock", errors.New("Failed to create SingletonLock: File exists"), true},
+		{"process singleton", errors.New("Failed to create a ProcessSingleton for your profile directory"), true},
+		{"chrome user data in use", errors.New("user data directory is already in use"), true},
+		{"other launch error", errors.New("chrome executable not found"), false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isProfileInUseError(tc.err); got != tc.want {
+				t.Fatalf("isProfileInUseError(%v) = %v, want %v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestShouldUseHeadedFallback(t *testing.T) {
+	cases := []struct {
+		name   string
+		engine string
+		html   string
+		want   bool
+	}{
+		{"ddg challenge", "ddg", `<div id="anomaly-modal">Unfortunately, bots use DuckDuckGo too.</div>`, true},
+		{"google challenge", "google", `<form action="/sorry/index"><div class="g-recaptcha"></div></form>`, true},
+		{"ddg empty provider page", "ddg", `<html><title>DuckDuckGo</title><form action="https://duckduckgo.com/html/"></form><div class="result__body"></div></html>`, true},
+		{"google empty provider page", "google", `<html><title>Google Search</title><form><input name="q"></form><div id="search"></div></html>`, true},
+		{"ddg explicit no results", "ddg", `<html><title>DuckDuckGo</title><div>No results found for xyz</div></html>`, false},
+		{"google explicit no results", "google", `<html><title>Google Search</title><p>Your search did not match any documents.</p></html>`, false},
+		{"non provider", "ddg", `<html><title>Example</title></html>`, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shouldUseHeadedFallback(tc.engine, tc.html); got != tc.want {
+				t.Fatalf("shouldUseHeadedFallback() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestIsGoogleInternalURL(t *testing.T) {
 	for _, internal := range []string{
@@ -91,11 +139,11 @@ func TestIsHTTPURL(t *testing.T) {
 func TestFilterResultsDropsNonHTTPAndAppliesDomains(t *testing.T) {
 	in := []SearchResult{
 		{Title: "ok", URL: "https://good.com/a"},
-		{Title: "evil", URL: "file:///etc/passwd"},      // dropped: not http(s)
-		{Title: "js", URL: "javascript:alert(1)"},        // dropped: not http(s)
-		{Title: "dup", URL: "https://good.com/a"},         // dropped: duplicate
-		{Title: "blocked", URL: "https://spam.com/x"},     // dropped: blocked domain
-		{Title: "sub", URL: "https://docs.good.com/y"},    // kept: subdomain of allowed
+		{Title: "evil", URL: "file:///etc/passwd"},     // dropped: not http(s)
+		{Title: "js", URL: "javascript:alert(1)"},      // dropped: not http(s)
+		{Title: "dup", URL: "https://good.com/a"},      // dropped: duplicate
+		{Title: "blocked", URL: "https://spam.com/x"},  // dropped: blocked domain
+		{Title: "sub", URL: "https://docs.good.com/y"}, // kept: subdomain of allowed
 	}
 	out := filterResults(in, []string{"good.com"}, []string{"spam.com"}, 10)
 	if len(out) != 2 {

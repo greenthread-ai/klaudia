@@ -109,12 +109,6 @@ func hasAnyMarker(root string, markers []string) bool {
 	return false
 }
 
-// resolved is a server spec with its located binary path.
-type resolved struct {
-	spec ServerSpec
-	path string
-}
-
 // detect finds the server binary on PATH or in its candidate directories.
 func detect(spec ServerSpec) (string, bool) {
 	if p, err := exec.LookPath(spec.Bin); err == nil {

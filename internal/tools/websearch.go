@@ -73,6 +73,9 @@ func (w *WebSearch) Execute(ctx context.Context, _ Context, raw json.RawMessage)
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	if w.engine == nil {
+		return []Result{{Content: "Error: browser engine is not configured", IsError: true}}, nil
+	}
 	results, err := w.engine.Search(ctx, browser.SearchOptions{
 		Engine:         in.Engine,
 		Query:          in.Query,

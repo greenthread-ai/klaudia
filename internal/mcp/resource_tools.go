@@ -33,14 +33,16 @@ func (t *listResourcesTool) Name() string { return "ListMcpResources" }
 func (t *listResourcesTool) Description(context.Context) (string, error) {
 	return "List the resources available from connected MCP servers, as lines of \"server\\turi\\tname\".", nil
 }
-func (t *listResourcesTool) InputSchema() json.RawMessage    { return t.schema.Raw }
+func (t *listResourcesTool) InputSchema() json.RawMessage        { return t.schema.Raw }
 func (t *listResourcesTool) ValidateInput(json.RawMessage) error { return nil }
 func (t *listResourcesTool) PermissionRequest(json.RawMessage) permission.PermissionRequest {
 	return permission.PermissionRequest{}
 }
+
 func (t *listResourcesTool) CheckPermissions(permission.Context, permission.PermissionRequest) permission.Decision {
 	return permission.Decision{Behavior: permission.Allow}
 }
+
 func (t *listResourcesTool) Execute(ctx context.Context, _ tools.Context, _ json.RawMessage) ([]tools.Result, error) {
 	return []tools.Result{{Content: t.mgr.formatResourceList(ctx)}}, nil
 }
@@ -69,14 +71,16 @@ func (t *readResourceTool) Name() string { return "ReadMcpResource" }
 func (t *readResourceTool) Description(context.Context) (string, error) {
 	return "Read a resource from a connected MCP server by server name and URI.", nil
 }
-func (t *readResourceTool) InputSchema() json.RawMessage      { return t.schema.Raw }
+func (t *readResourceTool) InputSchema() json.RawMessage            { return t.schema.Raw }
 func (t *readResourceTool) ValidateInput(raw json.RawMessage) error { return t.schema.Validate(raw) }
 func (t *readResourceTool) PermissionRequest(json.RawMessage) permission.PermissionRequest {
 	return permission.PermissionRequest{}
 }
+
 func (t *readResourceTool) CheckPermissions(permission.Context, permission.PermissionRequest) permission.Decision {
 	return permission.Decision{Behavior: permission.Allow}
 }
+
 func (t *readResourceTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMessage) ([]tools.Result, error) {
 	var in readResourceInput
 	if err := json.Unmarshal(raw, &in); err != nil {

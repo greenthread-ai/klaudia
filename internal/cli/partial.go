@@ -47,5 +47,5 @@ func (e *partialEmitter) emit(ev anthropic.BetaRawMessageStreamEventUnion) {
 		e.mu.Lock()
 		defer e.mu.Unlock()
 	}
-	e.w.Write(append(line, '\n'))
+	_, _ = e.w.Write(append(line, '\n'))
 }
