@@ -147,16 +147,37 @@ type planMsg struct {
 	reply chan bool
 }
 
+// Chrome styles. The accent-bearing ones (logo/heading/suggestion/prompt) are
+// re-derived from the active theme by applyChromeTheme; errors stay red and
+// banner/tool/hint stay neutral so body text and warnings read clearly on any
+// theme. Initialised to the default palette here.
 var (
-	userStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	toolStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	userStyle    = lipgloss.NewStyle()
+	toolStyle    = lipgloss.NewStyle()
 	errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	askStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11"))
+	askStyle     = lipgloss.NewStyle()
 	bannerStyle  = lipgloss.NewStyle().Faint(true)
-	logoStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("13"))
+	logoStyle    = lipgloss.NewStyle()
 	hintStyle    = lipgloss.NewStyle().Faint(true).Italic(true)
-	suggestStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	suggestStyle = lipgloss.NewStyle()
 )
+
+func init() { applyChromeTheme(defaultChromePalette) }
+
+// applyChromeTheme recolours the accent chrome styles from a theme palette so
+// the banner, pickers, prompts, and type-ahead follow /theme (not just the
+// rendered Markdown). Called at startup and on every theme change.
+func applyChromeTheme(p themePalette) {
+	accent := lipgloss.Color(p.accent)
+	accent2 := lipgloss.Color(p.accent2)
+	muted := lipgloss.Color(p.muted)
+	logoStyle = lipgloss.NewStyle().Bold(true).Foreground(accent)
+	askStyle = lipgloss.NewStyle().Bold(true).Foreground(accent)
+	suggestStyle = lipgloss.NewStyle().Foreground(accent2)
+	userStyle = lipgloss.NewStyle().Bold(true).Foreground(accent2)
+	toolStyle = lipgloss.NewStyle().Foreground(muted)
+	hintStyle = lipgloss.NewStyle().Faint(true).Italic(true).Foreground(muted)
+}
 
 // intro is the welcoming banner shown at startup. The model name/branch/session
 // id are filled in by the caller.
@@ -229,6 +250,9 @@ type Model struct {
 	streamBuf strings.Builder
 	glam      *glamour.TermRenderer
 	glamWidth int
+	// Intro banner inputs, so it can be regenerated (recoloured) on theme change.
+	introModel, introBranch, introSession string
+	hasIntro                              bool
 }
 
 type transcriptBlock struct {
@@ -259,10 +283,13 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		history: history,
 		sess:    sess,
 	}
+	// Colour the chrome for the session's theme before drawing the banner.
+	applyChromeTheme(chromePaletteFor(m.currentThemeID()))
 	model, branch, sessionID := "", "", ""
 	if sess != nil {
 		model, branch, sessionID = sess.displayModel(), sess.GitBranch, sess.SessionID
 	}
+	m.introModel, m.introBranch, m.introSession, m.hasIntro = model, branch, sessionID, true
 	introText := intro(model, branch, sessionID)
 	m.transcript.WriteString(introText)
 	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: introText})
@@ -1595,6 +1622,10 @@ func (m *Model) appendLine(s string) {
 func (m *Model) rerenderTranscript() {
 	if len(m.rawBlocks) == 0 {
 		return
+	}
+	// Regenerate the intro banner so it picks up the new theme's chrome colours.
+	if m.hasIntro && len(m.rawBlocks) > 0 {
+		m.rawBlocks[0].text = intro(m.introModel, m.introBranch, m.introSession)
 	}
 	m.transcript.Reset()
 	for _, block := range m.rawBlocks {

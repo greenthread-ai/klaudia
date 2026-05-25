@@ -35,6 +35,7 @@ var renderThemes = []renderTheme{
 		desc:     "dark purples with high contrast",
 		aliases:  []string{"drac"},
 		standard: "dracula",
+		palette:  themePalette{fg: "#f8f8f2", muted: "#6272a4", accent: "#bd93f9", accent2: "#ff79c6", accent3: "#50fa7b", bg: "#282a36", codeBG: "#44475a"},
 	},
 	{
 		id:      "gruvbox",
@@ -49,6 +50,7 @@ var renderThemes = []renderTheme{
 		desc:     "deep blues, cyans, and purples",
 		aliases:  []string{"tokyo", "tokyonight", "tokyo night"},
 		standard: "tokyo-night",
+		palette:  themePalette{fg: "#c0caf5", muted: "#565f89", accent: "#7aa2f7", accent2: "#bb9af7", accent3: "#9ece6a", bg: "#1a1b26", codeBG: "#24283b"},
 	},
 	{
 		id:      "nord",
@@ -63,6 +65,21 @@ var renderThemes = []renderTheme{
 		aliases: []string{"cat", "catppuccin-mocha", "mocha"},
 		palette: themePalette{fg: "#cdd6f4", muted: "#6c7086", accent: "#cba6f7", accent2: "#89b4fa", accent3: "#a6e3a1", bg: "#1e1e2e", codeBG: "#313244"},
 	},
+}
+
+// defaultChromePalette colours the TUI chrome when no theme is selected
+// (currentThemeID == "dark") or a theme lacks a palette.
+var defaultChromePalette = themePalette{
+	fg: "#d8dee9", muted: "#6c7086", accent: "#88c0d0", accent2: "#81a1c1", accent3: "#a3be8c", bg: "#2e3440", codeBG: "#3b4252",
+}
+
+// chromePaletteFor returns the palette used to colour the TUI chrome (banner,
+// pickers, prompts, type-ahead) for a theme id, falling back to the default.
+func chromePaletteFor(id string) themePalette {
+	if theme, ok := lookupTheme(id); ok && theme.palette.accent != "" {
+		return theme.palette
+	}
+	return defaultChromePalette
 }
 
 func lookupTheme(s string) (renderTheme, bool) {
@@ -106,6 +123,7 @@ func (m *Model) setTheme(id string) {
 	if m.sess != nil {
 		m.sess.Theme = id
 	}
+	applyChromeTheme(chromePaletteFor(id)) // recolour banner/pickers/prompts too
 	m.glam = nil
 	if m.ready {
 		m.buildGlamour(m.width)
