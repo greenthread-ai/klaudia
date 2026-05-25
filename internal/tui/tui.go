@@ -211,6 +211,12 @@ type Model struct {
 	ready  bool
 	width  int
 	height int
+	// follow keeps the viewport pinned to the bottom as new output arrives. It
+	// is true until the user scrolls up to read history, and becomes true again
+	// when they scroll back to the bottom. Programmatic appends and viewport
+	// resizes honor it rather than re-deriving "are we at the bottom?", which is
+	// unreliable across height changes (e.g. the "working…" line shrinking vp).
+	follow bool
 
 	transcript strings.Builder // rendered scrollback
 	rawBlocks  []transcriptBlock
@@ -285,6 +291,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		state:   stateIdle,
 		history: history,
 		sess:    sess,
+		follow:  true,
 	}
 	// Colour the chrome for the session's theme before drawing the banner.
 	applyChromeTheme(chromePaletteFor(m.currentThemeID()))
@@ -505,6 +512,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.vp, cmd = m.vp.Update(msg)
+	// A wheel scroll is a follow-intent signal: stop following when the user
+	// scrolls up, resume once they're back at the bottom.
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		m.follow = false
+	case tea.MouseButtonWheelDown:
+		m.follow = m.vp.AtBottom()
+	}
 	return m, cmd
 }
 
@@ -529,15 +544,19 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyPgUp:
 		m.vp.PageUp()
+		m.follow = false
 		return m, nil
 	case tea.KeyPgDown:
 		m.vp.PageDown()
+		m.follow = m.vp.AtBottom()
 		return m, nil
 	case tea.KeyCtrlU:
 		m.vp.HalfViewUp()
+		m.follow = false
 		return m, nil
 	case tea.KeyCtrlD:
 		m.vp.HalfViewDown()
+		m.follow = m.vp.AtBottom()
 		return m, nil
 	}
 
@@ -1721,9 +1740,6 @@ func (m *Model) syncViewport() {
 	if !m.ready {
 		return
 	}
-	// Auto-scroll to follow new output only when the user is already at the
-	// bottom; if they've scrolled up to read history, leave their position put.
-	stick := m.vp.AtBottom()
 	// Committed transcript (glamour-rendered answers + styled lines) plus the
 	// in-progress assistant message shown raw as it streams. Wrap to width;
 	// lipgloss preserves ANSI and won't re-wrap lines already within width.
@@ -1733,7 +1749,12 @@ func (m *Model) syncViewport() {
 	}
 	wrapped := lipgloss.NewStyle().Width(m.vp.Width).Render(content)
 	m.vp.SetContent(wrapped)
-	if stick {
+	// Follow new output to the bottom unless the user has scrolled up to read
+	// history (see m.follow). Honoring the flag — rather than re-checking
+	// AtBottom() here — keeps us pinned even when the viewport height changes
+	// under us (e.g. the "working…" line appearing shrinks vp), which would
+	// otherwise leave AtBottom() false and silently strand new content.
+	if m.follow {
 		m.vp.GotoBottom()
 	}
 }

@@ -16,7 +16,7 @@ import (
 
 func newTestModel() *Model {
 	in := newPromptInput()
-	return &Model{input: in, sess: &Session{}, histPos: 0}
+	return &Model{input: in, sess: &Session{}, histPos: 0, follow: true}
 }
 
 func TestHistoryNavigation(t *testing.T) {

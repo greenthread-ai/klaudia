@@ -35,6 +35,14 @@ import (
 	"github.com/greenthread/klaudia/internal/version"
 )
 
+func compactAndPersist(ctx context.Context, history []anthropic.BetaMessageParam, compact tui.CompactFunc, onSummary func(string)) ([]anthropic.BetaMessageParam, string, error) {
+	newHistory, summary, err := compact(ctx, history)
+	if err == nil && onSummary != nil {
+		onSummary(summary)
+	}
+	return newHistory, summary, err
+}
+
 // withAgentTool returns a registry that is the base tools plus the Agent tool,
 // wired to a sub-agent spawner that draws from the base tools.
 func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool) (*tools.Registry, error) {
@@ -650,7 +658,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	// Persistent memory: one store shared by the Memory tool (agent + sub-agents)
 	// and the /memory command.
-	memStore := memory.New(filepath.Join(cwd, ".klaudia", "memory"))
+	memStore := memory.New(filepath.Join(cwd, ".klaudia"))
 	if memTool, merr := tools.NewMemoryForProject(memStore, cwd); merr == nil {
 		baseTools = append(baseTools, memTool)
 	}
@@ -732,8 +740,11 @@ func run(cmd *cobra.Command, opts *options) error {
 			GitBranch:      gitBranch(cwd),
 			Agents:         tuiAgents(),
 			Compact: func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
-				return loop.Compact(ctx, history, api.ResolveModel(modelStr))
+				return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
+					return loop.Compact(ctx, history, api.ResolveModel(modelStr))
+				}, onSummary)
 			},
+
 			Doctor: func() string {
 				return doctor.Format(doctor.Run(buildDoctorInput(cfg, model, cwd, len(mcpCfg.MCPServers))))
 			},

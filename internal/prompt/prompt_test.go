@@ -44,9 +44,13 @@ func TestSystemLoadsProjectClaudeMd(t *testing.T) {
 func TestSystemRecallsMemory(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
-	memDir := filepath.Join(dir, ".klaudia", "memory")
-	os.MkdirAll(memDir, 0o755)
-	os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("# Memory\n\n- 2026 prefer doublestar\n"), 0o644)
+	klaudiaDir := filepath.Join(dir, ".klaudia")
+	if err := os.MkdirAll(klaudiaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(klaudiaDir, "MEMORY.md"), []byte("# Memory\n\n- 2026 prefer doublestar\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	p := System(dir, "")
 	if !strings.Contains(p, "# Recalled memory") || !strings.Contains(p, "prefer doublestar") {
@@ -54,6 +58,45 @@ func TestSystemRecallsMemory(t *testing.T) {
 	}
 	if !strings.Contains(p, "Memory tool") {
 		t.Errorf("recall section should mention the Memory tool")
+	}
+}
+
+func TestSystemRecallsLinkedMemoryFiles(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	memDir := filepath.Join(dir, ".klaudia", "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".klaudia", "MEMORY.md"), []byte("# Memory\n\n- Root memory\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Tools\n\n- Use rg for search\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := System(dir, "")
+	for _, want := range []string{"Root memory", "Use rg for search"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("system prompt missing recalled memory %q", want)
+		}
+	}
+}
+
+func TestSystemRecallsLegacyMemoryPath(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	memDir := filepath.Join(dir, ".klaudia", "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("# Memory\n\n- Legacy memory\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := System(dir, "")
+	if !strings.Contains(p, "Legacy memory") {
+		t.Errorf("system prompt should include legacy recalled memory")
 	}
 }
 

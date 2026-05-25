@@ -1,21 +1,23 @@
 // Package memory is a small Markdown-backed memory store. Session memory lives
-// in .klaudia/memory/MEMORY.md; project knowledge lives in .klaudia/KNOWLEDGE.md.
+// in .klaudia/MEMORY.md; detailed memory files live in .klaudia/memory/*.md;
+// project knowledge lives in .klaudia/KNOWLEDGE.md.
 package memory
 
 import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
 
-// Store appends and reads memory notes from a MEMORY.md under a directory.
+// Store appends and reads memory notes from a MEMORY.md file in a given directory.
 type Store struct {
 	dir string
 }
 
-// New returns a Store rooted at dir (e.g. ".klaudia/memory").
+// New returns a Store rooted at dir (e.g. ".klaudia").
 func New(dir string) *Store {
 	return &Store{dir: dir}
 }
@@ -99,10 +101,28 @@ func (s *Store) Search(query string) ([]string, error) {
 // Add appends a timestamped bullet to MEMORY.md, creating the directory and a
 // header on first write. Empty (whitespace-only) text is rejected.
 func (s *Store) Add(text string) error {
-	return appendBullet(s.Path(), "# Memory\n\n", text)
+	return appendBullet(s.Path(), "# Memory\n\n", text, s.linkedMemoryFiles()...)
 }
 
-func appendBullet(path, header, text string) error {
+func (s *Store) linkedMemoryFiles() []string {
+	paths, err := filepath.Glob(filepath.Join(s.dir, "memory", "*.md"))
+	if err != nil || len(paths) == 0 {
+		return nil
+	}
+	sort.Strings(paths)
+
+	links := make([]string, 0, len(paths))
+	for _, path := range paths {
+		name := filepath.Base(path)
+		if name == "MEMORY.md" {
+			continue
+		}
+		links = append(links, "["+strings.TrimSuffix(name, filepath.Ext(name))+"](memory/"+name+")")
+	}
+	return links
+}
+
+func appendBullet(path, header, text string, links ...string) error {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return errors.New("memory text is empty")
@@ -112,10 +132,10 @@ func appendBullet(path, header, text string) error {
 		return err
 	}
 
-	_, err := os.Stat(path)
-	newFile := errors.Is(err, os.ErrNotExist)
-	if err != nil && !newFile {
-		return err
+	existing, readErr := os.ReadFile(path)
+	newFile := errors.Is(readErr, os.ErrNotExist)
+	if readErr != nil && !newFile {
+		return readErr
 	}
 
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
@@ -129,7 +149,36 @@ func appendBullet(path, header, text string) error {
 			return err
 		}
 	}
+	if err := appendMissingLinks(file, string(existing), links); err != nil {
+		return err
+	}
 
 	_, err = file.WriteString("- " + time.Now().Format(time.RFC3339) + " " + text + "\n")
 	return err
+}
+
+func appendMissingLinks(file *os.File, existing string, links []string) error {
+	var missing []string
+	for _, link := range links {
+		if !strings.Contains(existing, link) {
+			missing = append(missing, link)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	if strings.TrimSpace(existing) != "" && !strings.HasSuffix(existing, "\n") {
+		if _, err := file.WriteString("\n"); err != nil {
+			return err
+		}
+	}
+	if _, err := file.WriteString("\n## Linked memory\n"); err != nil {
+		return err
+	}
+	for _, link := range missing {
+		if _, err := file.WriteString("- " + link + "\n"); err != nil {
+			return err
+		}
+	}
+	return nil
 }

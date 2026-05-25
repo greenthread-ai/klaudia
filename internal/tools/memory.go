@@ -14,7 +14,7 @@ import (
 // MemoryInput is the Memory tool's input.
 type MemoryInput struct {
 	Operation string `json:"operation" jsonschema:"enum=search,enum=add,enum=view,description=Operation to perform: search recalls matching notes; view reads all session notes; add stores content"`
-	Scope     string `json:"scope,omitempty" jsonschema:"enum=session,enum=project,description=Where to write for operation=add: session (default) writes .klaudia/memory/MEMORY.md; project writes .klaudia/KNOWLEDGE.md"`
+	Scope     string `json:"scope,omitempty" jsonschema:"enum=session,enum=project,description=Where to write for operation=add: session (default) writes .klaudia/MEMORY.md; project writes .klaudia/KNOWLEDGE.md"`
 	Query     string `json:"query,omitempty" jsonschema:"description=Search terms (required for operation=search)"`
 	Content   string `json:"content,omitempty" jsonschema:"description=The note to store (required for operation=add)"`
 }
@@ -50,7 +50,7 @@ func (m *Memory) Description(context.Context) (string, error) {
 		"asking the user or re-investigating, and to store durable facts (decisions, conventions, " +
 		"gotchas) for later. operation: \"search\" (find notes matching query terms), " +
 		"\"view\" (read all session notes), \"add\" (store a new note via content). " +
-		"For operation=add, scope may be \"session\" (default, .klaudia/memory/MEMORY.md) " +
+		"For operation=add, scope may be \"session\" (default, .klaudia/MEMORY.md) " +
 		"or \"project\" (.klaudia/KNOWLEDGE.md for durable project understanding). " +
 		"Search early when resuming work or when a task references past decisions.", nil
 }

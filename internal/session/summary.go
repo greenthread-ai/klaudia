@@ -7,22 +7,20 @@ import (
 	"strings"
 )
 
-// summaryDir is where per-session compaction summaries live: a project-local
-// .klaudia/sessions/ directory (greppable Markdown, no DB). This is a
-// deliberate Klaudia divergence supporting token-saving resume.
-func summaryDir(cwd string) string {
-	return filepath.Join(cwd, ".klaudia", "sessions")
+// SummaryPath returns the summary file path for a session, stored alongside
+// the transcript in the per-project session directory.
+func SummaryPath(cwd, sessionID string) string {
+	return filepath.Join(Dir(cwd), sessionID+".summary.md")
 }
 
-// SummaryPath returns the summary file path for a session.
-func SummaryPath(cwd, sessionID string) string {
-	return filepath.Join(summaryDir(cwd), sessionID+".summary.md")
+func legacySummaryPath(cwd, sessionID string) string {
+	return filepath.Join(cwd, ".klaudia", "sessions", sessionID+".summary.md")
 }
 
 // WriteSummary persists a compaction summary for a session, stamped with the
 // time and (when available) the current git commit. Last write wins.
 func WriteSummary(cwd, sessionID, summary, gitCommit string) error {
-	if err := os.MkdirAll(summaryDir(cwd), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(SummaryPath(cwd, sessionID)), 0o755); err != nil {
 		return err
 	}
 	var b strings.Builder
@@ -43,7 +41,10 @@ func WriteSummary(cwd, sessionID, summary, gitCommit string) error {
 func ReadSummary(cwd, sessionID string) (string, bool) {
 	data, err := os.ReadFile(SummaryPath(cwd, sessionID))
 	if err != nil {
-		return "", false
+		data, err = os.ReadFile(legacySummaryPath(cwd, sessionID))
+		if err != nil {
+			return "", false
+		}
 	}
 	body := stripSummaryHeader(string(data))
 	if strings.TrimSpace(body) == "" {

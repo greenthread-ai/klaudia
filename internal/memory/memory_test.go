@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -145,6 +147,63 @@ func TestSearchEmptyQueryReturnsAll(t *testing.T) {
 	}
 	if !reflect.DeepEqual(matches, entries) {
 		t.Fatalf("Search(empty) = %q, want %q", matches, entries)
+	}
+}
+
+func TestAddLinksMemoryFiles(t *testing.T) {
+	dir := t.TempDir()
+	store := New(dir)
+	memDir := filepath.Join(dir, "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Tools\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "prefs.md"), []byte("# Prefs\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("# Legacy\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.Add("remember this"); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+
+	contents, err := store.Index()
+	if err != nil {
+		t.Fatalf("Index() error = %v", err)
+	}
+	for _, want := range []string{"## Linked memory", "[prefs](memory/prefs.md)", "[tools](memory/tools.md)"} {
+		if !strings.Contains(contents, want) {
+			t.Fatalf("Index() = %q, want %q", contents, want)
+		}
+	}
+	if strings.Contains(contents, "memory/MEMORY.md") {
+		t.Fatalf("Index() = %q, should not link legacy MEMORY.md", contents)
+	}
+}
+
+func TestAddDoesNotDuplicateMemoryFileLinks(t *testing.T) {
+	dir := t.TempDir()
+	store := New(dir)
+	memDir := filepath.Join(dir, "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Tools\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	addNotes(t, store, "first", "second")
+
+	contents, err := store.Index()
+	if err != nil {
+		t.Fatalf("Index() error = %v", err)
+	}
+	if got := strings.Count(contents, "[tools](memory/tools.md)"); got != 1 {
+		t.Fatalf("tools link count = %d, want 1; contents = %q", got, contents)
 	}
 }
 

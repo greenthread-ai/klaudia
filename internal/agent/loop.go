@@ -30,13 +30,13 @@ type Emitter func(event Event)
 
 // Event is a streaming event emitted during a run (stream-json mode).
 type Event struct {
-	Type       string `json:"type"`                  // "assistant" | "tool_use" | "tool_result"
-	Text       string `json:"text,omitempty"`        // assistant text
-	ToolName   string `json:"tool_name,omitempty"`   // tool_use / tool_result
-	ToolUseID  string `json:"tool_use_id,omitempty"` // tool_use / tool_result
-	Input      any    `json:"input,omitempty"`       // tool_use input
-	Content    string `json:"content,omitempty"`     // tool_result content
-	IsError    bool   `json:"is_error,omitempty"`    // tool_result error flag
+	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_result"
+	Text      string `json:"text,omitempty"`        // assistant text
+	ToolName  string `json:"tool_name,omitempty"`   // tool_use / tool_result
+	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use / tool_result
+	Input     any    `json:"input,omitempty"`       // tool_use input
+	Content   string `json:"content,omitempty"`     // tool_result content
+	IsError   bool   `json:"is_error,omitempty"`    // tool_result error flag
 }
 
 // Recorder persists conversation messages to a transcript as the loop runs.
@@ -81,7 +81,7 @@ type Options struct {
 	// default and for the TUI, so its single-reader invariant is untouched.
 	PartialMessages func(anthropic.BetaRawMessageStreamEventUnion)
 	// OnSummary, if set, is called with each compaction summary the loop
-	// produces (autocompact). The CLI persists it to .klaudia/sessions for
+	// produces (autocompact). The CLI persists it alongside the transcript for
 	// token-saving resume. May be nil.
 	OnSummary func(summary string)
 }
@@ -505,7 +505,7 @@ func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[strin
 func splitSchema(raw json.RawMessage) (properties any, required []string) {
 	var s struct {
 		Properties json.RawMessage `json:"properties"`
-		Required    []string       `json:"required"`
+		Required   []string        `json:"required"`
 	}
 	_ = json.Unmarshal(raw, &s)
 	if len(s.Properties) > 0 {

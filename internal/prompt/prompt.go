@@ -80,14 +80,40 @@ func recalledKnowledge(cwd string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// recalledMemory returns the project memory index for priming the model, or ""
-// if there is none. Mirrors the JS auto-memory recall.
+// recalledMemory returns the project memory index and linked memory notes for
+// priming the model, or "" if there is none.
 func recalledMemory(cwd string) string {
-	data, err := os.ReadFile(filepath.Join(cwd, ".klaudia", "memory", "MEMORY.md"))
-	if err != nil {
-		return ""
+	klaudiaDir := filepath.Join(cwd, ".klaudia")
+	parts := readMarkdownFiles(filepath.Join(klaudiaDir, "MEMORY.md"))
+
+	// Backward compatibility for projects that still have the old session-memory
+	// index under .klaudia/memory/MEMORY.md.
+	parts = append(parts, readMarkdownFiles(filepath.Join(klaudiaDir, "memory", "MEMORY.md"))...)
+
+	if paths, err := filepath.Glob(filepath.Join(klaudiaDir, "memory", "*.md")); err == nil {
+		for _, path := range paths {
+			if filepath.Base(path) == "MEMORY.md" {
+				continue
+			}
+			parts = append(parts, readMarkdownFiles(path)...)
+		}
 	}
-	return strings.TrimSpace(string(data))
+
+	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
+func readMarkdownFiles(paths ...string) []string {
+	var parts []string
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if contents := strings.TrimSpace(string(data)); contents != "" {
+			parts = append(parts, contents)
+		}
+	}
+	return parts
 }
 
 // envBlock renders the <env> context the model sees each session.
