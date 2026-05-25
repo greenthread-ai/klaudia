@@ -94,6 +94,10 @@ Tool calls show their key input (e.g. `⚙ Bash go test ./...`) and a `-`/`+`
 preview for edits; a status bar tracks model · mode · turns · tokens; and
 `/last` reprints the most recent tool output in full.
 
+You can **queue a follow-up while the model is working**: type and press Enter to
+queue it (it's sent when the current turn finishes); press Enter again to
+interrupt and send it now, or `↑` to edit it.
+
 `/theme` switches the colour theme (Markdown + chrome) for the session; set a
 durable default with `theme = "nord"` in `.klaudia/config.toml` (dracula |
 gruvbox | tokyo-night | nord | catppuccin).

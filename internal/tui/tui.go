@@ -227,6 +227,7 @@ type Model struct {
 	statIn     int64
 	statOut    int64
 	lastResult string // full content of the most recent tool result (for /last)
+	queued     string // a message typed while the model is working (sent on completion)
 	// Pending AskUserQuestion.
 	askReply    chan string
 	askOptions  []tools.AskOption
@@ -312,8 +313,17 @@ func newPromptInput() textarea.Model {
 	return in
 }
 
+// setState changes the UI state and re-syncs the layout (the running and idle
+// states reserve different numbers of bottom rows).
+func (m *Model) setState(s uiState) {
+	m.state = s
+	m.syncInputHeight()
+}
+
 func (m *Model) inputHeight() int {
-	if m.state != stateIdle {
+	// The input is shown (and editable) when idle and while the model works
+	// (for queueing a follow-up); other states show a one-line prompt.
+	if m.state != stateIdle && m.state != stateRunning {
 		return 1
 	}
 	h := m.input.LineCount()
@@ -331,8 +341,16 @@ func (m *Model) syncInputHeight() {
 		return
 	}
 	inputH := m.inputHeight() + 2 // +1 separator, +1 persistent status bar
-	if sug := m.slashSuggestionLine(); sug != "" {
-		inputH += strings.Count(sug, "\n") + 1
+	switch m.state {
+	case stateRunning:
+		inputH++ // the "working…" line above the input
+		if m.queued != "" {
+			inputH++ // the queued-message hint
+		}
+	case stateIdle:
+		if sug := m.slashSuggestionLine(); sug != "" {
+			inputH += strings.Count(sug, "\n") + 1
+		}
 	}
 	if inputH > m.height-1 {
 		inputH = m.height - 1
@@ -394,7 +412,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			msg.reply <- permission.Decision{Behavior: permission.Allow}
 			return m, m.waitForEvent()
 		}
-		m.state = stateAwaitingPermission
+		m.setState(stateAwaitingPermission)
 		m.pending = msg.reply
 		m.pendingReq = msg.req
 		m.appendLine(askStyle.Render("Permission required: " + m.permissionSummary(msg.req)))
@@ -405,7 +423,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case askMsg:
-		m.state = stateAwaitingAnswer
+		m.setState(stateAwaitingAnswer)
 		m.askReply = msg.reply
 		m.askOptions = msg.options
 		m.askQuestion = msg.question
@@ -420,7 +438,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case planMsg:
-		m.state = stateAwaitingPlan
+		m.setState(stateAwaitingPlan)
 		m.planReply = msg.reply
 		m.appendLine(askStyle.Render("Proposed plan:"))
 		m.appendMarkdown(msg.plan)
@@ -448,7 +466,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statOut += msg.res.OutputTokens
 		// Drop any approval/ask/plan channels a turn was interrupted mid-prompt.
 		m.pending, m.askReply, m.planReply = nil, nil, nil
-		m.state = stateIdle
+		// A message queued while this turn ran is sent now as the next turn.
+		if q := strings.TrimSpace(m.queued); q != "" {
+			m.queued = ""
+			m.pushHistory(q)
+			m.appendLine(userStyle.Render("› ") + q)
+			m.setState(stateRunning)
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(q), stopSW)
+		}
+		m.setState(stateIdle)
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW)
 
@@ -459,7 +485,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.history = msg.history
 			m.appendLine(bannerStyle.Render("Compacted conversation. Summary:\n" + strings.TrimSpace(msg.summary)))
 		}
-		m.state = stateIdle
+		m.setState(stateIdle)
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent())
 
@@ -519,6 +545,38 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// While the model works, the input stays editable to queue a follow-up:
+	// Enter queues it; Enter again (empty) interrupts and sends it; ↑ edits it.
+	if m.state == stateRunning {
+		switch msg.Type {
+		case tea.KeyEnter:
+			if text := strings.TrimSpace(m.input.Value()); text != "" {
+				m.queued = text
+				m.input.Reset()
+				m.syncInputHeight()
+				return m, nil
+			}
+			if m.queued != "" && m.turnCancel != nil {
+				m.turnCancel()
+				m.turnCancel = nil
+				m.appendLine(toolStyle.Render("  ⊘ interrupting to send your queued message…"))
+			}
+			return m, nil
+		case tea.KeyUp:
+			if m.queued != "" { // recall the queued message to edit it
+				m.input.SetValue(m.queued)
+				m.queued = ""
+				m.input.CursorEnd()
+				m.syncInputHeight()
+			}
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		m.syncInputHeight()
+		return m, cmd
+	}
+
 	if m.state == stateAwaitingPlan {
 		switch strings.ToLower(msg.String()) {
 		case "y":
@@ -526,12 +584,12 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.planReply = nil
 			m.sess.PermissionMode = string(permission.ModeAcceptEdits) // leave plan mode
 			m.appendLine(toolStyle.Render("  → approved; plan mode off (acceptEdits)"))
-			m.state = stateRunning
+			m.setState(stateRunning)
 		case "n":
 			m.planReply <- false
 			m.planReply = nil
 			m.appendLine(toolStyle.Render("  → not approved; staying in plan mode"))
-			m.state = stateRunning
+			m.setState(stateRunning)
 		}
 		return m, nil
 	}
@@ -541,13 +599,13 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "y":
 			action := m.confirmAction
 			m.confirmAction = nil
-			m.state = stateIdle
+			m.setState(stateIdle)
 			if action != nil {
 				m.appendLine(bannerStyle.Render(action()))
 			}
 		case "n":
 			m.confirmAction = nil
-			m.state = stateIdle
+			m.setState(stateIdle)
 			m.appendLine(toolStyle.Render("  → cancelled"))
 		}
 		return m, nil
@@ -556,7 +614,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.state == stateAwaitingChoice {
 		if msg.Type == tea.KeyEsc {
 			m.choiceItems, m.choicePrompt = nil, ""
-			m.state = stateIdle
+			m.setState(stateIdle)
 			m.appendLine(toolStyle.Render("  → cancelled"))
 			return m, nil
 		}
@@ -565,7 +623,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if n := int(s[0] - '0'); n <= len(m.choiceItems) {
 				item := m.choiceItems[n-1]
 				m.choiceItems, m.choicePrompt = nil, ""
-				m.state = stateIdle
+				m.setState(stateIdle)
 				m.appendLine(bannerStyle.Render("  → " + item.apply()))
 			}
 		}
@@ -581,7 +639,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.askReply <- choice
 				m.askReply = nil
 				m.appendLine(toolStyle.Render("  → " + choice))
-				m.state = stateRunning
+				m.setState(stateRunning)
 			}
 		}
 		return m, nil
@@ -638,7 +696,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.handleSlash(prompt)
 		}
 
-		m.state = stateRunning
+		m.setState(stateRunning)
 		// Do NOT arm another waitForEvent here: exactly one channel reader must
 		// be outstanding (Init armed it; each channel-event handler re-arms it).
 		// A second reader would race and deliver streamed deltas out of order.
@@ -689,7 +747,6 @@ const keyHints = `Keys:
   Tab              Complete a /command or an @<path> reference
   ↑ / ↓            Cycle through previous prompts
   PgUp / PgDn      Scroll the conversation history
-  Mouse wheel      Scroll the conversation history
   Esc              Interrupt the model mid-turn
   Ctrl+C           Quit`
 
@@ -760,7 +817,7 @@ func (m *Model) slashSuggestionLine() string {
 func (m *Model) startChoice(title string, items []choiceItem) {
 	m.choiceItems = items
 	m.choicePrompt = title
-	m.state = stateAwaitingChoice
+	m.setState(stateAwaitingChoice)
 	m.appendLine(askStyle.Render(title))
 	for i, it := range items {
 		m.appendLine(toolStyle.Render(fmt.Sprintf("  %d) %s", i+1, it.label)))
@@ -992,7 +1049,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.appendLine(bannerStyle.Render("Compacting conversation…"))
-		m.state = stateRunning
+		m.setState(stateRunning)
 		go func(hist []anthropic.BetaMessageParam) {
 			newHist, summary, err := m.sess.Compact(m.ctx, hist)
 			m.events <- compactDoneMsg{history: newHist, summary: summary, err: err}
@@ -1054,7 +1111,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			}
 			return "Committed."
 		}
-		m.state = stateAwaitingConfirm
+		m.setState(stateAwaitingConfirm)
 		m.appendLine(askStyle.Render("Stage all changes and commit?\n" + strings.TrimRight(status, "\n") + "\n(y)es / (n)o"))
 	default:
 		// A /<skill> matching a user-defined skill renders its body and submits it
@@ -1063,7 +1120,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		if sk, ok := m.lookupSkill(strings.TrimPrefix(cmd, "/")); ok {
 			rendered := sk.Render(strings.Join(args, " "))
 			m.appendLine(bannerStyle.Render("Running skill /" + sk.Name))
-			m.state = stateRunning
+			m.setState(stateRunning)
 			return m, m.startTurn(rendered)
 		}
 		m.appendLine(errStyle.Render("Unknown command " + cmd + ". Try /help."))
@@ -1519,7 +1576,7 @@ func (m *Model) answer(d permission.Decision) {
 		verb = "denied"
 	}
 	m.appendLine(toolStyle.Render("  → " + verb))
-	m.state = stateRunning
+	m.setState(stateRunning)
 }
 
 // startTurn runs the agent in a goroutine, delivering events via the channel,
@@ -1685,19 +1742,18 @@ func (m *Model) syncViewport() {
 
 func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
-	inputH := m.inputHeight() + 1 // +1 reserves the persistent status bar
 	if !m.ready {
-		m.vp = viewport.New(w, h-inputH)
+		m.vp = viewport.New(w, h)
 		m.ready = true
-	} else {
-		m.vp.Width = w
-		m.vp.Height = h - inputH
 	}
+	m.vp.Width = w
 	m.input.SetWidth(w - 4)
 	if m.glam == nil || m.glamWidth != w {
 		m.buildGlamour(w)
 	}
-	m.syncViewport()
+	// syncInputHeight does the state-aware height reservation (status bar, and
+	// the working line + queued hint while running) and syncs the viewport.
+	m.syncInputHeight()
 }
 
 func (m *Model) View() string {
@@ -1707,7 +1763,12 @@ func (m *Model) View() string {
 	var bottom string
 	switch m.state {
 	case stateRunning:
-		bottom = m.spin.View() + " working… " + bannerStyle.Render(m.sw.View()) + hintStyle.Render("  (esc to interrupt)")
+		work := m.spin.View() + " working… " + bannerStyle.Render(m.sw.View()) + hintStyle.Render("  (esc to interrupt)")
+		m.input.SetHeight(m.inputHeight())
+		bottom = work + "\n" + m.input.View()
+		if m.queued != "" {
+			bottom += "\n" + hintStyle.Render(fmt.Sprintf("⏎ queued: %q · Enter to send now · ↑ to edit", oneline(m.queued, 48)))
+		}
 	case stateAwaitingPermission:
 		bottom = askStyle.Render(m.permissionPrompt())
 	case stateAwaitingAnswer:
@@ -1787,7 +1848,6 @@ func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	p := tea.NewProgram(
 		New(ctx, run, history, sess),
 		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
 	)
 	_, err := p.Run()
 	return err
