@@ -223,9 +223,10 @@ type Model struct {
 	sessionAllow []permission.Rule
 	sessionDeny  []permission.Rule
 	// Cumulative session stats for /stats.
-	statTurns int
-	statIn    int64
-	statOut   int64
+	statTurns  int
+	statIn     int64
+	statOut    int64
+	lastResult string // full content of the most recent tool result (for /last)
 	// Pending AskUserQuestion.
 	askReply    chan string
 	askOptions  []tools.AskOption
@@ -329,7 +330,7 @@ func (m *Model) syncInputHeight() {
 	if !m.ready {
 		return
 	}
-	inputH := m.inputHeight() + 1
+	inputH := m.inputHeight() + 2 // +1 separator, +1 persistent status bar
 	if sug := m.slashSuggestionLine(); sug != "" {
 		inputH += strings.Count(sug, "\n") + 1
 	}
@@ -677,6 +678,7 @@ var commandList = []cmdInfo{
 	{"/diff", "[args]", "Show git diff of the working tree"},
 	{"/commit", "<msg>", "Stage all changes and commit (asks first)"},
 	{"/export", "", "Export the conversation to a Markdown file"},
+	{"/last", "", "Reprint the most recent tool output in full"},
 	{"/clear", "", "Clear the screen and conversation history"},
 	{"/quit", "", "Exit Klaudia (alias /exit)"},
 }
@@ -811,6 +813,16 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.rawBlocks = nil
 		m.history = nil
 		m.appendLine(bannerStyle.Render("Cleared conversation and screen."))
+	case "/last":
+		if strings.TrimSpace(m.lastResult) == "" {
+			m.appendLine(bannerStyle.Render("No tool output yet."))
+			break
+		}
+		if strings.Contains(m.lastResult, "```") {
+			m.appendLine(m.markdown(m.lastResult))
+		} else {
+			m.appendLine(toolStyle.Render(m.lastResult))
+		}
 	case "/model":
 		if len(args) == 0 {
 			cur := m.sess.Model
@@ -1537,15 +1549,17 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.appendText(ev.Text) // streamed deltas (raw until flushed)
 	case "tool_use":
 		m.flushAssistant() // the assistant message before a tool call is complete
-		m.appendLine(toolStyle.Render(fmt.Sprintf("⚙ %s", ev.ToolName)))
+		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
+		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + toolSummary(ev.ToolName, ev.Input)))
+		if diff := toolDiff(ev.ToolName, ev.Input); diff != "" {
+			m.appendLine(diff)
+		}
 	case "tool_result":
 		m.flushAssistant()
+		m.lastResult = ev.Content // keep the full result for /last (#3)
 		s := strings.TrimSpace(ev.Content)
 		if s == "" {
 			s = "completed"
-		}
-		if len(s) > 240 {
-			s = s[:240] + "…"
 		}
 		style := toolStyle
 		prefix := "✓ " + ev.ToolName + ": "
@@ -1553,7 +1567,16 @@ func (m *Model) renderEvent(ev agent.Event) {
 			style = errStyle
 			prefix = "✗ " + ev.ToolName + ": "
 		}
-		m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(s, "\n", "\n  ")))
+		// Syntax-highlight fenced code in results (#5), else truncated plain text.
+		if !ev.IsError && strings.Contains(s, "```") && len(s) <= 4000 {
+			m.appendLine(toolStyle.Render("  " + prefix))
+			m.appendLine(m.markdown(s))
+		} else {
+			if len(s) > 240 {
+				s = s[:240] + "…  " + hintStyle.Render("(/last for full output)")
+			}
+			m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(s, "\n", "\n  ")))
+		}
 	case "compaction":
 		m.flushAssistant()
 		m.appendLine(bannerStyle.Render("· " + ev.Content))
@@ -1662,7 +1685,7 @@ func (m *Model) syncViewport() {
 
 func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
-	inputH := m.inputHeight()
+	inputH := m.inputHeight() + 1 // +1 reserves the persistent status bar
 	if !m.ready {
 		m.vp = viewport.New(w, h-inputH)
 		m.ready = true
@@ -1702,7 +1725,8 @@ func (m *Model) View() string {
 			bottom += "\n" + sug
 		}
 	}
-	return m.vp.View() + "\n" + bottom
+	// Persistent status bar (#4) at the very bottom, in every state.
+	return m.vp.View() + "\n" + bottom + "\n" + m.statusLine()
 }
 
 // uiApprover implements agent.Approver by asking the UI and blocking for the

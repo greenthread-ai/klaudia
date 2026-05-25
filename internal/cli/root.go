@@ -76,6 +76,7 @@ var builtinSlashCommands = map[string]bool{
 	"config": true, "agents": true, "context": true,
 	"compact": true, "add-dir": true,
 	"plan": true, "doctor": true, "diff": true, "commit": true, "export": true,
+	"last": true,
 }
 
 // withExtraDirs appends an "additional working directories" note to the system

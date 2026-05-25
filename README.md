@@ -90,6 +90,10 @@ A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
 type-ahead, `@path` file completion (Tab), input history (↑/↓), scrollback
 (PgUp/PgDn), and `Esc` to interrupt a turn. Type `/help` for the full list.
 
+Tool calls show their key input (e.g. `⚙ Bash go test ./...`) and a `-`/`+`
+preview for edits; a status bar tracks model · mode · turns · tokens; and
+`/last` reprints the most recent tool output in full.
+
 `/theme` switches the colour theme (Markdown + chrome) for the session; set a
 durable default with `theme = "nord"` in `.klaudia/config.toml` (dracula |
 gruvbox | tokyo-night | nord | catppuccin).
