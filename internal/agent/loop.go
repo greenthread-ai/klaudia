@@ -129,6 +129,10 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		system = []anthropic.BetaTextBlockParam{{Text: opts.System}}
 	}
 
+	// failures tracks how many times each identical tool call (name+input) has
+	// failed within this Run, so dispatch can break a model out of a retry loop.
+	failures := map[string]int{}
+
 	messages := append([]anthropic.BetaMessageParam{}, opts.InitialMessages...)
 	if opts.Prompt != "" {
 		userMsg := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(opts.Prompt))
@@ -205,7 +209,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		}
 		resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
 		for _, tu := range toolUses {
-			block := l.dispatch(ctx, tu, opts, emit, reveal)
+			block := l.dispatch(ctx, tu, opts, emit, reveal, failures)
 			resultBlocks = append(resultBlocks, block)
 		}
 		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
@@ -321,17 +325,48 @@ func (l *Loop) unknownToolMsg(name string) string {
 	return fmt.Sprintf("No such tool available: %s", name)
 }
 
-func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string)) anthropic.BetaContentBlockParamUnion {
+// repeatedFailureMsg is returned when the model retries an identical tool call
+// that has already failed repeatedly, instead of running it again. It tells the
+// model plainly to stop repeating and what to try instead.
+func repeatedFailureMsg(name string, n int) string {
+	msg := fmt.Sprintf("You have already tried this exact %s call %d times and it failed the same way each time. "+
+		"Stop repeating it — running it again will not change the result. Do something different.", name, n)
+	switch name {
+	case "Edit", "NotebookEdit":
+		msg += " Use Read to get the file's current exact contents, then build old_string by copying the " +
+			"text verbatim from what Read returns (including indentation and blank lines), or take a different approach."
+	case "Write":
+		msg += " Read the file first to see what is actually there before overwriting it."
+	}
+	return msg
+}
+
+// repeatFailureLimit is how many times an identical tool call (same name and
+// input) may fail within one Run before dispatch stops re-running it and
+// instead steers the model to change tack. Weaker models otherwise retry the
+// exact same failing call indefinitely, burning the whole turn budget.
+const repeatFailureLimit = 2
+
+func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), failures map[string]int) anthropic.BetaContentBlockParamUnion {
 	raw, _ := json.Marshal(tu.Input)
 	if emit != nil {
 		emit(Event{Type: "tool_use", ToolName: tu.Name, ToolUseID: tu.ID, Input: tu.Input})
 	}
 
+	key := tu.Name + "\x00" + string(raw)
 	errResult := func(msg string) anthropic.BetaContentBlockParamUnion {
+		failures[key]++
 		if emit != nil {
 			emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
 		}
 		return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
+	}
+
+	// Loop-breaker: this exact call has already failed repeatedly. Don't run it
+	// again (it would fail identically); return directive steering instead so a
+	// model stuck in a retry loop gets a clear push to do something different.
+	if failures[key] >= repeatFailureLimit {
+		return errResult(repeatedFailureMsg(tu.Name, failures[key]))
 	}
 
 	tool, ok := l.tools.Lookup(tu.Name)
@@ -390,6 +425,11 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		content += r.Content
 		isErr = isErr || r.IsError
 		images = append(images, r.Images...)
+	}
+	if isErr {
+		failures[key]++
+	} else {
+		delete(failures, key) // a clean run clears the retry counter for this call
 	}
 	if emit != nil {
 		emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr})
