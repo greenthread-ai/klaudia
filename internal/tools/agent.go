@@ -56,6 +56,10 @@ func NewAgent(spawner Spawner, types []AgentTypeInfo) (*Agent, error) {
 
 func (a *Agent) Name() string { return "Agent" }
 
+// HasType reports whether name is a known sub-agent type. Used by the loop to
+// steer a model that calls a sub-agent type as if it were a top-level tool.
+func (a *Agent) HasType(name string) bool { return a.valid[name] }
+
 func (a *Agent) Description(context.Context) (string, error) {
 	var b strings.Builder
 	b.WriteString("Launch a new sub-agent to handle a complex, multi-step task autonomously. ")

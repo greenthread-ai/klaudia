@@ -308,6 +308,19 @@ func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewPa
 
 // dispatch runs one tool_use: lookup → permission → validate → execute, and
 // returns the tool_result block to append to the conversation.
+// unknownToolMsg builds the error for an unrecognised tool name. If the name is
+// actually a sub-agent type (a common model mistake — calling "Plan" directly),
+// it steers the model to the Agent tool instead of a dead-end "no such tool".
+func (l *Loop) unknownToolMsg(name string) string {
+	if agentTool, ok := l.tools.Lookup("Agent"); ok {
+		if lister, ok := agentTool.(interface{ HasType(string) bool }); ok && lister.HasType(name) {
+			return fmt.Sprintf("%q is a sub-agent type, not a tool. Launch it with the Agent tool: "+
+				"Agent(subagent_type=%q, prompt=…).", name, name)
+		}
+	}
+	return fmt.Sprintf("No such tool available: %s", name)
+}
+
 func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string)) anthropic.BetaContentBlockParamUnion {
 	raw, _ := json.Marshal(tu.Input)
 	if emit != nil {
@@ -323,7 +336,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 
 	tool, ok := l.tools.Lookup(tu.Name)
 	if !ok {
-		return errResult(fmt.Sprintf("No such tool available: %s", tu.Name))
+		return errResult(l.unknownToolMsg(tu.Name))
 	}
 
 	req := tool.PermissionRequest(raw)
