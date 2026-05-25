@@ -144,6 +144,22 @@ func (e *Edit) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 
 	oldString, newString := normalizeEditStrings(in.OldString, in.NewString, content)
 	count := strings.Count(content, oldString)
+
+	// Whitespace-tolerant fallback: weaker models routinely get leading/trailing
+	// whitespace or blank lines slightly wrong and then retry the identical Edit
+	// forever. When the exact text isn't found, try to locate the block by
+	// comparing lines trimmed of surrounding whitespace; if exactly one block
+	// matches, edit that real span. Only for single (non-replace_all) edits, and
+	// only on a unique match, so we never silently edit the wrong place.
+	flexible := false
+	if count == 0 && !in.ReplaceAll {
+		if span, ok := flexibleMatch(content, oldString); ok {
+			oldString = span
+			count = 1
+			flexible = true
+		}
+	}
+
 	if count == 0 {
 		return []Result{{Content: editNotFoundMessage(content, oldString), IsError: true}}, nil
 	}
@@ -172,5 +188,50 @@ func (e *Edit) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	if in.ReplaceAll {
 		n = count
 	}
-	return []Result{{Content: fmt.Sprintf("Edited %s (%d replacement(s))", in.FilePath, n)}}, nil
+	msg := fmt.Sprintf("Edited %s (%d replacement(s))", in.FilePath, n)
+	if flexible {
+		msg += " — old_string was matched ignoring surrounding whitespace; verify the result with Read if it matters."
+	}
+	return []Result{{Content: msg}}, nil
+}
+
+// flexibleMatch locates oldString in content allowing per-line differences in
+// leading/trailing whitespace (the common way a model's old_string drifts from
+// the file). It compares the two as sequences of trimmed lines and, when
+// exactly one window of content matches, returns that window's original text
+// (with the file's real whitespace) so the caller can do an exact replacement.
+// It returns ("", false) on zero or multiple matches — ambiguity is never
+// resolved silently.
+func flexibleMatch(content, oldString string) (string, bool) {
+	oldLines := strings.Split(strings.TrimRight(oldString, "\n"), "\n")
+	if len(oldLines) == 0 || (len(oldLines) == 1 && strings.TrimSpace(oldLines[0]) == "") {
+		return "", false // nothing meaningful to match
+	}
+	contentLines := strings.Split(content, "\n")
+	if len(oldLines) > len(contentLines) {
+		return "", false
+	}
+
+	trimmedEqual := func(start int) bool {
+		for k, ol := range oldLines {
+			if strings.TrimSpace(contentLines[start+k]) != strings.TrimSpace(ol) {
+				return false
+			}
+		}
+		return true
+	}
+
+	match := -1
+	for i := 0; i+len(oldLines) <= len(contentLines); i++ {
+		if trimmedEqual(i) {
+			if match != -1 {
+				return "", false // ambiguous
+			}
+			match = i
+		}
+	}
+	if match == -1 {
+		return "", false
+	}
+	return strings.Join(contentLines[match:match+len(oldLines)], "\n"), true
 }

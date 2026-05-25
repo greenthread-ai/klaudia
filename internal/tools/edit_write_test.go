@@ -118,7 +118,10 @@ func TestEditNormalizesLineEndings(t *testing.T) {
 func TestEditNotFoundIncludesHint(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "f.txt")
-	if err := os.WriteFile(path, []byte("\talpha\n"), 0o644); err != nil {
+	// "alpha" appears only mid-word, so neither an exact nor a line-aligned
+	// (whitespace-flexible) match succeeds — but the trimmed text is present, so
+	// the hint should point that out.
+	if err := os.WriteFile(path, []byte("return alphabet\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -129,7 +132,7 @@ func TestEditNotFoundIncludesHint(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !res[0].IsError || !strings.Contains(res[0].Content, "trimmed text exists") {
-		t.Fatalf("expected whitespace hint, got %+v", res[0])
+		t.Fatalf("expected trimmed-text hint, got %+v", res[0])
 	}
 }
 
@@ -167,4 +170,61 @@ func TestEditClassPermissionByMode(t *testing.T) {
 	if req.Specifier != "/abs/f.txt" {
 		t.Errorf("specifier = %q, want the file path", req.Specifier)
 	}
+}
+
+func TestEditFlexibleWhitespaceMatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.go")
+	// File is tab-indented.
+	os.WriteFile(path, []byte("func main() {\n\tx := 1\n\tprintln(x)\n}\n"), 0o644)
+
+	e, _ := NewEdit()
+	// Model supplies the block space-indented with a stray trailing space, so
+	// there is no exact match — only a whitespace-flexible one.
+	raw, _ := json.Marshal(EditInput{
+		FilePath:  path,
+		OldString: "    x := 1  \n    println(x)",
+		NewString: "\ty := 2\n\tprintln(y)",
+	})
+	res, err := e.Execute(context.Background(), Context{}, raw)
+	if err != nil || res[0].IsError {
+		t.Fatalf("flexible edit failed: err=%v res=%+v", err, res[0])
+	}
+	if want := "func main() {\n\ty := 2\n\tprintln(y)\n}\n"; func() bool {
+		got, _ := os.ReadFile(path)
+		return string(got) == want
+	}() == false {
+		got, _ := os.ReadFile(path)
+		t.Errorf("content = %q", got)
+	}
+	if !strings.Contains(res[0].Content, "ignoring surrounding whitespace") {
+		t.Errorf("expected flexible-match note, got %q", res[0].Content)
+	}
+}
+
+func TestFlexibleMatch(t *testing.T) {
+	const content = "func main() {\n\tx := 1\n\tprintln(x)\n}\n"
+
+	t.Run("unique whitespace-only difference", func(t *testing.T) {
+		span, ok := flexibleMatch(content, "    x := 1  \n  println(x)")
+		if !ok || span != "\tx := 1\n\tprintln(x)" {
+			t.Errorf("got (%q, %v)", span, ok)
+		}
+	})
+	t.Run("no match", func(t *testing.T) {
+		if span, ok := flexibleMatch(content, "y := 9"); ok {
+			t.Errorf("expected no match, got %q", span)
+		}
+	})
+	t.Run("ambiguous returns false", func(t *testing.T) {
+		dup := "if x {\n    do()\n}\nif x {\n    do()\n}\n"
+		if span, ok := flexibleMatch(dup, "if x {\ndo()\n}"); ok {
+			t.Errorf("expected ambiguous match to be rejected, got %q", span)
+		}
+	})
+	t.Run("blank old_string returns false", func(t *testing.T) {
+		if _, ok := flexibleMatch(content, "   \n  "); ok {
+			t.Error("blank old_string should not match")
+		}
+	})
 }
