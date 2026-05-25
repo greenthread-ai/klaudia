@@ -412,7 +412,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if detail := permissionDetail(msg.req); detail != "" {
 			m.appendLine(toolStyle.Render("  " + detail))
 		}
-		m.appendLine(askStyle.Render(m.permissionPrompt()))
+		// The actionable prompt lives only in the persistent bottom view (see
+		// bottomView/stateAwaitingPermission) — don't duplicate it in scrollback.
 		return m, m.waitForEvent()
 
 	case askMsg:
@@ -435,7 +436,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.planReply = msg.reply
 		m.appendLine(askStyle.Render("Proposed plan:"))
 		m.appendMarkdown(msg.plan)
-		m.appendLine(askStyle.Render("Approve and start implementing? (y)es / (n)o"))
+		// The y/n prompt lives only in the persistent bottom view (see
+		// bottomView/stateAwaitingPlan); don't also write it to scrollback or
+		// the user sees the same prompt twice.
 		return m, m.waitForEvent()
 
 	case doneMsg:
@@ -1105,7 +1108,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			return "Committed."
 		}
 		m.setState(stateAwaitingConfirm)
-		m.appendLine(askStyle.Render("Stage all changes and commit?\n" + strings.TrimRight(status, "\n") + "\n(y)es / (n)o"))
+		// The y/n lives in the persistent bottom view (stateAwaitingConfirm);
+		// scrollback just records the question and the diff being committed.
+		m.appendLine(askStyle.Render("Stage all changes and commit?\n" + strings.TrimRight(status, "\n")))
 	default:
 		// A /<skill> matching a user-defined skill renders its body and submits it
 		// as the turn prompt. Built-in commands above always win (a skill that
