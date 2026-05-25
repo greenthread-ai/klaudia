@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/greenthread/klaudia/internal/permission"
@@ -14,7 +13,7 @@ import (
 
 // NotebookEditInput is the NotebookEdit tool's input.
 type NotebookEditInput struct {
-	NotebookPath string `json:"notebook_path" jsonschema:"description=Absolute path to the .ipynb file"`
+	NotebookPath string `json:"notebook_path" jsonschema:"description=Path to the .ipynb file (absolute, or relative to the working directory)"`
 	NewSource    string `json:"new_source" jsonschema:"description=The new cell source (ignored for delete)"`
 	CellID       string `json:"cell_id,omitempty" jsonschema:"description=Target cell id; or a 0-based index. Empty inserts at the top."`
 	CellType     string `json:"cell_type,omitempty" jsonschema:"description=code or markdown (required for insert)"`
@@ -54,8 +53,8 @@ func (n *NotebookEdit) ValidateInput(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return err
 	}
-	if !filepath.IsAbs(in.NotebookPath) {
-		return fmt.Errorf("notebook_path must be absolute, got %q", in.NotebookPath)
+	if strings.TrimSpace(in.NotebookPath) == "" {
+		return fmt.Errorf("notebook_path is required")
 	}
 	switch in.editMode() {
 	case "replace", "delete":
@@ -88,11 +87,12 @@ func (in NotebookEditInput) editMode() string {
 	return in.EditMode
 }
 
-func (n *NotebookEdit) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (n *NotebookEdit) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in NotebookEditInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	in.NotebookPath = resolvePath(tctx, in.NotebookPath) // accept paths relative to the working dir
 
 	data, err := os.ReadFile(in.NotebookPath)
 	if err != nil {

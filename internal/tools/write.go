@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/greenthread/klaudia/internal/permission"
 	"github.com/greenthread/klaudia/internal/schema"
@@ -13,7 +14,7 @@ import (
 
 // WriteInput is the Write tool's input.
 type WriteInput struct {
-	FilePath string `json:"file_path" jsonschema:"description=The absolute path to the file to write"`
+	FilePath string `json:"file_path" jsonschema:"description=The path to the file to write (absolute, or relative to the working directory)"`
 	Content  string `json:"content" jsonschema:"description=The content to write to the file"`
 }
 
@@ -36,8 +37,8 @@ func (w *Write) Name() string { return "Write" }
 
 func (w *Write) Description(context.Context) (string, error) {
 	return "Writes a file to the local filesystem, overwriting it if it already exists. " +
-		"file_path must be absolute. Parent directories are created as needed. " +
-		"Prefer Edit for modifying existing files.", nil
+		"file_path may be absolute or relative to the working directory. Parent " +
+		"directories are created as needed. Prefer Edit for modifying existing files.", nil
 }
 
 func (w *Write) InputSchema() json.RawMessage { return w.schema.Raw }
@@ -50,8 +51,8 @@ func (w *Write) ValidateInput(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return err
 	}
-	if !filepath.IsAbs(in.FilePath) {
-		return fmt.Errorf("file_path must be absolute, got %q", in.FilePath)
+	if strings.TrimSpace(in.FilePath) == "" {
+		return fmt.Errorf("file_path is required")
 	}
 	return nil
 }
@@ -68,11 +69,12 @@ func (w *Write) CheckPermissions(pctx permission.Context, _ permission.Permissio
 	return editClassDecision(pctx)
 }
 
-func (w *Write) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (w *Write) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in WriteInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	in.FilePath = resolvePath(tctx, in.FilePath) // accept paths relative to the working dir
 	if dir := filepath.Dir(in.FilePath); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return []Result{{Content: fmt.Sprintf("Error creating parent directory: %v", err), IsError: true}}, nil

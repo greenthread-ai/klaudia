@@ -75,7 +75,7 @@ const readMaxLineLen = 2000
 // ReadInput is the Read tool's input. Tags drive both API schema generation and
 // runtime validation (see internal/schema).
 type ReadInput struct {
-	FilePath string `json:"file_path" jsonschema:"description=The absolute path to the file to read"`
+	FilePath string `json:"file_path" jsonschema:"description=The path to the file to read (absolute, or relative to the working directory)"`
 	Offset   int    `json:"offset,omitempty" jsonschema:"description=The line number to start reading from (1-indexed)"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"description=The number of lines to read"`
 }
@@ -98,7 +98,8 @@ func NewRead() (*Read, error) {
 func (r *Read) Name() string { return "Read" }
 
 func (r *Read) Description(context.Context) (string, error) {
-	return "Reads a file from the local filesystem. file_path must be an absolute path. " +
+	return "Reads a file from the local filesystem. file_path may be absolute or relative " +
+		"to the working directory. " +
 		"Text files return up to 2000 lines in cat -n format (line numbers from 1); use " +
 		"offset and limit to window a large file. PDF files are returned as extracted text. " +
 		"Image files (png, jpg, jpeg, gif, webp) are returned as viewable image blocks — use " +
@@ -115,8 +116,8 @@ func (r *Read) ValidateInput(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return err
 	}
-	if !filepath.IsAbs(in.FilePath) {
-		return fmt.Errorf("file_path must be absolute, got %q", in.FilePath)
+	if strings.TrimSpace(in.FilePath) == "" {
+		return fmt.Errorf("file_path is required")
 	}
 	return nil
 }
@@ -131,11 +132,12 @@ func (r *Read) CheckPermissions(pctx permission.Context, _ permission.Permission
 	return allowAlways(pctx)
 }
 
-func (r *Read) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (r *Read) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in ReadInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	in.FilePath = resolvePath(tctx, in.FilePath) // accept paths relative to the working dir
 
 	if info, statErr := os.Stat(in.FilePath); statErr == nil && info.IsDir() {
 		return []Result{{Content: fmt.Sprintf("Path is a directory, not a file: %s. Use Glob or `ls` via Bash to list its contents.", in.FilePath), IsError: true}}, nil

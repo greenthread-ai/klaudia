@@ -53,11 +53,29 @@ func TestReadOffsetLimit(t *testing.T) {
 	}
 }
 
-func TestReadValidateRejectsRelativePath(t *testing.T) {
+func TestReadValidateRejectsEmptyPath(t *testing.T) {
 	r := mustRead(t)
-	raw, _ := json.Marshal(ReadInput{FilePath: "relative/path.txt"})
+	raw, _ := json.Marshal(ReadInput{FilePath: "  "})
 	if err := r.ValidateInput(raw); err == nil {
-		t.Error("expected relative path to be rejected")
+		t.Error("expected empty file_path to be rejected")
+	}
+}
+
+func TestReadResolvesRelativePath(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "rel.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := mustRead(t)
+	raw, _ := json.Marshal(ReadInput{FilePath: "rel.txt"})
+	res, err := r.Execute(context.Background(), Context{WorkingDir: dir}, raw)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	want := "     1\thi\n"
+	if res[0].Content != want {
+		t.Errorf("content = %q, want %q", res[0].Content, want)
 	}
 }
 

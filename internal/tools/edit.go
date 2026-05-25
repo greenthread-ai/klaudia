@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/greenthread/klaudia/internal/permission"
@@ -14,7 +13,7 @@ import (
 
 // EditInput is the Edit tool's input.
 type EditInput struct {
-	FilePath   string `json:"file_path" jsonschema:"description=The absolute path to the file to modify"`
+	FilePath   string `json:"file_path" jsonschema:"description=The path to the file to modify (absolute, or relative to the working directory)"`
 	OldString  string `json:"old_string" jsonschema:"description=The text to replace"`
 	NewString  string `json:"new_string" jsonschema:"description=The text to replace it with (must differ from old_string)"`
 	ReplaceAll bool   `json:"replace_all,omitempty" jsonschema:"description=Replace all occurrences (default false: old_string must be unique)"`
@@ -38,9 +37,10 @@ func NewEdit() (*Edit, error) {
 func (e *Edit) Name() string { return "Edit" }
 
 func (e *Edit) Description(context.Context) (string, error) {
-	return "Performs an exact string replacement in a file. file_path must be absolute. " +
-		"old_string must match exactly (including whitespace) and be unique in the file, " +
-		"unless replace_all is true. new_string must differ from old_string.", nil
+	return "Performs an exact string replacement in a file. file_path may be absolute or " +
+		"relative to the working directory. old_string must match exactly (including " +
+		"whitespace) and be unique in the file, unless replace_all is true. new_string " +
+		"must differ from old_string.", nil
 }
 
 func (e *Edit) InputSchema() json.RawMessage { return e.schema.Raw }
@@ -53,8 +53,8 @@ func (e *Edit) ValidateInput(raw json.RawMessage) error {
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return err
 	}
-	if !filepath.IsAbs(in.FilePath) {
-		return fmt.Errorf("file_path must be absolute, got %q", in.FilePath)
+	if strings.TrimSpace(in.FilePath) == "" {
+		return fmt.Errorf("file_path is required")
 	}
 	if in.OldString == in.NewString {
 		return fmt.Errorf("old_string and new_string must differ")
@@ -126,11 +126,12 @@ func editHint(content, oldString string) string {
 	return "Hint: old_string must match exactly, including whitespace. Use Read immediately before Edit and include surrounding unchanged context."
 }
 
-func (e *Edit) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (e *Edit) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in EditInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	in.FilePath = resolvePath(tctx, in.FilePath) // accept paths relative to the working dir
 
 	data, err := os.ReadFile(in.FilePath)
 	if err != nil {
