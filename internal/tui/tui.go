@@ -326,7 +326,10 @@ func (m *Model) inputHeight() int {
 	if m.state != stateIdle && m.state != stateRunning {
 		return 1
 	}
-	h := m.input.LineCount()
+	// Count wrapped display rows, not logical lines: a single long line that
+	// the textarea soft-wraps must grow the box rather than scroll within one
+	// row. (LineCount counts logical lines only.)
+	h := wrappedRowCount(m.input.Value(), m.input.Width())
 	if h < 1 {
 		return 1
 	}
