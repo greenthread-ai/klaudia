@@ -457,6 +457,8 @@ type options struct {
 	disallowedTools []string
 	partialMessages bool   // --include-partial-messages
 	createConfig    string // --create-config global|local
+	loop            bool   // --loop: autonomous goal-spec iteration
+	maxIterations   int    // --max-iterations: outer-loop cap for --loop
 }
 
 // NewRootCommand builds the top-level `klaudia` command.
@@ -501,6 +503,8 @@ func NewRootCommand() *cobra.Command {
 	f.StringSliceVar(&opts.disallowedTools, "disallowedTools", nil, "Deny tool rules (same format as --allowedTools)")
 	f.BoolVar(&opts.partialMessages, "include-partial-messages", false, "Include partial message chunks as they arrive (only with --print and --output-format=stream-json)")
 	f.StringVar(&opts.createConfig, "create-config", "", "Create a starter TOML config and exit: global (~/.klaudia/config.toml) or local (./.klaudia/config.toml)")
+	f.BoolVar(&opts.loop, "loop", false, "Autonomous loop: iterate against the goal spec (PRD.md or .klaudia/GOAL.md) until complete or --max-iterations. Requires --dangerously-skip-permissions.")
+	f.IntVar(&opts.maxIterations, "max-iterations", 0, "Max iterations for --loop (0 = default 10, hard cap 50)")
 
 	return cmd
 }
@@ -524,8 +528,17 @@ func run(cmd *cobra.Command, opts *options) error {
 		return nil
 	}
 
-	// Mode: stream-json input (embedding) | headless -p | interactive TUI.
-	interactive := !opts.print && opts.inputFormat != "stream-json"
+	// Mode: autonomous --loop | stream-json input (embedding) | headless -p |
+	// interactive TUI. --loop is non-interactive and renders as text.
+	interactive := !opts.print && !opts.loop && opts.inputFormat != "stream-json"
+	if opts.loop {
+		if opts.inputFormat == "stream-json" {
+			return fmt.Errorf("--loop cannot be combined with --input-format stream-json")
+		}
+		if format != FormatText {
+			return fmt.Errorf("--loop only supports --output-format text")
+		}
+	}
 	if opts.print && format == FormatStreamJSON && !opts.verbose {
 		return fmt.Errorf("--output-format stream-json requires --verbose")
 	}
@@ -797,6 +810,25 @@ func run(cmd *cobra.Command, opts *options) error {
 			}, emit)
 		}
 		return driver.Run(ctx, cmd.InOrStdin(), runFn)
+	}
+
+	// Autonomous goal loop: iterate against the spec until complete or capped.
+	if opts.loop {
+		return runGoalLoop(ctx, cmd, loopRun{
+			loop:       loop,
+			cwd:        cwd,
+			mode:       mode,
+			model:      model,
+			system:     sysPrompt,
+			maxTurns:   opts.maxTurns,
+			iterations: opts.maxIterations,
+			permCtx:    permCtx,
+			approver:   approver,
+			deferred:   deferredTools,
+			recorder:   recorder,
+			onSummary:  onSummary,
+			render:     r,
+		})
 	}
 
 	// Single-shot headless run. For stream-json output, emit JS-compatible

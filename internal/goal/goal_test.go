@@ -67,6 +67,21 @@ func TestTemplateHasSections(t *testing.T) {
 	}
 }
 
+func TestIterations(t *testing.T) {
+	tests := []struct{ in, want int }{
+		{0, DefaultIterations},
+		{-3, DefaultIterations},
+		{5, 5},
+		{MaxIterations, MaxIterations},
+		{MaxIterations + 100, MaxIterations},
+	}
+	for _, tc := range tests {
+		if got := Iterations(tc.in); got != tc.want {
+			t.Errorf("Iterations(%d) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestIsComplete(t *testing.T) {
 	if !IsComplete("all done\n<goal-complete/>\n") {
 		t.Error("should detect the completion token")

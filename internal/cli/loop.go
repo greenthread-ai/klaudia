@@ -1,0 +1,113 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/spf13/cobra"
+
+	"github.com/greenthread/klaudia/internal/agent"
+	"github.com/greenthread/klaudia/internal/goal"
+	"github.com/greenthread/klaudia/internal/permission"
+)
+
+// loopStallLimit stops the loop after this many consecutive iterations make no
+// new git commit — a sign the agent is spinning without making progress.
+const loopStallLimit = 3
+
+// loopRun bundles the already-built run state the goal loop reuses (set up once
+// in run() like the single-shot headless path).
+type loopRun struct {
+	loop       *agent.Loop
+	cwd        string
+	mode       permission.Mode
+	model      anthropic.Model
+	system     string
+	maxTurns   int
+	iterations int
+	permCtx    permission.Context
+	approver   agent.Approver
+	deferred   map[string]bool
+	recorder   agent.Recorder
+	onSummary  func(string)
+	render     *Renderer
+}
+
+// runGoalLoop drives the headless Ralph loop: it iterates against the goal spec,
+// each iteration re-orienting from the spec + git with a fresh context (progress
+// lives in files and commits, not the conversation window), until the model
+// reports completion, the iteration cap is hit, or it stalls (no new commits).
+func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
+	specText, specPath, _ := goal.Read(p.cwd)
+	if strings.TrimSpace(specText) == "" {
+		return fmt.Errorf("no goal spec found — create PRD.md or .klaudia/GOAL.md first (run klaudia interactively and use /goal)")
+	}
+	// No human is present to approve tool use, so the loop can only do real work
+	// (edits + Bash) under bypassPermissions. Refuse otherwise rather than spin
+	// on denials.
+	if p.mode != permission.ModeBypassPermissions {
+		return fmt.Errorf("--loop runs autonomously with no approver; re-run with --dangerously-skip-permissions")
+	}
+
+	iters := goal.Iterations(p.iterations)
+	errOut := cmd.ErrOrStderr()
+
+	branch := goal.BranchName(specText)
+	if out, gerr := gitRun(p.cwd, "checkout", "-B", branch); gerr != nil {
+		fmt.Fprintf(errOut, "warning: not branching (%s)\n", strings.TrimSpace(out))
+	} else {
+		fmt.Fprintf(errOut, "↳ on branch %s\n", branch)
+	}
+
+	emit := func(ev agent.Event) { _ = p.render.Event(ev) }
+	lastCommit := gitCommit(p.cwd)
+	stalls := 0
+
+	for i := 1; i <= iters; i++ {
+		fmt.Fprintf(errOut, "↻ iteration %d/%d\n", i, iters)
+		res, err := p.loop.Run(ctx, agent.Options{
+			Prompt:        goal.IterationPrompt(specPath),
+			Model:         p.model,
+			System:        p.system,
+			MaxTurns:      p.maxTurns,
+			Permission:    p.permCtx,
+			Approver:      p.approver,
+			DeferredTools: p.deferred,
+			Recorder:      p.recorder,
+			WebTools:      true,
+			OnSummary:     p.onSummary,
+			// No InitialMessages: each iteration starts fresh and re-reads the
+			// spec and git state (the Ralph principle — bounded context).
+		}, emit)
+		if err != nil {
+			return err
+		}
+		if goal.IsComplete(res.Text) {
+			fmt.Fprintf(errOut, "✓ goal complete in %d iteration(s)\n", i)
+			return nil
+		}
+		// Stall detection: a non-repo (commit == "") never stalls.
+		if c := gitCommit(p.cwd); c == "" || c != lastCommit {
+			stalls, lastCommit = 0, c
+		} else {
+			stalls++
+			if stalls >= loopStallLimit {
+				fmt.Fprintf(errOut, "⊘ no new commits for %d iterations — stopping (goal not complete)\n", stalls)
+				return nil
+			}
+		}
+	}
+	fmt.Fprintf(errOut, "stopped after %d iteration(s); goal not yet complete\n", iters)
+	return nil
+}
+
+// gitRun runs a git command in dir and returns its combined output.
+func gitRun(dir string, args ...string) (string, error) {
+	c := exec.Command("git", args...)
+	c.Dir = dir
+	out, err := c.CombinedOutput()
+	return string(out), err
+}

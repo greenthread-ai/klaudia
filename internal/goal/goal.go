@@ -109,6 +109,19 @@ func IsComplete(text string) bool {
 	return strings.Contains(text, CompleteToken)
 }
 
+// Iterations clamps a requested loop count: <=0 means "use the default", and
+// anything above the cap is clamped to MaxIterations.
+func Iterations(requested int) int {
+	switch {
+	case requested <= 0:
+		return DefaultIterations
+	case requested > MaxIterations:
+		return MaxIterations
+	default:
+		return requested
+	}
+}
+
 // BranchName derives the loop's working branch from the spec's first heading
 // (its objective), as klaudia/goal-<slug>. Falls back to "klaudia/goal".
 func BranchName(spec string) string {

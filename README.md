@@ -323,6 +323,11 @@ Two complementary modes for working toward an objective:
     `klaudia/goal-<slug>` branch, stops when the model reports `<goal-complete/>`
     or after `N` iterations (default 10, cap 50), and is interruptible any time
     with `Esc` or `/goal stop`. The status bar shows `goal K/N`.
+  - Headless/scriptable: `klaudia --loop --dangerously-skip-permissions
+    [--max-iterations N]` runs the same loop without the TUI (each iteration with
+    a fresh context). It needs a spec in the cwd and bypass permissions (no human
+    to approve), and also stops if it stalls (no new commits for a few
+    iterations).
 
 ## Memory & project knowledge
 
