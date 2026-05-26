@@ -589,7 +589,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			}
 			fmt.Fprintln(cmd.ErrOrStderr(), "resuming from compacted summary (--full for the entire transcript)")
 		} else {
-			entries, rerr := session.Read(session.Path(cwd, resumeID))
+			entries, rerr := session.Read(session.ExistingPath(cwd, resumeID))
 			if rerr != nil {
 				return fmt.Errorf("resume %s: %w", resumeID, rerr)
 			}

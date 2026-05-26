@@ -152,14 +152,18 @@ channel for editor/SDK integrations (no terminal needed):
 ### Resuming
 
 ```bash
-./klaudia --continue                 # resume the most recent session here
+./klaudia                            # auto-resume the most recent session here
+./klaudia --new-session              # start fresh instead of auto-resuming
+./klaudia --continue                 # explicitly resume the most recent session here
 ./klaudia -r <session-id>            # resume a specific session
 ./klaudia -r <session-id> --full     # replay the whole transcript (not the summary)
 ```
 
-Sessions are JSONL transcripts under `~/.klaudia/projects/<encoded-cwd>/`
-(override the base with `KLAUDIA_CONFIG_DIR`). When a session has a persisted
-compaction summary, `--resume` seeds from it (token-saving) unless `--full`.
+Sessions are JSONL transcripts under `~/.klaudia/sessions/<encoded-cwd>/`
+(override the base with `KLAUDIA_CONFIG_DIR`). Klaudia still reads legacy
+transcripts from `~/.klaudia/projects/<encoded-cwd>/` during migration. When a
+session has a persisted compaction summary, resume seeds from it (token-saving)
+unless `--full`.
 
 ## Permission modes
 

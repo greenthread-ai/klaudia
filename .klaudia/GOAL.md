@@ -12,7 +12,7 @@ Make Klaudia automatically resume the most recent existing session for the curre
 - [x] Auto-resume is scoped to the current working directory and does not pick up sessions from unrelated projects.
 - [x] Existing explicit resume/session behavior remains compatible or is intentionally superseded with clear CLI help text.
 - [x] CLI help documents the default auto-resume behavior and the `--new-session` opt-out flag.
-- [ ] Session persistence continues to store sessions under the existing project-scoped `~/.klaudia/sessions/...` layout.
+- [x] Session persistence continues to store sessions under the existing project-scoped `~/.klaudia/sessions/...` layout.
 
 ## Verify
 
@@ -24,7 +24,8 @@ CGO_ENABLED=0 go build ./cmd/klaudia && go test ./internal/...
 
 - Done: Added default project-scoped auto-resume by selecting `session.MostRecent(cwd)` when neither `--resume` nor `--new-session` is supplied; added `--new-session` as the explicit opt-out; preserved explicit `--resume` precedence and kept `--continue` compatible.
 - Done: Added CLI tests for auto-resume, no-session fresh start, `--new-session` opt-out, unrelated-project scoping, and explicit `--resume` compatibility.
-- Done: Verified CLI help includes the default auto-resume wording and the `--new-session` flag.
+- Done: Moved transcript and summary persistence to `~/.klaudia/sessions/<encoded-cwd>/` while still reading existing legacy `~/.klaudia/projects/<encoded-cwd>/` transcripts/summaries during migration.
+- Done: Updated README/parity/compaction docs for default auto-resume and the new session storage root.
 - Verified: `CGO_ENABLED=0 go build ./cmd/klaudia && go test ./internal/...` passes.
-- Remains: The implementation still stores transcripts under the current `~/.klaudia/projects/<encoded-cwd>/` root; the spec says `~/.klaudia/sessions/...`, so the storage-layout acceptance item needs either an implementation update or a spec clarification.
-- Next step: Align session storage with the requested `~/.klaudia/sessions/<encoded-cwd>/` layout while preserving compatibility with existing `~/.klaudia/projects/<encoded-cwd>/` transcripts.
+- Remains: Nothing known.
+- Next step: None; goal is complete after commit.

@@ -55,7 +55,7 @@ blockingLimit    = effectiveWindow - 3000            // hard ceiling
 ### Divergence: persisted summaries
 
 Beyond the JS scheme, each autocompact summary is offered to the CLI via
-`agent.Options.OnSummary` and written to `.klaudia/sessions/<id>.summary.md`. On
-`--resume`, Klaudia seeds the conversation from that summary instead of replaying
-the whole transcript (token-saving); `--full` forces a full replay. See
-`internal/session/summary.go`.
+`agent.Options.OnSummary` and written alongside the transcript in
+`~/.klaudia/sessions/<encoded-cwd>/<id>.summary.md`. On resume, Klaudia seeds the
+conversation from that summary instead of replaying the whole transcript
+(token-saving); `--full` forces a full replay. See `internal/session/summary.go`.
