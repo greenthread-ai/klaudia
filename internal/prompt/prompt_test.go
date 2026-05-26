@@ -68,7 +68,10 @@ func TestSystemRecallsLinkedMemoryFiles(t *testing.T) {
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".klaudia", "MEMORY.md"), []byte("# Memory\n\n- Root memory\n"), 0o644); err != nil {
+	// MEMORY.md is the index — session bullets plus a "## Linked memory" section
+	// of pointers (maintained on disk by memory.Store.SyncLinks).
+	index := "# Memory\n\n- Root memory\n\n## Linked memory\n\n- [tools](memory/tools.md) — Tools\n"
+	if err := os.WriteFile(filepath.Join(dir, ".klaudia", "MEMORY.md"), []byte(index), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Tools\n\n- Use rg for search\n"), 0o644); err != nil {
@@ -76,9 +79,9 @@ func TestSystemRecallsLinkedMemoryFiles(t *testing.T) {
 	}
 
 	p := System(dir, "")
-	// The index entry is inlined; the detail note is referenced by a pointer
-	// (name + hook), not by its contents, so recall stays cheap.
-	for _, want := range []string{"Root memory", "[tools](memory/tools.md)", "Tools"} {
+	// Recall surfaces the index and its pointers, but never inlines the detail
+	// note's contents, so it stays cheap as memory grows.
+	for _, want := range []string{"Root memory", "[tools](memory/tools.md)"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("system prompt missing recalled memory %q", want)
 		}

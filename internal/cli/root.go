@@ -614,6 +614,9 @@ func run(cmd *cobra.Command, opts *options) error {
 		return fmt.Errorf("--disallowedTools/permissions.deny: %w", err)
 	}
 	permCtx := permission.Context{Mode: mode, Allow: allowRules, Deny: denyRules}
+	// Refresh MEMORY.md's links to the .klaudia/memory/*.md detail notes before
+	// building the prompt, so recall surfaces them (best-effort; idempotent).
+	_ = memory.New(filepath.Join(cwd, ".klaudia")).SyncLinks()
 	// Assemble the full system prompt (base instructions + env context +
 	// CLAUDE.md) once for this run.
 	sysPrompt := prompt.System(cwd, string(model))

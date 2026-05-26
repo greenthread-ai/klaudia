@@ -126,10 +126,80 @@ func (s *Store) Search(query string) ([]string, error) {
 	return matches, nil
 }
 
-// Add appends a timestamped bullet to MEMORY.md, creating the directory and a
-// header on first write. Empty (whitespace-only) text is rejected.
+// linkedSectionHeader titles the section of MEMORY.md that points at the
+// memory/*.md detail notes.
+const linkedSectionHeader = "## Linked memory"
+
+// Add appends a timestamped bullet to MEMORY.md (creating the directory and a
+// header on first write), then refreshes the linked-memory section. Empty
+// (whitespace-only) text is rejected.
 func (s *Store) Add(text string) error {
-	return appendBullet(s.Path(), "# Memory\n\n", text)
+	if err := appendBullet(s.Path(), "# Memory\n\n", text); err != nil {
+		return err
+	}
+	return s.SyncLinks()
+}
+
+// SyncLinks rewrites the "## Linked memory" section of MEMORY.md so it lists
+// exactly the current memory/*.md detail notes, one pointer each (see
+// FilePointers). It is idempotent — it only writes when the file would change —
+// so calling it at startup and after each Add doesn't churn the file, and a
+// removed or renamed note is reflected on the next sync. When no detail notes
+// exist it strips any stale section; it never creates MEMORY.md just to hold an
+// empty section.
+func (s *Store) SyncLinks() error {
+	pointers := s.FilePointers()
+
+	existing, err := os.ReadFile(s.Path())
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	body := stripLinkedSection(string(existing))
+
+	updated := body
+	if len(pointers) > 0 {
+		if strings.TrimSpace(body) == "" {
+			body = "# Memory\n\n" // a brand-new index needs a header
+		}
+		updated = strings.TrimRight(body, "\n") + "\n\n" + linkedSectionHeader + "\n\n" + strings.Join(pointers, "\n") + "\n"
+	}
+
+	if updated == string(existing) {
+		return nil // already current — no write
+	}
+	if strings.TrimSpace(updated) == "" {
+		return nil // nothing to write and nothing meaningful was there
+	}
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(s.Path(), []byte(updated), 0o644)
+}
+
+// stripLinkedSection removes the "## Linked memory" section (its header through
+// the line before the next "## " heading, or end of file) from content,
+// returning the rest unchanged. Content without the section is returned as-is.
+func stripLinkedSection(content string) string {
+	lines := strings.Split(content, "\n")
+	start := -1
+	for i, l := range lines {
+		if strings.TrimSpace(l) == linkedSectionHeader {
+			start = i
+			break
+		}
+	}
+	if start == -1 {
+		return content
+	}
+	end := len(lines)
+	for j := start + 1; j < len(lines); j++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[j]), "## ") {
+			end = j
+			break
+		}
+	}
+	kept := append(append([]string{}, lines[:start]...), lines[end:]...)
+	return strings.Join(kept, "\n")
 }
 
 // FilePointers returns one Markdown pointer line per detail note under

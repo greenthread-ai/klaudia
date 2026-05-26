@@ -180,6 +180,65 @@ func TestFilePointers(t *testing.T) {
 	}
 }
 
+func TestSyncLinksWritesAndIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	store := New(dir)
+	memDir := filepath.Join(dir, "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Preferred tools\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Seed an index with a session bullet.
+	if err := store.Add("prefer table tests"); err != nil { // Add also syncs
+		t.Fatal(err)
+	}
+
+	contents, err := store.Index()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"prefer table tests", "## Linked memory", "- [tools](memory/tools.md) — Preferred tools"} {
+		if !strings.Contains(contents, want) {
+			t.Fatalf("Index() = %q, missing %q", contents, want)
+		}
+	}
+
+	// Re-syncing without changes must not rewrite the file (idempotent) and must
+	// not duplicate the section.
+	before, _ := os.ReadFile(store.Path())
+	infoBefore, _ := os.Stat(store.Path())
+	if err := store.SyncLinks(); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(store.Path())
+	if string(before) != string(after) {
+		t.Fatalf("SyncLinks rewrote an unchanged file:\nbefore=%q\nafter=%q", before, after)
+	}
+	if infoAfter, _ := os.Stat(store.Path()); !infoAfter.ModTime().Equal(infoBefore.ModTime()) {
+		t.Error("SyncLinks touched the file despite no change")
+	}
+	if got := strings.Count(string(after), linkedSectionHeader); got != 1 {
+		t.Fatalf("linked section appears %d times, want 1", got)
+	}
+
+	// Removing the note strips the section on the next sync.
+	if err := os.Remove(filepath.Join(memDir, "tools.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SyncLinks(); err != nil {
+		t.Fatal(err)
+	}
+	final, _ := os.ReadFile(store.Path())
+	if strings.Contains(string(final), linkedSectionHeader) {
+		t.Fatalf("stale linked section survived removal: %q", final)
+	}
+	if !strings.Contains(string(final), "prefer table tests") {
+		t.Fatalf("session bullets must survive link sync: %q", final)
+	}
+}
+
 func TestSearchIncludesDetailFiles(t *testing.T) {
 	dir := t.TempDir()
 	store := New(dir)
