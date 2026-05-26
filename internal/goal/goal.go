@@ -5,6 +5,7 @@
 package goal
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,13 +139,24 @@ func Iterations(requested int) int {
 }
 
 // BranchName derives the loop's working branch from the spec's first heading
-// (its objective), as klaudia/goal-<slug>. Falls back to "klaudia/goal".
+// (its objective), as klaudia/goal-<slug>. Falls back to "klaudia/goal". A
+// leading "goal" in the slug is dropped so an objective like "Goal: …" doesn't
+// produce "klaudia/goal-goal-…".
 func BranchName(spec string) string {
-	slug := slugify(firstHeading(spec))
-	if slug == "" {
+	slug := strings.TrimPrefix(slugify(firstHeading(spec)), "goal-")
+	if slug == "" || slug == "goal" {
 		return "klaudia/goal"
 	}
 	return "klaudia/goal-" + slug
+}
+
+// MergeHint tells the user where the loop's work landed and how to review/merge
+// it. base is the branch the loop started from ("" or == branch when unknown).
+func MergeHint(branch, base string) string {
+	if base == "" || base == branch {
+		return fmt.Sprintf("Work is on branch %s — review it (git log / git diff) and merge into your main branch when ready.", branch)
+	}
+	return fmt.Sprintf("Work is on branch %s — review with `git diff %s...%s`, then merge with `git switch %s && git merge %s`.", branch, base, branch, base, branch)
 }
 
 // structuralHeadings are the template's section titles; they make poor branch

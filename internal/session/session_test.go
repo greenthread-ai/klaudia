@@ -2,6 +2,8 @@ package session
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -24,6 +26,33 @@ func TestEncodePathLongTruncatesWithHash(t *testing.T) {
 	}
 	if !strings.Contains(got, "-") {
 		t.Errorf("expected hash suffix separated by '-', got %q", got)
+	}
+}
+
+func TestDirUsesSessionsRoot(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("KLAUDIA_CONFIG_DIR", root)
+	cwd := "/work/proj"
+	want := filepath.Join(root, "sessions", EncodePath(cwd))
+	if got := Dir(cwd); got != want {
+		t.Fatalf("Dir = %q, want %q", got, want)
+	}
+}
+
+func TestExistingPathFallsBackToLegacyProjectsRoot(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("KLAUDIA_CONFIG_DIR", root)
+	cwd := "/work/proj"
+	sid := "legacy-session"
+	legacy := filepath.Join(root, "projects", EncodePath(cwd), sid+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ExistingPath(cwd, sid); got != legacy {
+		t.Fatalf("ExistingPath = %q, want %q", got, legacy)
 	}
 }
 
@@ -92,5 +121,21 @@ func TestMostRecent(t *testing.T) {
 	}
 	if id, ok := MostRecent(cwd); !ok || id != "only-session" {
 		t.Errorf("MostRecent = %q,%v", id, ok)
+	}
+}
+
+func TestMostRecentIncludesLegacyProjectsRoot(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("KLAUDIA_CONFIG_DIR", root)
+	cwd := "/work/proj"
+	legacy := filepath.Join(root, "projects", EncodePath(cwd), "legacy-session.jsonl")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if id, ok := MostRecent(cwd); !ok || id != "legacy-session" {
+		t.Fatalf("MostRecent = %q,%v; want legacy-session,true", id, ok)
 	}
 }

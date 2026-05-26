@@ -30,10 +30,30 @@ func TestSummaryRoundTrip(t *testing.T) {
 	}
 }
 
-func TestReadSummaryLegacyPath(t *testing.T) {
+func TestReadSummaryLegacyProjectsRoot(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("KLAUDIA_CONFIG_DIR", root)
+	cwd := "/work/proj"
+	path := filepath.Join(root, "projects", EncodePath(cwd), "sess-legacy.summary.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("# Session summary sess-legacy\n\n_Compacted yesterday_\n\nlegacy summary\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	body, ok := ReadSummary(cwd, "sess-legacy")
+	if !ok {
+		t.Fatal("ReadSummary returned !ok")
+	}
+	if body != "legacy summary" {
+		t.Errorf("body = %q, want legacy summary", body)
+	}
+}
+
+func TestReadSummaryLocalLegacyPath(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	cwd := t.TempDir()
-	path := legacySummaryPath(cwd, "sess-legacy")
+	path := localLegacySummaryPath(cwd, "sess-legacy")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}

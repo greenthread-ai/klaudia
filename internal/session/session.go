@@ -1,5 +1,5 @@
 // Package session reads and writes Klaudia session transcripts:
-// newline-delimited JSON (JSONL) under ~/.klaudia/projects/<encoded-cwd>/.
+// newline-delimited JSON (JSONL) under ~/.klaudia/sessions/<encoded-cwd>/.
 package session
 
 import (
@@ -19,14 +19,23 @@ const maxDirLen = 200
 
 var nonAlnum = regexp.MustCompile(`[^a-zA-Z0-9]`)
 
-// ProjectsRoot returns ~/.klaudia/projects (honoring KLAUDIA_CONFIG_DIR).
-func ProjectsRoot() string {
+// ConfigRoot returns ~/.klaudia (honoring KLAUDIA_CONFIG_DIR).
+func ConfigRoot() string {
 	base := os.Getenv("KLAUDIA_CONFIG_DIR")
 	if base == "" {
 		home, _ := os.UserHomeDir()
 		base = filepath.Join(home, ".klaudia")
 	}
-	return filepath.Join(base, "projects")
+	return base
+}
+
+// SessionsRoot returns ~/.klaudia/sessions (honoring KLAUDIA_CONFIG_DIR).
+func SessionsRoot() string {
+	return filepath.Join(ConfigRoot(), "sessions")
+}
+
+func legacyProjectsRoot() string {
+	return filepath.Join(ConfigRoot(), "projects")
 }
 
 // EncodePath maps an absolute path to a project-dir name, matching K0A
@@ -50,12 +59,36 @@ func EncodePath(path string) string {
 
 // Dir returns the project transcript directory for a working directory.
 func Dir(cwd string) string {
-	return filepath.Join(ProjectsRoot(), EncodePath(cwd))
+	return filepath.Join(SessionsRoot(), EncodePath(cwd))
+}
+
+func legacyDir(cwd string) string {
+	return filepath.Join(legacyProjectsRoot(), EncodePath(cwd))
 }
 
 // Path returns the transcript file path for a session in a working directory.
 func Path(cwd, sessionID string) string {
 	return filepath.Join(Dir(cwd), sessionID+".jsonl")
+}
+
+// ExistingPath returns the transcript file path for a session. It prefers the
+// newer copy when both the current sessions root and legacy projects root have
+// the same session ID.
+func ExistingPath(cwd, sessionID string) string {
+	path := Path(cwd, sessionID)
+	legacy := filepath.Join(legacyDir(cwd), sessionID+".jsonl")
+	st, err := os.Stat(path)
+	legacySt, legacyErr := os.Stat(legacy)
+	switch {
+	case err == nil && legacyErr == nil && legacySt.ModTime().After(st.ModTime()):
+		return legacy
+	case err == nil:
+		return path
+	case legacyErr == nil:
+		return legacy
+	default:
+		return path
+	}
 }
 
 // Entry is one transcript line. Field names/tags match the JS schema; optional
@@ -150,10 +183,12 @@ func Read(path string) ([]Entry, error) {
 }
 
 // MostRecent returns the session ID of the most recently modified transcript in
-// the project dir for cwd, or ("", false) if none exists. Used by --continue.
+// the project dir for cwd, or ("", false) if none exists. The current sessions
+// root and legacy projects root are both considered during migration.
 func MostRecent(cwd string) (string, bool) {
-	dir := Dir(cwd)
-	matches, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	matches, _ := filepath.Glob(filepath.Join(Dir(cwd), "*.jsonl"))
+	legacyMatches, _ := filepath.Glob(filepath.Join(legacyDir(cwd), "*.jsonl"))
+	matches = append(matches, legacyMatches...)
 	if len(matches) == 0 {
 		return "", false
 	}

@@ -306,6 +306,18 @@ func TestGoalLoopNext(t *testing.T) {
 	}
 }
 
+func TestGoalLoopMergeHintOnStop(t *testing.T) {
+	m := newTestModel()
+	m.loopTotal, m.loopRemaining = 2, 2
+	m.loopBranch, m.loopBaseBranch = "klaudia/goal-x", "main"
+	// A completing turn should stop and tell the user how to merge.
+	m.loopNext(agent.Result{Text: "done <goal-complete/>"}, nil)
+	out := m.transcript.String()
+	if !strings.Contains(out, "git merge klaudia/goal-x") {
+		t.Errorf("expected a merge hint on completion; got %q", out)
+	}
+}
+
 func TestGoalRunRequiresSpec(t *testing.T) {
 	m := newTestModel()
 	m.sess.CWD = t.TempDir() // no PRD.md / GOAL.md

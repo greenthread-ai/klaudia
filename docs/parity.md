@@ -64,8 +64,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 
 | Feature | JS ref | Klaudia pkg | Status | Notes |
 | --- | --- | --- | --- | --- |
-| JSONL transcripts | 07-app-features | `session/` | ✅ done | `~/.klaudia/projects/<encoded-cwd>/` (honors `KLAUDIA_CONFIG_DIR`); EncodePath matches JS K0A. |
-| Resume / continue / fork | 07/08 | `session/` + `cli/` | ✅ done | `-r/--resume`, `--continue`, `--fork-session`. |
+| JSONL transcripts | 07-app-features | `session/` | ✅ done | `~/.klaudia/sessions/<encoded-cwd>/` (honors `KLAUDIA_CONFIG_DIR`); reads legacy `~/.klaudia/projects/<encoded-cwd>/`; EncodePath matches JS K0A. |
+| Resume / continue / fork | 07/08 | `session/` + `cli/` | ✅ done | Auto-resumes most recent project session by default; `--new-session` starts fresh; `-r/--resume`, `--continue`, `--fork-session` remain. |
 | Microcompaction (local) | 07-app-features | `compaction/` | ✅ done | |
 | Autocompaction (model summary) | 07-app-features | `compaction/` | ✅ done | |
 | Persisted summaries + resume seeding | — | `session/summary.go` + `agent.OnSummary` | 🔀 divergent | Compaction summaries persisted to `.klaudia/sessions/<id>.summary.md`; `--resume` seeds from them (token-saving), `--full` replays the transcript. |

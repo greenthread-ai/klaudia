@@ -152,14 +152,22 @@ channel for editor/SDK integrations (no terminal needed):
 ### Resuming
 
 ```bash
-./klaudia --continue                 # resume the most recent session here
+./klaudia                            # auto-resume the most recent session here
+./klaudia --new-session              # start fresh instead of auto-resuming
+./klaudia --continue                 # explicitly resume the most recent session here
 ./klaudia -r <session-id>            # resume a specific session
 ./klaudia -r <session-id> --full     # replay the whole transcript (not the summary)
 ```
 
-Sessions are JSONL transcripts under `~/.klaudia/projects/<encoded-cwd>/`
-(override the base with `KLAUDIA_CONFIG_DIR`). When a session has a persisted
-compaction summary, `--resume` seeds from it (token-saving) unless `--full`.
+Auto-resume is an interactive convenience: headless (`-p`) and embedding
+(`--input-format stream-json`) runs stay stateless unless you pass
+`--continue` or `-r <id>`.
+
+Sessions are JSONL transcripts under `~/.klaudia/sessions/<encoded-cwd>/`
+(override the base with `KLAUDIA_CONFIG_DIR`). Klaudia still reads legacy
+transcripts from `~/.klaudia/projects/<encoded-cwd>/` during migration. When a
+session has a persisted compaction summary, resume seeds from it (token-saving)
+unless `--full`.
 
 ## Permission modes
 
@@ -325,6 +333,8 @@ Two complementary modes for working toward an objective:
     with `Esc` or `/goal stop`. The status bar shows `goal K/N`. On an incomplete
     stop it runs a final wrap-up turn that records an end-of-run summary in the
     spec (what's done, what remains, the next step) so a re-run resumes cleanly.
+    When it stops, it prints where the work landed and how to review/merge the
+    branch — the loop never touches your starting branch.
   - Headless/scriptable: `klaudia --loop --dangerously-skip-permissions
     [--max-iterations N]` runs the same loop without the TUI (each iteration with
     a fresh context). It needs a spec in the cwd and bypass permissions (no human
