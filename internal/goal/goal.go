@@ -1,7 +1,7 @@
 // Package goal supports PRD-anchored autonomous iteration (the "/goal run"
 // Ralph loop): locating/templating a goal spec, framing goal-setting and
 // iteration turns, and detecting completion. The helpers are pure so both the
-// TUI loop and a future headless `klaudia loop` can share them.
+// TUI loop and the headless `klaudia --loop` share them.
 package goal
 
 import (

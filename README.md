@@ -322,7 +322,9 @@ Two complementary modes for working toward an objective:
     (the [Ralph](https://ghuntley.com/ralph/) pattern). It runs on a dedicated
     `klaudia/goal-<slug>` branch, stops when the model reports `<goal-complete/>`
     or after `N` iterations (default 10, cap 50), and is interruptible any time
-    with `Esc` or `/goal stop`. The status bar shows `goal K/N`.
+    with `Esc` or `/goal stop`. The status bar shows `goal K/N`. On an incomplete
+    stop it runs a final wrap-up turn that records an end-of-run summary in the
+    spec (what's done, what remains, the next step) so a re-run resumes cleanly.
   - Headless/scriptable: `klaudia --loop --dangerously-skip-permissions
     [--max-iterations N]` runs the same loop without the TUI (each iteration with
     a fresh context). It needs a spec in the cwd and bypass permissions (no human
