@@ -159,6 +159,10 @@ channel for editor/SDK integrations (no terminal needed):
 ./klaudia -r <session-id> --full     # replay the whole transcript (not the summary)
 ```
 
+Auto-resume is an interactive convenience: headless (`-p`) and embedding
+(`--input-format stream-json`) runs stay stateless unless you pass
+`--continue` or `-r <id>`.
+
 Sessions are JSONL transcripts under `~/.klaudia/sessions/<encoded-cwd>/`
 (override the base with `KLAUDIA_CONFIG_DIR`). Klaudia still reads legacy
 transcripts from `~/.klaudia/projects/<encoded-cwd>/` during migration. When a

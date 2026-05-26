@@ -27,7 +27,7 @@ func TestResolveResumeIDAutoResumesMostRecentSessionForCWD(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := resolveResumeID(cwd, options{})
+	got, err := resolveResumeID(cwd, options{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestResolveResumeIDAutoResumesMostRecentSessionForCWD(t *testing.T) {
 func TestResolveResumeIDStartsNewWhenNoSessionExists(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 
-	got, err := resolveResumeID("/work/proj", options{})
+	got, err := resolveResumeID("/work/proj", options{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestResolveResumeIDNewSessionSkipsAutoResume(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := resolveResumeID(cwd, options{newSession: true})
+	got, err := resolveResumeID(cwd, options{newSession: true}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestResolveResumeIDExplicitResumeWinsOverAutoResume(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := resolveResumeID(cwd, options{resume: "explicit-session"})
+	got, err := resolveResumeID(cwd, options{resume: "explicit-session"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,9 +89,30 @@ func TestResolveResumeIDExplicitResumeWinsOverAutoResume(t *testing.T) {
 }
 
 func TestResolveResumeIDNewSessionConflictsWithExplicitResume(t *testing.T) {
-	_, err := resolveResumeID("/work/proj", options{newSession: true, resume: "old"})
+	_, err := resolveResumeID("/work/proj", options{newSession: true, resume: "old"}, true)
 	if err == nil || !strings.Contains(err.Error(), "--new-session cannot be combined") {
 		t.Fatalf("err = %v, want --new-session conflict", err)
+	}
+}
+
+func TestResolveResumeIDHeadlessDoesNotAutoResume(t *testing.T) {
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	cwd := "/work/proj"
+	w, err := session.NewWriter(cwd, "project-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Headless (interactive=false): a prior session is NOT auto-resumed.
+	if got, err := resolveResumeID(cwd, options{}, false); err != nil || got != "" {
+		t.Fatalf("headless auto-resume = (%q, %v), want empty", got, err)
+	}
+	// …but an explicit --continue still resumes it, even headless.
+	if got, err := resolveResumeID(cwd, options{continueSession: true}, false); err != nil || got != "project-session" {
+		t.Fatalf("headless --continue = (%q, %v), want project-session", got, err)
 	}
 }
 func TestCompactAndPersistWritesSummaryOnSuccess(t *testing.T) {

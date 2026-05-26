@@ -464,19 +464,29 @@ type options struct {
 }
 
 // resolveResumeID selects the prior session to seed from, if any.
-func resolveResumeID(cwd string, opts options) (string, error) {
-	resumeID := opts.resume
-	if opts.newSession && (resumeID != "" || opts.continueSession) {
+// resolveResumeID selects the prior session to seed from, if any. An explicit
+// --resume/--continue is honored in any mode; the implicit "pick up the most
+// recent project session" is an interactive convenience only, so headless (-p)
+// and embedding (stream-json) runs stay stateless unless asked.
+func resolveResumeID(cwd string, opts options, interactive bool) (string, error) {
+	if opts.newSession && (opts.resume != "" || opts.continueSession) {
 		return "", fmt.Errorf("--new-session cannot be combined with --resume or --continue")
 	}
-	if !opts.newSession && resumeID == "" {
+	if opts.resume != "" {
+		return opts.resume, nil
+	}
+	if opts.continueSession {
 		if id, ok := session.MostRecent(cwd); ok {
-			resumeID = id
-		} else if opts.continueSession {
-			return "", fmt.Errorf("--continue: no previous session found in this directory")
+			return id, nil
+		}
+		return "", fmt.Errorf("--continue: no previous session found in this directory")
+	}
+	if interactive && !opts.newSession {
+		if id, ok := session.MostRecent(cwd); ok {
+			return id, nil
 		}
 	}
-	return resumeID, nil
+	return "", nil
 }
 
 // NewRootCommand builds the top-level `klaudia` command.
@@ -573,7 +583,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// project session by default, or start new when requested/no prior session.
 	// --fork-session writes to a fresh id while preserving the original.
 	var initialMessages []anthropic.BetaMessageParam
-	resumeID, err := resolveResumeID(cwd, *opts)
+	resumeID, err := resolveResumeID(cwd, *opts, interactive)
 	if err != nil {
 		return err
 	}
