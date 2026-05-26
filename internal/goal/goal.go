@@ -94,11 +94,15 @@ func FacilitatorPrompt(specPath, existing string) string {
 // the conversation context (the Ralph principle).
 func IterationPrompt(specPath string) string {
 	return "You are autonomously iterating toward the goal defined in " + specPath + ".\n" +
-		"Re-read " + specPath + " now to recall the objective and acceptance criteria. Then inspect " +
-		"the current state of the repository (git status, git log, and run the build and tests). " +
+		"Re-read " + specPath + " now to recall the objective, acceptance criteria, and the " +
+		"\"## Progress\" notes from earlier iterations. Then inspect the current state of the " +
+		"repository (git status, git log, and run the build and tests). " +
 		"Choose the SINGLE most valuable next step toward satisfying the acceptance criteria, " +
 		"implement it, verify it (build + tests, or the spec's Verify command), and commit your work " +
-		"with a clear message. Update the spec's checklist to reflect real, verified progress.\n\n" +
+		"with a clear message.\n\n" +
+		"Before ending the turn, update " + specPath + " and commit it: tick the checklist items you " +
+		"verified, and maintain a short \"## Progress\" section recording what is done, what remains, " +
+		"and the single best next step — so the next run (or a person) can resume from the spec alone.\n\n" +
 		"If and only if EVERY acceptance criterion is satisfied and verification passes, reply with " +
 		"exactly " + CompleteToken + " on its own line and make no further changes. Otherwise, end " +
 		"your turn after committing this step."

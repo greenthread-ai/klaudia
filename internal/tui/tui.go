@@ -971,9 +971,15 @@ func (m *Model) startGoalLoop(args []string) (tea.Model, tea.Cmd) {
 	}
 
 	// Move onto a dedicated branch so iterations stay isolated and revertible.
+	// Reuse the branch if it already exists (resume prior work) rather than
+	// resetting it, so a second /goal run continues from earlier commits.
 	if cwd != "" {
 		branch := goal.BranchName(specText)
-		if out, err := gitOutput(cwd, "checkout", "-B", branch); err != nil {
+		args := []string{"checkout", "-b", branch}
+		if _, err := gitOutput(cwd, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
+			args = []string{"checkout", branch}
+		}
+		if out, err := gitOutput(cwd, args...); err != nil {
 			m.appendLine(toolStyle.Render("  (not branching: " + strings.TrimSpace(out) + ")"))
 		} else {
 			m.appendLine(toolStyle.Render("  ↳ on branch " + branch))
@@ -1004,7 +1010,7 @@ func (m *Model) loopAdvance(res agent.Result, err error) bool {
 	default:
 		m.loopRemaining--
 		if m.loopRemaining == 0 {
-			m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); goal not yet complete — /goal run to continue.", m.loopTotal)))
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); goal not yet complete. Progress is recorded in the spec — /goal run to resume.", m.loopTotal)))
 			break
 		}
 		next := m.loopTotal - m.loopRemaining + 1

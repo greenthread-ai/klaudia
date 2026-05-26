@@ -56,7 +56,7 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 	errOut := cmd.ErrOrStderr()
 
 	branch := goal.BranchName(specText)
-	if out, gerr := gitRun(p.cwd, "checkout", "-B", branch); gerr != nil {
+	if out, gerr := gitCheckoutBranch(p.cwd, branch); gerr != nil {
 		fmt.Fprintf(errOut, "warning: not branching (%s)\n", strings.TrimSpace(out))
 	} else {
 		fmt.Fprintf(errOut, "↳ on branch %s\n", branch)
@@ -95,12 +95,12 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 		} else {
 			stalls++
 			if stalls >= loopStallLimit {
-				fmt.Fprintf(errOut, "⊘ no new commits for %d iterations — stopping (goal not complete)\n", stalls)
+				fmt.Fprintf(errOut, "⊘ no new commits for %d iterations — stopping (goal not complete). Progress is recorded in %s; re-run to resume.\n", stalls, specPath)
 				return nil
 			}
 		}
 	}
-	fmt.Fprintf(errOut, "stopped after %d iteration(s); goal not yet complete\n", iters)
+	fmt.Fprintf(errOut, "stopped after %d iteration(s); goal not yet complete. Progress is recorded in %s; re-run to resume.\n", iters, specPath)
 	return nil
 }
 
@@ -110,4 +110,13 @@ func gitRun(dir string, args ...string) (string, error) {
 	c.Dir = dir
 	out, err := c.CombinedOutput()
 	return string(out), err
+}
+
+// gitCheckoutBranch switches to branch, reusing it if it already exists (so a
+// resumed loop continues from earlier commits) or creating it otherwise.
+func gitCheckoutBranch(dir, branch string) (string, error) {
+	if _, err := gitRun(dir, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
+		return gitRun(dir, "checkout", branch)
+	}
+	return gitRun(dir, "checkout", "-b", branch)
 }
