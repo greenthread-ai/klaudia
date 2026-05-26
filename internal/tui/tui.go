@@ -563,12 +563,23 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// While the model works, the input stays editable to queue a follow-up:
-	// Enter queues it; Enter again (empty) interrupts and sends it; ↑ edits it.
+	// While the model works, the input stays editable. A slash command runs
+	// immediately (display/config ones apply now; the few that mutate history or
+	// start a turn refuse until you interrupt). Plain text is queued as a
+	// follow-up: Enter queues it; Enter again (empty) interrupts and sends it; ↑
+	// edits it.
 	if m.state == stateRunning {
 		switch msg.Type {
 		case tea.KeyEnter:
-			if text := strings.TrimSpace(m.input.Value()); text != "" {
+			text := strings.TrimSpace(m.input.Value())
+			if strings.HasPrefix(text, "/") {
+				m.input.Reset()
+				m.pushHistory(text)
+				m.appendLine(userStyle.Render("› ") + text)
+				m.syncInputHeight()
+				return m.handleSlash(text)
+			}
+			if text != "" {
 				m.queued = text
 				m.input.Reset()
 				m.syncInputHeight()
@@ -871,8 +882,22 @@ func (m *Model) modeChoices() []choiceItem {
 	return items
 }
 
+// busyGuard reports whether a slash command must be refused because a turn is
+// in flight. Display/config commands run fine while the model works, but ones
+// that mutate the conversation history, change the run state, or start another
+// turn would race the active turn — those call this first. what is the command
+// label used in the hint (e.g. "/clear").
+func (m *Model) busyGuard(what string) bool {
+	if m.state == stateRunning {
+		m.appendLine(toolStyle.Render("  " + what + " isn't available while Klaudia is working — press Esc to interrupt first."))
+		return true
+	}
+	return false
+}
+
 // handleSlash dispatches a slash command. Commands run locally and never reach
-// the model.
+// the model. Most are safe to run while a turn is in flight; the destructive
+// ones guard with busyGuard.
 func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	fields := strings.Fields(input)
 	cmd := fields[0]
@@ -884,6 +909,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	case "/quit", "/exit":
 		return m, tea.Quit
 	case "/clear":
+		if m.busyGuard("/clear") {
+			break
+		}
 		m.transcript.Reset()
 		m.rawBlocks = nil
 		m.history = nil
@@ -914,6 +942,10 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 	case "/theme":
 		if len(args) == 0 {
+			if m.state == stateRunning {
+				m.appendLine(toolStyle.Render("  use /theme <name> while Klaudia is working (the picker needs an idle session). Names: " + themeNames()))
+				break
+			}
 			m.startChoice("Theme — choose Markdown render colours:", m.themeChoices())
 			return m, nil
 		}
@@ -1058,6 +1090,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.sess.ExtraDirs = append(m.sess.ExtraDirs, dir)
 		m.appendLine(bannerStyle.Render("Added directory (referenced in the prompt context next turn): " + dir))
 	case "/compact":
+		if m.busyGuard("/compact") {
+			break
+		}
 		if m.sess.Compact == nil {
 			m.appendLine(errStyle.Render("compaction is not available"))
 			break
@@ -1105,6 +1140,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(bannerStyle.Render("Exported transcript to " + path))
 		}
 	case "/commit":
+		if m.busyGuard("/commit") {
+			break
+		}
 		if len(args) == 0 {
 			m.appendLine(errStyle.Render("usage: /commit <message>"))
 			break
@@ -1138,6 +1176,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		// as the turn prompt. Built-in commands above always win (a skill that
 		// shadows one is unreachable here).
 		if sk, ok := m.lookupSkill(strings.TrimPrefix(cmd, "/")); ok {
+			if m.busyGuard("/" + sk.Name) {
+				break
+			}
 			rendered := sk.Render(strings.Join(args, " "))
 			m.appendLine(bannerStyle.Render("Running skill /" + sk.Name))
 			m.setState(stateRunning)

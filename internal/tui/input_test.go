@@ -221,3 +221,36 @@ func TestMatchPaths(t *testing.T) {
 		t.Errorf("no-match should be nil")
 	}
 }
+
+func TestSlashCommandsDuringProcessing(t *testing.T) {
+	m := newTestModel()
+	m.state = stateRunning
+
+	// A display command runs while the model works and leaves state running.
+	m.input.SetValue("/help")
+	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.state != stateRunning {
+		t.Fatalf("state = %v after /help, want stateRunning", m.state)
+	}
+	if !strings.Contains(m.transcript.String(), "/help") {
+		t.Error("transcript should echo the /help command run mid-turn")
+	}
+
+	// A history-mutating command is refused (not executed) while a turn runs.
+	m.history = []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))}
+	m.input.SetValue("/clear")
+	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if len(m.history) == 0 {
+		t.Error("/clear must not wipe history while a turn is in flight")
+	}
+	if !strings.Contains(m.transcript.String(), "isn't available while Klaudia is working") {
+		t.Error("expected the busy-guard hint for /clear")
+	}
+
+	// Plain (non-slash) text still queues as a follow-up rather than dispatching.
+	m.input.SetValue("do the thing")
+	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.queued != "do the thing" {
+		t.Fatalf("queued = %q, want the plain text queued", m.queued)
+	}
+}
