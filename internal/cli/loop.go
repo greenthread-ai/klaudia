@@ -56,10 +56,21 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 	errOut := cmd.ErrOrStderr()
 
 	branch := goal.BranchName(specText)
+	base := gitBranch(p.cwd) // merge target (the branch we start from)
+	if base == branch {
+		base = "" // resuming on the goal branch already; base unknown
+	}
+	onBranch := false
 	if out, gerr := gitCheckoutBranch(p.cwd, branch); gerr != nil {
 		fmt.Fprintf(errOut, "warning: not branching (%s)\n", strings.TrimSpace(out))
 	} else {
+		onBranch = true
 		fmt.Fprintf(errOut, "↳ on branch %s\n", branch)
+	}
+	mergeHint := func() {
+		if onBranch {
+			fmt.Fprintln(errOut, goal.MergeHint(branch, base))
+		}
 	}
 
 	emit := func(ev agent.Event) { _ = p.render.Event(ev) }
@@ -90,6 +101,7 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 		}
 		if goal.IsComplete(res.Text) {
 			fmt.Fprintf(errOut, "✓ goal complete in %d iteration(s)\n", i)
+			mergeHint()
 			return nil
 		}
 		// Stall detection: a non-repo (commit == "") never stalls.
@@ -108,6 +120,7 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 		return err
 	}
 	fmt.Fprintf(errOut, "stopped; goal not yet complete. Progress recorded in %s — re-run to resume.\n", specPath)
+	mergeHint()
 	return nil
 }
 

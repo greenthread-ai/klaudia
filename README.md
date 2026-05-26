@@ -329,6 +329,8 @@ Two complementary modes for working toward an objective:
     with `Esc` or `/goal stop`. The status bar shows `goal K/N`. On an incomplete
     stop it runs a final wrap-up turn that records an end-of-run summary in the
     spec (what's done, what remains, the next step) so a re-run resumes cleanly.
+    When it stops, it prints where the work landed and how to review/merge the
+    branch — the loop never touches your starting branch.
   - Headless/scriptable: `klaudia --loop --dangerously-skip-permissions
     [--max-iterations N]` runs the same loop without the TUI (each iteration with
     a fresh context). It needs a spec in the cwd and bypass permissions (no human

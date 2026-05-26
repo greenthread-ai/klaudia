@@ -101,6 +101,7 @@ func TestBranchName(t *testing.T) {
 		{"skips bare Goal title", "# Goal\n", "klaudia/goal"},
 		{"empty spec", "", "klaudia/goal"},
 		{"slug strips punctuation", "# Fix the LSP: diagnostics!\n", "klaudia/goal-fix-the-lsp-diagnostics"},
+		{"no goal-goal doubling", "# Goal\n\n## Objective\n\nGoal: auto-resume project session\n", "klaudia/goal-auto-resume-project-session"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -108,6 +109,20 @@ func TestBranchName(t *testing.T) {
 				t.Errorf("BranchName = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestMergeHint(t *testing.T) {
+	withBase := MergeHint("klaudia/goal-x", "main")
+	if !contains(withBase, "git diff main...klaudia/goal-x") || !contains(withBase, "git merge klaudia/goal-x") {
+		t.Errorf("hint with base = %q", withBase)
+	}
+	// Unknown base (empty, or same as the branch) → generic guidance.
+	for _, base := range []string{"", "klaudia/goal-x"} {
+		g := MergeHint("klaudia/goal-x", base)
+		if !contains(g, "merge into your main branch") || contains(g, "git switch") {
+			t.Errorf("hint with base %q = %q", base, g)
+		}
 	}
 }
 

@@ -237,11 +237,13 @@ type Model struct {
 	// spec-authoring. loopRemaining>0 means the "/goal run" Ralph loop is active:
 	// each finished iteration starts the next (via the doneMsg hook) until the
 	// goal completes, the count hits 0, or the user stops it.
-	goalSetting   bool
-	loopRemaining int
-	loopTotal     int
-	loopSpecPath  string
-	loopWrapUp    bool // the next loop turn is the end-of-run summary
+	goalSetting    bool
+	loopRemaining  int
+	loopTotal      int
+	loopSpecPath   string
+	loopWrapUp     bool   // the next loop turn is the end-of-run summary
+	loopBranch     string // the goal branch the loop's work lands on
+	loopBaseBranch string // the branch the loop started from (merge target)
 	// Cumulative session stats for /stats.
 	statTurns  int
 	statIn     int64
@@ -976,8 +978,16 @@ func (m *Model) startGoalLoop(args []string) (tea.Model, tea.Cmd) {
 	// Move onto a dedicated branch so iterations stay isolated and revertible.
 	// Reuse the branch if it already exists (resume prior work) rather than
 	// resetting it, so a second /goal run continues from earlier commits.
+	m.loopBranch, m.loopBaseBranch = "", ""
 	if cwd != "" {
 		branch := goal.BranchName(specText)
+		// Capture the branch we're starting from (the merge target) before we
+		// switch, unless we're already sitting on the goal branch (a resume).
+		if base, err := gitOutput(cwd, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
+			if b := strings.TrimSpace(base); b != branch {
+				m.loopBaseBranch = b
+			}
+		}
 		args := []string{"checkout", "-b", branch}
 		if _, err := gitOutput(cwd, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
 			args = []string{"checkout", branch}
@@ -985,6 +995,7 @@ func (m *Model) startGoalLoop(args []string) (tea.Model, tea.Cmd) {
 		if out, err := gitOutput(cwd, args...); err != nil {
 			m.appendLine(toolStyle.Render("  (not branching: " + strings.TrimSpace(out) + ")"))
 		} else {
+			m.loopBranch = branch
 			m.appendLine(toolStyle.Render("  ↳ on branch " + branch))
 		}
 	}
@@ -1008,17 +1019,20 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 		if err == nil {
 			m.appendLine(toolStyle.Render(fmt.Sprintf("  summary written to %s — /goal run to resume.", filepath.Base(m.loopSpecPath))))
 		}
+		m.appendMergeHint()
 		return ""
 	}
 	switch {
 	case err != nil:
 		m.loopRemaining = 0
 		m.appendLine(toolStyle.Render("  ⊘ goal loop halted."))
+		m.appendMergeHint()
 		return ""
 	case goal.IsComplete(res.Text):
 		done := m.loopTotal - m.loopRemaining + 1
 		m.loopRemaining = 0
 		m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ goal complete in %d iteration(s).", done)))
+		m.appendMergeHint()
 		return ""
 	default:
 		m.loopRemaining--
@@ -1031,6 +1045,14 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 		m.loopWrapUp = true
 		m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); summarising progress to the spec…", m.loopTotal)))
 		return goal.WrapUpPrompt(m.loopSpecPath)
+	}
+}
+
+// appendMergeHint tells the user where the loop's work landed and how to merge
+// it (only when the loop actually moved onto a branch).
+func (m *Model) appendMergeHint() {
+	if m.loopBranch != "" {
+		m.appendLine(toolStyle.Render("  " + goal.MergeHint(m.loopBranch, m.loopBaseBranch)))
 	}
 }
 
