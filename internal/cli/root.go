@@ -451,14 +451,32 @@ type options struct {
 	maxTurns        int
 	resume          string // --resume <session-id>
 	continueSession bool   // --continue
+	newSession      bool   // --new-session
 	forkSession     bool   // --fork-session
 	fullResume      bool   // --full (replay entire transcript, not the summary)
+
 	allowedTools    []string
 	disallowedTools []string
 	partialMessages bool   // --include-partial-messages
 	createConfig    string // --create-config global|local
 	loop            bool   // --loop: autonomous goal-spec iteration
 	maxIterations   int    // --max-iterations: outer-loop cap for --loop
+}
+
+// resolveResumeID selects the prior session to seed from, if any.
+func resolveResumeID(cwd string, opts options) (string, error) {
+	resumeID := opts.resume
+	if opts.newSession && (resumeID != "" || opts.continueSession) {
+		return "", fmt.Errorf("--new-session cannot be combined with --resume or --continue")
+	}
+	if !opts.newSession && resumeID == "" {
+		if id, ok := session.MostRecent(cwd); ok {
+			resumeID = id
+		} else if opts.continueSession {
+			return "", fmt.Errorf("--continue: no previous session found in this directory")
+		}
+	}
+	return resumeID, nil
 }
 
 // NewRootCommand builds the top-level `klaudia` command.
@@ -496,7 +514,8 @@ func NewRootCommand() *cobra.Command {
 	f.BoolVar(&opts.verbose, "verbose", false, "Verbose output (required for stream-json)")
 	f.IntVar(&opts.maxTurns, "max-turns", 0, "Limit the number of agentic loop turns (0 = unlimited)")
 	f.StringVarP(&opts.resume, "resume", "r", "", "Resume a session by ID")
-	f.BoolVar(&opts.continueSession, "continue", false, "Resume the most recent session in this directory")
+	f.BoolVar(&opts.continueSession, "continue", false, "Resume the most recent session in this directory (default when available)")
+	f.BoolVar(&opts.newSession, "new-session", false, "Start a fresh session instead of auto-resuming the most recent session in this directory")
 	f.BoolVar(&opts.forkSession, "fork-session", false, "When resuming, start a new session ID (preserves the original)")
 	f.BoolVar(&opts.fullResume, "full", false, "When resuming, replay the entire transcript instead of the compacted summary")
 	f.StringSliceVar(&opts.allowedTools, "allowedTools", nil, "Auto-allow tool rules, e.g. 'Edit' or 'Bash(git status:*)' (repeatable, comma-separated)")
@@ -550,16 +569,13 @@ func run(cmd *cobra.Command, opts *options) error {
 	ctx := cmd.Context()
 	r := NewRenderer(format, cmd.OutOrStdout())
 
-	// Resolve the session: resume by id, continue the most recent, or start new.
+	// Resolve the session: explicit resume by id, auto-resume the most recent
+	// project session by default, or start new when requested/no prior session.
 	// --fork-session writes to a fresh id while preserving the original.
 	var initialMessages []anthropic.BetaMessageParam
-	resumeID := opts.resume
-	if opts.continueSession && resumeID == "" {
-		if id, ok := session.MostRecent(cwd); ok {
-			resumeID = id
-		} else {
-			return fmt.Errorf("--continue: no previous session found in this directory")
-		}
+	resumeID, err := resolveResumeID(cwd, *opts)
+	if err != nil {
+		return err
 	}
 	sessionID := uuid.NewString()
 	if resumeID != "" {
