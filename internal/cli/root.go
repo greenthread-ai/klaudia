@@ -667,7 +667,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		baseTools = append(baseTools, memTool)
 	}
 
-	// User-defined skills (~/.claude/skills overlaid by .klaudia/skills) become a
+	// User-defined skills (~/.klaudia/skills overlaid by .klaudia/skills) become a
 	// single Skill tool the model can invoke; the TUI also dispatches /<skill>.
 	skills := skill.Load(cwd, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
 	skillInfos := skillToolInfos(skills)

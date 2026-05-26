@@ -281,9 +281,10 @@ disabled = ["python"]
 
 ## Skills
 
-Drop Markdown files with YAML frontmatter in `~/.claude/skills` or
-`.klaudia/skills/` (project wins). They become a `Skill` tool the model can
-invoke and `/＜name＞` commands in the TUI. Body supports `$ARGUMENTS`.
+Drop Markdown files with YAML frontmatter in `~/.klaudia/skills` (user) or
+`.klaudia/skills/` (project, wins on name collision). They become a `Skill` tool
+the model can invoke and `/＜name＞` commands in the TUI. Body supports
+`$ARGUMENTS`.
 
 ```markdown
 ---
