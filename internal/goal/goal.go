@@ -108,6 +108,17 @@ func IterationPrompt(specPath string) string {
 		"your turn after committing this step."
 }
 
+// WrapUpPrompt is run once when the loop stops without completing (iteration cap
+// or stall). It asks the model to record an honest end-of-run summary in the
+// spec — no new work — so the next run or a person can resume cleanly.
+func WrapUpPrompt(specPath string) string {
+	return "The goal loop is stopping before the goal is complete. Do NOT make code changes or " +
+		"start new work. Review " + specPath + " and the recent git history, then update " + specPath +
+		" so it reflects reality: tick the acceptance criteria that are genuinely done, and write a " +
+		"clear \"## Progress\" section summarising what was accomplished this run, what remains, any " +
+		"blockers, and the single best next step to resume. Commit only that spec update."
+}
+
 // IsComplete reports whether an iteration's final text signals completion.
 func IsComplete(text string) bool {
 	return strings.Contains(text, CompleteToken)

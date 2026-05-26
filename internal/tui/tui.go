@@ -241,6 +241,7 @@ type Model struct {
 	loopRemaining int
 	loopTotal     int
 	loopSpecPath  string
+	loopWrapUp    bool // the next loop turn is the end-of-run summary
 	// Cumulative session stats for /stats.
 	statTurns  int
 	statIn     int64
@@ -482,11 +483,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statOut += msg.res.OutputTokens
 		// Drop any approval/ask/plan channels a turn was interrupted mid-prompt.
 		m.pending, m.askReply, m.planReply = nil, nil, nil
-		// Goal loop: advance to the next iteration unless the goal is complete,
-		// the count is exhausted, or the turn errored/was interrupted.
-		if m.loopRemaining > 0 && m.loopAdvance(msg.res, msg.err) {
-			m.setState(stateRunning)
-			return m, tea.Batch(m.waitForEvent(), m.startTurn(goal.IterationPrompt(m.loopSpecPath)), stopSW)
+		// Goal loop: run the next iteration (or the wrap-up turn) unless the goal
+		// is complete, the turn errored/was interrupted, or we've fully stopped.
+		if m.loopRemaining > 0 || m.loopWrapUp {
+			if next := m.loopNext(msg.res, msg.err); next != "" {
+				m.setState(stateRunning)
+				return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
+			}
 		}
 		// A message queued while this turn ran is sent now as the next turn.
 		if q := strings.TrimSpace(m.queued); q != "" {
@@ -553,7 +556,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.turnCancel != nil {
 			m.turnCancel()
 			m.turnCancel = nil
-			m.loopRemaining = 0 // Esc also halts a running goal loop
+			m.loopRemaining, m.loopWrapUp = 0, false // Esc also halts a goal loop
 			m.appendLine(toolStyle.Render("  ⊘ interrupting…"))
 			return m, nil
 		}
@@ -994,30 +997,41 @@ func (m *Model) startGoalLoop(args []string) (tea.Model, tea.Cmd) {
 	return m, m.startTurn(goal.IterationPrompt(specPath))
 }
 
-// loopAdvance updates goal-loop state after an iteration finished and reports
-// whether another iteration should start (the caller then starts the turn). It
-// stops the loop when the turn errored/was interrupted, the goal reported
-// complete, or the iteration count is exhausted, printing the outcome.
-func (m *Model) loopAdvance(res agent.Result, err error) bool {
+// loopNext updates goal-loop state after a turn finished and returns the prompt
+// for the next loop turn, or "" to stop. It continues with the iteration prompt
+// while iterations remain; on the cap it runs one wrap-up turn (an end-of-run
+// summary into the spec) and then stops; it stops immediately on completion or
+// an errored/interrupted turn.
+func (m *Model) loopNext(res agent.Result, err error) string {
+	if m.loopWrapUp { // the wrap-up turn just finished
+		m.loopWrapUp = false
+		if err == nil {
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  summary written to %s — /goal run to resume.", filepath.Base(m.loopSpecPath))))
+		}
+		return ""
+	}
 	switch {
 	case err != nil:
 		m.loopRemaining = 0
 		m.appendLine(toolStyle.Render("  ⊘ goal loop halted."))
+		return ""
 	case goal.IsComplete(res.Text):
 		done := m.loopTotal - m.loopRemaining + 1
 		m.loopRemaining = 0
 		m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ goal complete in %d iteration(s).", done)))
+		return ""
 	default:
 		m.loopRemaining--
-		if m.loopRemaining == 0 {
-			m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); goal not yet complete. Progress is recorded in the spec — /goal run to resume.", m.loopTotal)))
-			break
+		if m.loopRemaining > 0 {
+			next := m.loopTotal - m.loopRemaining + 1
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration %d/%d", next, m.loopTotal)))
+			return goal.IterationPrompt(m.loopSpecPath)
 		}
-		next := m.loopTotal - m.loopRemaining + 1
-		m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration %d/%d", next, m.loopTotal)))
-		return true
+		// Cap reached without completing: do one wrap-up turn, then stop.
+		m.loopWrapUp = true
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); summarising progress to the spec…", m.loopTotal)))
+		return goal.WrapUpPrompt(m.loopSpecPath)
 	}
-	return false
 }
 
 // handleSlash dispatches a slash command. Commands run locally and never reach
@@ -1094,8 +1108,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			}
 			return m.startGoalLoop(args[1:])
 		case strings.EqualFold(args[0], "stop"):
-			if m.loopRemaining > 0 || m.turnCancel != nil {
-				m.loopRemaining = 0
+			if m.loopRemaining > 0 || m.loopWrapUp || m.turnCancel != nil {
+				m.loopRemaining, m.loopWrapUp = 0, false
 				if m.turnCancel != nil {
 					m.turnCancel()
 					m.turnCancel = nil
@@ -1792,8 +1806,8 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	case m.goalSetting && m.sess != nil:
 		existing, specPath, _ := goal.Read(m.sess.CWD)
 		prompt = goal.FacilitatorPrompt(specPath, existing) + "\n\nUser: " + prompt
-	case m.loopRemaining > 0:
-		// prompt is the iteration prompt already; no framing added.
+	case m.loopRemaining > 0 || m.loopWrapUp:
+		// prompt is the iteration / wrap-up prompt already; no framing added.
 	case m.sess != nil && m.sess.Goal != "":
 		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
 	}

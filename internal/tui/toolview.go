@@ -175,6 +175,8 @@ func (m *Model) statusLine() string {
 	if m.loopRemaining > 0 {
 		// While the /goal loop runs, show which iteration we're on.
 		line += fmt.Sprintf(" · goal %d/%d", m.loopTotal-m.loopRemaining+1, m.loopTotal)
+	} else if m.loopWrapUp {
+		line += " · goal summary"
 	} else if m.goalSetting {
 		line += " · goal-setting"
 	}

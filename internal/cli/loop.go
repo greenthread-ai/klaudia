@@ -63,13 +63,11 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 	}
 
 	emit := func(ev agent.Event) { _ = p.render.Event(ev) }
-	lastCommit := gitCommit(p.cwd)
-	stalls := 0
-
-	for i := 1; i <= iters; i++ {
-		fmt.Fprintf(errOut, "↻ iteration %d/%d\n", i, iters)
-		res, err := p.loop.Run(ctx, agent.Options{
-			Prompt:        goal.IterationPrompt(specPath),
+	// Each turn starts fresh (no InitialMessages): it re-reads the spec and git
+	// state, per the Ralph principle (bounded context over long runs).
+	runTurn := func(prompt string) (agent.Result, error) {
+		return p.loop.Run(ctx, agent.Options{
+			Prompt:        prompt,
 			Model:         p.model,
 			System:        p.system,
 			MaxTurns:      p.maxTurns,
@@ -79,9 +77,14 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 			Recorder:      p.recorder,
 			WebTools:      true,
 			OnSummary:     p.onSummary,
-			// No InitialMessages: each iteration starts fresh and re-reads the
-			// spec and git state (the Ralph principle — bounded context).
 		}, emit)
+	}
+
+	lastCommit := gitCommit(p.cwd)
+	stalls := 0
+	for i := 1; i <= iters; i++ {
+		fmt.Fprintf(errOut, "↻ iteration %d/%d\n", i, iters)
+		res, err := runTurn(goal.IterationPrompt(specPath))
 		if err != nil {
 			return err
 		}
@@ -92,15 +95,19 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 		// Stall detection: a non-repo (commit == "") never stalls.
 		if c := gitCommit(p.cwd); c == "" || c != lastCommit {
 			stalls, lastCommit = 0, c
-		} else {
-			stalls++
-			if stalls >= loopStallLimit {
-				fmt.Fprintf(errOut, "⊘ no new commits for %d iterations — stopping (goal not complete). Progress is recorded in %s; re-run to resume.\n", stalls, specPath)
-				return nil
-			}
+		} else if stalls++; stalls >= loopStallLimit {
+			fmt.Fprintf(errOut, "⊘ no new commits for %d iterations — stopping (goal not complete).\n", stalls)
+			break
 		}
 	}
-	fmt.Fprintf(errOut, "stopped after %d iteration(s); goal not yet complete. Progress is recorded in %s; re-run to resume.\n", iters, specPath)
+
+	// Stopped without completing (cap or stall): one wrap-up turn records an
+	// end-of-run summary in the spec so the next run (or a person) can resume.
+	fmt.Fprintf(errOut, "summarising progress to %s…\n", specPath)
+	if _, err := runTurn(goal.WrapUpPrompt(specPath)); err != nil {
+		return err
+	}
+	fmt.Fprintf(errOut, "stopped; goal not yet complete. Progress recorded in %s — re-run to resume.\n", specPath)
 	return nil
 }
 

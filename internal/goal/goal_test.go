@@ -123,6 +123,10 @@ func TestPromptsReferenceSpecPath(t *testing.T) {
 	if !contains(it, p) || !contains(it, CompleteToken) {
 		t.Error("iteration prompt should reference the spec path and completion token")
 	}
+	w := WrapUpPrompt(p)
+	if !contains(w, p) || !contains(w, "Do NOT make code changes") {
+		t.Error("wrap-up prompt should reference the spec path and forbid new work")
+	}
 }
 
 func contains(s, sub string) bool {

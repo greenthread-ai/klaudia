@@ -255,48 +255,54 @@ func TestSlashCommandsDuringProcessing(t *testing.T) {
 	}
 }
 
-func TestGoalLoopAdvance(t *testing.T) {
-	// A normal iteration that isn't complete: decrement and continue.
+func TestGoalLoopNext(t *testing.T) {
+	// A normal iteration that isn't complete: decrement and continue with the
+	// iteration prompt.
 	m := newTestModel()
-	m.loopTotal, m.loopRemaining = 3, 3
-	if !m.loopAdvance(agent.Result{Text: "made progress"}, nil) {
-		t.Fatal("should continue while iterations remain and goal incomplete")
+	m.loopTotal, m.loopRemaining, m.loopSpecPath = 3, 3, "PRD.md"
+	if next := m.loopNext(agent.Result{Text: "made progress"}, nil); !strings.Contains(next, "iterating toward") {
+		t.Fatalf("should continue with the iteration prompt; got %q", next)
 	}
-	if m.loopRemaining != 2 {
-		t.Fatalf("loopRemaining = %d, want 2", m.loopRemaining)
-	}
-	if !strings.Contains(m.transcript.String(), "↻ iteration 2/3") {
-		t.Errorf("expected iteration progress line; got %q", m.transcript.String())
+	if m.loopRemaining != 2 || !strings.Contains(m.transcript.String(), "↻ iteration 2/3") {
+		t.Errorf("rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
 	}
 
-	// Completion token stops the loop immediately.
+	// Completion token stops the loop immediately (no wrap-up).
 	m = newTestModel()
 	m.loopTotal, m.loopRemaining = 5, 5
-	if m.loopAdvance(agent.Result{Text: "all good <goal-complete/>"}, nil) {
-		t.Fatal("completion must stop the loop")
+	if next := m.loopNext(agent.Result{Text: "all good <goal-complete/>"}, nil); next != "" {
+		t.Fatalf("completion must stop the loop; got %q", next)
 	}
 	if m.loopRemaining != 0 || !strings.Contains(m.transcript.String(), "goal complete in 1") {
-		t.Errorf("expected completion at iter 1; rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
+		t.Errorf("rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
 	}
 
-	// Last iteration with no completion: stop at the cap.
+	// Cap reached without completing: run one wrap-up turn, then stop.
 	m = newTestModel()
-	m.loopTotal, m.loopRemaining = 2, 1
-	if m.loopAdvance(agent.Result{Text: "still going"}, nil) {
-		t.Fatal("must not continue past the iteration cap")
+	m.loopTotal, m.loopRemaining, m.loopSpecPath = 2, 1, "PRD.md"
+	next := m.loopNext(agent.Result{Text: "still going"}, nil)
+	if !strings.Contains(next, "stopping before the goal is complete") {
+		t.Fatalf("cap should trigger a wrap-up turn; got %q", next)
 	}
-	if m.loopRemaining != 0 || !strings.Contains(m.transcript.String(), "stopped after 2") {
-		t.Errorf("expected cap stop; rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
+	if !m.loopWrapUp || !strings.Contains(m.transcript.String(), "summarising progress") {
+		t.Errorf("expected wrap-up state; wrapUp=%v transcript=%q", m.loopWrapUp, m.transcript.String())
+	}
+	// The turn after the wrap-up stops the loop and points at the spec.
+	if after := m.loopNext(agent.Result{Text: "summary written"}, nil); after != "" {
+		t.Fatalf("loop should stop after the wrap-up turn; got %q", after)
+	}
+	if m.loopWrapUp || !strings.Contains(m.transcript.String(), "summary written to PRD.md") {
+		t.Errorf("wrapUp=%v transcript=%q", m.loopWrapUp, m.transcript.String())
 	}
 
-	// An error (e.g. Esc/cancel) halts the loop.
+	// An error (e.g. Esc/cancel) halts the loop with no wrap-up.
 	m = newTestModel()
 	m.loopTotal, m.loopRemaining = 4, 4
-	if m.loopAdvance(agent.Result{}, context.Canceled) {
-		t.Fatal("an errored turn must halt the loop")
+	if next := m.loopNext(agent.Result{}, context.Canceled); next != "" {
+		t.Fatalf("an errored turn must halt the loop; got %q", next)
 	}
-	if m.loopRemaining != 0 || !strings.Contains(m.transcript.String(), "halted") {
-		t.Errorf("expected halt; rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
+	if m.loopRemaining != 0 || m.loopWrapUp || !strings.Contains(m.transcript.String(), "halted") {
+		t.Errorf("rem=%d wrapUp=%v transcript=%q", m.loopRemaining, m.loopWrapUp, m.transcript.String())
 	}
 }
 
