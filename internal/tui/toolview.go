@@ -170,6 +170,13 @@ func (m *Model) statusLine() string {
 		}
 	}
 	toks := m.statIn + m.statOut
-	return hintStyle.Render(fmt.Sprintf("%s · %s · %d turns · %s tokens",
-		model, shortMode(m.currentMode()), m.statTurns, humanTokens(toks)))
+	line := fmt.Sprintf("%s · %s · %d turns · %s tokens",
+		model, shortMode(m.currentMode()), m.statTurns, humanTokens(toks))
+	if m.loopRemaining > 0 {
+		// While the /goal loop runs, show which iteration we're on.
+		line += fmt.Sprintf(" · goal %d/%d", m.loopTotal-m.loopRemaining+1, m.loopTotal)
+	} else if m.goalSetting {
+		line += " · goal-setting"
+	}
+	return hintStyle.Render(line)
 }

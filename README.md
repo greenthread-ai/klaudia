@@ -305,11 +305,24 @@ Markdown rendering, not just code blocks. Built in: `dracula`, `gruvbox`,
 theme = "nord"
 ```
 
-## Standing goals
+## Goals & autonomous iteration
 
-`/goal <text>` pins an objective that is re-stated to the model at the start of
-every turn, so it doesn't drift over a long session. `/goal` shows the current
-goal; `/goal clear` removes it.
+Two complementary modes for working toward an objective:
+
+- **Standing goal** — `/goal <text>` pins an objective re-stated to the model at
+  the start of every turn so it doesn't drift; `/goal clear` removes it.
+- **Goal spec + Ralph loop** — for bigger objectives:
+  - `/goal` (no args) enters **goal-setting**: it loads an existing spec
+    (`./PRD.md` or `./.klaudia/GOAL.md`) or, if none, helps you draft one
+    (objective, an acceptance-criteria checklist, and a verification command).
+    `/goal` again finishes.
+  - `/goal run [N]` then runs an **autonomous loop** against the spec: each
+    iteration re-reads the spec, makes the next valuable change, verifies, and
+    commits — progress accumulating in files and git, not the context window
+    (the [Ralph](https://ghuntley.com/ralph/) pattern). It runs on a dedicated
+    `klaudia/goal-<slug>` branch, stops when the model reports `<goal-complete/>`
+    or after `N` iterations (default 10, cap 50), and is interruptible any time
+    with `Esc` or `/goal stop`. The status bar shows `goal K/N`.
 
 ## Memory & project knowledge
 

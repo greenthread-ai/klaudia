@@ -254,3 +254,76 @@ func TestSlashCommandsDuringProcessing(t *testing.T) {
 		t.Fatalf("queued = %q, want the plain text queued", m.queued)
 	}
 }
+
+func TestGoalLoopAdvance(t *testing.T) {
+	// A normal iteration that isn't complete: decrement and continue.
+	m := newTestModel()
+	m.loopTotal, m.loopRemaining = 3, 3
+	if !m.loopAdvance(agent.Result{Text: "made progress"}, nil) {
+		t.Fatal("should continue while iterations remain and goal incomplete")
+	}
+	if m.loopRemaining != 2 {
+		t.Fatalf("loopRemaining = %d, want 2", m.loopRemaining)
+	}
+	if !strings.Contains(m.transcript.String(), "↻ iteration 2/3") {
+		t.Errorf("expected iteration progress line; got %q", m.transcript.String())
+	}
+
+	// Completion token stops the loop immediately.
+	m = newTestModel()
+	m.loopTotal, m.loopRemaining = 5, 5
+	if m.loopAdvance(agent.Result{Text: "all good <goal-complete/>"}, nil) {
+		t.Fatal("completion must stop the loop")
+	}
+	if m.loopRemaining != 0 || !strings.Contains(m.transcript.String(), "goal complete in 1") {
+		t.Errorf("expected completion at iter 1; rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
+	}
+
+	// Last iteration with no completion: stop at the cap.
+	m = newTestModel()
+	m.loopTotal, m.loopRemaining = 2, 1
+	if m.loopAdvance(agent.Result{Text: "still going"}, nil) {
+		t.Fatal("must not continue past the iteration cap")
+	}
+	if m.loopRemaining != 0 || !strings.Contains(m.transcript.String(), "stopped after 2") {
+		t.Errorf("expected cap stop; rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
+	}
+
+	// An error (e.g. Esc/cancel) halts the loop.
+	m = newTestModel()
+	m.loopTotal, m.loopRemaining = 4, 4
+	if m.loopAdvance(agent.Result{}, context.Canceled) {
+		t.Fatal("an errored turn must halt the loop")
+	}
+	if m.loopRemaining != 0 || !strings.Contains(m.transcript.String(), "halted") {
+		t.Errorf("expected halt; rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
+	}
+}
+
+func TestGoalRunRequiresSpec(t *testing.T) {
+	m := newTestModel()
+	m.sess.CWD = t.TempDir() // no PRD.md / GOAL.md
+	m.startGoalLoop(nil)
+	if m.loopRemaining != 0 {
+		t.Errorf("loop should not start without a spec; rem=%d", m.loopRemaining)
+	}
+	if !strings.Contains(m.transcript.String(), "No goal spec found") {
+		t.Errorf("expected a missing-spec error; got %q", m.transcript.String())
+	}
+}
+
+func TestGoalSettingToggle(t *testing.T) {
+	m := newTestModel()
+	m.sess.CWD = t.TempDir()
+	m.toggleGoalSetting()
+	if !m.goalSetting {
+		t.Fatal("first /goal should enter goal-setting")
+	}
+	if !strings.Contains(m.transcript.String(), "no spec yet") {
+		t.Errorf("expected no-spec prompt; got %q", m.transcript.String())
+	}
+	m.toggleGoalSetting()
+	if m.goalSetting {
+		t.Fatal("second /goal should leave goal-setting")
+	}
+}

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/greenthread/klaudia/internal/agent"
 	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/config"
+	"github.com/greenthread/klaudia/internal/goal"
 	"github.com/greenthread/klaudia/internal/memory"
 	"github.com/greenthread/klaudia/internal/native/search"
 	"github.com/greenthread/klaudia/internal/permission"
@@ -231,6 +233,14 @@ type Model struct {
 	// Accessed only from the UI goroutine (Update) to avoid races.
 	sessionAllow []permission.Rule
 	sessionDeny  []permission.Rule
+	// Goal/loop state (the "/goal" feature). goalSetting frames turns as
+	// spec-authoring. loopRemaining>0 means the "/goal run" Ralph loop is active:
+	// each finished iteration starts the next (via the doneMsg hook) until the
+	// goal completes, the count hits 0, or the user stops it.
+	goalSetting   bool
+	loopRemaining int
+	loopTotal     int
+	loopSpecPath  string
 	// Cumulative session stats for /stats.
 	statTurns  int
 	statIn     int64
@@ -472,6 +482,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statOut += msg.res.OutputTokens
 		// Drop any approval/ask/plan channels a turn was interrupted mid-prompt.
 		m.pending, m.askReply, m.planReply = nil, nil, nil
+		// Goal loop: advance to the next iteration unless the goal is complete,
+		// the count is exhausted, or the turn errored/was interrupted.
+		if m.loopRemaining > 0 && m.loopAdvance(msg.res, msg.err) {
+			m.setState(stateRunning)
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(goal.IterationPrompt(m.loopSpecPath)), stopSW)
+		}
 		// A message queued while this turn ran is sent now as the next turn.
 		if q := strings.TrimSpace(m.queued); q != "" {
 			m.queued = ""
@@ -537,6 +553,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.turnCancel != nil {
 			m.turnCancel()
 			m.turnCancel = nil
+			m.loopRemaining = 0 // Esc also halts a running goal loop
 			m.appendLine(toolStyle.Render("  ⊘ interrupting…"))
 			return m, nil
 		}
@@ -750,7 +767,7 @@ var commandList = []cmdInfo{
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
 	{"/allow", "<rule>", "Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)"},
 	{"/deny", "<rule>", "Auto-deny a tool rule this session"},
-	{"/goal", "[text]", "Set/show a standing goal re-stated each turn (/goal clear to stop)"},
+	{"/goal", "[run N|stop|text]", "No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder"},
 	{"/memory", "[add …]", "Show recalled memory, or add a note"},
 	{"/mcp", "", "List MCP servers; reconnect or disconnect them"},
 	{"/stats", "", "Show session stats (turns, tokens)"},
@@ -895,6 +912,108 @@ func (m *Model) busyGuard(what string) bool {
 	return false
 }
 
+// toggleGoalSetting flips goal-setting mode. Turning it on loads any existing
+// spec (PRD.md / .klaudia/GOAL.md) or invites the user to describe the goal so
+// the model can draft one on the next turn; turning it off readies the loop.
+func (m *Model) toggleGoalSetting() (tea.Model, tea.Cmd) {
+	if m.goalSetting {
+		m.goalSetting = false
+		m.appendLine(bannerStyle.Render("Goal-setting finished. /goal run [N] to start the loop."))
+		return m, nil
+	}
+	m.goalSetting = true
+	cwd := ""
+	if m.sess != nil {
+		cwd = m.sess.CWD
+	}
+	text, specPath, _ := goal.Read(cwd)
+	if strings.TrimSpace(text) != "" {
+		m.appendLine(bannerStyle.Render(fmt.Sprintf(
+			"Goal-setting on. Loaded spec from %s:\n  %s\nRefine it in chat, /goal to finish, then /goal run to start.",
+			specPath, oneLine(text, 100))))
+	} else {
+		m.appendLine(bannerStyle.Render(fmt.Sprintf(
+			"Goal-setting on — no spec yet. Tell me what you're building and I'll draft %s. /goal to finish.",
+			specPath)))
+	}
+	return m, nil
+}
+
+// startGoalLoop kicks off the "/goal run [N]" Ralph loop: requires a spec, moves
+// onto a dedicated branch when possible, then runs up to N interruptible
+// iterations (each re-invoking the agent with goal.IterationPrompt; subsequent
+// iterations are started by the doneMsg hook). Reached only from an idle
+// KeyMsg, so — like the normal turn-start — it must NOT arm waitForEvent (the
+// single reader is already outstanding).
+func (m *Model) startGoalLoop(args []string) (tea.Model, tea.Cmd) {
+	cwd := ""
+	if m.sess != nil {
+		cwd = m.sess.CWD
+	}
+	specText, specPath, _ := goal.Read(cwd)
+	if strings.TrimSpace(specText) == "" {
+		m.appendLine(errStyle.Render("No goal spec found. Run /goal first to create one (PRD.md or .klaudia/GOAL.md)."))
+		return m, nil
+	}
+
+	n := goal.DefaultIterations
+	if len(args) > 0 {
+		v, err := strconv.Atoi(args[0])
+		if err != nil || v <= 0 {
+			m.appendLine(errStyle.Render("usage: /goal run [N]  (N = max iterations, a positive integer)"))
+			return m, nil
+		}
+		n = v
+	}
+	if n > goal.MaxIterations {
+		n = goal.MaxIterations
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  capped at %d iterations.", goal.MaxIterations)))
+	}
+
+	// Move onto a dedicated branch so iterations stay isolated and revertible.
+	if cwd != "" {
+		branch := goal.BranchName(specText)
+		if out, err := gitOutput(cwd, "checkout", "-B", branch); err != nil {
+			m.appendLine(toolStyle.Render("  (not branching: " + strings.TrimSpace(out) + ")"))
+		} else {
+			m.appendLine(toolStyle.Render("  ↳ on branch " + branch))
+		}
+	}
+
+	m.goalSetting = false
+	m.loopTotal, m.loopRemaining, m.loopSpecPath = n, n, specPath
+	m.appendLine(bannerStyle.Render(fmt.Sprintf("Goal loop: up to %d iterations against %s. Esc or /goal stop to halt.", n, specPath)))
+	m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration 1/%d", n)))
+	m.setState(stateRunning)
+	return m, m.startTurn(goal.IterationPrompt(specPath))
+}
+
+// loopAdvance updates goal-loop state after an iteration finished and reports
+// whether another iteration should start (the caller then starts the turn). It
+// stops the loop when the turn errored/was interrupted, the goal reported
+// complete, or the iteration count is exhausted, printing the outcome.
+func (m *Model) loopAdvance(res agent.Result, err error) bool {
+	switch {
+	case err != nil:
+		m.loopRemaining = 0
+		m.appendLine(toolStyle.Render("  ⊘ goal loop halted."))
+	case goal.IsComplete(res.Text):
+		done := m.loopTotal - m.loopRemaining + 1
+		m.loopRemaining = 0
+		m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ goal complete in %d iteration(s).", done)))
+	default:
+		m.loopRemaining--
+		if m.loopRemaining == 0 {
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); goal not yet complete — /goal run to continue.", m.loopTotal)))
+			break
+		}
+		next := m.loopTotal - m.loopRemaining + 1
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration %d/%d", next, m.loopTotal)))
+		return true
+	}
+	return false
+}
+
 // handleSlash dispatches a slash command. Commands run locally and never reach
 // the model. Most are safe to run while a turn is in flight; the destructive
 // ones guard with busyGuard.
@@ -959,12 +1078,27 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	case "/goal":
 		switch {
 		case len(args) == 0:
-			if m.sess.Goal == "" {
-				m.appendLine(bannerStyle.Render("No standing goal set. /goal <text> to set one."))
-			} else {
-				m.appendLine(bannerStyle.Render("Goal: " + m.sess.Goal))
+			if m.busyGuard("/goal") {
+				break
 			}
-		case strings.ToLower(args[0]) == "clear":
+			return m.toggleGoalSetting()
+		case strings.EqualFold(args[0], "run"):
+			if m.busyGuard("/goal run") {
+				break
+			}
+			return m.startGoalLoop(args[1:])
+		case strings.EqualFold(args[0], "stop"):
+			if m.loopRemaining > 0 || m.turnCancel != nil {
+				m.loopRemaining = 0
+				if m.turnCancel != nil {
+					m.turnCancel()
+					m.turnCancel = nil
+				}
+				m.appendLine(toolStyle.Render("  ⊘ goal loop stopped."))
+			} else {
+				m.appendLine(bannerStyle.Render("No goal loop running."))
+			}
+		case strings.EqualFold(args[0], "clear"):
 			m.sess.Goal = ""
 			m.appendLine(bannerStyle.Render("Standing goal cleared."))
 		default:
@@ -1645,7 +1779,16 @@ func (m *Model) answer(d permission.Decision) {
 // runs under a cancellable context so Esc can interrupt it. A standing /goal is
 // re-stated to the model each turn (Ralph-style).
 func (m *Model) startTurn(prompt string) tea.Cmd {
-	if m.sess != nil && m.sess.Goal != "" {
+	// Frame the turn. Goal-setting interviews the user and drafts the spec; an
+	// active loop's prompt is already goal.IterationPrompt (built by the caller),
+	// so leave it untouched; otherwise re-state any standing /goal (drift guard).
+	switch {
+	case m.goalSetting && m.sess != nil:
+		existing, specPath, _ := goal.Read(m.sess.CWD)
+		prompt = goal.FacilitatorPrompt(specPath, existing) + "\n\nUser: " + prompt
+	case m.loopRemaining > 0:
+		// prompt is the iteration prompt already; no framing added.
+	case m.sess != nil && m.sess.Goal != "":
 		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
 	}
 	approver := &uiApprover{events: m.events}
