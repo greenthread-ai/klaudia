@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/greenthread/klaudia/internal/memory"
 )
 
 // securityClause mirrors the JS constant V44 (05-app-core.js:65659).
@@ -80,8 +82,8 @@ func recalledKnowledge(cwd string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// recalledMemory returns the project memory index and linked memory notes for
-// priming the model, or "" if there is none.
+// recalledMemory returns the project memory index plus pointers to the detail
+// notes for priming the model, or "" if there is none.
 func recalledMemory(cwd string) string {
 	klaudiaDir := filepath.Join(cwd, ".klaudia")
 	parts := readMarkdownFiles(filepath.Join(klaudiaDir, "MEMORY.md"))
@@ -90,13 +92,19 @@ func recalledMemory(cwd string) string {
 	// index under .klaudia/memory/MEMORY.md.
 	parts = append(parts, readMarkdownFiles(filepath.Join(klaudiaDir, "memory", "MEMORY.md"))...)
 
-	if paths, err := filepath.Glob(filepath.Join(klaudiaDir, "memory", "*.md")); err == nil {
-		for _, path := range paths {
-			if filepath.Base(path) == "MEMORY.md" {
-				continue
-			}
-			parts = append(parts, readMarkdownFiles(path)...)
+	// Reference the memory/*.md detail notes by pointer (name + one-line hook)
+	// rather than inlining their contents — recall stays cheap as memory grows,
+	// and the model opens a note (Read / Memory search) only when it's relevant.
+	// Skip any pointer already written into the index to avoid duplication.
+	indexText := strings.Join(parts, "\n\n")
+	var pointers []string
+	for _, p := range memory.New(klaudiaDir).FilePointers() {
+		if !strings.Contains(indexText, p) {
+			pointers = append(pointers, p)
 		}
+	}
+	if len(pointers) > 0 {
+		parts = append(parts, "## Memory files (read on demand)\n"+strings.Join(pointers, "\n"))
 	}
 
 	return strings.TrimSpace(strings.Join(parts, "\n\n"))

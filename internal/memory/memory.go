@@ -69,7 +69,11 @@ func (s *Store) Entries() ([]string, error) {
 	return entries, nil
 }
 
-// Search returns entries containing all whitespace-separated query terms.
+// Search returns memory lines containing all whitespace-separated query terms.
+// It searches the MEMORY.md index bullets and the content of each memory/*.md
+// detail note; matches from a detail file are tagged "name.md: <line>" so the
+// model knows which file to open for the full context. An empty query returns
+// just the index entries (use FilePointers / Read to reach detail notes).
 func (s *Store) Search(query string) ([]string, error) {
 	entries, err := s.Entries()
 	if err != nil {
@@ -81,18 +85,42 @@ func (s *Store) Search(query string) ([]string, error) {
 		return entries, nil
 	}
 
+	candidates := append([]string{}, entries...)
+
+	// Detail notes: tag each content line with its filename so a hit points the
+	// model at the right file.
+	paths, _ := filepath.Glob(filepath.Join(s.dir, "memory", "*.md"))
+	sort.Strings(paths)
+	for _, path := range paths {
+		name := filepath.Base(path)
+		if name == "MEMORY.md" {
+			continue
+		}
+		data, rerr := os.ReadFile(path)
+		if rerr != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			t := strings.TrimSpace(line)
+			if t == "" || strings.HasPrefix(t, "#") {
+				continue
+			}
+			candidates = append(candidates, name+": "+t)
+		}
+	}
+
 	var matches []string
-	for _, entry := range entries {
-		entryLower := strings.ToLower(entry)
+	for _, c := range candidates {
+		lower := strings.ToLower(c)
 		matched := true
 		for _, term := range terms {
-			if !strings.Contains(entryLower, term) {
+			if !strings.Contains(lower, term) {
 				matched = false
 				break
 			}
 		}
 		if matched {
-			matches = append(matches, entry)
+			matches = append(matches, c)
 		}
 	}
 	return matches, nil
@@ -101,28 +129,62 @@ func (s *Store) Search(query string) ([]string, error) {
 // Add appends a timestamped bullet to MEMORY.md, creating the directory and a
 // header on first write. Empty (whitespace-only) text is rejected.
 func (s *Store) Add(text string) error {
-	return appendBullet(s.Path(), "# Memory\n\n", text, s.linkedMemoryFiles()...)
+	return appendBullet(s.Path(), "# Memory\n\n", text)
 }
 
-func (s *Store) linkedMemoryFiles() []string {
+// FilePointers returns one Markdown pointer line per detail note under
+// memory/*.md, as "- [name](memory/name.md) — <hook>", where <hook> is the
+// file's first heading or non-empty line. MEMORY.md itself is skipped.
+//
+// These let the index *reference* detail notes rather than inline them: recall
+// stays cheap as memory grows, and the model opens a file (via Read or a Memory
+// search) only when it's relevant.
+func (s *Store) FilePointers() []string {
 	paths, err := filepath.Glob(filepath.Join(s.dir, "memory", "*.md"))
-	if err != nil || len(paths) == 0 {
+	if err != nil {
 		return nil
 	}
 	sort.Strings(paths)
 
-	links := make([]string, 0, len(paths))
+	ptrs := make([]string, 0, len(paths))
 	for _, path := range paths {
 		name := filepath.Base(path)
 		if name == "MEMORY.md" {
 			continue
 		}
-		links = append(links, "["+strings.TrimSuffix(name, filepath.Ext(name))+"](memory/"+name+")")
+		slug := strings.TrimSuffix(name, filepath.Ext(name))
+		line := "- [" + slug + "](memory/" + name + ")"
+		if hook := fileHook(path); hook != "" {
+			line += " — " + hook
+		}
+		ptrs = append(ptrs, line)
 	}
-	return links
+	return ptrs
 }
 
-func appendBullet(path, header, text string, links ...string) error {
+// fileHook returns a one-line summary of a memory file: its first Markdown
+// heading (with leading '#'s stripped) or, failing that, its first non-empty
+// line. Returns "" if the file is unreadable or empty.
+func fileHook(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" {
+			continue
+		}
+		t = strings.TrimSpace(strings.TrimLeft(t, "#"))
+		if len(t) > 80 {
+			t = t[:80] + "…"
+		}
+		return t
+	}
+	return ""
+}
+
+func appendBullet(path, header, text string) error {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return errors.New("memory text is empty")
@@ -132,10 +194,10 @@ func appendBullet(path, header, text string, links ...string) error {
 		return err
 	}
 
-	existing, readErr := os.ReadFile(path)
-	newFile := errors.Is(readErr, os.ErrNotExist)
-	if readErr != nil && !newFile {
-		return readErr
+	_, statErr := os.Stat(path)
+	newFile := errors.Is(statErr, os.ErrNotExist)
+	if statErr != nil && !newFile {
+		return statErr
 	}
 
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
@@ -149,36 +211,7 @@ func appendBullet(path, header, text string, links ...string) error {
 			return err
 		}
 	}
-	if err := appendMissingLinks(file, string(existing), links); err != nil {
-		return err
-	}
 
 	_, err = file.WriteString("- " + time.Now().Format(time.RFC3339) + " " + text + "\n")
 	return err
-}
-
-func appendMissingLinks(file *os.File, existing string, links []string) error {
-	var missing []string
-	for _, link := range links {
-		if !strings.Contains(existing, link) {
-			missing = append(missing, link)
-		}
-	}
-	if len(missing) == 0 {
-		return nil
-	}
-	if strings.TrimSpace(existing) != "" && !strings.HasSuffix(existing, "\n") {
-		if _, err := file.WriteString("\n"); err != nil {
-			return err
-		}
-	}
-	if _, err := file.WriteString("\n## Linked memory\n"); err != nil {
-		return err
-	}
-	for _, link := range missing {
-		if _, err := file.WriteString("- " + link + "\n"); err != nil {
-			return err
-		}
-	}
-	return nil
 }

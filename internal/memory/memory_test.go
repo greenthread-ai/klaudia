@@ -150,60 +150,63 @@ func TestSearchEmptyQueryReturnsAll(t *testing.T) {
 	}
 }
 
-func TestAddLinksMemoryFiles(t *testing.T) {
+func TestFilePointers(t *testing.T) {
 	dir := t.TempDir()
 	store := New(dir)
 	memDir := filepath.Join(dir, "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Tools\n"), 0o644); err != nil {
+	// A file whose hook comes from its first heading.
+	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Preferred tools\n\n- rg\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(memDir, "prefs.md"), []byte("# Prefs\n"), 0o644); err != nil {
+	// A file with no heading: hook is the first non-empty line.
+	if err := os.WriteFile(filepath.Join(memDir, "prefs.md"), []byte("\nlikes tabs\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// A nested index file must be ignored.
 	if err := os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("# Legacy\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := store.Add("remember this"); err != nil {
-		t.Fatalf("Add() error = %v", err)
+	got := store.FilePointers()
+	want := []string{
+		"- [prefs](memory/prefs.md) — likes tabs",
+		"- [tools](memory/tools.md) — Preferred tools",
 	}
-
-	contents, err := store.Index()
-	if err != nil {
-		t.Fatalf("Index() error = %v", err)
-	}
-	for _, want := range []string{"## Linked memory", "[prefs](memory/prefs.md)", "[tools](memory/tools.md)"} {
-		if !strings.Contains(contents, want) {
-			t.Fatalf("Index() = %q, want %q", contents, want)
-		}
-	}
-	if strings.Contains(contents, "memory/MEMORY.md") {
-		t.Fatalf("Index() = %q, should not link legacy MEMORY.md", contents)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("FilePointers() = %#v, want %#v", got, want)
 	}
 }
 
-func TestAddDoesNotDuplicateMemoryFileLinks(t *testing.T) {
+func TestSearchIncludesDetailFiles(t *testing.T) {
 	dir := t.TempDir()
 	store := New(dir)
+	if err := store.Add("prefer table tests"); err != nil {
+		t.Fatal(err)
+	}
 	memDir := filepath.Join(dir, "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Tools\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(memDir, "browser.md"),
+		[]byte("# Browser port\n\n- DDG search hits an anomaly modal in headless Chrome\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	addNotes(t, store, "first", "second")
-
-	contents, err := store.Index()
+	// A term only present in the detail file is found, tagged with the filename.
+	matches, err := store.Search("anomaly")
 	if err != nil {
-		t.Fatalf("Index() error = %v", err)
+		t.Fatalf("Search() error = %v", err)
 	}
-	if got := strings.Count(contents, "[tools](memory/tools.md)"); got != 1 {
-		t.Fatalf("tools link count = %d, want 1; contents = %q", got, contents)
+	if len(matches) != 1 || !strings.HasPrefix(matches[0], "browser.md: ") || !strings.Contains(matches[0], "anomaly modal") {
+		t.Fatalf("Search(anomaly) = %#v, want one browser.md-tagged hit", matches)
+	}
+
+	// Headings are not matchable content lines.
+	if got, _ := store.Search("Browser port"); len(got) != 0 {
+		t.Fatalf("Search should skip headings, got %#v", got)
 	}
 }
 

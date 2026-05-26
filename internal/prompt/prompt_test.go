@@ -76,10 +76,15 @@ func TestSystemRecallsLinkedMemoryFiles(t *testing.T) {
 	}
 
 	p := System(dir, "")
-	for _, want := range []string{"Root memory", "Use rg for search"} {
+	// The index entry is inlined; the detail note is referenced by a pointer
+	// (name + hook), not by its contents, so recall stays cheap.
+	for _, want := range []string{"Root memory", "[tools](memory/tools.md)", "Tools"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("system prompt missing recalled memory %q", want)
 		}
+	}
+	if strings.Contains(p, "Use rg for search") {
+		t.Errorf("detail-note contents should not be inlined into recall")
 	}
 }
 

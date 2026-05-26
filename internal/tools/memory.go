@@ -48,8 +48,10 @@ func (m *Memory) Name() string { return "Memory" }
 func (m *Memory) Description(context.Context) (string, error) {
 	return "Your persistent memory across sessions. Use it to recall prior context before " +
 		"asking the user or re-investigating, and to store durable facts (decisions, conventions, " +
-		"gotchas) for later. operation: \"search\" (find notes matching query terms), " +
-		"\"view\" (read all session notes), \"add\" (store a new note via content). " +
+		"gotchas) for later. operation: \"search\" (find notes matching query terms — searches the " +
+		"MEMORY.md index and the .klaudia/memory/*.md detail notes; a detail hit is tagged " +
+		"\"file.md: …\", so Read that file for full context), \"view\" (read all session notes), " +
+		"\"add\" (store a new note via content). " +
 		"For operation=add, scope may be \"session\" (default, .klaudia/MEMORY.md) " +
 		"or \"project\" (.klaudia/KNOWLEDGE.md for durable project understanding). " +
 		"Search early when resuming work or when a task references past decisions.", nil
