@@ -32,6 +32,7 @@ import (
 	"github.com/greenthread/klaudia/internal/memory"
 	"github.com/greenthread/klaudia/internal/native/search"
 	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread/klaudia/internal/remotecontrol"
 	"github.com/greenthread/klaudia/internal/tools"
 )
 
@@ -265,6 +266,11 @@ type Model struct {
 	// introTagline is chosen once so it stays stable across regenerations.
 	introModel, introBranch, introSession, introTagline string
 	hasIntro                                            bool
+
+	// Remote-control: when set, agent events fan out to ai-console over
+	// a WebSocket and the server can inject user input back. nil when
+	// disconnected. See remote.go.
+	remote *remotecontrol.Session
 }
 
 type transcriptBlock struct {
@@ -483,6 +489,65 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setState(stateIdle)
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW)
+
+	case remoteCodeMsg:
+		// Show the verification URL + user code so the user can approve in
+		// the browser. Stays visible in scrollback so they don't have to scroll.
+		m.appendLine(bannerStyle.Render("Open this URL in your browser to connect klaudia:"))
+		m.appendLine("  " + msg.verificationURL)
+		m.appendLine(bannerStyle.Render("  code: " + msg.userCode))
+		return m, m.waitForEvent()
+	case remoteLoggedInMsg:
+		m.appendLine(bannerStyle.Render("Signed in to ai-console — opening session…"))
+		return m, m.waitForEvent()
+	case remoteOpenedMsg:
+		m.remote = msg.sess
+		m.appendLine(bannerStyle.Render("Remote-control session " + msg.sess.SessionID() + " is live."))
+		return m, m.waitForEvent()
+	case remoteFailedMsg:
+		m.appendLine(errStyle.Render("remote-control: " + msg.err.Error()))
+		return m, m.waitForEvent()
+	case remoteClosedMsg:
+		if m.remote != nil {
+			m.remote = nil
+			m.appendLine(bannerStyle.Render("Remote-control connection closed."))
+		}
+		return m, m.waitForEvent()
+	case remoteInputMsg:
+		// Inject server-side input as if the user typed it. Messages start
+		// a new turn (or queue if one is running); permission replies are
+		// handled inside the session approver (never reach the TUI).
+		switch msg.in.Kind {
+		case remotecontrol.InputKindMessage:
+			text := strings.TrimSpace(msg.in.Text)
+			if text == "" {
+				return m, m.waitForEvent()
+			}
+			if m.state == stateRunning {
+				if strings.TrimSpace(m.queued) == "" {
+					m.queued = text
+				} else {
+					m.queued += "\n" + text
+				}
+				m.appendLine(userStyle.Render("› (queued from ai-console) ") + text)
+				return m, m.waitForEvent()
+			}
+			m.pushHistory(text)
+			m.appendLine(userStyle.Render("› (from ai-console) ") + text)
+			m.setState(stateRunning)
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(text))
+		case remotecontrol.InputKindSlash:
+			switch msg.in.Command {
+			case "abort":
+				if m.turnCancel != nil {
+					m.turnCancel()
+				}
+			case "close":
+				m.stopRemoteControl()
+			}
+			return m, m.waitForEvent()
+		}
+		return m, m.waitForEvent()
 
 	case compactDoneMsg:
 		if msg.err != nil {
@@ -1133,6 +1198,25 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		// The y/n lives in the persistent bottom view (stateAwaitingConfirm);
 		// scrollback just records the question and the diff being committed.
 		m.appendLine(askStyle.Render("Stage all changes and commit?\n" + strings.TrimRight(status, "\n")))
+	case "/remote-control":
+		if m.remote != nil {
+			m.stopRemoteControl()
+			m.appendLine(bannerStyle.Render("Remote-control disconnected."))
+			break
+		}
+		baseURL := ""
+		if len(args) > 0 {
+			baseURL = args[0]
+		}
+		m.appendLine(bannerStyle.Render("Starting remote-control sign-in…"))
+		m.startRemoteControl(baseURL)
+	case "/logout":
+		m.stopRemoteControl()
+		if err := remotecontrol.ClearCredential(); err != nil {
+			m.appendLine(errStyle.Render("logout: " + err.Error()))
+		} else {
+			m.appendLine(bannerStyle.Render("Cleared ai-console credential."))
+		}
 	default:
 		// A /<skill> matching a user-defined skill renders its body and submits it
 		// as the turn prompt. Built-in commands above always win (a skill that
@@ -1607,14 +1691,28 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	if m.sess != nil && m.sess.Goal != "" {
 		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
 	}
-	approver := &uiApprover{events: m.events}
+	var approver agent.Approver = &uiApprover{events: m.events}
 	asker := &uiAsker{events: m.events}
 	planner := &uiPlanner{events: m.events}
 	emit := func(ev agent.Event) { m.events <- eventMsg{ev} }
+	// Fan events out to the remote-control WS when it's open. Permission
+	// asks go to the remote approver (browser/mobile) with the local TUI
+	// approver as a fallback so the agent never wedges if the WS dies.
+	if m.remote != nil {
+		emit = m.remote.WrapEmitter(emit)
+		approver = m.remote.Approver(approver)
+		// Echo the user's prompt so the UI sees it.
+		m.remote.SendUserMessage(prompt)
+		m.remote.SendStatus("thinking")
+	}
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.turnCancel = cancel
 	go func() {
 		res, err := m.run(ctx, prompt, m.history, approver, asker, planner, emit)
+		if m.remote != nil {
+			m.remote.SendTurnDone(res.StopReason)
+			m.remote.SendStatus("idle")
+		}
 		m.events <- doneMsg{res: res, err: err}
 	}()
 	return tea.Batch(m.spin.Tick, m.sw.Reset(), m.sw.Start())
