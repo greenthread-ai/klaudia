@@ -6,6 +6,23 @@ macOS), no runtime dependencies. Klaudia began as a cleanroom of Claude Code
 the `js-reference` branch). See [Background](#background) for the story and
 [docs/parity.md](docs/parity.md) for the feature map.
 
+![Klaudia's terminal UI](docs/screenshot.png)
+
+Klaudia keeps full parity with the reference and then builds past it — the
+extras we lean on day to day:
+
+- **[Code intelligence (LSP)](#code-intelligence-lsp)** — real diagnostics and
+  go-to-definition from language servers you already have installed.
+- **[Memory & project knowledge](#memory--project-knowledge)** — a `MEMORY.md`
+  index that links out to detail notes, recalled into every session.
+- **[Themes](#themes)** — the whole UI (banner, prompts, menus, Markdown)
+  recolors, persisted in config.
+- **[Standing goals](#standing-goals)** — `/goal` pins an objective that's
+  re-stated to the model every turn.
+- Plus [OS/container Bash sandboxing](#sandboxing-the-bash-tool), local
+  [web search & browsing](#web-search--browsing), [MCP](#mcp), and
+  [skills](#skills).
+
 ## Getting started
 
 ```bash
@@ -276,10 +293,32 @@ description: Structured review of the current diff
 Review the staged changes carefully. $ARGUMENTS
 ```
 
+## Themes
+
+`/theme` recolors the whole UI — banner, prompts, menus, type-ahead, and
+Markdown rendering, not just code blocks. Built in: `dracula`, `gruvbox`,
+`tokyo-night`, `nord`, `catppuccin`. Persist a default in config (project
+`.klaudia` overrides `~/.klaudia`):
+
+```toml
+theme = "nord"
+```
+
+## Standing goals
+
+`/goal <text>` pins an objective that is re-stated to the model at the start of
+every turn, so it doesn't drift over a long session. `/goal` shows the current
+goal; `/goal clear` removes it.
+
 ## Memory & project knowledge
 
-- **Auto-memory** — the `Memory` tool reads/writes notes under
-  `.klaudia/memory/`; the index is recalled into the system prompt.
+- **Auto-memory** — the `Memory` tool stores and recalls notes. `.klaudia/MEMORY.md`
+  is the index (session bullets); longer notes live as `.klaudia/memory/*.md`
+  detail files. The index keeps a `## Linked memory` section pointing at those
+  files (name + one-line hook), kept in sync automatically. Only the index is
+  recalled into the prompt — cheap as memory grows — and the model opens a
+  detail note on demand. `Memory` search spans both the index and the detail
+  notes (a hit is tagged with its filename).
 - **Project knowledge** — `.klaudia/KNOWLEDGE.md` (curated, durable lessons) is
   injected into the system prompt when present.
 
@@ -340,8 +379,10 @@ tools.
   Anthropic provider).
 - Config and sessions live under `~/.klaudia` (`KLAUDIA_CONFIG_DIR`), not
   `~/.claude`.
-- New capabilities with no reference analogue: OS/container Bash sandboxing,
-  persisted resume summaries, project `KNOWLEDGE.md`, background shells.
+- New capabilities with no reference analogue: language-server code intelligence
+  (Diagnostics/Definition/References), OS/container Bash sandboxing, persisted
+  resume summaries, project `KNOWLEDGE.md`, an index→detail memory store,
+  standing goals (`/goal`), chrome-wide themes, and background shells.
 
 ## Roadmap
 
