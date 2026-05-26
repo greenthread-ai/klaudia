@@ -64,7 +64,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 
 | Feature | JS ref | Klaudia pkg | Status | Notes |
 | --- | --- | --- | --- | --- |
-| JSONL transcripts | 07-app-features | `session/` | ✅ done | `~/.claude/projects/<encoded-cwd>/`; EncodePath matches JS K0A. |
+| JSONL transcripts | 07-app-features | `session/` | ✅ done | `~/.klaudia/projects/<encoded-cwd>/` (honors `KLAUDIA_CONFIG_DIR`); EncodePath matches JS K0A. |
 | Resume / continue / fork | 07/08 | `session/` + `cli/` | ✅ done | `-r/--resume`, `--continue`, `--fork-session`. |
 | Microcompaction (local) | 07-app-features | `compaction/` | ✅ done | |
 | Autocompaction (model summary) | 07-app-features | `compaction/` | ✅ done | |
