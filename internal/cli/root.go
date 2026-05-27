@@ -206,7 +206,7 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 		if key == "" {
 			return nil, "", fmt.Errorf("provider \"openai\" needs apiKey or apiKeyEnv in ~/.klaudia/config.toml or ./.klaudia/config.toml; if using apiKeyEnv, export that variable before running")
 		}
-		return api.NewOpenAIProvider(cfg.BaseURL, key), cfg.Model, nil
+		return api.NewOpenAIProvider(cfg.BaseURL, key, cfg.Temperature), cfg.Model, nil
 	default:
 		cred, err := api.ResolveCredential()
 		if err != nil {
@@ -391,6 +391,10 @@ baseURL = "https://api.example.com/v1"
 #   export MY_API_KEY="sk-..."
 # Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
+
+# Temperature for the model. Omitted by default (server picks its own default).
+# Some providers reject this field; remove the line to omit it from the request.
+# temperature = 1.0
 
 # TUI theme (Markdown + chrome). /theme switches it for a session.
 # theme = "nord" # dracula | gruvbox | tokyo-night | nord | catppuccin

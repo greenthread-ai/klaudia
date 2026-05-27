@@ -29,6 +29,9 @@ type Config struct {
 	Theme string `toml:"theme,omitempty"`
 	// BaseURL is the OpenAI-compatible endpoint (including /v1), if provider=openai.
 	BaseURL string `toml:"baseURL,omitempty"`
+	// Temperature for the OpenAI-compatible provider. Omitted from the request
+	// when nil (lets the server pick its default).
+	Temperature *float64 `toml:"temperature,omitempty"`
 	// APIKey is the bearer token. Prefer APIKeyEnv to keep secrets out of files.
 	APIKey string `toml:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable holding the key.
@@ -228,6 +231,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.APIKeyEnv != "" {
 		dst.APIKeyEnv = src.APIKeyEnv
+	}
+	if src.Temperature != nil {
+		dst.Temperature = src.Temperature
 	}
 	if src.Sandbox.Mode != "" {
 		dst.Sandbox.Mode = src.Sandbox.Mode

@@ -19,17 +19,20 @@ import (
 // SSE response, and assembling an anthropic.BetaMessage so the rest of Klaudia
 // (loop, tools, sessions, compaction) is unchanged.
 type OpenAIProvider struct {
-	baseURL string // e.g. https://api.demo.gthread.dev/v1
-	apiKey  string
-	http    *http.Client
+	baseURL     string // e.g. https://api.demo.gthread.dev/v1
+	apiKey      string
+	temperature *float64
+	http        *http.Client
 }
 
 // NewOpenAIProvider builds the provider. baseURL should include the /v1 suffix.
-func NewOpenAIProvider(baseURL, apiKey string) *OpenAIProvider {
+// temperature may be nil (omit from request) or a pointer to a value.
+func NewOpenAIProvider(baseURL, apiKey string, temperature *float64) *OpenAIProvider {
 	return &OpenAIProvider{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
-		http:    &http.Client{},
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		apiKey:      apiKey,
+		temperature: temperature,
+		http:        &http.Client{},
 	}
 }
 
@@ -84,7 +87,7 @@ type oaRequest struct {
 	Model               string        `json:"model"`
 	Messages            []oaMessage   `json:"messages"`
 	Tools               []oaTool      `json:"tools,omitempty"`
-	Temperature         float64       `json:"temperature"`
+	Temperature         *float64      `json:"temperature,omitempty"` // optional per OpenAI spec; omitted when nil
 	MaxCompletionTokens int64         `json:"max_completion_tokens,omitempty"`
 	Stream              bool          `json:"stream"`
 	StreamOptions       *oaStreamOpts `json:"stream_options,omitempty"`
@@ -136,7 +139,7 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 func (p *OpenAIProvider) translateRequest(params anthropic.BetaMessageNewParams) (oaRequest, error) {
 	out := oaRequest{
 		Model:               string(params.Model),
-		Temperature:         1,
+		Temperature:         p.temperature,
 		MaxCompletionTokens: params.MaxTokens,
 		Stream:              true,
 		StreamOptions:       &oaStreamOpts{IncludeUsage: true},
