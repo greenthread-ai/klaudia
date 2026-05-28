@@ -216,6 +216,13 @@ baseURL = "https://api.example.com/v1"
 # apiKeyEnv names the env var holding the key (you then `export MY_API_KEY=...`).
 # Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
+
+# Optional: set the model's context window in tokens so autocompaction kicks
+# in before the provider overflows. Defaults to 200000 (Anthropic-sized); set
+# this when running against smaller-context models (e.g. 128000 for many
+# OpenAI-compatible hosts) — otherwise long sessions can hit
+# "max_tokens must be at least 1, got -N" or "context length exceeded" 400s.
+# contextWindow = 128000
 ```
 
 Create a commented starter config with `./klaudia --create-config=global` for

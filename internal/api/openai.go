@@ -328,7 +328,11 @@ func (e *OpenAIError) Error() string {
 type OpenAIErrorPayload struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
-	Code    string `json:"code"`
+	// Code is provider-dependent: most OpenAI-compatible APIs send a string
+	// like "insufficient_quota", but some (e.g. gpt-oss-120b hosts) send a
+	// numeric HTTP status. json.RawMessage accepts both shapes without
+	// erroring the whole envelope parse.
+	Code json.RawMessage `json:"code"`
 }
 
 // Payload parses the response body for that envelope. Returns nil when the
@@ -343,7 +347,7 @@ func (e *OpenAIError) Payload() *OpenAIErrorPayload {
 	if err := json.Unmarshal([]byte(e.Body), &wrap); err != nil {
 		return nil
 	}
-	if wrap.Error.Message == "" && wrap.Error.Type == "" && wrap.Error.Code == "" {
+	if wrap.Error.Message == "" && wrap.Error.Type == "" && len(wrap.Error.Code) == 0 {
 		return nil
 	}
 	return &wrap.Error

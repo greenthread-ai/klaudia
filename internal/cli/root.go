@@ -805,6 +805,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
 				System:          withExtraDirs(sysPrompt, sess.ExtraDirs),
 				MaxTurns:        opts.maxTurns,
+				ContextWindow:   cfg.ContextWindow,
 				Permission:      turnPerm,
 				DeferredTools:   deferredTools,
 				Approver:        ap,
@@ -830,6 +831,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				Model:           model,
 				System:          sysPrompt,
 				MaxTurns:        opts.maxTurns,
+				ContextWindow:   cfg.ContextWindow,
 				Permission:      permCtx,
 				Approver:        ap,
 				DeferredTools:   deferredTools,
@@ -882,6 +884,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		Model:           model,
 		System:          sysPrompt,
 		MaxTurns:        opts.maxTurns,
+		ContextWindow:   cfg.ContextWindow,
 		Permission:      permCtx,
 		Approver:        approver,
 		DeferredTools:   deferredTools,

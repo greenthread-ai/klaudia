@@ -209,8 +209,13 @@ func TestFriendlyErrorPassesThroughUpstreamDetail(t *testing.T) {
 func TestOpenAIErrorPayload(t *testing.T) {
 	// Parses the OpenAI error envelope; returns nil for empty / non-JSON bodies.
 	p := (&OpenAIError{Body: `{"error":{"message":"m","type":"t","code":"c"}}`}).Payload()
-	if p == nil || p.Message != "m" || p.Type != "t" || p.Code != "c" {
+	if p == nil || p.Message != "m" || p.Type != "t" || string(p.Code) != `"c"` {
 		t.Errorf("payload = %+v", p)
+	}
+	// Numeric codes (some hosts send "code":400) parse cleanly too — they used
+	// to abort the whole envelope parse when Code was typed `string`.
+	if p := (&OpenAIError{Body: `{"error":{"message":"bad","type":"BadRequestError","code":400}}`}).Payload(); p == nil || p.Message != "bad" || string(p.Code) != "400" {
+		t.Errorf("numeric code: payload = %+v", p)
 	}
 	if (&OpenAIError{Body: ""}).Payload() != nil {
 		t.Error("empty body should parse to nil")
@@ -280,5 +285,39 @@ func TestMaxRetriesEnvOverride(t *testing.T) {
 	t.Setenv("KLAUDIA_MAX_RETRIES", "")
 	if maxRetries() != defaultMaxRetries {
 		t.Errorf("maxRetries = %d, want default %d", maxRetries(), defaultMaxRetries)
+	}
+}
+
+func TestFriendlyError400ContextOverflowSuggestsContextWindow(t *testing.T) {
+	// Real shape from a hosted gpt-oss-120b endpoint: after enough turns the
+	// provider's internal max_tokens = ctx - input goes negative, and we get
+	// a 400 with a misleading "max_tokens must be at least 1, got -71". The
+	// user can't tell from that string that their context window is the real
+	// issue — translate it.
+	body := `{"error":{"message":"max_tokens must be at least 1, got -71. (parameter=max_tokens, value=-71)","type":"BadRequestError","param":"max_tokens","code":400}}`
+	msg := FriendlyError(&OpenAIError{StatusCode: 400, Body: body})
+	for _, want := range []string{
+		"outgrew the model's context window",
+		"contextWindow",
+		".klaudia/config.toml",
+		"/compact",
+		"got -71", // the upstream message is still shown so the user knows what was raw
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("missing %q in: %q", want, msg)
+		}
+	}
+}
+
+func TestFriendlyError400OtherStillSurfacesUpstream(t *testing.T) {
+	// A normal 400 (bad input shape) gets the upstream message but NOT the
+	// context-window advice.
+	body := `{"error":{"message":"invalid model parameter","type":"BadRequestError","code":400}}`
+	msg := FriendlyError(&OpenAIError{StatusCode: 400, Body: body})
+	if !strings.Contains(msg, "Bad request (400)") || !strings.Contains(msg, "invalid model parameter") {
+		t.Errorf("upstream 400 should pass through; got %q", msg)
+	}
+	if strings.Contains(msg, "context window") {
+		t.Errorf("non-overflow 400 should not suggest contextWindow; got %q", msg)
 	}
 }

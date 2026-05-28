@@ -26,7 +26,7 @@ func FriendlyError(err error) string {
 			// (billing). They need very different advice and the provider's own
 			// message is usually clearer than ours.
 			if oai := openAIPayload(err); oai != nil {
-				if oai.Code == "insufficient_quota" || oai.Type == "insufficient_quota" {
+				if codeIs(oai.Code, "insufficient_quota") || oai.Type == "insufficient_quota" {
 					return "Insufficient quota: " + strings.TrimSpace(oai.Message) +
 						" (Retries won't help — top up your plan/billing or switch to a different key.)"
 				}
@@ -59,6 +59,23 @@ func FriendlyError(err error) string {
 				out += "If you signed in via Claude Code OAuth, this often happens when the token is in use by another session. "
 			}
 			return out + "Wait a moment and try again. (Set KLAUDIA_MAX_RETRIES to retry more.)"
+		case 400:
+			// A 400 is usually the model rejecting an input shape, but two
+			// patterns are really "your conversation outgrew the model's context
+			// window": some OpenAI-compatible providers compute
+			// max_tokens = ctx_window - input_tokens server-side and then reject
+			// when it goes negative ("max_tokens must be at least 1, got -71"),
+			// and "context length exceeded" messages mean the same thing. Tell
+			// the user clearly so they can set contextWindow (which drives
+			// autocompaction) and /compact to recover the current session.
+			if detail := providerDetail(err); detail != "" {
+				if isContextOverflow(detail) {
+					return "Conversation outgrew the model's context window — the provider returned: " + detail +
+						" Set `contextWindow` in .klaudia/config.toml to match this model so autocompaction triggers earlier, and run /compact to summarise the current session."
+				}
+				return fmt.Sprintf("Bad request (400): %s", detail)
+			}
+			return "Bad request (400) — the model rejected the request shape; check the input."
 		case 401, 403:
 			// OpenAI-compatible providers send specific messages here ("Incorrect
 			// API key provided", "You don't have access to …"); surface them and
@@ -154,6 +171,34 @@ func providerDetail(err error) string {
 		}
 	}
 	return ""
+}
+
+// codeIs reports whether the raw "code" JSON field equals want. Providers
+// inconsistently send code as a string ("insufficient_quota") or a bare
+// number (400) — RawMessage lets us accept either and compare here.
+func codeIs(raw json.RawMessage, want string) bool {
+	s := strings.Trim(strings.TrimSpace(string(raw)), `"`)
+	return s == want
+}
+
+// isContextOverflow recognises provider error messages that actually mean
+// "your conversation outgrew the model's context window", so FriendlyError can
+// suggest setting contextWindow + /compact instead of leaving the raw error.
+// Two real-world shapes: (a) negative max_tokens after the provider's
+// server-side `max_tokens = ctx - input` arithmetic ("max_tokens must be at
+// least 1, got -71"); (b) explicit "context length exceeded" / "too many
+// tokens" phrases.
+func isContextOverflow(detail string) bool {
+	d := strings.ToLower(detail)
+	switch {
+	case strings.Contains(d, "max_tokens") && (strings.Contains(d, "at least 1") || strings.Contains(d, "must be positive")),
+		strings.Contains(d, "context length"),
+		strings.Contains(d, "context window"),
+		strings.Contains(d, "maximum context"),
+		strings.Contains(d, "too many tokens"):
+		return true
+	}
+	return false
 }
 
 // meaningfulMessage trims msg and returns "" when the result is empty, the
