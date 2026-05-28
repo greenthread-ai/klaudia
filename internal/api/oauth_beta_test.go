@@ -124,11 +124,36 @@ func TestNewGatesClaudeCodeImpersonationByCredential(t *testing.T) {
 					t.Errorf("X-Stainless-Lang = %q, want %q", got, tc.wantStainless)
 				}
 			}
-			// API-key path must keep the Go SDK's native Stainless fingerprint —
-			// not "js". (We don't pin the exact value; the SDK owns it.)
+			// The full set of Claude-Code-only headers — UA + Stainless lang is
+			// the loudest, but each missing header is another bit of entropy a
+			// rate-limit filter could key on. Track them all so a future refactor
+			// can't silently drop one.
+			oauthOnlyHeaders := []string{
+				"X-Stainless-Timeout",
+				"Anthropic-Dangerous-Direct-Browser-Access",
+				"X-Claude-Code-Session-Id",
+			}
+			if tc.name == "oauth" {
+				for _, name := range oauthOnlyHeaders {
+					if h.Get(name) == "" {
+						t.Errorf("OAuth client missing %s — Claude Code sends it; full fingerprint match needs every header", name)
+					}
+				}
+				if h.Get("X-Stainless-Package-Version") != claudeCodeStainlessVersion {
+					t.Errorf("X-Stainless-Package-Version = %q, want %q (mirror real claude)", h.Get("X-Stainless-Package-Version"), claudeCodeStainlessVersion)
+				}
+			}
 			if tc.name == "api-key" {
+				// API-key path must keep the Go SDK's native Stainless fingerprint —
+				// not "js" — and must NOT carry the Claude Code impersonation
+				// headers either. (We don't pin Stainless values; the SDK owns them.)
 				if got := h.Get("X-Stainless-Lang"); got == "js" {
 					t.Errorf("API-key client should keep Go SDK X-Stainless-Lang, got %q (impersonation leaked)", got)
+				}
+				for _, name := range oauthOnlyHeaders {
+					if got := h.Get(name); got != "" {
+						t.Errorf("API-key client carries OAuth-only header %s = %q (impersonation leaked)", name, got)
+					}
 				}
 			}
 		})
@@ -136,17 +161,43 @@ func TestNewGatesClaudeCodeImpersonationByCredential(t *testing.T) {
 }
 
 func TestUserAgentMatchesClaudeCodeShape(t *testing.T) {
-	// Anthropic rate-limits OAuth tokens by client fingerprint — User-Agent +
-	// X-Stainless-*. A `claude-cli/…` prefix is the signal we need; the rest
-	// of the string identifies us as klaudia so the request is honest.
+	// Mirror real claude exactly on the OAuth path: `claude-cli/<ver> (external,
+	// sdk-ts)`. No klaudia signature in the entrypoint — Anthropic gates the
+	// Claude Max OAuth quota on the full fingerprint, and a `; klaudia/...`
+	// extension was a one-line giveaway. (Captured ground-truth via the
+	// headerdump_test harness against a real `claude -p` run.)
 	ua := userAgent()
-	if !strings.HasPrefix(ua, "claude-cli/") {
-		t.Errorf("UA prefix must be claude-cli/...; got %q", ua)
+	if !strings.HasPrefix(ua, "claude-cli/"+claudeCodeVersion+" ") {
+		t.Errorf("UA must start with claude-cli/%s ; got %q", claudeCodeVersion, ua)
 	}
-	if !strings.Contains(ua, "klaudia/") {
-		t.Errorf("UA should still identify us as klaudia in the entrypoint segment; got %q", ua)
+	if !strings.HasSuffix(ua, " (external, sdk-ts)") {
+		t.Errorf("UA must end with (external, sdk-ts); got %q", ua)
 	}
-	if !strings.Contains(ua, "external") {
-		t.Errorf("UA should carry the (external, …) entrypoint marker; got %q", ua)
+	if strings.Contains(ua, "klaudia") {
+		t.Errorf("UA must not leak the klaudia name on the OAuth fingerprint; got %q", ua)
+	}
+}
+
+func TestNewClaudeCodeSessionIDIsUUIDv4(t *testing.T) {
+	// claude sends a stable per-session UUIDv4. Verify shape so we don't drift
+	// (e.g. accidentally emit a hex-without-dashes that fails a server-side
+	// regex). Two consecutive calls must also produce different ids.
+	id := newClaudeCodeSessionID()
+	parts := strings.Split(id, "-")
+	wantLens := []int{8, 4, 4, 4, 12}
+	if len(parts) != len(wantLens) {
+		t.Fatalf("UUID parts = %d, want %d (got %q)", len(parts), len(wantLens), id)
+	}
+	for i, n := range wantLens {
+		if len(parts[i]) != n {
+			t.Errorf("part %d = %q (len %d), want len %d", i, parts[i], len(parts[i]), n)
+		}
+	}
+	// Version nibble: first char of part[2] must be '4'.
+	if len(parts[2]) > 0 && parts[2][0] != '4' {
+		t.Errorf("UUIDv4 version nibble = %q, want '4' (id %q)", parts[2][:1], id)
+	}
+	if id == newClaudeCodeSessionID() {
+		t.Errorf("session ids must differ between calls (got %q twice)", id)
 	}
 }

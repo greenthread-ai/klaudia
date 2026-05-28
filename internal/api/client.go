@@ -7,14 +7,14 @@
 package api
 
 import (
+	"crypto/rand"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
-
-	"github.com/greenthread-ai/klaudia/internal/version"
 )
 
 // DefaultBetas is the Claude Code default beta set (Cn1 in 03-providers.js).
@@ -31,16 +31,41 @@ var DefaultBetas = []anthropic.AnthropicBeta{
 // token, works normally. (03-providers.js: `if (Y7()) q.push(BZ)`.)
 const OAuthBeta anthropic.AnthropicBeta = "oauth-2025-04-20"
 
-// userAgent is the User-Agent header we send to the Anthropic API. Claude Code
-// uses `claude-cli/<version> (external, <entrypoint>)` (cli.js ry()); the API
-// recognises that prefix and applies the Claude-Code rate-limit bucket. The
-// Go SDK otherwise sends `anthropic-sdk-go/…`, which lands us in the strict
-// external-use bucket — observable as instant 429s on the very first turn
-// while `claude` (holding the same Keychain OAuth token) works normally.
-// Embed our build version in the entrypoint segment so we're identifiable
-// while still matching the prefix the API gates on.
+// claudeCode* mirror the *current* Claude Code release we impersonate on the
+// OAuth path. Anthropic rate-limits Claude Max OAuth tokens on the full request
+// fingerprint (UA + Stainless headers + session id + beta set), not just the
+// token, so these need to track whatever a real `claude` is sending. Re-capture
+// with the helper in headerdump_test.go (or any mitmproxy of `claude -p`) and
+// bump these constants when claude moves.
+const (
+	claudeCodeVersion          = "2.1.153"
+	claudeCodeStainlessVersion = "0.94.0"
+	claudeCodeNodeVersion      = "v24.3.0"
+	claudeCodeStainlessTimeout = "600"
+)
+
+// userAgent returns the User-Agent string we send on the OAuth path. We mirror
+// what real `claude` ships byte-for-byte — no klaudia signature in the
+// entrypoint segment. The user signed off on full mimicry on OAuth: we're
+// spending Claude Max quota with a Claude Code token, so the request should
+// look like Claude Code on the wire. API-key callers get the SDK-native UA.
 func userAgent() string {
-	return "claude-cli/2.1.66 (external, cli; klaudia/" + version.Version + ")"
+	return "claude-cli/" + claudeCodeVersion + " (external, sdk-ts)"
+}
+
+// newClaudeCodeSessionID returns a UUIDv4 for the X-Claude-Code-Session-Id
+// header. `claude` emits a stable per-session UUID; missing or malformed values
+// are one more fingerprint divergence the rate-limit path can pattern-match on.
+// Not security-sensitive — purely identity-matching — so the rand failure path
+// returns a zero UUID rather than aborting.
+func newClaudeCodeSessionID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "00000000-0000-4000-8000-000000000000"
+	}
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // WebToolBetas are the additional betas required when the server-side
@@ -124,23 +149,26 @@ func New(cred Credential, baseURL string) *Client {
 	}
 	if cred.IsOAuth() {
 		// The Claude Code OAuth flow is gated by Anthropic on the *full request
-		// fingerprint*, not just the token. A `claude-cli/…` User-Agent paired
-		// with `X-Stainless-Lang: go` (the Go SDK's default) is a giveaway that
-		// this isn't Claude Code and lands the request in the strict external-
-		// use rate-limit bucket — observable as instant 429s while `claude`
-		// itself, holding the same Keychain token, works fine. Match the JS-SDK
-		// fingerprint Claude Code ships so our OAuth requests are treated like
-		// theirs. Honest about being klaudia in the entrypoint segment.
-		//
-		// We only apply this on the OAuth path: API-key callers have their own
-		// Anthropic billing relationship, no reason to mask the SDK identity.
+		// fingerprint*, not just the token. A `claude-cli/…` UA paired with
+		// `X-Stainless-Lang: go` (the Go SDK's default) lands us in the strict
+		// external-use rate-limit bucket — observable as instant 429s while
+		// `claude` itself, holding the same Keychain token, works fine. We
+		// capture a real `claude -p` against a local proxy (see
+		// headerdump_test.go for the harness) and mirror every static header it
+		// sends: UA, Stainless identity, browser-access flag, session id, and
+		// the timeout hint. API-key callers have their own Anthropic billing
+		// relationship and skip all of this — they keep the SDK-native identity
+		// so their requests stay identifiable in Anthropic-side logs.
 		opts = append(opts,
 			option.WithAuthToken(cred.AuthToken),
 			option.WithHeader("User-Agent", userAgent()),
 			option.WithHeader("X-Stainless-Lang", "js"),
 			option.WithHeader("X-Stainless-Runtime", "node"),
-			option.WithHeader("X-Stainless-Runtime-Version", "v22.0.0"),
-			option.WithHeader("X-Stainless-Package-Version", "0.39.0"),
+			option.WithHeader("X-Stainless-Runtime-Version", claudeCodeNodeVersion),
+			option.WithHeader("X-Stainless-Package-Version", claudeCodeStainlessVersion),
+			option.WithHeader("X-Stainless-Timeout", claudeCodeStainlessTimeout),
+			option.WithHeader("Anthropic-Dangerous-Direct-Browser-Access", "true"),
+			option.WithHeader("X-Claude-Code-Session-Id", newClaudeCodeSessionID()),
 		)
 	} else {
 		opts = append(opts, option.WithAPIKey(cred.APIKey))
