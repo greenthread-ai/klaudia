@@ -1,4 +1,4 @@
-module github.com/greenthread/klaudia
+module github.com/greenthread-ai/klaudia
 
 go 1.26
 
