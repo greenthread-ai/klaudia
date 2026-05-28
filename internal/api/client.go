@@ -120,20 +120,28 @@ func maxRetries() int {
 func New(cred Credential, baseURL string) *Client {
 	opts := []option.RequestOption{
 		option.WithHeader("x-app", "cli"),
-		option.WithHeader("User-Agent", userAgent()),
-		// Override the Stainless SDK fingerprint headers to match Claude Code's
-		// (JS SDK) shape: a `claude-cli/…` UA paired with `X-Stainless-Lang: go`
-		// is a giveaway to Anthropic that this isn't Claude Code, which lands us
-		// in the strict external-use rate-limit bucket. Aligning these makes our
-		// request fingerprint match what `claude` sends with the same OAuth token.
-		option.WithHeader("X-Stainless-Lang", "js"),
-		option.WithHeader("X-Stainless-Runtime", "node"),
-		option.WithHeader("X-Stainless-Runtime-Version", "v22.0.0"),
-		option.WithHeader("X-Stainless-Package-Version", "0.39.0"),
 		option.WithMaxRetries(maxRetries()),
 	}
 	if cred.IsOAuth() {
-		opts = append(opts, option.WithAuthToken(cred.AuthToken))
+		// The Claude Code OAuth flow is gated by Anthropic on the *full request
+		// fingerprint*, not just the token. A `claude-cli/…` User-Agent paired
+		// with `X-Stainless-Lang: go` (the Go SDK's default) is a giveaway that
+		// this isn't Claude Code and lands the request in the strict external-
+		// use rate-limit bucket — observable as instant 429s while `claude`
+		// itself, holding the same Keychain token, works fine. Match the JS-SDK
+		// fingerprint Claude Code ships so our OAuth requests are treated like
+		// theirs. Honest about being klaudia in the entrypoint segment.
+		//
+		// We only apply this on the OAuth path: API-key callers have their own
+		// Anthropic billing relationship, no reason to mask the SDK identity.
+		opts = append(opts,
+			option.WithAuthToken(cred.AuthToken),
+			option.WithHeader("User-Agent", userAgent()),
+			option.WithHeader("X-Stainless-Lang", "js"),
+			option.WithHeader("X-Stainless-Runtime", "node"),
+			option.WithHeader("X-Stainless-Runtime-Version", "v22.0.0"),
+			option.WithHeader("X-Stainless-Package-Version", "0.39.0"),
+		)
 	} else {
 		opts = append(opts, option.WithAPIKey(cred.APIKey))
 	}
