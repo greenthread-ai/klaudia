@@ -50,6 +50,37 @@ func TestFriendlyErrorOpenAI(t *testing.T) {
 	}
 }
 
+func TestFriendlyError429AnthropicSurfacesUpstreamMessage(t *testing.T) {
+	// A real-shape 429 body from Anthropic: an actionable provider message we
+	// were throwing away in favour of a generic guess. After the fix we splice
+	// the upstream type and message into the output (and keep the OAuth-token
+	// note as a possible cause).
+	body := []byte(`{"error":{"type":"rate_limit_error","message":"This request would exceed your organization's input-tokens-per-minute rate limit."}}`)
+	var anthErr anthropic.Error
+	if err := anthErr.UnmarshalJSON(body); err != nil {
+		t.Fatalf("unmarshal anthropic.Error: %v", err)
+	}
+	anthErr.StatusCode = 429 // the status comes off the HTTP response, not the body
+
+	got := FriendlyError(&anthErr)
+	for _, want := range []string{
+		"Rate limited (429)",
+		"[rate_limit_error]",
+		"input-tokens-per-minute rate limit",
+		"Claude Code OAuth",   // OAuth-sharing remains as a possible cause
+		"KLAUDIA_MAX_RETRIES", // the retry knob is still relevant
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in: %q", want, got)
+		}
+	}
+	// Generic "API is busy" boilerplate should NOT appear once we have the real
+	// upstream message — that was the previous misleading phrasing.
+	if strings.Contains(got, "API is busy") {
+		t.Errorf("upstream message available; should not fall back to generic boilerplate: %q", got)
+	}
+}
+
 func TestFriendlyError429HintIsProviderSpecific(t *testing.T) {
 	// The Claude Code OAuth-token hint is Anthropic-specific and must not surface
 	// for OpenAI-compatible providers (the original "even though we're using
