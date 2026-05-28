@@ -161,10 +161,13 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			toolParams = append(toolParams, webToolParams()...)
 		}
 
+		// Repair any message with empty content (e.g. an old refusal recorded with
+		// content: null) before sending — the Anthropic API otherwise rejects the
+		// whole request with "messages.<i>.content: Field required".
 		params := anthropic.BetaMessageNewParams{
 			Model:     opts.Model,
 			MaxTokens: maxTokens,
-			Messages:  messages,
+			Messages:  sanitizeMessages(messages),
 			System:    system,
 			Tools:     toolParams,
 			Betas:     betas,
