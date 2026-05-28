@@ -186,7 +186,11 @@ func applyChromeTheme(p themePalette) {
 
 // intro is the welcoming banner shown at startup. The model name/branch/session
 // id are filled in by the caller.
-func intro(model, branch, sessionID, tagline string) string {
+// intro renders the startup banner. The session id is intentionally absent:
+// interactive runs auto-resume the most recent project session, so reciting it
+// (and a manual `--resume` command) on every launch is noise; /status surfaces
+// it on demand.
+func intro(model, branch, tagline string) string {
 	logo := logoStyle.Render("✦ Klaudia")
 	tag := bannerStyle.Render(" " + tagline)
 	var meta string
@@ -195,9 +199,6 @@ func intro(model, branch, sessionID, tagline string) string {
 	}
 	if branch != "" {
 		meta += bannerStyle.Render("   ⎇ " + branch)
-	}
-	if sessionID != "" {
-		meta += "\n" + bannerStyle.Render("  session: "+sessionID+"  (resume with: klaudia --resume "+sessionID+")")
 	}
 	tip := hintStyle.Render("\n  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C to quit")
 	return logo + tag + meta + tip + "\n"
@@ -276,8 +277,8 @@ type Model struct {
 	glamWidth int
 	// Intro banner inputs, so it can be regenerated (recoloured) on theme change.
 	// introTagline is chosen once so it stays stable across regenerations.
-	introModel, introBranch, introSession, introTagline string
-	hasIntro                                            bool
+	introModel, introBranch, introTagline string
+	hasIntro                              bool
 }
 
 type transcriptBlock struct {
@@ -311,13 +312,13 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	}
 	// Colour the chrome for the session's theme before drawing the banner.
 	applyChromeTheme(chromePaletteFor(m.currentThemeID()))
-	model, branch, sessionID := "", "", ""
+	model, branch := "", ""
 	if sess != nil {
-		model, branch, sessionID = sess.displayModel(), sess.GitBranch, sess.SessionID
+		model, branch = sess.displayModel(), sess.GitBranch
 	}
-	m.introModel, m.introBranch, m.introSession = model, branch, sessionID
+	m.introModel, m.introBranch = model, branch
 	m.introTagline, m.hasIntro = randomTagline(), true
-	introText := intro(model, branch, sessionID, m.introTagline)
+	introText := intro(model, branch, m.introTagline)
 	m.transcript.WriteString(introText)
 	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: introText})
 	return m
@@ -1953,7 +1954,7 @@ func (m *Model) rerenderTranscript() {
 	}
 	// Regenerate the intro banner so it picks up the new theme's chrome colours.
 	if m.hasIntro && len(m.rawBlocks) > 0 {
-		m.rawBlocks[0].text = intro(m.introModel, m.introBranch, m.introSession, m.introTagline)
+		m.rawBlocks[0].text = intro(m.introModel, m.introBranch, m.introTagline)
 	}
 	m.transcript.Reset()
 	for _, block := range m.rawBlocks {
