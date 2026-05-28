@@ -358,6 +358,13 @@ Two complementary modes for working toward an objective:
     spec (what's done, what remains, the next step) so a re-run resumes cleanly.
     When it stops, it prints where the work landed and how to review/merge the
     branch — the loop never touches your starting branch.
+  - **Completion is gated on the spec, not the model's word.** Before each run,
+    the spec's `## Progress` tracker is scanned: if the body describes phases
+    that the tracker doesn't list, the first iteration is a stub-fix turn that
+    repairs the tracker. After every claimed `<goal-complete/>` the loop runs
+    two checks — a mechanical count of remaining `- [ ]` items, and a one-shot
+    verification turn that re-reads the spec from disk and cross-references it
+    against git/build/tests — and only honours completion if both agree.
   - Headless/scriptable: `klaudia --loop --dangerously-skip-permissions
     [--max-iterations N]` runs the same loop without the TUI (each iteration with
     a fresh context). It needs a spec in the cwd and bypass permissions (no human

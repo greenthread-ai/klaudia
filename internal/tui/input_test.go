@@ -255,6 +255,19 @@ func TestSlashCommandsDuringProcessing(t *testing.T) {
 	}
 }
 
+// writeSpec is a test helper: dump `body` to a fresh PRD.md under TempDir and
+// return its path. Used by the loopNext gate tests so CountUnchecked has a real
+// file to read (it abstains on read errors, which is fine for older tests that
+// don't care about the mechanical gate).
+func writeSpec(t *testing.T, body string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "PRD.md")
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func TestGoalLoopNext(t *testing.T) {
 	// A normal iteration that isn't complete: decrement and continue with the
 	// iteration prompt.
@@ -267,20 +280,64 @@ func TestGoalLoopNext(t *testing.T) {
 		t.Errorf("rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
 	}
 
-	// Completion token stops the loop immediately (no wrap-up).
+	// First <goal-complete/> with all checkboxes ticked: fires the verification
+	// turn (doesn't exit yet). loopRemaining and budget stay untouched.
 	m = newTestModel()
 	m.loopTotal, m.loopRemaining = 5, 5
-	if next := m.loopNext(agent.Result{Text: "all good <goal-complete/>"}, nil); next != "" {
-		t.Fatalf("completion must stop the loop; got %q", next)
+	m.loopSpecPath = writeSpec(t, "# Goal\n\n- [x] all done\n")
+	next := m.loopNext(agent.Result{Text: "all good <goal-complete/>"}, nil)
+	if !strings.Contains(next, "final independent review") {
+		t.Fatalf("first <goal-complete/> should fire verification; got %q", next)
 	}
-	if m.loopRemaining != 0 || !strings.Contains(m.transcript.String(), "goal complete in 1") {
+	if !m.loopVerifying || m.loopRemaining != 5 {
+		t.Errorf("verifying=%v rem=%d, want true/5", m.loopVerifying, m.loopRemaining)
+	}
+	// Verification turn itself emits <goal-complete/>: NOW the loop exits.
+	if got := m.loopNext(agent.Result{Text: "<goal-complete/>"}, nil); got != "" {
+		t.Fatalf("verified completion must stop the loop; got %q", got)
+	}
+	if m.loopRemaining != 0 || !strings.Contains(m.transcript.String(), "goal complete (verified) in 1") {
 		t.Errorf("rem=%d transcript=%q", m.loopRemaining, m.transcript.String())
+	}
+
+	// <goal-complete/> with unchecked items in the spec: claim rejected,
+	// iteration continues. Mechanical gate must catch the "model forgot" case
+	// even before verification gets a chance.
+	m = newTestModel()
+	m.loopTotal, m.loopRemaining = 5, 5
+	m.loopSpecPath = writeSpec(t, "- [x] done\n- [ ] still open\n- [ ] also open\n")
+	next = m.loopNext(agent.Result{Text: "<goal-complete/>"}, nil)
+	if !strings.Contains(next, "iterating toward") {
+		t.Fatalf("rejected completion should fall back to iteration prompt; got %q", next)
+	}
+	tr := m.transcript.String()
+	if !strings.Contains(tr, "completion claim rejected: 2 unchecked") {
+		t.Errorf("expected rejection line with count; got %q", tr)
+	}
+	if m.loopRemaining != 4 || m.loopVerifying {
+		t.Errorf("rem=%d verifying=%v, want 4/false", m.loopRemaining, m.loopVerifying)
+	}
+
+	// Verification turn says "more work needed": resume iteration, no exit.
+	m = newTestModel()
+	m.loopTotal, m.loopRemaining = 5, 4
+	m.loopSpecPath = writeSpec(t, "- [x] all done\n")
+	m.loopVerifying = true // pretend we just sent the verification prompt
+	next = m.loopNext(agent.Result{Text: "actually Phase 7 still needs auth wiring"}, nil)
+	if !strings.Contains(next, "iterating toward") {
+		t.Fatalf("verification flagging work should resume iteration; got %q", next)
+	}
+	if m.loopVerifying || m.loopRemaining != 3 {
+		t.Errorf("verifying=%v rem=%d, want false/3", m.loopVerifying, m.loopRemaining)
+	}
+	if !strings.Contains(m.transcript.String(), "verification flagged remaining work") {
+		t.Errorf("expected verification-flag line; got %q", m.transcript.String())
 	}
 
 	// Cap reached without completing: run one wrap-up turn, then stop.
 	m = newTestModel()
 	m.loopTotal, m.loopRemaining, m.loopSpecPath = 2, 1, "PRD.md"
-	next := m.loopNext(agent.Result{Text: "still going"}, nil)
+	next = m.loopNext(agent.Result{Text: "still going"}, nil)
 	if !strings.Contains(next, "stopping before the goal is complete") {
 		t.Fatalf("cap should trigger a wrap-up turn; got %q", next)
 	}
@@ -309,12 +366,60 @@ func TestGoalLoopNext(t *testing.T) {
 func TestGoalLoopMergeHintOnStop(t *testing.T) {
 	m := newTestModel()
 	m.loopTotal, m.loopRemaining = 2, 2
+	m.loopSpecPath = writeSpec(t, "- [x] done\n")
 	m.loopBranch, m.loopBaseBranch = "klaudia/goal-x", "main"
-	// A completing turn should stop and tell the user how to merge.
+	// First <goal-complete/> kicks off the verification turn — merge hint not
+	// emitted yet.
 	m.loopNext(agent.Result{Text: "done <goal-complete/>"}, nil)
-	out := m.transcript.String()
-	if !strings.Contains(out, "git merge klaudia/goal-x") {
-		t.Errorf("expected a merge hint on completion; got %q", out)
+	if strings.Contains(m.transcript.String(), "git merge") {
+		t.Fatalf("merge hint should wait until verification confirms; got %q", m.transcript.String())
+	}
+	// Verification turn also says complete — NOW the loop stops and points
+	// the user at the merge command.
+	m.loopNext(agent.Result{Text: "<goal-complete/>"}, nil)
+	if !strings.Contains(m.transcript.String(), "git merge klaudia/goal-x") {
+		t.Errorf("expected merge hint after verified completion; got %q", m.transcript.String())
+	}
+}
+
+func TestPrepareFirstLoopTurnStubFix(t *testing.T) {
+	// Spec body mentions Phases 0–4 but the Progress tracker only stubs out
+	// 0–1 — exactly the huedoku failure mode. The first turn must be a
+	// stub-fix turn (not the regular iteration prompt) and the warning line
+	// must show which phases are missing.
+	m := newTestModel()
+	specPath := writeSpec(t, "# Goal\n\n## Phase 0 — Setup\n\n## Phase 1 — Build\n\n## Phase 4 — Validation\n\n## Progress\n- [x] Phase 0 — Setup\n- [ ] Phase 1 — Build\n")
+	prompt := m.prepareFirstLoopTurn(specPath, 10)
+	if !m.loopStubFixing {
+		t.Errorf("loopStubFixing should be set when body phases outstrip the tracker")
+	}
+	if !strings.Contains(prompt, "Progress tracker") || !strings.Contains(prompt, "Phase 4 — Validation") {
+		t.Errorf("first prompt should be StubFixPrompt listing the missing phase; got %q", prompt)
+	}
+	tr := m.transcript.String()
+	if !strings.Contains(tr, "Progress tracker missing stubs") || !strings.Contains(tr, "Phase 4 — Validation") {
+		t.Errorf("expected stub-fix warning listing the missing phase; got %q", tr)
+	}
+	if !strings.Contains(tr, "stub fix") {
+		t.Errorf("iteration banner should label the stub fix; got %q", tr)
+	}
+}
+
+func TestPrepareFirstLoopTurnCleanSpec(t *testing.T) {
+	// Spec without a Progress tracker (or with one that covers every body
+	// phase) goes straight into the normal iteration prompt — no stub-fix
+	// detour, no warning line.
+	m := newTestModel()
+	specPath := writeSpec(t, "# Goal\n\n## Objective\nShip a thing.\n\n## Acceptance criteria\n- [ ] tests pass\n")
+	prompt := m.prepareFirstLoopTurn(specPath, 10)
+	if m.loopStubFixing {
+		t.Errorf("loopStubFixing must stay false for a single-phase spec")
+	}
+	if !strings.Contains(prompt, "iterating toward") {
+		t.Errorf("expected the regular iteration prompt; got %q", prompt)
+	}
+	if strings.Contains(m.transcript.String(), "Progress tracker missing stubs") {
+		t.Errorf("no stub-fix warning expected; got %q", m.transcript.String())
 	}
 }
 

@@ -243,6 +243,8 @@ type Model struct {
 	loopTotal      int
 	loopSpecPath   string
 	loopWrapUp     bool   // the next loop turn is the end-of-run summary
+	loopStubFixing bool   // the next loop turn is the up-front Progress-stub repair
+	loopVerifying  bool   // the next loop turn is the final-review verification
 	loopBranch     string // the goal branch the loop's work lands on
 	loopBaseBranch string // the branch the loop started from (merge target)
 	// Cumulative session stats for /stats.
@@ -559,7 +561,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.turnCancel != nil {
 			m.turnCancel()
 			m.turnCancel = nil
-			m.loopRemaining, m.loopWrapUp = 0, false // Esc also halts a goal loop
+			m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false // Esc also halts a goal loop
 			m.appendLine(toolStyle.Render("  ⊘ interrupting…"))
 			return m, nil
 		}
@@ -1003,17 +1005,46 @@ func (m *Model) startGoalLoop(args []string) (tea.Model, tea.Cmd) {
 
 	m.goalSetting = false
 	m.loopTotal, m.loopRemaining, m.loopSpecPath = n, n, specPath
+	m.loopStubFixing, m.loopVerifying = false, false
 	m.appendLine(bannerStyle.Render(fmt.Sprintf("Goal loop: up to %d iterations against %s. Esc or /goal stop to halt.", n, specPath)))
-	m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration 1/%d", n)))
+
+	prompt := m.prepareFirstLoopTurn(specPath, n)
 	m.setState(stateRunning)
-	return m, m.startTurn(goal.IterationPrompt(specPath))
+	return m, m.startTurn(prompt)
+}
+
+// prepareFirstLoopTurn selects the first turn's prompt for /goal run: either
+// a stub-fix turn (when the Progress tracker doesn't list every phase the body
+// describes — fixing that up-front makes the mechanical CountUnchecked gate
+// trustworthy for the rest of the run) or the normal iteration prompt. Side
+// effects (loopStubFixing, scrollback) are confined here so the caller stays
+// linear and tests can drive this without standing up a full Tea runtime.
+func (m *Model) prepareFirstLoopTurn(specPath string, n int) string {
+	if missing, err := goal.RequiresStubFix(specPath); err == nil && len(missing) > 0 {
+		m.loopStubFixing = true
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  ⚠ Progress tracker missing stubs for: %s — repairing first.", strings.Join(missing, ", "))))
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration 1/%d (stub fix)", n)))
+		return goal.StubFixPrompt(specPath, missing)
+	}
+	m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration 1/%d", n)))
+	return goal.IterationPrompt(specPath)
 }
 
 // loopNext updates goal-loop state after a turn finished and returns the prompt
-// for the next loop turn, or "" to stop. It continues with the iteration prompt
-// while iterations remain; on the cap it runs one wrap-up turn (an end-of-run
-// summary into the spec) and then stops; it stops immediately on completion or
-// an errored/interrupted turn.
+// for the next loop turn, or "" to stop. The completion path runs a two-layer
+// gate against premature <goal-complete/>:
+//
+//  1. Mechanical: count `- [ ]` lines in the spec. If any remain, reject the
+//     claim and continue iterating — catches "model forgot one it could see".
+//  2. Verification: if the mechanical gate passes, fire ONE final-review turn
+//     that forces a holistic re-read (body vs Progress tracker vs git/tests).
+//     Only completion from THAT turn ends the loop — belt-and-suspenders for
+//     "tracker is missing rows that body phases never had" (the huedoku failure
+//     mode that RequiresStubFix already tries to prevent up-front).
+//
+// Stub-fix and verification turns don't consume an iteration each: stub-fix
+// happens before normal iteration starts (counted as iteration 1 in display
+// only), and verification is a single check on top.
 func (m *Model) loopNext(res agent.Result, err error) string {
 	if m.loopWrapUp { // the wrap-up turn just finished
 		m.loopWrapUp = false
@@ -1023,30 +1054,63 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 		m.appendMergeHint()
 		return ""
 	}
-	switch {
-	case err != nil:
+	if err != nil {
 		m.loopRemaining = 0
 		m.appendLine(toolStyle.Render("  ⊘ goal loop halted."))
 		m.appendMergeHint()
 		return ""
-	case goal.IsComplete(res.Text):
-		done := m.loopTotal - m.loopRemaining + 1
-		m.loopRemaining = 0
-		m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ goal complete in %d iteration(s).", done)))
-		m.appendMergeHint()
-		return ""
-	default:
-		m.loopRemaining--
-		if m.loopRemaining > 0 {
-			next := m.loopTotal - m.loopRemaining + 1
-			m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration %d/%d", next, m.loopTotal)))
-			return goal.IterationPrompt(m.loopSpecPath)
-		}
-		// Cap reached without completing: do one wrap-up turn, then stop.
-		m.loopWrapUp = true
-		m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); summarising progress to the spec…", m.loopTotal)))
-		return goal.WrapUpPrompt(m.loopSpecPath)
 	}
+	// Stub-fix turn just finished — fall through to normal iteration for the
+	// remaining budget (decrement happens in the default branch).
+	if m.loopStubFixing {
+		m.loopStubFixing = false
+	}
+
+	if goal.IsComplete(res.Text) {
+		// Mechanical gate first.
+		if n, cerr := goal.CountUnchecked(m.loopSpecPath); cerr == nil && n > 0 {
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  ✗ completion claim rejected: %d unchecked item(s) remain in %s", n, filepath.Base(m.loopSpecPath))))
+			m.loopVerifying = false
+			return m.continueIteration()
+		}
+		// If we just ran the verification turn and it also says complete, exit.
+		if m.loopVerifying {
+			m.loopVerifying = false
+			done := m.loopTotal - m.loopRemaining + 1
+			m.loopRemaining = 0
+			m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ goal complete (verified) in %d iteration(s).", done)))
+			m.appendMergeHint()
+			return ""
+		}
+		// Mechanical passed but verification hasn't fired yet — fire it once.
+		// Doesn't decrement the budget; it's an insurance check, not new work.
+		m.loopVerifying = true
+		m.appendLine(toolStyle.Render("  completion claimed; running final verification…"))
+		return goal.VerificationPrompt(m.loopSpecPath)
+	}
+
+	// Non-complete turn. If we just did a verification turn, the model decided
+	// more work was needed — surface that and resume normal iteration.
+	if m.loopVerifying {
+		m.loopVerifying = false
+		m.appendLine(toolStyle.Render("  verification flagged remaining work; continuing iteration."))
+	}
+	return m.continueIteration()
+}
+
+// continueIteration consumes one slot from loopRemaining and returns the prompt
+// for the next iteration — or kicks off the wrap-up turn when the cap is hit.
+// Centralised so the rejection path and the ordinary path can't drift apart.
+func (m *Model) continueIteration() string {
+	m.loopRemaining--
+	if m.loopRemaining > 0 {
+		next := m.loopTotal - m.loopRemaining + 1
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration %d/%d", next, m.loopTotal)))
+		return goal.IterationPrompt(m.loopSpecPath)
+	}
+	m.loopWrapUp = true
+	m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); summarising progress to the spec…", m.loopTotal)))
+	return goal.WrapUpPrompt(m.loopSpecPath)
 }
 
 // appendMergeHint tells the user where the loop's work landed and how to merge
@@ -1132,7 +1196,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			return m.startGoalLoop(args[1:])
 		case strings.EqualFold(args[0], "stop"):
 			if m.loopRemaining > 0 || m.loopWrapUp || m.turnCancel != nil {
-				m.loopRemaining, m.loopWrapUp = 0, false
+				m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false
 				if m.turnCancel != nil {
 					m.turnCancel()
 					m.turnCancel = nil
