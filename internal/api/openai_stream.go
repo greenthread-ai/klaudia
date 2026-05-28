@@ -157,6 +157,21 @@ func assembleMessage(model, text string, tools map[int]*toolAccum, finish string
 	if text != "" {
 		content = append(content, map[string]any{"type": "text", "text": text})
 	}
+	// A refusal / empty response (the model returned no text AND no tool calls)
+	// otherwise marshals to "content": null, which the Anthropic API later
+	// rejects on resume ("messages.<i>.content: Field required"). Synthesize a
+	// visible placeholder block so the refusal is recorded honestly, the
+	// transcript stays well-formed, and the model can see what happened.
+	if text == "" && len(tools) == 0 {
+		reason := finish
+		if reason == "" {
+			reason = "empty response"
+		}
+		content = append(content, map[string]any{
+			"type": "text",
+			"text": "[Provider returned no content — finish_reason=" + reason + "]",
+		})
+	}
 	// Emit tool_use blocks in ascending index order.
 	idxs := make([]int, 0, len(tools))
 	for i := range tools {
