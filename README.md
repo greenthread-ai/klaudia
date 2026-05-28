@@ -25,17 +25,39 @@ extras we lean on day to day:
 
 ## Getting started
 
+### Install
+
 ```bash
-CGO_ENABLED=0 go build -o klaudia ./cmd/klaudia
+go install github.com/greenthread-ai/klaudia/cmd/klaudia@latest
 ```
 
-Before first run, configure credentials using one of these paths:
+This installs the `klaudia` binary into `$(go env GOPATH)/bin` (commonly
+`~/go/bin`) — make sure that's on your `PATH`. Prefer to build from a checkout?
+See [Build](#build).
+
+### Create a config (optional but recommended)
+
+Klaudia reads `~/.klaudia/config.toml` automatically for every run; a project
+`./.klaudia/config.toml` overlays it when present. Generate a commented starter:
+
+```bash
+klaudia --create-config=global   # ~/.klaudia/config.toml  (your default)
+# or:
+klaudia --create-config=local    # ./.klaudia/config.toml  (project override)
+```
+
+Both commands refuse to overwrite an existing config (so you can't accidentally
+clobber settings); delete the file first if you want a fresh starter.
+
+### Authentication
+
+Pick one of these paths:
 
 **Anthropic API key**
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
-./klaudia
+klaudia
 ```
 
 **Existing Claude Code login on macOS**
@@ -45,23 +67,15 @@ Sign in with Claude Code first, then run Klaudia:
 
 ```bash
 claude
-./klaudia
+klaudia
 ```
 
 **OpenAI-compatible provider**
 
-Create a starter config globally or just for the current project:
-
-```bash
-./klaudia --create-config=global   # writes ~/.klaudia/config.toml
-# or:
-./klaudia --create-config=local    # writes ./.klaudia/config.toml
-```
-
-Edit the generated config:
+Edit the config you just generated and set the provider block:
 
 ```toml
-# Comments are supported.
+# ~/.klaudia/config.toml  (comments are supported)
 provider = "openai"
 model = "openai/gpt-5.5"
 baseURL = "https://api.example.com/v1"
@@ -76,11 +90,8 @@ Then export the variable you named in `apiKeyEnv` and run:
 
 ```bash
 export MY_API_KEY="sk-..."   # same name as apiKeyEnv above
-./klaudia
+klaudia
 ```
-
-`~/.klaudia/config.toml` is loaded automatically for every run; a project-local
-`./.klaudia/config.toml` overlays it when present.
 
 Once the TUI starts, type `/doctor` to verify auth and environment status.
 
