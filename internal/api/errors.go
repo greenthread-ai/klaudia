@@ -20,9 +20,15 @@ func FriendlyError(err error) string {
 	if status, ok := apiStatus(err); ok {
 		switch status {
 		case 429:
-			return "Rate limited (429): the API is busy and retries were exhausted. " +
-				"This often happens when your Claude Code OAuth token is in use by another " +
-				"session — wait a moment and try again. (Set KLAUDIA_MAX_RETRIES to retry more.)"
+			msg := "Rate limited (429): the API is busy and retries were exhausted. "
+			// The OAuth-token-in-use cause is Anthropic-specific (Claude Code OAuth
+			// sessions can collide); for the OpenAI-compatible provider, 429 is just
+			// the provider throttling — don't mention OAuth.
+			var anthropicErr *anthropic.Error
+			if errors.As(err, &anthropicErr) {
+				msg += "If you signed in via Claude Code OAuth, this often happens when the token is in use by another session. "
+			}
+			return msg + "Wait a moment and try again. (Set KLAUDIA_MAX_RETRIES to retry more.)"
 		case 401, 403:
 			return fmt.Sprintf("Authentication failed (%d): check your API key / sign-in "+
 				"(or .klaudia/config.toml for a custom provider).", status)

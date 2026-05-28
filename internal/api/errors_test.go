@@ -50,6 +50,23 @@ func TestFriendlyErrorOpenAI(t *testing.T) {
 	}
 }
 
+func TestFriendlyError429HintIsProviderSpecific(t *testing.T) {
+	// The Claude Code OAuth-token hint is Anthropic-specific and must not surface
+	// for OpenAI-compatible providers (the original "even though we're using
+	// ChatGPT we're told to check our Claude Code OAuth" bug).
+	openAI := FriendlyError(&OpenAIError{StatusCode: 429})
+	if strings.Contains(openAI, "OAuth") || strings.Contains(openAI, "Claude Code") {
+		t.Errorf("OpenAI 429 leaked the Claude-Code OAuth hint: %q", openAI)
+	}
+	if !strings.Contains(openAI, "KLAUDIA_MAX_RETRIES") {
+		t.Errorf("OpenAI 429 should still mention the retries env: %q", openAI)
+	}
+	anth := FriendlyError(&anthropic.Error{StatusCode: 429})
+	if !strings.Contains(anth, "Claude Code OAuth") {
+		t.Errorf("Anthropic 429 should mention the OAuth-token cause: %q", anth)
+	}
+}
+
 func TestBackoffGrows(t *testing.T) {
 	if backoff(1) >= backoff(2) {
 		t.Error("backoff should grow with attempt")
