@@ -12,6 +12,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -335,7 +337,19 @@ func (l *Loop) unknownToolMsg(name string) string {
 				"Agent(subagent_type=%q, prompt=…).", name, name)
 		}
 	}
-	return fmt.Sprintf("No such tool available: %s", name)
+	// List the real tool names so a model that's improvised a name (e.g. "Find"
+	// when it meant Glob/Grep) sees what's actually on offer and can self-correct
+	// — without us having to maintain a fuzzy-match table per typo.
+	all := l.tools.All()
+	names := make([]string, 0, len(all))
+	for _, t := range all {
+		names = append(names, t.Name())
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return fmt.Sprintf("No such tool available: %s", name)
+	}
+	return fmt.Sprintf("No such tool available: %s. Available tools: %s.", name, strings.Join(names, ", "))
 }
 
 // repeatedFailureMsg is returned when the model retries an identical tool call
@@ -419,7 +433,14 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	}
 
 	if err := tool.ValidateInput(raw); err != nil {
-		return errResult(fmt.Sprintf("Input validation error: %v", err))
+		msg := fmt.Sprintf("Input validation error: %v", err)
+		// Tell the model what the tool actually accepts. Smaller models hallucinate
+		// param names ("line_start" instead of "offset") and keep retrying with the
+		// same wrong shape — listing the real fields lets them self-correct.
+		if fields := schemaFieldList(tool.InputSchema()); fields != "" {
+			msg += fmt.Sprintf(" — %s accepts: %s.", tu.Name, fields)
+		}
+		return errResult(msg)
 	}
 
 	results, err := tool.Execute(ctx, tools.Context{Ask: opts.Asker, Plan: opts.Planner, Reveal: reveal}, raw)
@@ -515,6 +536,36 @@ func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[strin
 
 // splitSchema pulls "properties" and "required" out of a generated JSON Schema
 // object so they can be placed into BetaToolInputSchemaParam.
+// schemaFieldList renders a tool's accepted input fields as
+// "file_path (required), offset, limit" — appended to validation errors so the
+// model sees what's correct, not just what was wrong. Returns "" when the
+// schema has no properties (e.g. parameterless tools).
+func schemaFieldList(raw json.RawMessage) string {
+	props, required := splitSchema(raw)
+	pm, ok := props.(map[string]any)
+	if !ok || len(pm) == 0 {
+		return ""
+	}
+	req := make(map[string]bool, len(required))
+	for _, r := range required {
+		req[r] = true
+	}
+	names := make([]string, 0, len(pm))
+	for k := range pm {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	parts := make([]string, len(names))
+	for i, n := range names {
+		if req[n] {
+			parts[i] = n + " (required)"
+		} else {
+			parts[i] = n
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
 func splitSchema(raw json.RawMessage) (properties any, required []string) {
 	var s struct {
 		Properties json.RawMessage `json:"properties"`
