@@ -67,6 +67,55 @@ func TestFriendlyError429HintIsProviderSpecific(t *testing.T) {
 	}
 }
 
+func TestFriendlyErrorInsufficientQuotaDoesNotRecommendRetry(t *testing.T) {
+	// Real OpenAI body for an exhausted-quota 429: the provider already gives a
+	// useful message, and retries won't help — so we surface their wording and
+	// drop the misleading "retries / KLAUDIA_MAX_RETRIES" advice.
+	body := `{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","param":null,"code":"insufficient_quota"}}`
+	msg := FriendlyError(&OpenAIError{StatusCode: 429, Body: body})
+
+	for _, want := range []string{"Insufficient quota", "exceeded your current quota", "Retries won't help"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("missing %q in: %q", want, msg)
+		}
+	}
+	for _, banned := range []string{"KLAUDIA_MAX_RETRIES", "retries were exhausted", "Wait a moment"} {
+		if strings.Contains(msg, banned) {
+			t.Errorf("should not recommend retrying for insufficient_quota: %q (contains %q)", msg, banned)
+		}
+	}
+}
+
+func TestFriendlyError429PassesThroughOpenAIMessage(t *testing.T) {
+	// For a non-quota 429 with a useful provider message, surface it verbatim
+	// instead of the generic "API is busy" guess.
+	body := `{"error":{"message":"You are sending requests too quickly.","type":"requests","code":"rate_limit_exceeded"}}`
+	msg := FriendlyError(&OpenAIError{StatusCode: 429, Body: body})
+	if !strings.Contains(msg, "You are sending requests too quickly") {
+		t.Errorf("expected the upstream message to pass through: %q", msg)
+	}
+	if !strings.Contains(msg, "KLAUDIA_MAX_RETRIES") {
+		t.Errorf("transient 429 should still mention the retry knob: %q", msg)
+	}
+}
+
+func TestOpenAIErrorPayload(t *testing.T) {
+	// Parses the OpenAI error envelope; returns nil for empty / non-JSON bodies.
+	p := (&OpenAIError{Body: `{"error":{"message":"m","type":"t","code":"c"}}`}).Payload()
+	if p == nil || p.Message != "m" || p.Type != "t" || p.Code != "c" {
+		t.Errorf("payload = %+v", p)
+	}
+	if (&OpenAIError{Body: ""}).Payload() != nil {
+		t.Error("empty body should parse to nil")
+	}
+	if (&OpenAIError{Body: "plain text"}).Payload() != nil {
+		t.Error("non-JSON body should parse to nil")
+	}
+	if (&OpenAIError{Body: `{}`}).Payload() != nil {
+		t.Error("envelope without an error object should parse to nil")
+	}
+}
+
 func TestBackoffGrows(t *testing.T) {
 	if backoff(1) >= backoff(2) {
 		t.Error("backoff should grow with attempt")

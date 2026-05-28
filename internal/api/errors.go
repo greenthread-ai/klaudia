@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
@@ -20,10 +21,24 @@ func FriendlyError(err error) string {
 	if status, ok := apiStatus(err); ok {
 		switch status {
 		case 429:
+			// OpenAI returns 429 for transient throttling AND for "insufficient_quota"
+			// (a billing problem). The two need very different advice — and when the
+			// provider gives us a useful message in the body, prefer it verbatim
+			// over our guess.
+			if oai := openAIPayload(err); oai != nil {
+				if oai.Code == "insufficient_quota" || oai.Type == "insufficient_quota" {
+					return "Insufficient quota: " + strings.TrimSpace(oai.Message) +
+						" (Retries won't help — top up your plan/billing or switch to a different key.)"
+				}
+				if oai.Message != "" {
+					return "Rate limited (429): " + strings.TrimSpace(oai.Message) +
+						" (Set KLAUDIA_MAX_RETRIES to retry more.)"
+				}
+			}
 			msg := "Rate limited (429): the API is busy and retries were exhausted. "
 			// The OAuth-token-in-use cause is Anthropic-specific (Claude Code OAuth
-			// sessions can collide); for the OpenAI-compatible provider, 429 is just
-			// the provider throttling — don't mention OAuth.
+			// sessions can collide); generic OpenAI 429s without a parseable body
+			// fall through here too.
 			var anthropicErr *anthropic.Error
 			if errors.As(err, &anthropicErr) {
 				msg += "If you signed in via Claude Code OAuth, this often happens when the token is in use by another session. "
@@ -54,6 +69,17 @@ func FriendlyError(err error) string {
 			"and the baseURL is correct.\nDetails: " + err.Error()
 	}
 	return err.Error()
+}
+
+// openAIPayload returns the parsed structured payload from an OpenAI-compatible
+// error, if one is wrapped inside err. Returns nil for other providers or when
+// the body isn't a recognized error envelope.
+func openAIPayload(err error) *OpenAIErrorPayload {
+	var oai *OpenAIError
+	if errors.As(err, &oai) {
+		return oai.Payload()
+	}
+	return nil
 }
 
 // apiStatus extracts an HTTP status code from a provider error (Anthropic or

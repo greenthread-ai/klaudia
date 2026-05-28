@@ -318,6 +318,37 @@ func (e *OpenAIError) Error() string {
 	return fmt.Sprintf("openai endpoint %d", e.StatusCode)
 }
 
+// OpenAIErrorPayload is the structured error envelope OpenAI-compatible
+// providers return inside the response body:
+//
+//	{"error": {"message": "...", "type": "...", "code": "..."}}
+//
+// Surfacing it lets FriendlyError pass through the provider's own (often
+// actionable) wording instead of a generic guess.
+type OpenAIErrorPayload struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Code    string `json:"code"`
+}
+
+// Payload parses the response body for that envelope. Returns nil when the
+// body is empty or doesn't match (some providers ship plain-text errors).
+func (e *OpenAIError) Payload() *OpenAIErrorPayload {
+	if e == nil || e.Body == "" {
+		return nil
+	}
+	var wrap struct {
+		Error OpenAIErrorPayload `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(e.Body), &wrap); err != nil {
+		return nil
+	}
+	if wrap.Error.Message == "" && wrap.Error.Type == "" && wrap.Error.Code == "" {
+		return nil
+	}
+	return &wrap.Error
+}
+
 // doWithRetry issues the request, retrying transient failures (connection
 // errors and 429/5xx) with exponential backoff that honors Retry-After. The
 // request body is re-created from bodyBytes for each attempt. It mirrors the
