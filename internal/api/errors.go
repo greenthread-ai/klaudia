@@ -35,23 +35,20 @@ func FriendlyError(err error) string {
 						" (Set KLAUDIA_MAX_RETRIES to retry more.)"
 				}
 			}
-			// Anthropic: pass through whatever the API actually said
-			// ("rate_limit_error", "5-hour usage limit reached", concurrent-OAuth
-			// hints, etc.) and only mention the OAuth-token-sharing cause as one
-			// possibility when the upstream doesn't already explain it.
+			// Anthropic: pass through whatever the API actually said when it's
+			// useful ("5-hour usage limit reached", quota-detail messages, etc.);
+			// otherwise demote the upstream noise and promote the OAuth-sharing
+			// hint to the primary explanation, since that's the common cause for
+			// Claude Code users.
 			if errType, msg := anthropicPayload(err); errType != "" || msg != "" {
 				out := "Rate limited (429)"
 				if errType != "" {
 					out += " [" + errType + "]"
 				}
-				out += ": "
-				if msg != "" {
-					out += strings.TrimSpace(msg) + " "
-				} else {
-					out += "the API is busy and retries were exhausted. "
+				if detail := meaningfulMessage(msg, errType); detail != "" {
+					return out + ": " + detail + " (If you signed in via Claude Code OAuth this often happens when the token is in use by another session. Set KLAUDIA_MAX_RETRIES to retry more.)"
 				}
-				out += "(If you signed in via Claude Code OAuth this often happens when the token is in use by another session. Set KLAUDIA_MAX_RETRIES to retry more.)"
-				return out
+				return out + ": if you signed in via Claude Code OAuth this often happens when the token is in use by another session — try closing other sessions and waiting a moment. (Set KLAUDIA_MAX_RETRIES to retry more.)"
 			}
 			// Fallback (no parseable provider payload). The OAuth-token-sharing
 			// cause is Anthropic-specific, so still include it when the error
@@ -142,17 +139,37 @@ func anthropicPayload(err error) (errType, message string) {
 
 // providerDetail returns the upstream-provider's own message for err (trimmed)
 // — OpenAI envelope or Anthropic body — so our error templates can splice in
-// what the provider actually said. Empty when no provider payload is parseable.
+// what the provider actually said. Empty when no provider payload is parseable
+// OR the payload's message is uselessly generic (literal "Error", just the type
+// name); the caller should fall back to descriptive text in those cases.
 func providerDetail(err error) string {
 	if p := openAIPayload(err); p != nil {
-		if m := strings.TrimSpace(p.Message); m != "" {
+		if m := meaningfulMessage(p.Message, p.Type); m != "" {
 			return m
 		}
 	}
-	if _, m := anthropicPayload(err); strings.TrimSpace(m) != "" {
-		return strings.TrimSpace(m)
+	if errType, m := anthropicPayload(err); m != "" || errType != "" {
+		if c := meaningfulMessage(m, errType); c != "" {
+			return c
+		}
 	}
 	return ""
+}
+
+// meaningfulMessage trims msg and returns "" when the result is empty, the
+// literal word "error" / "unknown", or just the error type repeated — patterns
+// providers sometimes emit instead of an actual explanation, which splice into
+// our templates as confusing "...: Error (..." gibberish.
+func meaningfulMessage(msg, errType string) string {
+	t := strings.TrimSpace(msg)
+	switch {
+	case t == "",
+		strings.EqualFold(t, "error"),
+		strings.EqualFold(t, "unknown"),
+		errType != "" && strings.EqualFold(t, errType):
+		return ""
+	}
+	return t
 }
 
 // apiStatus extracts an HTTP status code from a provider error (Anthropic or

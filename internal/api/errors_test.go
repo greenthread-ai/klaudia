@@ -81,6 +81,36 @@ func TestFriendlyError429AnthropicSurfacesUpstreamMessage(t *testing.T) {
 	}
 }
 
+func TestFriendlyError429AnthropicUselessMessageFallsBack(t *testing.T) {
+	// Real shape Anthropic sometimes returns on an OAuth-token-sharing 429:
+	// the body has a type but the "message" is the literal word "Error",
+	// which we used to splice in verbatim — producing the broken-looking
+	// "Rate limited (429) [rate_limit_error]: Error (..." output. Detect the
+	// useless message and promote the OAuth-sharing hint to primary.
+	body := []byte(`{"error":{"type":"rate_limit_error","message":"Error"}}`)
+	var anthErr anthropic.Error
+	if err := anthErr.UnmarshalJSON(body); err != nil {
+		t.Fatalf("unmarshal anthropic.Error: %v", err)
+	}
+	anthErr.StatusCode = 429
+
+	got := FriendlyError(&anthErr)
+	// Type still surfaces — that's actually informative.
+	if !strings.Contains(got, "[rate_limit_error]") {
+		t.Errorf("type label missing: %q", got)
+	}
+	// Useless upstream "Error" must NOT appear as the explanation.
+	if strings.Contains(got, ": Error (") || strings.Contains(got, ": Error.") {
+		t.Errorf("upstream 'Error' should not be spliced in verbatim: %q", got)
+	}
+	// OAuth hint promoted to the primary explanation.
+	for _, want := range []string{"Claude Code OAuth", "token is in use by another session"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in: %q", want, got)
+		}
+	}
+}
+
 func TestFriendlyError429HintIsProviderSpecific(t *testing.T) {
 	// The Claude Code OAuth-token hint is Anthropic-specific and must not surface
 	// for OpenAI-compatible providers (the original "even though we're using
