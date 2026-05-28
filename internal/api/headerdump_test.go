@@ -15,9 +15,11 @@ import (
 //
 //	go test ./internal/api/... -run TestDumpOutgoingHeaders -v
 //
-// to see every header klaudia actually puts on the wire for OAuth vs API-key
-// clients. Useful for comparing against `claude`'s real fingerprint (e.g. via
-// `mitmproxy -p 8080` plus ANTHROPIC_BASE_URL=http://localhost:8080 claude …).
+// to see what we put on the wire for OAuth vs API-key clients. Headers turned
+// out NOT to be the OAuth rate-limit discriminator — the gate is the body's
+// system[0] prefix (see augmentSystem) — so this is now mostly useful for
+// confirming we haven't accidentally regressed back to a heavy header set, or
+// for debugging future provider quirks.
 func TestDumpOutgoingHeaders(t *testing.T) {
 	t.Setenv("KLAUDIA_MAX_RETRIES", "0")
 

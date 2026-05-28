@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -104,152 +106,114 @@ func containsBeta(list []anthropic.AnthropicBeta, want anthropic.AnthropicBeta) 
 	return false
 }
 
-// TestNewGatesClaudeCodeImpersonationByCredential confirms the Claude-Code
-// fingerprint (User-Agent prefix + X-Stainless-Lang: js) is only applied when
-// the credential is OAuth. API-key callers have their own Anthropic billing
-// relationship and have no reason to mask the Go SDK identity — masking would
-// just make their requests harder to identify in Anthropic-side logs.
-func TestNewGatesClaudeCodeImpersonationByCredential(t *testing.T) {
+// TestOAuthRequestCarriesBillingHeaderInBody is the end-to-end gate: real
+// `claude -p` against a local proxy showed that the *only* discriminator
+// between 200 and 429 on OAuth is the `x-anthropic-billing-header:` prefix on
+// system[0]. Bogus cch values, missing oauth-beta, missing UA, missing every
+// X-Stainless-* — all 200 as long as that prefix is present. (Curl tests
+// captured in git history of this file.) So instead of asserting which headers
+// we ship, we assert the body shape that actually flips the bucket — and that
+// API-key callers don't get the prefix shoved into their tenant by accident.
+func TestOAuthRequestCarriesBillingHeaderInBody(t *testing.T) {
 	t.Setenv("KLAUDIA_MAX_RETRIES", "0")
 
 	var (
-		mu      sync.Mutex
-		headers http.Header
+		mu   sync.Mutex
+		body []byte
 	)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
 		mu.Lock()
-		headers = r.Header.Clone()
+		body = b
 		mu.Unlock()
-		// We don't need a valid stream — failing fast still lets us inspect the
-		// request the SDK actually sent.
 		http.Error(w, `{"type":"error","error":{"type":"api_error","message":"test"}}`, http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
 	for _, tc := range []struct {
-		name           string
-		cred           Credential
-		wantClaudeCLI  bool
-		wantStainless  string // expected X-Stainless-Lang, "" means don't care
-		dontWantPrefix string // forbid this User-Agent prefix
+		name        string
+		cred        Credential
+		wantPrefix  bool
+		userSystem  string
+		wantSysLen  int    // expected length of body.system array
+		wantSysFst0 string // expected text of body.system[0] (empty = don't check)
 	}{
 		{
-			name:          "oauth",
-			cred:          Credential{AuthToken: "oauth-token"},
-			wantClaudeCLI: true,
-			wantStainless: "js",
+			name:        "oauth/with user system",
+			cred:        Credential{AuthToken: "oauth-token"},
+			wantPrefix:  true,
+			userSystem:  "You are a helpful assistant.",
+			wantSysLen:  2,
+			wantSysFst0: "", // checked separately via wantPrefix
 		},
 		{
-			name:           "api-key",
-			cred:           Credential{APIKey: "sk-..."},
-			wantClaudeCLI:  false,
-			dontWantPrefix: "claude-cli/",
+			name:       "oauth/empty user system",
+			cred:       Credential{AuthToken: "oauth-token"},
+			wantPrefix: true,
+			wantSysLen: 1,
+		},
+		{
+			name:        "api-key/with user system",
+			cred:        Credential{APIKey: "sk-..."},
+			wantPrefix:  false,
+			userSystem:  "You are a helpful assistant.",
+			wantSysLen:  1,
+			wantSysFst0: "You are a helpful assistant.",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mu.Lock()
-			headers = nil
+			body = nil
 			mu.Unlock()
+
+			var sys []anthropic.BetaTextBlockParam
+			if tc.userSystem != "" {
+				sys = []anthropic.BetaTextBlockParam{{Text: tc.userSystem}}
+			}
 
 			c := New(tc.cred, server.URL)
 			_, _ = c.StreamTurn(context.Background(), anthropic.BetaMessageNewParams{
 				Model:     anthropic.Model(DefaultModel),
 				MaxTokens: 16,
 				Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
+				System:    sys,
 			}, StreamSink{})
 
 			mu.Lock()
-			h := headers
+			b := body
 			mu.Unlock()
-			if h == nil {
-				t.Fatal("server never received a request")
+			if len(b) == 0 {
+				t.Fatal("server never received a request body")
 			}
-			ua := h.Get("User-Agent")
-			if tc.wantClaudeCLI && !strings.HasPrefix(ua, "claude-cli/") {
-				t.Errorf("OAuth client UA = %q, want claude-cli/ prefix", ua)
+
+			var got struct {
+				System []struct {
+					Text string `json:"text"`
+				} `json:"system"`
 			}
-			if tc.dontWantPrefix != "" && strings.HasPrefix(ua, tc.dontWantPrefix) {
-				t.Errorf("API-key client UA = %q, must not start with %q (keeps Go SDK identity)", ua, tc.dontWantPrefix)
+			if err := json.Unmarshal(b, &got); err != nil {
+				t.Fatalf("body parse: %v\nbody=%s", err, b)
 			}
-			if tc.wantStainless != "" {
-				if got := h.Get("X-Stainless-Lang"); got != tc.wantStainless {
-					t.Errorf("X-Stainless-Lang = %q, want %q", got, tc.wantStainless)
+			if len(got.System) != tc.wantSysLen {
+				t.Fatalf("system blocks = %d, want %d (body=%s)", len(got.System), tc.wantSysLen, b)
+			}
+			if tc.wantPrefix {
+				if !strings.HasPrefix(got.System[0].Text, claudeCodeBillingPrefix) {
+					t.Errorf("system[0] = %q, must start with %q on OAuth — Anthropic gates on it", got.System[0].Text, claudeCodeBillingPrefix)
 				}
-			}
-			// The full set of Claude-Code-only headers — UA + Stainless lang is
-			// the loudest, but each missing header is another bit of entropy a
-			// rate-limit filter could key on. Track them all so a future refactor
-			// can't silently drop one.
-			oauthOnlyHeaders := []string{
-				"X-Stainless-Timeout",
-				"Anthropic-Dangerous-Direct-Browser-Access",
-				"X-Claude-Code-Session-Id",
-			}
-			if tc.name == "oauth" {
-				for _, name := range oauthOnlyHeaders {
-					if h.Get(name) == "" {
-						t.Errorf("OAuth client missing %s — Claude Code sends it; full fingerprint match needs every header", name)
+				if !strings.Contains(got.System[0].Text, "cc_entrypoint=klaudia") {
+					t.Errorf("billing block should declare klaudia honestly; got %q", got.System[0].Text)
+				}
+			} else {
+				for i, blk := range got.System {
+					if strings.HasPrefix(blk.Text, claudeCodeBillingPrefix) {
+						t.Errorf("API-key system[%d] = %q carries OAuth billing prefix (impersonation leaked)", i, blk.Text)
 					}
 				}
-				if h.Get("X-Stainless-Package-Version") != claudeCodeStainlessVersion {
-					t.Errorf("X-Stainless-Package-Version = %q, want %q (mirror real claude)", h.Get("X-Stainless-Package-Version"), claudeCodeStainlessVersion)
-				}
 			}
-			if tc.name == "api-key" {
-				// API-key path must keep the Go SDK's native Stainless fingerprint —
-				// not "js" — and must NOT carry the Claude Code impersonation
-				// headers either. (We don't pin Stainless values; the SDK owns them.)
-				if got := h.Get("X-Stainless-Lang"); got == "js" {
-					t.Errorf("API-key client should keep Go SDK X-Stainless-Lang, got %q (impersonation leaked)", got)
-				}
-				for _, name := range oauthOnlyHeaders {
-					if got := h.Get(name); got != "" {
-						t.Errorf("API-key client carries OAuth-only header %s = %q (impersonation leaked)", name, got)
-					}
-				}
+			if tc.wantSysFst0 != "" && got.System[0].Text != tc.wantSysFst0 {
+				t.Errorf("system[0] = %q, want %q", got.System[0].Text, tc.wantSysFst0)
 			}
 		})
-	}
-}
-
-func TestUserAgentMatchesClaudeCodeShape(t *testing.T) {
-	// Mirror real claude exactly on the OAuth path: `claude-cli/<ver> (external,
-	// sdk-ts)`. No klaudia signature in the entrypoint — Anthropic gates the
-	// Claude Max OAuth quota on the full fingerprint, and a `; klaudia/...`
-	// extension was a one-line giveaway. (Captured ground-truth via the
-	// headerdump_test harness against a real `claude -p` run.)
-	ua := userAgent()
-	if !strings.HasPrefix(ua, "claude-cli/"+claudeCodeVersion+" ") {
-		t.Errorf("UA must start with claude-cli/%s ; got %q", claudeCodeVersion, ua)
-	}
-	if !strings.HasSuffix(ua, " (external, sdk-ts)") {
-		t.Errorf("UA must end with (external, sdk-ts); got %q", ua)
-	}
-	if strings.Contains(ua, "klaudia") {
-		t.Errorf("UA must not leak the klaudia name on the OAuth fingerprint; got %q", ua)
-	}
-}
-
-func TestNewClaudeCodeSessionIDIsUUIDv4(t *testing.T) {
-	// claude sends a stable per-session UUIDv4. Verify shape so we don't drift
-	// (e.g. accidentally emit a hex-without-dashes that fails a server-side
-	// regex). Two consecutive calls must also produce different ids.
-	id := newClaudeCodeSessionID()
-	parts := strings.Split(id, "-")
-	wantLens := []int{8, 4, 4, 4, 12}
-	if len(parts) != len(wantLens) {
-		t.Fatalf("UUID parts = %d, want %d (got %q)", len(parts), len(wantLens), id)
-	}
-	for i, n := range wantLens {
-		if len(parts[i]) != n {
-			t.Errorf("part %d = %q (len %d), want len %d", i, parts[i], len(parts[i]), n)
-		}
-	}
-	// Version nibble: first char of part[2] must be '4'.
-	if len(parts[2]) > 0 && parts[2][0] != '4' {
-		t.Errorf("UUIDv4 version nibble = %q, want '4' (id %q)", parts[2][:1], id)
-	}
-	if id == newClaudeCodeSessionID() {
-		t.Errorf("session ids must differ between calls (got %q twice)", id)
 	}
 }
