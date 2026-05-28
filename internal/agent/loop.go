@@ -131,9 +131,13 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		system = []anthropic.BetaTextBlockParam{{Text: opts.System}}
 	}
 
-	// failures tracks how many times each identical tool call (name+input) has
-	// failed within this Run, so dispatch can break a model out of a retry loop.
+	// failures tracks how many times each IDENTICAL tool call (name+input) has
+	// failed within this Run; errStreaks tracks how many consecutive failures
+	// of the same SHAPE a tool has produced (regardless of input). Together
+	// they break a model out of retry loops where either the same call or the
+	// same kind of mistake keeps recurring.
 	failures := map[string]int{}
+	errStreaks := map[string]errStreak{}
 
 	messages := append([]anthropic.BetaMessageParam{}, opts.InitialMessages...)
 	if opts.Prompt != "" {
@@ -218,7 +222,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		}
 		resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
 		for _, tu := range toolUses {
-			block := l.dispatch(ctx, tu, opts, emit, reveal, failures)
+			block := l.dispatch(ctx, tu, opts, emit, reveal, failures, errStreaks)
 			resultBlocks = append(resultBlocks, block)
 		}
 		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
@@ -374,7 +378,50 @@ func repeatedFailureMsg(name string, n int) string {
 // exact same failing call indefinitely, burning the whole turn budget.
 const repeatFailureLimit = 2
 
-func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), failures map[string]int) anthropic.BetaContentBlockParamUnion {
+// errStreak counts how many consecutive failures of the same SHAPE a tool has
+// produced (same exact error message). It's reset whenever the tool succeeds
+// or produces a different error. The point: identical-args retry detection
+// misses "same mistake, different values" — like Read called repeatedly with
+// `line_start`/`line_end` (wrong field names) but new line numbers each time.
+type errStreak struct {
+	sig   string // last error message text
+	count int    // consecutive occurrences of sig
+}
+
+// bumpErrStreak records a new failure for tool. If the message matches the
+// prior signature, the count grows; otherwise the streak starts over.
+func bumpErrStreak(streaks map[string]errStreak, tool, msg string) {
+	prev := streaks[tool]
+	if prev.sig == msg {
+		prev.count++
+	} else {
+		prev = errStreak{sig: msg, count: 1}
+	}
+	streaks[tool] = prev
+}
+
+// repeatedShapeFailureMsg is the directive returned when loop-breaker B fires:
+// the tool keeps producing the same error and the next attempt would too.
+// Quoting the recurring error in the message forces the model to confront the
+// real problem rather than guess again.
+func repeatedShapeFailureMsg(tool string, n int, sig string) string {
+	return fmt.Sprintf(
+		"%s has failed with the SAME error %d times in a row. Stop calling it until you've understood the error below — guessing different values for the same wrong call won't help.\n\n--- recurring error ---\n%s",
+		tool, n, sig,
+	)
+}
+
+// shortCircuit returns a tool_result without touching the failure counters
+// (the loop-breaker is refusing the call, not registering another attempt).
+// Used by loop-breaker B; A reuses errResult since it bumps state intentionally.
+func shortCircuit(emit Emitter, tu anthropic.BetaToolUseBlock, msg string) anthropic.BetaContentBlockParamUnion {
+	if emit != nil {
+		emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
+	}
+	return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
+}
+
+func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), failures map[string]int, errStreaks map[string]errStreak) anthropic.BetaContentBlockParamUnion {
 	raw, _ := json.Marshal(tu.Input)
 	if emit != nil {
 		emit(Event{Type: "tool_use", ToolName: tu.Name, ToolUseID: tu.ID, Input: tu.Input})
@@ -383,17 +430,27 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	key := tu.Name + "\x00" + string(raw)
 	errResult := func(msg string) anthropic.BetaContentBlockParamUnion {
 		failures[key]++
+		bumpErrStreak(errStreaks, tu.Name, msg)
 		if emit != nil {
 			emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
 		}
 		return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
 	}
 
-	// Loop-breaker: this exact call has already failed repeatedly. Don't run it
-	// again (it would fail identically); return directive steering instead so a
-	// model stuck in a retry loop gets a clear push to do something different.
+	// Loop-breaker A: this exact call has already failed repeatedly. Don't run
+	// it again — it would fail identically.
 	if failures[key] >= repeatFailureLimit {
 		return errResult(repeatedFailureMsg(tu.Name, failures[key]))
+	}
+	// Loop-breaker B: the same tool has produced the same KIND of error for
+	// `repeatFailureLimit` consecutive calls (different args, same mistake —
+	// e.g. a weaker model retrying Read with new line numbers but always with
+	// the wrong parameter names). Short-circuit with a directive that quotes
+	// the recurring error so the model has to read it.
+	if streak := errStreaks[tu.Name]; streak.count >= repeatFailureLimit {
+		// Use shortCircuit() so we don't keep growing the streak on each fired
+		// short-circuit (the model isn't actually trying — we're refusing).
+		return shortCircuit(emit, tu, repeatedShapeFailureMsg(tu.Name, streak.count, streak.sig))
 	}
 
 	tool, ok := l.tools.Lookup(tu.Name)
@@ -462,8 +519,13 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	}
 	if isErr {
 		failures[key]++
+		bumpErrStreak(errStreaks, tu.Name, content)
 	} else {
-		delete(failures, key) // a clean run clears the retry counter for this call
+		// A clean run resets both counters: this exact call's retry count and
+		// the per-tool same-shape streak (the tool clearly isn't fundamentally
+		// broken for the caller).
+		delete(failures, key)
+		delete(errStreaks, tu.Name)
 	}
 	if emit != nil {
 		emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr})
