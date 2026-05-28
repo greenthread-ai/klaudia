@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/greenthread-ai/klaudia/internal/config"
 )
 
 func TestCreateConfig(t *testing.T) {
@@ -48,7 +50,13 @@ func TestCreateConfig(t *testing.T) {
 				t.Fatal(err)
 			}
 			body := string(data)
-			for _, want := range []string{`provider = "openai"`, `baseURL = "https://api.example.com/v1"`, `apiKeyEnv = "MY_API_KEY"`, `# Klaudia config`} {
+			for _, want := range []string{
+				`provider = "openai"`,
+				`baseURL = "https://api.example.com/v1"`,
+				`apiKeyEnv = "MY_API_KEY"`,
+				`# Klaudia config`,
+				`# contextWindow = 8192`, // commented example for OpenAI-compatible hosts
+			} {
 				if !strings.Contains(body, want) {
 					t.Errorf("starter config missing %s:\n%s", want, body)
 				}
@@ -85,5 +93,29 @@ func TestThemeOrWarn(t *testing.T) {
 	}
 	if len(warned) != 1 || !strings.Contains(warned[0], "unknown theme") {
 		t.Errorf("expected an unknown-theme warning, got %v", warned)
+	}
+}
+
+func TestStarterConfigRoundtripsContextWindow(t *testing.T) {
+	// Generate the starter, uncomment the contextWindow example, parse it back
+	// through config.Load and confirm the field actually populates. Catches the
+	// case where the toml tag drifts from the example line.
+	cwd := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	path, err := createConfig("local", cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	got := strings.Replace(string(data), "# contextWindow = 8192", "contextWindow = 8192", 1)
+	if got == string(data) {
+		t.Fatal("commented contextWindow line not found in starter — toml tag/example may have drifted")
+	}
+	if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Load(cwd)
+	if cfg.ContextWindow != 8192 {
+		t.Errorf("ContextWindow = %d, want 8192 (toml tag mismatch?)", cfg.ContextWindow)
 	}
 }

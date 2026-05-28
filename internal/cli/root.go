@@ -396,6 +396,13 @@ apiKeyEnv = "MY_API_KEY"
 # Some providers reject this field; remove the line to omit it from the request.
 # temperature = 1.0
 
+# Context window in tokens — drives autocompaction so long sessions don't
+# overflow the model upstream ("max_tokens must be at least 1, got -N" or
+# "context length exceeded"). Defaults to 200000 (Anthropic-sized); set this
+# to the actual window your provider/model exposes. Common values: 8192, 16384,
+# 32768, 128000.
+# contextWindow = 8192
+
 # TUI theme (Markdown + chrome). /theme switches it for a session.
 # theme = "nord" # dracula | gruvbox | tokyo-night | nord | catppuccin
 
