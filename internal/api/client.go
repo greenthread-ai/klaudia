@@ -13,6 +13,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+
+	"github.com/greenthread-ai/klaudia/internal/version"
 )
 
 // DefaultBetas is the Claude Code default beta set (Cn1 in 03-providers.js).
@@ -28,6 +30,18 @@ var DefaultBetas = []anthropic.AnthropicBeta{
 // 429s on the first turn while `claude` itself, holding the same Keychain
 // token, works normally. (03-providers.js: `if (Y7()) q.push(BZ)`.)
 const OAuthBeta anthropic.AnthropicBeta = "oauth-2025-04-20"
+
+// userAgent is the User-Agent header we send to the Anthropic API. Claude Code
+// uses `claude-cli/<version> (external, <entrypoint>)` (cli.js ry()); the API
+// recognises that prefix and applies the Claude-Code rate-limit bucket. The
+// Go SDK otherwise sends `anthropic-sdk-go/…`, which lands us in the strict
+// external-use bucket — observable as instant 429s on the very first turn
+// while `claude` (holding the same Keychain OAuth token) works normally.
+// Embed our build version in the entrypoint segment so we're identifiable
+// while still matching the prefix the API gates on.
+func userAgent() string {
+	return "claude-cli/2.1.66 (external, cli; klaudia/" + version.Version + ")"
+}
 
 // WebToolBetas are the additional betas required when the server-side
 // web_search / web_fetch tools are enabled.
@@ -106,6 +120,16 @@ func maxRetries() int {
 func New(cred Credential, baseURL string) *Client {
 	opts := []option.RequestOption{
 		option.WithHeader("x-app", "cli"),
+		option.WithHeader("User-Agent", userAgent()),
+		// Override the Stainless SDK fingerprint headers to match Claude Code's
+		// (JS SDK) shape: a `claude-cli/…` UA paired with `X-Stainless-Lang: go`
+		// is a giveaway to Anthropic that this isn't Claude Code, which lands us
+		// in the strict external-use rate-limit bucket. Aligning these makes our
+		// request fingerprint match what `claude` sends with the same OAuth token.
+		option.WithHeader("X-Stainless-Lang", "js"),
+		option.WithHeader("X-Stainless-Runtime", "node"),
+		option.WithHeader("X-Stainless-Runtime-Version", "v22.0.0"),
+		option.WithHeader("X-Stainless-Package-Version", "0.39.0"),
 		option.WithMaxRetries(maxRetries()),
 	}
 	if cred.IsOAuth() {

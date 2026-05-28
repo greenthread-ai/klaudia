@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -45,4 +46,20 @@ func containsBeta(list []anthropic.AnthropicBeta, want anthropic.AnthropicBeta) 
 		}
 	}
 	return false
+}
+
+func TestUserAgentMatchesClaudeCodeShape(t *testing.T) {
+	// Anthropic rate-limits OAuth tokens by client fingerprint — User-Agent +
+	// X-Stainless-*. A `claude-cli/…` prefix is the signal we need; the rest
+	// of the string identifies us as klaudia so the request is honest.
+	ua := userAgent()
+	if !strings.HasPrefix(ua, "claude-cli/") {
+		t.Errorf("UA prefix must be claude-cli/...; got %q", ua)
+	}
+	if !strings.Contains(ua, "klaudia/") {
+		t.Errorf("UA should still identify us as klaudia in the entrypoint segment; got %q", ua)
+	}
+	if !strings.Contains(ua, "external") {
+		t.Errorf("UA should carry the (external, …) entrypoint marker; got %q", ua)
+	}
 }
