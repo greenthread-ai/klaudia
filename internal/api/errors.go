@@ -45,12 +45,24 @@ func FriendlyError(err error) string {
 			}
 			return msg + "Wait a moment and try again. (Set KLAUDIA_MAX_RETRIES to retry more.)"
 		case 401, 403:
+			// OpenAI-compatible providers send specific messages here ("Incorrect
+			// API key provided", "You don't have access to …"); surface them and
+			// keep the generic where-to-fix-it hint.
+			if detail := openAIDetail(err); detail != "" {
+				return fmt.Sprintf("Authentication failed (%d): %s. Check your API key / sign-in (or .klaudia/config.toml for a custom provider).", status, detail)
+			}
 			return fmt.Sprintf("Authentication failed (%d): check your API key / sign-in "+
 				"(or .klaudia/config.toml for a custom provider).", status)
 		case 529:
+			if detail := openAIDetail(err); detail != "" {
+				return fmt.Sprintf("The API is overloaded (529): %s Try again shortly.", detail)
+			}
 			return "The API is overloaded (529) and retries were exhausted. Try again shortly."
 		default:
 			if status >= 500 {
+				if detail := openAIDetail(err); detail != "" {
+					return fmt.Sprintf("API server error (%d): %s Try again shortly.", status, detail)
+				}
 				return fmt.Sprintf("API server error (%d) after retries. Try again shortly.", status)
 			}
 		}
@@ -80,6 +92,16 @@ func openAIPayload(err error) *OpenAIErrorPayload {
 		return oai.Payload()
 	}
 	return nil
+}
+
+// openAIDetail returns the provider's own message for err (trimmed) if one is
+// available, else "". Used to splice provider wording into our status-specific
+// templates so the user sees what the upstream actually said.
+func openAIDetail(err error) string {
+	if p := openAIPayload(err); p != nil {
+		return strings.TrimSpace(p.Message)
+	}
+	return ""
 }
 
 // apiStatus extracts an HTTP status code from a provider error (Anthropic or

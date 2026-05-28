@@ -99,6 +99,52 @@ func TestFriendlyError429PassesThroughOpenAIMessage(t *testing.T) {
 	}
 }
 
+func TestFriendlyErrorPassesThroughUpstreamDetail(t *testing.T) {
+	body := func(msg, code string) string {
+		return fmt.Sprintf(`{"error":{"message":%q,"type":"invalid_request_error","code":%q}}`, msg, code)
+	}
+	cases := []struct {
+		name, body string
+		status     int
+		wantSubs   []string
+	}{
+		{
+			name: "401 splices upstream message with the config hint",
+			body: body("Incorrect API key provided: sk-***xyz", "invalid_api_key"), status: 401,
+			wantSubs: []string{"Authentication failed (401)", "Incorrect API key provided", "Check your API key", ".klaudia/config.toml"},
+		},
+		{
+			name: "403 splices upstream message",
+			body: body("You don't have access to this model.", "model_not_found"), status: 403,
+			wantSubs: []string{"Authentication failed (403)", "don't have access to this model"},
+		},
+		{
+			name: "500 surfaces provider message and keeps the try-again hint",
+			body: body("Internal server error", "server_error"), status: 500,
+			wantSubs: []string{"API server error (500)", "Internal server error", "Try again shortly"},
+		},
+		{
+			name: "529 surfaces provider message and keeps the try-again hint",
+			body: body("Service temporarily overloaded.", "overloaded"), status: 529,
+			wantSubs: []string{"overloaded (529)", "Service temporarily overloaded", "Try again shortly"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FriendlyError(&OpenAIError{StatusCode: tc.status, Body: tc.body})
+			for _, w := range tc.wantSubs {
+				if !strings.Contains(got, w) {
+					t.Errorf("missing %q in %q", w, got)
+				}
+			}
+		})
+	}
+	// Without a parseable body, the generic templates are still used.
+	if got := FriendlyError(&OpenAIError{StatusCode: 401, Body: "plain text"}); !strings.Contains(got, "check your API key") {
+		t.Errorf("401 without payload should fall back to the generic template; got %q", got)
+	}
+}
+
 func TestOpenAIErrorPayload(t *testing.T) {
 	// Parses the OpenAI error envelope; returns nil for empty / non-JSON bodies.
 	p := (&OpenAIError{Body: `{"error":{"message":"m","type":"t","code":"c"}}`}).Payload()
