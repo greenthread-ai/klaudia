@@ -183,22 +183,26 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		res.OutputTokens += assistant.Usage.OutputTokens
 		res.Text = finalText
 
-		// Persist the assistant turn (including the final, tool-less answer) and
-		// add it to the running conversation.
-		record(opts.Recorder, "assistant", assistant)
+		// Add the assistant turn to the running conversation. Persisting to the
+		// transcript is DEFERRED until we know it's either final (no tools) or
+		// has its tool_result paired up — see the record calls below. Persisting
+		// here, then dying mid-dispatch (Ctrl+C / SIGTERM / OOM), would leak an
+		// orphan tool_use to disk and poison the next resume.
 		messages = append(messages, assistant.ToParam())
 
 		// pause_turn: the API paused a long-running server-side tool (e.g. web
-		// search). Re-send the accumulated turn to let it continue.
+		// search). Re-send the accumulated turn to let it continue. The
+		// assistant has no local tool_use to pair, so record it now.
 		if assistant.StopReason == "pause_turn" {
+			record(opts.Recorder, "assistant", assistant)
 			continue
 		}
 
 		// Collect tool_use blocks from this turn.
 		toolUses := toolUseBlocks(assistant)
 		if len(toolUses) == 0 {
-			// No tools requested → the model is done (server-side tool results,
-			// if any, were already resolved inline by the API).
+			// Final (tool-less) answer: structurally fine on its own, record now.
+			record(opts.Recorder, "assistant", assistant)
 			res.Messages = messages
 			return res, nil
 		}
@@ -216,8 +220,14 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			resultBlocks = append(resultBlocks, block)
 		}
 		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
-		record(opts.Recorder, "user", toolResultMsg)
 		messages = append(messages, toolResultMsg)
+
+		// Now persist BOTH back-to-back. The window for process termination
+		// between them is microseconds (two Recorder.Record calls), whereas the
+		// dispatch above can be seconds-to-minutes — that gap is where orphans
+		// used to land in the transcript.
+		record(opts.Recorder, "assistant", assistant)
+		record(opts.Recorder, "user", toolResultMsg)
 
 		if opts.MaxTurns > 0 && res.NumTurns >= opts.MaxTurns {
 			res.StopReason = "max_turns"
