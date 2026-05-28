@@ -28,12 +28,17 @@ extras we lean on day to day:
 ### Install
 
 ```bash
-go install github.com/greenthread-ai/klaudia/cmd/klaudia@latest
+go install github.com/greenthread-ai/klaudia/cmd/klaudia@main
 ```
 
 This installs the `klaudia` binary into `$(go env GOPATH)/bin` (commonly
-`~/go/bin`) — make sure that's on your `PATH`. Prefer to build from a checkout?
-See [Build](#build).
+`~/go/bin`) — make sure that's on your `PATH`. We track `main` while a release
+tag isn't published yet; `@main` always resolves to the current HEAD, whereas
+`@latest` (the usual Go default) routes through `proxy.golang.org` and can lag
+behind new commits on an untagged module. To force a refresh:
+`GOPROXY=direct go install github.com/greenthread-ai/klaudia/cmd/klaudia@latest`.
+
+Prefer to build from a checkout? See [Build](#build).
 
 ### Create a config (optional but recommended)
 
