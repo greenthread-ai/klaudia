@@ -39,10 +39,20 @@ func TestSanitizeMessagesFillsEmptyContent(t *testing.T) {
 	}
 }
 
+// asstMessage builds an assistant BetaMessageParam from content blocks. The SDK
+// only ships NewBetaUserMessage; we need the assistant role too in tests.
+func asstMessage(blocks ...anthropic.BetaContentBlockParamUnion) anthropic.BetaMessageParam {
+	return anthropic.BetaMessageParam{
+		Role:    anthropic.BetaMessageParamRoleAssistant,
+		Content: blocks,
+	}
+}
+
 func TestSanitizeMessagesPassthrough(t *testing.T) {
-	// Already-clean conversations must not be re-allocated or rewritten.
-	good := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))
-	in := []anthropic.BetaMessageParam{good, good}
+	// Already-clean alternating conversation must not be re-allocated or rewritten.
+	user := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))
+	asst := asstMessage(anthropic.NewBetaTextBlock("hello"))
+	in := []anthropic.BetaMessageParam{user, asst, user}
 	out := sanitizeMessages(in)
 	if &out[0] != &in[0] {
 		t.Error("clean input should be returned without reallocation")
@@ -50,5 +60,61 @@ func TestSanitizeMessagesPassthrough(t *testing.T) {
 	// Empty input doesn't panic.
 	if got := sanitizeMessages(nil); got != nil {
 		t.Errorf("nil input = %#v, want nil", got)
+	}
+}
+
+func TestSanitizeMessagesRepairsOrphanToolUse(t *testing.T) {
+	// Real shape from the corrupted huedoku transcript: an assistant tool_use
+	// (Bash) followed by user text messages — no matching tool_result. The API
+	// rejects with "tool_use ids were found without tool_result blocks
+	// immediately after". Sanitize must inject a synthetic tool_result.
+	asstToolUse := asstMessage(
+		anthropic.NewBetaToolUseBlock("chatcmpl-tool-90ed3808", map[string]any{"cmd": "ls"}, "Bash"),
+	)
+	userText := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("iteration prompt"))
+	out := sanitizeMessages([]anthropic.BetaMessageParam{asstToolUse, userText})
+
+	if len(out) != 2 {
+		t.Fatalf("len = %d, want 2 (synthetic result merged into next user)", len(out))
+	}
+	// First content of the user message is now a tool_result for that id.
+	if tr := out[1].Content[0].OfToolResult; tr == nil || tr.ToolUseID != "chatcmpl-tool-90ed3808" {
+		t.Fatalf("missing synthetic tool_result; got %#v", out[1].Content)
+	}
+	// Original text follows the injected tool_result.
+	if len(out[1].Content) != 2 || out[1].Content[1].OfText == nil {
+		t.Errorf("original content lost; got %#v", out[1].Content)
+	}
+}
+
+func TestSanitizeMessagesOrphanToolUseAtEndInsertsUser(t *testing.T) {
+	// A trailing assistant tool_use with no following message at all — a new
+	// user message carrying the synthetic tool_result is inserted.
+	asst := asstMessage(
+		anthropic.NewBetaToolUseBlock("orphan-1", map[string]any{}, "Bash"),
+	)
+	out := sanitizeMessages([]anthropic.BetaMessageParam{asst})
+	if len(out) != 2 || out[1].Role != anthropic.BetaMessageParamRoleUser {
+		t.Fatalf("expected an injected user message; got %d msgs, last role %v", len(out), out[len(out)-1].Role)
+	}
+	if tr := out[1].Content[0].OfToolResult; tr == nil || tr.ToolUseID != "orphan-1" {
+		t.Errorf("injected message missing the synthetic result; got %#v", out[1].Content)
+	}
+}
+
+func TestSanitizeMessagesMergesConsecutiveSameRole(t *testing.T) {
+	// Three identical user prompts in a row (from three failed /goal run
+	// attempts) — Anthropic requires alternation, so merge into one user with
+	// concatenated blocks.
+	mk := func(s string) anthropic.BetaMessageParam {
+		return anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(s))
+	}
+	asst := asstMessage(anthropic.NewBetaTextBlock("ok"))
+	out := sanitizeMessages([]anthropic.BetaMessageParam{asst, mk("a"), mk("b"), mk("c")})
+	if len(out) != 2 {
+		t.Fatalf("len = %d, want 2 (the three users merged)", len(out))
+	}
+	if len(out[1].Content) != 3 {
+		t.Errorf("merged user should hold 3 blocks; got %d", len(out[1].Content))
 	}
 }
