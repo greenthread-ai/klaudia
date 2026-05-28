@@ -49,6 +49,10 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	if len(params.Betas) == 0 {
 		params.Betas = DefaultBetas
 	}
+	// Credential-specific betas (e.g. oauth-2025-04-20) make our request match
+	// what Claude Code itself sends with the same OAuth token, so the API doesn't
+	// treat us as external usage and rate-limit aggressively.
+	params.Betas = c.augmentBetas(params.Betas)
 	stream := c.sdk.Beta.Messages.NewStreaming(ctx, params)
 
 	var acc anthropic.BetaMessage

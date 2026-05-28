@@ -22,6 +22,13 @@ var DefaultBetas = []anthropic.AnthropicBeta{
 	"context-management-2025-06-27",
 }
 
+// OAuthBeta is the header Claude Code attaches when the credential is an OAuth
+// token. Without it, the Anthropic API treats the same token as "external" use
+// and applies much stricter rate limits — observed in practice as immediate
+// 429s on the first turn while `claude` itself, holding the same Keychain
+// token, works normally. (03-providers.js: `if (Y7()) q.push(BZ)`.)
+const OAuthBeta anthropic.AnthropicBeta = "oauth-2025-04-20"
+
 // WebToolBetas are the additional betas required when the server-side
 // web_search / web_fetch tools are enabled.
 var WebToolBetas = []anthropic.AnthropicBeta{
@@ -58,6 +65,23 @@ func ResolveModel(m string) anthropic.Model {
 type Client struct {
 	sdk  anthropic.Client
 	cred Credential
+}
+
+// augmentBetas adds credential-specific betas to a request's beta list — today
+// just oauth-2025-04-20 when the credential is an OAuth token. The agent loop
+// constructs params.Betas from package-level DefaultBetas + WebToolBetas, so
+// adding it here keeps callers ignorant of the credential. Idempotent: a beta
+// already in the list is not added again.
+func (c *Client) augmentBetas(in []anthropic.AnthropicBeta) []anthropic.AnthropicBeta {
+	if !c.cred.IsOAuth() {
+		return in
+	}
+	for _, b := range in {
+		if b == OAuthBeta {
+			return in
+		}
+	}
+	return append(in, OAuthBeta)
 }
 
 // defaultMaxRetries is higher than the SDK default (2) so transient 429s — common
