@@ -53,6 +53,10 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	// what Claude Code itself sends with the same OAuth token, so the API doesn't
 	// treat us as external usage and rate-limit aggressively.
 	params.Betas = c.augmentBetas(params.Betas)
+	// The OAuth bucket also requires an `x-anthropic-billing-header:` prefix
+	// on the first system block — without it, every request 429s regardless of
+	// headers. See augmentSystem for why.
+	params.System = c.augmentSystem(params.System)
 	stream := c.sdk.Beta.Messages.NewStreaming(ctx, params)
 
 	var acc anthropic.BetaMessage

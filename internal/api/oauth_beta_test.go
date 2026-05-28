@@ -33,6 +33,58 @@ func TestAugmentBetasAddsOAuthForOAuthCredential(t *testing.T) {
 	}
 }
 
+func TestAugmentSystemPrependsBillingHeaderForOAuth(t *testing.T) {
+	// OAuth credentials need the `x-anthropic-billing-header:` prefix as the
+	// FIRST system block — discovered empirically by capturing real claude vs
+	// our requests and binary-searching the diff: with the prefix, 200; without,
+	// 429 instantly. Values after the prefix (cc_version, cc_entrypoint, cch)
+	// are server-logged but not validated, so we ship klaudia branding honestly.
+	c := &Client{cred: Credential{AuthToken: "fake-oauth"}}
+
+	// Existing system block: billing must land in front of it, not at the end.
+	user := []anthropic.BetaTextBlockParam{{Text: "You are a helpful assistant."}}
+	got := c.augmentSystem(user)
+	if len(got) != 2 {
+		t.Fatalf("system blocks = %d, want 2", len(got))
+	}
+	if !strings.HasPrefix(got[0].Text, claudeCodeBillingPrefix) {
+		t.Errorf("block[0].Text = %q, want %q prefix", got[0].Text, claudeCodeBillingPrefix)
+	}
+	if got[1].Text != user[0].Text {
+		t.Errorf("user system block displaced: block[1] = %q, want %q", got[1].Text, user[0].Text)
+	}
+	if !strings.Contains(got[0].Text, "cc_entrypoint=klaudia") {
+		t.Errorf("billing entrypoint must declare klaudia honestly; got %q", got[0].Text)
+	}
+
+	// Empty input: still gets the billing block — otherwise requests with no
+	// user-supplied system would 429.
+	got = c.augmentSystem(nil)
+	if len(got) != 1 || !strings.HasPrefix(got[0].Text, claudeCodeBillingPrefix) {
+		t.Errorf("nil input must yield a single billing block; got %+v", got)
+	}
+
+	// Idempotent: re-augmenting an already-augmented slice doesn't double up.
+	twice := c.augmentSystem(got)
+	if len(twice) != 1 {
+		t.Errorf("idempotency violated: %d blocks after second augment, want 1", len(twice))
+	}
+}
+
+func TestAugmentSystemNoOpForAPIKey(t *testing.T) {
+	// API-key callers go straight to their own Anthropic tenant; the billing-
+	// header gate doesn't apply, and prepending one would just confuse logs.
+	c := &Client{cred: Credential{APIKey: "sk-..."}}
+	user := []anthropic.BetaTextBlockParam{{Text: "You are a helpful assistant."}}
+	got := c.augmentSystem(user)
+	if len(got) != 1 || got[0].Text != user[0].Text {
+		t.Errorf("API-key system should pass through unchanged; got %+v", got)
+	}
+	if got := c.augmentSystem(nil); got != nil {
+		t.Errorf("API-key + nil system should stay nil; got %+v", got)
+	}
+}
+
 func TestAugmentBetasNoOpForAPIKey(t *testing.T) {
 	// API-key credential: NOT in the OAuth quota bucket, so the OAuth beta
 	// would just be misleading. Don't add it.

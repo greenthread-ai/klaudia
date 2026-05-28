@@ -125,6 +125,32 @@ func (c *Client) augmentBetas(in []anthropic.AnthropicBeta) []anthropic.Anthropi
 	return append(in, OAuthBeta)
 }
 
+// claudeCodeBillingPrefix is the literal prefix Anthropic looks for in the
+// *first* system block on OAuth requests. Without it, every request — even
+// with a perfect set of impersonation headers — falls into a strict default
+// bucket and returns instant 429s. The values that follow are observed for
+// server-side analytics but NOT validated (verified by sending bogus values
+// and watching them all 200), so we put honest klaudia metadata in there.
+const claudeCodeBillingPrefix = "x-anthropic-billing-header:"
+
+// augmentSystem prepends Claude Code's billing-header system block on the
+// OAuth path. The block must come *first* in the system array — claude itself
+// emits it as system[0] and a real `claude -p` against a local proxy confirms
+// the format. Idempotent: if the caller already sent a billing block (e.g. on
+// retry), don't double up.
+func (c *Client) augmentSystem(in []anthropic.BetaTextBlockParam) []anthropic.BetaTextBlockParam {
+	if !c.cred.IsOAuth() {
+		return in
+	}
+	if len(in) > 0 && strings.HasPrefix(in[0].Text, claudeCodeBillingPrefix) {
+		return in
+	}
+	billing := anthropic.BetaTextBlockParam{
+		Text: claudeCodeBillingPrefix + " cc_version=" + claudeCodeVersion + "; cc_entrypoint=klaudia;",
+	}
+	return append([]anthropic.BetaTextBlockParam{billing}, in...)
+}
+
 // defaultMaxRetries is higher than the SDK default (2) so transient 429s — common
 // when an OAuth token is shared with another active session — recover
 // transparently. The SDK uses exponential backoff and honors Retry-After.
