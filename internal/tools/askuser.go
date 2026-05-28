@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
 // AskUserQuestionInput is the AskUserQuestion tool's input.

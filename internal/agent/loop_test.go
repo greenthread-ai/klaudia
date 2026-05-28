@@ -7,7 +7,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 func namesOf(params []anthropic.BetaToolUnionParam) []string {

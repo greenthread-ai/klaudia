@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 var (

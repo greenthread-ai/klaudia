@@ -15,10 +15,10 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread/klaudia/internal/api"
-	"github.com/greenthread/klaudia/internal/compaction"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/compaction"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // defaultMaxTokens is the per-response output cap when the caller doesn't set one.

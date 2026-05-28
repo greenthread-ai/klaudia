@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
 // NotebookEditInput is the NotebookEdit tool's input.

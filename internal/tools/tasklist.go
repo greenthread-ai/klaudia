@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
-	"github.com/greenthread/klaudia/internal/tasks"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/tasks"
 )
 
 // TaskListInput is the TaskList tool's input.

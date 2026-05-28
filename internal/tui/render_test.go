@@ -9,8 +9,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread/klaudia/internal/agent"
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 func TestToolSummary(t *testing.T) {

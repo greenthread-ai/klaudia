@@ -6,10 +6,10 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread/klaudia/internal/api"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/subagent"
-	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/subagent"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // Spawner runs sub-agents. It implements tools.Spawner so the Agent tool can

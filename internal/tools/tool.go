@@ -10,7 +10,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 // Result is a single tool_result content block produced by a tool execution.

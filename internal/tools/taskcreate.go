@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
-	"github.com/greenthread/klaudia/internal/tasks"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/tasks"
 )
 
 // TaskCreateInput is the TaskCreate tool's input.

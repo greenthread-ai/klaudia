@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 func TestUnknownToolMsgSteersToAgent(t *testing.T) {

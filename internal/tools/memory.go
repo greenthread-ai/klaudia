@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/greenthread/klaudia/internal/memory"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/memory"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
 // MemoryInput is the Memory tool's input.

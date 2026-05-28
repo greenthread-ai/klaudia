@@ -8,8 +8,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread/klaudia/internal/api"
-	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // blockingProvider blocks in StreamTurn until the context is cancelled, then

@@ -1,6 +1,6 @@
 package tools
 
-import "github.com/greenthread/klaudia/internal/permission"
+import "github.com/greenthread-ai/klaudia/internal/permission"
 
 // editClassDecision is the intrinsic permission decision for file-mutating
 // tools (Write, Edit, NotebookEdit): auto-accepted under acceptEdits, blocked

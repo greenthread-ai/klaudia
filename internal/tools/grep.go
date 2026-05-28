@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/greenthread/klaudia/internal/native/search"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/native/search"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
 // GrepInput is the Grep tool's input. Mirrors the JS Grep tool's core options.

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
 // Spawner runs a sub-agent of the given type with a prompt and returns its

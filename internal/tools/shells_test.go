@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/greenthread/klaudia/internal/sandbox"
+	"github.com/greenthread-ai/klaudia/internal/sandbox"
 )
 
 // waitUntil polls fn until it returns true or the deadline passes.

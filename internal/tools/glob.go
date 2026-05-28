@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/greenthread/klaudia/internal/native/search"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/native/search"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
 // GlobInput is the Glob tool's input.

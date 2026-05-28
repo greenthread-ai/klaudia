@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
 // TodoItem is one entry in the model's task list.

@@ -27,14 +27,14 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/greenthread/klaudia/internal/agent"
-	"github.com/greenthread/klaudia/internal/api"
-	"github.com/greenthread/klaudia/internal/config"
-	"github.com/greenthread/klaudia/internal/goal"
-	"github.com/greenthread/klaudia/internal/memory"
-	"github.com/greenthread/klaudia/internal/native/search"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/config"
+	"github.com/greenthread-ai/klaudia/internal/goal"
+	"github.com/greenthread-ai/klaudia/internal/memory"
+	"github.com/greenthread-ai/klaudia/internal/native/search"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // RunFunc drives one user turn against the agent core, threading conversation

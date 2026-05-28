@@ -3,7 +3,7 @@
 // by the Agent tool and run their own agentic loop with a restricted toolset.
 package subagent
 
-import "github.com/greenthread/klaudia/internal/tools"
+import "github.com/greenthread-ai/klaudia/internal/tools"
 
 // Type describes a sub-agent kind selectable via the Agent tool's
 // subagent_type, mirroring the JS built-in agents (general-purpose/Explore/Plan).

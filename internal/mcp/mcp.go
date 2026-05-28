@@ -16,7 +16,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/greenthread/klaudia/internal/version"
+	"github.com/greenthread-ai/klaudia/internal/version"
 )
 
 // ServerConfig defines how to reach an MCP server. A stdio server sets

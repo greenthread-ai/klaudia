@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/greenthread/klaudia/internal/browser"
-	"github.com/greenthread/klaudia/internal/lsp"
-	"github.com/greenthread/klaudia/internal/sandbox"
-	"github.com/greenthread/klaudia/internal/tasks"
+	"github.com/greenthread-ai/klaudia/internal/browser"
+	"github.com/greenthread-ai/klaudia/internal/lsp"
+	"github.com/greenthread-ai/klaudia/internal/sandbox"
+	"github.com/greenthread-ai/klaudia/internal/tasks"
 )
 
 // regOptions holds the caller-owned, session-scoped resources the registry's

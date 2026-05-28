@@ -12,8 +12,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread/klaudia/internal/agent"
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 // lineSink captures emitted JSON lines, safe for concurrent writes/reads.

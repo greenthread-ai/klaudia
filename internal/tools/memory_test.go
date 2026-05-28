@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread/klaudia/internal/memory"
+	"github.com/greenthread-ai/klaudia/internal/memory"
 )
 
 func newMemTool(t *testing.T) *Memory {
