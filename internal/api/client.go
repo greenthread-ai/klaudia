@@ -38,14 +38,16 @@ var WebToolBetas = []anthropic.AnthropicBeta{
 
 // DefaultModel is used when no --model is given. Server-side resolution may
 // pick a newer snapshot; this is the alias we send.
-const DefaultModel = "claude-sonnet-4-5"
+const DefaultModel = "claude-sonnet-4-6"
 
-// modelAliases maps the short CLI aliases to model IDs (resolveModelId,
-// 07-app-features.js:7901). Full IDs pass through unchanged.
+// modelAliases maps the short CLI aliases to current model IDs (resolveModelId,
+// 07-app-features.js:7901). Full IDs pass through unchanged. Bumped to track
+// the current Claude 4.x lineup — Claude Code on Claude Max defaults to Opus
+// 4.7, so `--model opus` now matches that experience.
 var modelAliases = map[string]string{
 	"haiku":  "claude-haiku-4-5",
-	"sonnet": "claude-sonnet-4-5",
-	"opus":   "claude-opus-4-5",
+	"sonnet": "claude-sonnet-4-6",
+	"opus":   "claude-opus-4-7",
 }
 
 // ResolveModel turns a CLI --model value into a model ID. Empty → DefaultModel.
