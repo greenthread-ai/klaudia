@@ -382,6 +382,50 @@ func TestGoalLoopMergeHintOnStop(t *testing.T) {
 	}
 }
 
+func TestLoopNextHaltsOnStalledTurn(t *testing.T) {
+	// Anthropic streaming can complete a request cleanly but with no content
+	// during session-limit/quota throttling (no 429, no err — just zero
+	// tokens and zero turns). Without this check the loop ate its iteration
+	// budget on empty turns while the spinner span. Halt with a clear line so
+	// the user can see the cause rather than chase a phantom.
+	m := newTestModel()
+	m.loopTotal, m.loopRemaining = 5, 5
+	m.loopSpecPath = writeSpec(t, "- [ ] still open\n")
+	next := m.loopNext(agent.Result{}, nil) // no err, no tokens, no turns
+	if next != "" {
+		t.Fatalf("stalled turn must halt the loop; got %q", next)
+	}
+	if m.loopRemaining != 0 {
+		t.Errorf("loopRemaining should be 0 after stall; got %d", m.loopRemaining)
+	}
+	if !strings.Contains(m.transcript.String(), "empty response from model") {
+		t.Errorf("expected stall message in scrollback; got %q", m.transcript.String())
+	}
+}
+
+func TestLoopIsStallShape(t *testing.T) {
+	// Belt-and-braces unit on the predicate. Only a no-error / no-turns /
+	// no-tokens result counts — a legitimate finish with tokens is fine, and
+	// an error is handled by the regular halt path.
+	cases := []struct {
+		name string
+		res  agent.Result
+		err  error
+		want bool
+	}{
+		{"empty + nil err", agent.Result{}, nil, true},
+		{"has text", agent.Result{Text: "ok"}, nil, false},
+		{"has output", agent.Result{OutputTokens: 12}, nil, false},
+		{"has turn", agent.Result{NumTurns: 1}, nil, false},
+		{"has err", agent.Result{}, context.Canceled, false},
+	}
+	for _, tc := range cases {
+		if got := loopIsStall(tc.res, tc.err); got != tc.want {
+			t.Errorf("%s: loopIsStall = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestFormatStats(t *testing.T) {
 	// Unknown limit (0) → no context suffix; users get the bare counters they
 	// had before so /stats still works on unmapped models.

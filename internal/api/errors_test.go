@@ -321,3 +321,51 @@ func TestFriendlyError400OtherStillSurfacesUpstream(t *testing.T) {
 		t.Errorf("non-overflow 400 should not suggest contextWindow; got %q", msg)
 	}
 }
+
+func TestFriendlyError429SessionLimitAdvisesNotToRetry(t *testing.T) {
+	// Claude Max / Claude Code "session limit" 429: the OAuth-sharing hint
+	// would be misleading (it's a daily/period quota wait, not concurrent use)
+	// and the "set KLAUDIA_MAX_RETRIES" suggestion is actively wrong since
+	// no retry will help until the reset time the message names. Detect the
+	// shape and swap the advice.
+	body := []byte(`{"error":{"type":"rate_limit_error","message":"You've hit your session limit · resets 12:40am (Australia/Sydney)"}}`)
+	var anthErr anthropic.Error
+	if err := anthErr.UnmarshalJSON(body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	anthErr.StatusCode = 429
+
+	got := FriendlyError(&anthErr)
+	if !strings.Contains(got, "session limit") {
+		t.Errorf("upstream session-limit message must be surfaced; got %q", got)
+	}
+	if !strings.Contains(got, "Retries won't help") {
+		t.Errorf("must advise against retrying; got %q", got)
+	}
+	for _, forbidden := range []string{"token is in use by another session", "KLAUDIA_MAX_RETRIES"} {
+		if strings.Contains(got, forbidden) {
+			t.Errorf("should not suggest %q for a session-limit 429; got %q", forbidden, got)
+		}
+	}
+}
+
+func TestIsSessionLimitRecognition(t *testing.T) {
+	for _, in := range []string{
+		"You've hit your session limit · resets 12:40am",
+		"Rate limit hit (session_limit) — try later",
+		"SESSION LIMIT exceeded",
+	} {
+		if !isSessionLimit(in) {
+			t.Errorf("should recognise session-limit shape: %q", in)
+		}
+	}
+	for _, in := range []string{
+		"Too many requests",
+		"You've hit your input-tokens-per-minute rate limit",
+		"",
+	} {
+		if isSessionLimit(in) {
+			t.Errorf("false positive on non-session-limit message: %q", in)
+		}
+	}
+}

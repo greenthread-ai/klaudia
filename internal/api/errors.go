@@ -46,6 +46,13 @@ func FriendlyError(err error) string {
 					out += " [" + errType + "]"
 				}
 				if detail := meaningfulMessage(msg, errType); detail != "" {
+					// Claude Max session-limit ("You've hit your session limit,
+					// resets at …") doesn't recover within any reasonable retry
+					// window, so the generic OAuth-sharing hint is misleading.
+					// Tell the user it's a quota wait, not concurrent use.
+					if isSessionLimit(detail) {
+						return out + ": " + detail + " (Retries won't help — wait for the reset time shown, switch to a key-based provider, or sign in with a different account.)"
+					}
 					return out + ": " + detail + " (If you signed in via Claude Code OAuth this often happens when the token is in use by another session. Set KLAUDIA_MAX_RETRIES to retry more.)"
 				}
 				return out + ": if you signed in via Claude Code OAuth this often happens when the token is in use by another session — try closing other sessions and waiting a moment. (Set KLAUDIA_MAX_RETRIES to retry more.)"
@@ -179,6 +186,17 @@ func providerDetail(err error) string {
 func codeIs(raw json.RawMessage, want string) bool {
 	s := strings.Trim(strings.TrimSpace(string(raw)), `"`)
 	return s == want
+}
+
+// isSessionLimit recognises the Claude Max / Claude Code "you've hit your
+// session limit" 429 — a daily/period quota wait rather than the per-minute
+// throttle or the OAuth concurrent-session contention we usually warn about.
+// Captured shape from a real `claude` rejection: "You've hit your session limit
+// · resets <time>". Matching either substring is enough; both are too specific
+// to appear in benign messages.
+func isSessionLimit(detail string) bool {
+	d := strings.ToLower(detail)
+	return strings.Contains(d, "session limit") || strings.Contains(d, "session_limit")
 }
 
 // isContextOverflow recognises provider error messages that actually mean

@@ -253,6 +253,12 @@ type Model struct {
 	loopVerifying  bool   // the next loop turn is the final-review verification
 	loopBranch     string // the goal branch the loop's work lands on
 	loopBaseBranch string // the branch the loop started from (merge target)
+	// cancelling is set when the user pressed Esc but the agent goroutine
+	// hasn't returned yet (e.g. blocked in SDK retry backoff or a tool that's
+	// slow to honour ctx). The bottom view swaps "working…" for "cancelling…"
+	// so the user gets immediate feedback that Esc registered, and knows Ctrl+C
+	// is the next escalation. Cleared on doneMsg.
+	cancelling bool
 	// Cumulative session stats for /stats.
 	statTurns  int
 	statIn     int64
@@ -477,7 +483,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		elapsed := m.sw.Elapsed()
 		stopSW := m.sw.Stop()
 		m.turnCancel = nil
-		m.flushAssistant() // prettify the final answer through glamour
+		m.cancelling = false // the goroutine returned; we're past the cancel window
+		m.flushAssistant()   // prettify the final answer through glamour
 		switch {
 		case errors.Is(msg.err, context.Canceled):
 			m.appendLine(toolStyle.Render(fmt.Sprintf("  ⊘ interrupted after %s", fmtDuration(elapsed))))
@@ -568,7 +575,8 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.turnCancel()
 			m.turnCancel = nil
 			m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false // Esc also halts a goal loop
-			m.appendLine(toolStyle.Render("  ⊘ interrupting…"))
+			m.cancelling = true
+			m.appendLine(toolStyle.Render("  ⊘ interrupting… (Ctrl+C to force quit if it doesn't return)"))
 			return m, nil
 		}
 	}
@@ -1036,6 +1044,19 @@ func (m *Model) prepareFirstLoopTurn(specPath string, n int) string {
 	return goal.IterationPrompt(specPath)
 }
 
+// loopIsStall reports whether a finished iteration looks like an undetected
+// failure — finished without error, but the model produced literally nothing
+// (no text, no turn count, no output tokens). Anthropic's session-limit and
+// some other throttling cases can manifest as a successful HTTP response with
+// an empty stream rather than a 429, and without this check the loop happily
+// decrements its budget for nothing while the user wonders why the spinner is
+// spinning. All three signals must be zero — a turn that returned text but
+// no tokens (e.g. a stubby test fixture) or no text but at least one inner
+// turn (refusal, tool-only) is real work and shouldn't trip this.
+func loopIsStall(res agent.Result, err error) bool {
+	return err == nil && res.Text == "" && res.NumTurns == 0 && res.OutputTokens == 0
+}
+
 // loopNext updates goal-loop state after a turn finished and returns the prompt
 // for the next loop turn, or "" to stop. The completion path runs a two-layer
 // gate against premature <goal-complete/>:
@@ -1063,6 +1084,18 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 	if err != nil {
 		m.loopRemaining = 0
 		m.appendLine(toolStyle.Render("  ⊘ goal loop halted."))
+		m.appendMergeHint()
+		return ""
+	}
+	// Stall: turn finished without error but produced nothing. Most often this
+	// is the Anthropic API returning a successful-looking empty stream during
+	// session-limit / quota throttling — without this check the loop would
+	// blow through its budget on empty turns. Halt with a clear line so the
+	// user can fix the underlying cause (wait for limit reset, switch model,
+	// etc.) before re-running.
+	if loopIsStall(res, err) {
+		m.loopRemaining = 0
+		m.appendLine(errStyle.Render("  ⊘ empty response from model — likely rate-limited or session-limit-hit. Stopping the loop."))
 		m.appendMergeHint()
 		return ""
 	}
@@ -2103,7 +2136,13 @@ func (m *Model) bottomView() string {
 	var bottom string
 	switch m.state {
 	case stateRunning:
-		work := m.spin.View() + " working… " + bannerStyle.Render(m.sw.View()) + hintStyle.Render("  (esc to interrupt)")
+		label := " working… "
+		hint := "  (esc to interrupt)"
+		if m.cancelling {
+			label = " cancelling… "
+			hint = "  (Ctrl+C to force quit)"
+		}
+		work := m.spin.View() + label + bannerStyle.Render(m.sw.View()) + hintStyle.Render(hint)
 		m.input.SetHeight(m.inputHeight())
 		bottom = work + "\n" + m.input.View()
 		if m.queued != "" {
