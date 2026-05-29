@@ -382,6 +382,84 @@ func TestGoalLoopMergeHintOnStop(t *testing.T) {
 	}
 }
 
+func TestLiveUsageEventsUpdateStats(t *testing.T) {
+	// One inner-LLM-call usage event should immediately move the session
+	// counters — that's the whole point: long /goal iterations show progress
+	// in the status bar between inner calls instead of staying at 0 until
+	// the whole iteration concludes.
+	m := newTestModel()
+	m.renderEvent(agent.Event{Type: "usage", InputDelta: 1200, OutputDelta: 300, TurnDelta: 1})
+	m.renderEvent(agent.Event{Type: "usage", InputDelta: 800, OutputDelta: 150, TurnDelta: 1})
+	if m.statTurns != 2 || m.statIn != 2000 || m.statOut != 450 {
+		t.Errorf("session counters after live events: turns=%d in=%d out=%d, want 2/2000/450",
+			m.statTurns, m.statIn, m.statOut)
+	}
+	if m.turnLiveTurns != 2 || m.turnLiveIn != 2000 || m.turnLiveOut != 450 {
+		t.Errorf("per-turn tally: turns=%d in=%d out=%d, want 2/2000/450",
+			m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut)
+	}
+}
+
+func TestReconcileUsageNoDoubleCount(t *testing.T) {
+	// Three scenarios for the doneMsg reconciliation arithmetic:
+	tests := []struct {
+		name        string
+		liveTurns   int
+		liveIn      int64
+		liveOut     int64
+		resTurns    int
+		resIn       int64
+		resOut      int64
+		wantTurns   int
+		wantIn      int64
+		wantOut     int64
+		description string
+	}{
+		{
+			name:      "all live events arrived → reconcile adds zero",
+			liveTurns: 3, liveIn: 2000, liveOut: 450,
+			resTurns: 3, resIn: 2000, resOut: 450,
+			wantTurns: 3, wantIn: 2000, wantOut: 450,
+			description: "no double-count when live tally matches Result",
+		},
+		{
+			name:      "some live events dropped → reconcile catches up",
+			liveTurns: 2, liveIn: 1500, liveOut: 300,
+			resTurns: 3, resIn: 2000, resOut: 450,
+			wantTurns: 3, wantIn: 2000, wantOut: 450,
+			description: "channel pressure shouldn't show stale totals",
+		},
+		{
+			name:      "no live events (back-compat path) → straight accumulation",
+			liveTurns: 0, liveIn: 0, liveOut: 0,
+			resTurns: 3, resIn: 2000, resOut: 450,
+			wantTurns: 3, wantIn: 2000, wantOut: 450,
+			description: "back-compat for callers without usage events",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestModel()
+			m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = tc.liveTurns, tc.liveIn, tc.liveOut
+			m.statTurns, m.statIn, m.statOut = tc.liveTurns, tc.liveIn, tc.liveOut
+			// Inline the reconciliation arithmetic from the doneMsg handler.
+			m.statTurns += tc.resTurns - m.turnLiveTurns
+			m.statIn += tc.resIn - m.turnLiveIn
+			m.statOut += tc.resOut - m.turnLiveOut
+			m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
+			if m.statTurns != tc.wantTurns || m.statIn != tc.wantIn || m.statOut != tc.wantOut {
+				t.Errorf("%s: got turns=%d in=%d out=%d, want %d/%d/%d",
+					tc.description, m.statTurns, m.statIn, m.statOut,
+					tc.wantTurns, tc.wantIn, tc.wantOut)
+			}
+			if m.turnLiveTurns != 0 || m.turnLiveIn != 0 || m.turnLiveOut != 0 {
+				t.Errorf("per-turn tally must be cleared after reconcile; got %d/%d/%d",
+					m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut)
+			}
+		})
+	}
+}
+
 func TestLoopNextHaltsOnStalledTurn(t *testing.T) {
 	// Anthropic streaming can complete a request cleanly but with no content
 	// during session-limit/quota throttling (no 429, no err — just zero

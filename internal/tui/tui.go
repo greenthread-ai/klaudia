@@ -259,12 +259,22 @@ type Model struct {
 	// so the user gets immediate feedback that Esc registered, and knows Ctrl+C
 	// is the next escalation. Cleared on doneMsg.
 	cancelling bool
-	// Cumulative session stats for /stats.
-	statTurns  int
-	statIn     int64
-	statOut    int64
-	lastResult string // full content of the most recent tool result (for /last)
-	queued     string // a message typed while the model is working (sent on completion)
+	// Cumulative session stats for /stats. Updated live via "usage" events from
+	// the agent loop (per inner LLM call), then reconciled against the
+	// authoritative Result fields when doneMsg arrives — so a long /goal
+	// iteration shows progress in the status bar mid-turn rather than staying
+	// at zero until the whole iteration concludes.
+	statTurns int
+	statIn    int64
+	statOut   int64
+	// Per-turn tally of what we already counted via live "usage" events. Reset
+	// at startTurn and subtracted from the final Result at doneMsg so a dropped
+	// usage event still settles correctly without double-counting.
+	turnLiveTurns int
+	turnLiveIn    int64
+	turnLiveOut   int64
+	lastResult    string // full content of the most recent tool result (for /last)
+	queued        string // a message typed while the model is working (sent on completion)
 	// Pending AskUserQuestion.
 	askReply    chan string
 	askOptions  []tools.AskOption
@@ -496,9 +506,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.res.Messages != nil {
 			m.history = msg.res.Messages
 		}
-		m.statTurns += msg.res.NumTurns
-		m.statIn += msg.res.InputTokens
-		m.statOut += msg.res.OutputTokens
+		// Reconcile live usage with the authoritative Result. If every "usage"
+		// event made it through, these deltas are zero (no double-count); if
+		// some were dropped due to channel pressure, this catches the gap up
+		// to the final accurate totals.
+		m.statTurns += msg.res.NumTurns - m.turnLiveTurns
+		m.statIn += msg.res.InputTokens - m.turnLiveIn
+		m.statOut += msg.res.OutputTokens - m.turnLiveOut
+		m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
 		// Drop any approval/ask/plan channels a turn was interrupted mid-prompt.
 		m.pending, m.askReply, m.planReply = nil, nil, nil
 		// Goal loop: run the next iteration (or the wrap-up turn) unless the goal
@@ -1939,6 +1954,10 @@ func (m *Model) answer(d permission.Decision) {
 // runs under a cancellable context so Esc can interrupt it. A standing /goal is
 // re-stated to the model each turn (Ralph-style).
 func (m *Model) startTurn(prompt string) tea.Cmd {
+	// Belt-and-braces: zero the per-turn live tally so a path that skipped
+	// doneMsg can't poison the next reconcile. The normal path also resets
+	// these on doneMsg, so this is just a guard.
+	m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
 	// Frame the turn. Goal-setting interviews the user and drafts the spec; an
 	// active loop's prompt is already goal.IterationPrompt (built by the caller),
 	// so leave it untouched; otherwise re-state any standing /goal (drift guard).
@@ -2001,6 +2020,18 @@ func (m *Model) renderEvent(ev agent.Event) {
 	case "compaction":
 		m.flushAssistant()
 		m.appendLine(bannerStyle.Render("· " + ev.Content))
+	case "usage":
+		// One inner LLM call's usage. Update both the session counters and the
+		// per-turn tally so doneMsg's reconciliation knows what we already
+		// counted. No scrollback line — the status bar at the bottom shows
+		// the running totals, and we don't want a stream of "+1234 tokens"
+		// noise during an iteration.
+		m.statTurns += ev.TurnDelta
+		m.statIn += ev.InputDelta
+		m.statOut += ev.OutputDelta
+		m.turnLiveTurns += ev.TurnDelta
+		m.turnLiveIn += ev.InputDelta
+		m.turnLiveOut += ev.OutputDelta
 	}
 }
 

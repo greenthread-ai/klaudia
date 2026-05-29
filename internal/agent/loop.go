@@ -32,13 +32,22 @@ type Emitter func(event Event)
 
 // Event is a streaming event emitted during a run (stream-json mode).
 type Event struct {
-	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_result"
+	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_result" | "usage" | "compaction"
 	Text      string `json:"text,omitempty"`        // assistant text
 	ToolName  string `json:"tool_name,omitempty"`   // tool_use / tool_result
 	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use / tool_result
 	Input     any    `json:"input,omitempty"`       // tool_use input
 	Content   string `json:"content,omitempty"`     // tool_result content
 	IsError   bool   `json:"is_error,omitempty"`    // tool_result error flag
+	// Usage deltas for one inner-loop LLM call, emitted after each streamTurn so
+	// the TUI/stream-json frontend can update token counters live during long
+	// goal iterations rather than waiting for the whole Run to return. The
+	// matching Result fields (NumTurns/InputTokens/OutputTokens) stay
+	// authoritative — the TUI reconciles against them at doneMsg so dropped
+	// usage events still settle correctly.
+	InputDelta  int64 `json:"input_delta,omitempty"`
+	OutputDelta int64 `json:"output_delta,omitempty"`
+	TurnDelta   int   `json:"turn_delta,omitempty"`
 }
 
 // Recorder persists conversation messages to a transcript as the loop runs.
@@ -188,6 +197,17 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		res.InputTokens += assistant.Usage.InputTokens
 		res.OutputTokens += assistant.Usage.OutputTokens
 		res.Text = finalText
+		// Live usage tick: emit per inner LLM call so frontends can update
+		// counters during long iterations. TurnDelta=1 mirrors res.NumTurns
+		// being incremented at the top of this loop iteration.
+		if emit != nil {
+			emit(Event{
+				Type:        "usage",
+				InputDelta:  assistant.Usage.InputTokens,
+				OutputDelta: assistant.Usage.OutputTokens,
+				TurnDelta:   1,
+			})
+		}
 
 		// Add the assistant turn to the running conversation. Persisting to the
 		// transcript is DEFERRED until we know it's either final (no tools) or
