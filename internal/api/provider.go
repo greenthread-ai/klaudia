@@ -62,6 +62,18 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	var acc anthropic.BetaMessage
 	for stream.Next() {
 		ev := stream.Current()
+		// Defend against an SDK bug in Accumulate: BetaRawContentBlockStopEvent
+		// and BetaRawMessageStopEvent both run `json.Marshal(content_block)` /
+		// `json.Marshal(acc)` to refresh the JSON.raw cache. If any content
+		// block's Input (a json.RawMessage) ended up zero-length — observed
+		// when a tool_use start event arrives with Input: null and no
+		// input_json_delta follows — the marshal fails with "unexpected end of
+		// JSON input" and the whole stream aborts even though we have a
+		// usable accumulated message. Losing 4M-token /goal iterations to one
+		// malformed event isn't OK, so we patch empty Input fields to "{}" —
+		// semantically the correct empty-object placeholder — before each
+		// stop event that triggers a marshal.
+		repairEmptyToolInputs(&acc, ev)
 		if err := acc.Accumulate(ev); err != nil {
 			return acc, err
 		}
@@ -71,4 +83,34 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 		}
 	}
 	return acc, stream.Err()
+}
+
+// repairEmptyToolInputs replaces empty-but-non-nil Input json.RawMessage values
+// in acc.Content with []byte("{}") just before the SDK runs json.Marshal on
+// the containing block(s). Only fires on the two stop events that trigger
+// marshaling — message_stop (marshals acc) and content_block_stop (marshals
+// the most recent block) — so normal accumulation isn't touched.
+//
+// Nil RawMessages are left alone on purpose — `RawMessage(nil).MarshalJSON()`
+// returns "null" cleanly, so the bug is specifically `[]byte{}` (length 0,
+// non-nil). Touching nil would convert "field absent" to "field present but
+// empty" semantically, which the SDK shouldn't see from us.
+//
+// Safe when acc.Content is empty (the loop does nothing).
+func repairEmptyToolInputs(acc *anthropic.BetaMessage, ev anthropic.BetaRawMessageStreamEventUnion) {
+	patch := func(cb *anthropic.BetaContentBlockUnion) {
+		if cb.Input != nil && len(cb.Input) == 0 {
+			cb.Input = []byte("{}")
+		}
+	}
+	switch ev.AsAny().(type) {
+	case anthropic.BetaRawMessageStopEvent:
+		for i := range acc.Content {
+			patch(&acc.Content[i])
+		}
+	case anthropic.BetaRawContentBlockStopEvent:
+		if n := len(acc.Content); n > 0 {
+			patch(&acc.Content[n-1])
+		}
+	}
 }
