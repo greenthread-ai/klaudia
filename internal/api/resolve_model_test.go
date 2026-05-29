@@ -29,3 +29,32 @@ func TestResolveModelAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestContextWindowResolution(t *testing.T) {
+	// Hybrid resolver for /stats and /doctor: positive config override always
+	// wins (the OpenAI-compat escape hatch), then the per-model table, then a
+	// fallback signalling we don't actually know.
+	tests := []struct {
+		name       string
+		model      string
+		override   int
+		wantLimit  int
+		wantSource string
+	}{
+		{"override wins over known model", "claude-opus-4-7", 8192, 8192, ContextSourceConfig},
+		{"override wins over unknown model", "openai/gpt-oss-120b", 8192, 8192, ContextSourceConfig},
+		{"alias resolves to known limit", "opus", 0, 200_000, ContextSourceModel},
+		{"full id matches known limit", "claude-sonnet-4-6", 0, 200_000, ContextSourceModel},
+		{"unknown model, no override → unknown", "openai/gpt-oss-120b", 0, 0, ContextSourceUnknown},
+		{"empty model + no override → DefaultModel's window", "", 0, 200_000, ContextSourceModel},
+		{"negative override is ignored", "opus", -1, 200_000, ContextSourceModel},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			limit, source := ContextWindow(tc.model, tc.override)
+			if limit != tc.wantLimit || source != tc.wantSource {
+				t.Errorf("ContextWindow(%q, %d) = (%d, %q), want (%d, %q)", tc.model, tc.override, limit, source, tc.wantLimit, tc.wantSource)
+			}
+		})
+	}
+}

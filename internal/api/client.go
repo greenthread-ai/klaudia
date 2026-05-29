@@ -56,6 +56,41 @@ var modelAliases = map[string]string{
 	"opus":   "claude-opus-4-7",
 }
 
+// modelContextWindows is the per-model input-token limit klaudia would actually
+// receive on a request, given the betas we ship today. The Claude 4.x lineup
+// supports 1M context via `context-1m-2025-08-07`, but DefaultBetas doesn't
+// enable it, so the honest reportable limit is 200K. Bump alongside DefaultBetas
+// if/when we opt into the 1M beta.
+var modelContextWindows = map[string]int{
+	"claude-opus-4-7":   200_000,
+	"claude-sonnet-4-6": 200_000,
+	"claude-haiku-4-5":  200_000,
+}
+
+// ContextWindow source labels for /stats and /doctor reporting.
+const (
+	ContextSourceConfig  = "config override"
+	ContextSourceModel   = "model default"
+	ContextSourceUnknown = "unknown — using compaction fallback"
+)
+
+// ContextWindow returns the effective input-token limit and a human-readable
+// source label. Precedence: an explicit positive override (cfg.ContextWindow,
+// the OpenAI-compat escape hatch) wins; otherwise the per-model table; finally
+// a generic "unknown" with the compaction fallback. Aliases ("opus", "sonnet")
+// resolve through ResolveModel so users see the same number regardless of how
+// they typed the model name.
+func ContextWindow(model string, override int) (limit int, source string) {
+	if override > 0 {
+		return override, ContextSourceConfig
+	}
+	resolved := string(ResolveModel(model))
+	if n, ok := modelContextWindows[resolved]; ok {
+		return n, ContextSourceModel
+	}
+	return 0, ContextSourceUnknown
+}
+
 // ResolveModel turns a CLI --model value into a model ID. Empty → DefaultModel.
 func ResolveModel(m string) anthropic.Model {
 	m = strings.TrimSpace(m)

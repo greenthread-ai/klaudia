@@ -97,6 +97,55 @@ func TestFormatIncludesMarks(t *testing.T) {
 	}
 }
 
+func TestRunContextWindowLine(t *testing.T) {
+	// Known limit: rendered with K/M suffix and the source label so users can
+	// tell whether their cfg.contextWindow override is in effect.
+	t.Run("known limit and source render", func(t *testing.T) {
+		got, ok := find(Run(Input{ContextWindow: 200_000, ContextSource: "model default"}), "context")
+		if !ok || !strings.Contains(got.Detail, "200K") || !strings.Contains(got.Detail, "model default") {
+			t.Errorf("context check = %+v ok=%v", got, ok)
+		}
+		if got.Status != StatusInfo {
+			t.Errorf("known limit should be informational, got %q", got.Status)
+		}
+	})
+	t.Run("override formatted", func(t *testing.T) {
+		got, ok := find(Run(Input{ContextWindow: 8192, ContextSource: "config override"}), "context")
+		if !ok || !strings.Contains(got.Detail, "8.2K") || !strings.Contains(got.Detail, "config override") {
+			t.Errorf("override check = %+v ok=%v", got, ok)
+		}
+	})
+	t.Run("unknown limit surfaces warning", func(t *testing.T) {
+		got, ok := find(Run(Input{ContextWindow: 0, ContextSource: "unknown — using compaction fallback"}), "context")
+		if !ok || got.Status != StatusWarn || !strings.Contains(got.Detail, "fallback") {
+			t.Errorf("unknown limit = %+v ok=%v", got, ok)
+		}
+	})
+	t.Run("absent when neither set", func(t *testing.T) {
+		if _, ok := find(Run(Input{}), "context"); ok {
+			t.Error("no context check expected when ContextWindow=0 and ContextSource=\"\"")
+		}
+	})
+}
+
+func TestFormatTokens(t *testing.T) {
+	tests := []struct {
+		in   int
+		want string
+	}{
+		{200_000, "200K"},
+		{1_000_000, "1M"},
+		{1_500_000, "1.5M"},
+		{8192, "8.2K"},
+		{900, "900"},
+	}
+	for _, tc := range tests {
+		if got := formatTokens(tc.in); got != tc.want {
+			t.Errorf("formatTokens(%d) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 // exerrNotFound is a sentinel "binary not found" error for the lookPath stub.
 var exerrNotFound = &exErr{}
 

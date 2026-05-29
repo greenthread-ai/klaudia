@@ -382,6 +382,34 @@ func TestGoalLoopMergeHintOnStop(t *testing.T) {
 	}
 }
 
+func TestFormatStats(t *testing.T) {
+	// Unknown limit (0) → no context suffix; users get the bare counters they
+	// had before so /stats still works on unmapped models.
+	t.Run("unknown limit omits suffix", func(t *testing.T) {
+		got := formatStats(3, 1500, 800, 0, 0, "")
+		if !strings.Contains(got, "turns=3") || !strings.Contains(got, "input_tokens=1500") {
+			t.Errorf("base counters missing: %q", got)
+		}
+		if strings.Contains(got, "context:") {
+			t.Errorf("context suffix should be omitted when limit=0: %q", got)
+		}
+	})
+	// Known limit → suffix shows resident vs limit, percentage, and source so
+	// users can tell at a glance whether they're close to autocompaction.
+	t.Run("known limit shows resident and source", func(t *testing.T) {
+		got := formatStats(5, 12345, 2000, 60000, 200000, "model default")
+		if !strings.Contains(got, "context: ~60000/200000") {
+			t.Errorf("expected resident/limit ratio: %q", got)
+		}
+		if !strings.Contains(got, "30%") {
+			t.Errorf("expected 30%% usage: %q", got)
+		}
+		if !strings.Contains(got, "model default") {
+			t.Errorf("expected source label: %q", got)
+		}
+	})
+}
+
 func TestPrepareFirstLoopTurnStubFix(t *testing.T) {
 	// Spec body mentions Phases 0–4 but the Progress tracker only stubs out
 	// 0–1 — exactly the huedoku failure mode. The first turn must be a

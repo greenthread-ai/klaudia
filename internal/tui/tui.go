@@ -29,6 +29,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/goal"
 	"github.com/greenthread-ai/klaudia/internal/memory"
@@ -61,6 +62,11 @@ type Session struct {
 	GitBranch   string      // current git branch (may be "")
 	Agents      []AgentInfo // built-in sub-agent types, for /agents
 	ExtraDirs   []string    // additional working dirs added via /add-dir
+	// ContextWindow is the input-token limit /stats reports against; resolved
+	// at startup via api.ContextWindow (config override > model default > 0).
+	// Zero means "unknown"; /stats omits the usage ratio in that case.
+	ContextWindow       int
+	ContextWindowSource string
 
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
@@ -1113,6 +1119,20 @@ func (m *Model) continueIteration() string {
 	return goal.WrapUpPrompt(m.loopSpecPath)
 }
 
+// formatStats renders the /stats line. When the context limit is known, the
+// caller passes the live estimated resident size (via compaction.EstimateTokens
+// over current history) and we surface it as "context: ~R/L (P%, source)".
+// Unknown limits omit the suffix rather than show a misleading percentage.
+// Extracted so the test can pin the format without standing up a Model.
+func formatStats(turns int, inTok, outTok int64, resident, ctxLimit int, ctxSource string) string {
+	base := fmt.Sprintf("Session: turns=%d  input_tokens=%d  output_tokens=%d", turns, inTok, outTok)
+	if ctxLimit <= 0 {
+		return base
+	}
+	pct := float64(resident) / float64(ctxLimit) * 100
+	return fmt.Sprintf("%s  context: ~%d/%d (%.0f%%, %s)", base, resident, ctxLimit, pct, ctxSource)
+}
+
 // appendMergeHint tells the user where the loop's work landed and how to merge
 // it (only when the loop actually moved onto a branch).
 func (m *Model) appendMergeHint() {
@@ -1271,8 +1291,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.startChoice("Manage MCP servers (Esc to leave as-is):", items)
 		return m, nil
 	case "/stats":
-		m.appendLine(bannerStyle.Render(fmt.Sprintf("Session: turns=%d  input_tokens=%d  output_tokens=%d",
-			m.statTurns, m.statIn, m.statOut)))
+		resident := compaction.EstimateTokens(m.history)
+		m.appendLine(bannerStyle.Render(formatStats(m.statTurns, m.statIn, m.statOut, resident, m.sess.ContextWindow, m.sess.ContextWindowSource)))
 	case "/allow", "/deny":
 		if len(args) == 0 {
 			m.appendLine(errStyle.Render("usage: " + cmd + " <rule>  e.g. " + cmd + " Bash(go test:*)"))

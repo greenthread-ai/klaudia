@@ -35,6 +35,11 @@ type Input struct {
 	AuthKind    string      // "oauth" | "api-key" | "none"
 	MCPServers  int         // configured MCP server count
 	LSPServers  []LSPServer // detected language servers
+	// Context-window facts resolved by the CLI (api.ContextWindow). Zero limit
+	// means the model isn't in our table and no config override was set — we
+	// fall back to compaction's default at request time.
+	ContextWindow int
+	ContextSource string
 	// MissingLSPHints are actionable suggestions for languages present in the
 	// project but lacking a server (e.g. "install gopls for go support").
 	MissingLSPHints []string
@@ -79,6 +84,15 @@ func Run(in Input) []Check {
 		model = "(default)"
 	}
 	add("provider", StatusInfo, provider+" — model "+model)
+
+	// Context window — show the limit klaudia will request against, plus where
+	// it came from, so users know whether their `contextWindow` config override
+	// is taking effect.
+	if in.ContextWindow > 0 {
+		add("context", StatusInfo, fmt.Sprintf("%s tokens (%s)", formatTokens(in.ContextWindow), in.ContextSource))
+	} else if in.ContextSource != "" {
+		add("context", StatusWarn, in.ContextSource)
+	}
 
 	// Config presence.
 	if in.ConfigFound {
@@ -125,6 +139,25 @@ func Run(in Input) []Check {
 	}
 
 	return checks
+}
+
+// formatTokens renders a token count compactly: "200K", "1M", or the raw
+// integer when smaller than 1K (uncommon for context windows but possible if a
+// user pins a tiny override). Doesn't aim for SI precision — just a readable
+// label in /doctor and /stats lines.
+func formatTokens(n int) string {
+	switch {
+	case n >= 1_000_000 && n%1_000_000 == 0:
+		return fmt.Sprintf("%dM", n/1_000_000)
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+	case n >= 1_000 && n%1_000 == 0:
+		return fmt.Sprintf("%dK", n/1_000)
+	case n >= 1_000:
+		return fmt.Sprintf("%.1fK", float64(n)/1_000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
 }
 
 // sandboxCheck reports whether the backend required by the configured sandbox

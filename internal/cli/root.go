@@ -105,6 +105,7 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 	for _, s := range servers {
 		lspServers = append(lspServers, doctor.LSPServer{Name: s.Bin, Language: s.Language, Version: s.Version})
 	}
+	ctxLimit, ctxSource := api.ContextWindow(string(model), cfg.ContextWindow)
 	in := doctor.Input{
 		Provider:        providerName(cfg),
 		Model:           string(model),
@@ -114,6 +115,8 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 		LSPServers:      lspServers,
 		MissingLSPHints: hints,
 		AuthKind:        "none",
+		ContextWindow:   ctxLimit,
+		ContextSource:   ctxSource,
 	}
 	if cfg.Provider == config.ProviderOpenAI {
 		if cfg.ResolveAPIKey() != "" {
@@ -777,22 +780,25 @@ func run(cmd *cobra.Command, opts *options) error {
 	// It drives the same loop, prompting the user to resolve permission asks.
 	if interactive {
 		// Shared settings so slash commands can read/change them between turns.
+		ctxLimit, ctxSource := api.ContextWindow(string(model), cfg.ContextWindow)
 		sess := &tui.Session{
 			// Effective model (flag or config default), never "" — otherwise a
 			// non-Anthropic provider would wrongly resolve to the Anthropic default.
-			SessionID:      sessionID,
-			Model:          modelStr,
-			ResolvedModel:  string(model),
-			Theme:          themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
-			PermissionMode: string(mode),
-			Memory:         memStore,
-			MCP:            mcpController{mgr: mcpMgr, ctx: ctx},
-			Skills:         tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
-			Provider:       providerName(cfg),
-			SandboxMode:    sandboxMode(cfg.Sandbox),
-			CWD:            cwd,
-			GitBranch:      gitBranch(cwd),
-			Agents:         tuiAgents(),
+			SessionID:           sessionID,
+			Model:               modelStr,
+			ResolvedModel:       string(model),
+			Theme:               themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
+			PermissionMode:      string(mode),
+			Memory:              memStore,
+			MCP:                 mcpController{mgr: mcpMgr, ctx: ctx},
+			Skills:              tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
+			Provider:            providerName(cfg),
+			SandboxMode:         sandboxMode(cfg.Sandbox),
+			CWD:                 cwd,
+			GitBranch:           gitBranch(cwd),
+			Agents:              tuiAgents(),
+			ContextWindow:       ctxLimit,
+			ContextWindowSource: ctxSource,
 			Compact: func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 				return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 					return loop.Compact(ctx, history, api.ResolveModel(modelStr))
