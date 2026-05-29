@@ -13,22 +13,32 @@ import (
 // "unexpected end of JSON input" error the user saw. After repair it succeeds.
 // If a future SDK version stops crashing on this — e.g. by normalising empty
 // RawMessage internally — this test will reveal it (the "before" branch will
-// stop failing) and we can remove repairEmptyToolInputs.
+// stop failing) and we can remove repairInvalidToolInputs.
 func TestRepairFixesActualSDKMarshalFailure(t *testing.T) {
-	block := anthropic.BetaContentBlockUnion{Type: "tool_use", Input: []byte("")}
-
-	// Before repair: the SDK marshal fails for the documented reason.
-	if _, err := json.Marshal(block); err == nil {
-		t.Fatal("expected json.Marshal to fail on empty non-nil RawMessage; the SDK may have fixed the bug — consider removing repairEmptyToolInputs")
-	} else if !strings.Contains(err.Error(), "unexpected end of JSON input") {
-		t.Fatalf("error shape changed; got %v", err)
+	// Pin the workaround to the three real shapes that fail upstream — if any
+	// of these stops failing in a future SDK / stdlib, the "before" branch
+	// will break and we'll know we can shrink or remove the repair.
+	shapes := map[string][]byte{
+		"empty non-nil":   []byte(""),
+		"truncated":       []byte(`{"argument":`),
+		"unclosed string": []byte(`{"x": "abc`),
 	}
+	for name, shape := range shapes {
+		t.Run(name, func(t *testing.T) {
+			block := anthropic.BetaContentBlockUnion{Type: "tool_use", Input: shape}
 
-	// After repair (driven via repair on a message_stop event): marshal succeeds.
-	acc := anthropic.BetaMessage{Content: []anthropic.BetaContentBlockUnion{block}}
-	repairEmptyToolInputs(&acc, anthropic.BetaRawMessageStreamEventUnion{Type: "message_stop"})
-	if _, err := json.Marshal(acc.Content[0]); err != nil {
-		t.Fatalf("marshal after repair must succeed; got %v", err)
+			if _, err := json.Marshal(block); err == nil {
+				t.Fatal("expected json.Marshal to fail; SDK/stdlib may have changed — consider removing repairInvalidToolInputs")
+			} else if !strings.Contains(err.Error(), "unexpected end of JSON input") {
+				t.Fatalf("error shape changed; got %v", err)
+			}
+
+			acc := anthropic.BetaMessage{Content: []anthropic.BetaContentBlockUnion{block}}
+			repairInvalidToolInputs(&acc, anthropic.BetaRawMessageStreamEventUnion{Type: "message_stop"})
+			if _, err := json.Marshal(acc.Content[0]); err != nil {
+				t.Fatalf("marshal after repair must succeed; got %v", err)
+			}
+		})
 	}
 }
 
@@ -39,34 +49,43 @@ func TestRepairFixesActualSDKMarshalFailure(t *testing.T) {
 // followed), the marshal returns "unexpected end of JSON input" and the whole
 // stream aborts mid-iteration. The repair must patch any such Input to "{}"
 // BEFORE the marshal happens so the rest of the message is preserved.
-func TestRepairEmptyToolInputsOnMessageStop(t *testing.T) {
-	// json.RawMessage marshaling:
-	//   nil         → "null" (fine — left alone, preserves "field absent")
-	//   []byte{}    → ERROR  (the bug — patched to "{}")
-	//   []byte("…") → as-is  (fine — left alone)
+func TestRepairInvalidToolInputsOnMessageStop(t *testing.T) {
+	// Three invalid shapes all produce the same "unexpected end of JSON input"
+	// error from the encoder; all three need patching. Nil and valid are left
+	// alone.
 	acc := anthropic.BetaMessage{
 		Content: []anthropic.BetaContentBlockUnion{
-			{Type: "tool_use", Input: []byte("")},         // the failure mode
-			{Type: "tool_use", Input: []byte(`{"x": 1}`)}, // valid — must NOT be touched
-			{Type: "tool_use", Input: nil},                // nil — must NOT be touched (marshals as null)
-			{Type: "text"},                                // non-tool block with nil Input — must NOT be touched
+			{Type: "tool_use", Input: []byte("")},             // empty non-nil
+			{Type: "tool_use", Input: []byte(`{"argument":`)}, // truncated mid-key (max_tokens cutoff)
+			{Type: "tool_use", Input: []byte(`{"x": "abc`)},   // unclosed string
+			{Type: "tool_use", Input: []byte(`{"x": 1}`)},     // valid — must NOT be touched
+			{Type: "tool_use", Input: nil},                    // nil — must NOT be touched (marshals as null)
+			{Type: "text"},                                    // non-tool block, nil Input — must NOT be touched
 		},
 	}
 	stopEv := anthropic.BetaRawMessageStreamEventUnion{Type: "message_stop"}
 
-	repairEmptyToolInputs(&acc, stopEv)
+	repairInvalidToolInputs(&acc, stopEv)
 
-	if string(acc.Content[0].Input) != "{}" {
-		t.Errorf("empty non-nil Input must be patched to {}; got %q", acc.Content[0].Input)
+	want := []struct {
+		idx  int
+		want string
+	}{
+		{0, "{}"},
+		{1, "{}"},
+		{2, "{}"},
+		{3, `{"x": 1}`},
 	}
-	if string(acc.Content[1].Input) != `{"x": 1}` {
-		t.Errorf("valid Input must not be touched; got %q", acc.Content[1].Input)
+	for _, tc := range want {
+		if got := string(acc.Content[tc.idx].Input); got != tc.want {
+			t.Errorf("Content[%d].Input = %q, want %q", tc.idx, got, tc.want)
+		}
 	}
-	if acc.Content[2].Input != nil {
-		t.Errorf("nil Input must stay nil (marshals as null); got %q", acc.Content[2].Input)
+	if acc.Content[4].Input != nil {
+		t.Errorf("nil Input must stay nil (marshals as null); got %q", acc.Content[4].Input)
 	}
-	if acc.Content[3].Input != nil {
-		t.Errorf("non-tool block nil Input must stay nil; got %q", acc.Content[3].Input)
+	if acc.Content[5].Input != nil {
+		t.Errorf("non-tool block nil Input must stay nil; got %q", acc.Content[5].Input)
 	}
 }
 
@@ -82,7 +101,7 @@ func TestRepairEmptyToolInputsOnContentBlockStop(t *testing.T) {
 	}
 	stopEv := anthropic.BetaRawMessageStreamEventUnion{Type: "content_block_stop"}
 
-	repairEmptyToolInputs(&acc, stopEv)
+	repairInvalidToolInputs(&acc, stopEv)
 
 	if string(acc.Content[0].Input) != "" {
 		t.Errorf("earlier block must not be touched by content_block_stop; got %q", acc.Content[0].Input)
@@ -103,7 +122,7 @@ func TestRepairEmptyToolInputsNoOpOnOtherEvents(t *testing.T) {
 			Content: []anthropic.BetaContentBlockUnion{{Type: "tool_use", Input: []byte("")}},
 		}
 		ev := anthropic.BetaRawMessageStreamEventUnion{Type: eventType}
-		repairEmptyToolInputs(&acc, ev)
+		repairInvalidToolInputs(&acc, ev)
 		if string(acc.Content[0].Input) != "" {
 			t.Errorf("event %q must not trigger repair; Input was modified to %q", eventType, acc.Content[0].Input)
 		}
@@ -116,6 +135,6 @@ func TestRepairEmptyToolInputsNoOpOnEmptyContent(t *testing.T) {
 	acc := anthropic.BetaMessage{}
 	for _, eventType := range []string{"message_stop", "content_block_stop"} {
 		ev := anthropic.BetaRawMessageStreamEventUnion{Type: eventType}
-		repairEmptyToolInputs(&acc, ev) // must not panic
+		repairInvalidToolInputs(&acc, ev) // must not panic
 	}
 }
