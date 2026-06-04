@@ -837,7 +837,7 @@ var commandList = []cmdInfo{
 	{"/allow", "<rule>", "Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)"},
 	{"/deny", "<rule>", "Auto-deny a tool rule this session"},
 	{"/goal", "[run N|stop|text]", "No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder"},
-	{"/memory", "[add …]", "Show recalled memory, or add a note"},
+	{"/memory", "[add|recent|stale|tag|promote|supersede]", "Show / audit / curate memory; no args views the index"},
 	{"/mcp", "", "List MCP servers; reconnect or disconnect them"},
 	{"/stats", "", "Show session stats (turns, tokens)"},
 	{"/status", "", "Show the current session settings"},
@@ -1314,26 +1314,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 	case "/memory":
 		// Memory is always an interface value; headless mode gets memory.Disabled()
-		// which returns "" for reads and ErrDisabled for writes — see below.
-		if len(args) > 0 && strings.ToLower(args[0]) == "add" {
-			note := strings.TrimSpace(strings.TrimPrefix(strings.Join(args, " "), args[0]))
-			if err := m.sess.Memory.Add(note); err != nil {
-				if errors.Is(err, memory.ErrDisabled) {
-					m.appendLine(errStyle.Render("memory is not available in this run"))
-				} else {
-					m.appendLine(errStyle.Render("memory: " + err.Error()))
-				}
-			} else {
-				m.appendLine(bannerStyle.Render("Saved to memory."))
-			}
-		} else {
-			idx, _ := m.sess.Memory.Index()
-			if strings.TrimSpace(idx) == "" {
-				m.appendLine(bannerStyle.Render("No memory yet. /memory add <note> to save one."))
-			} else {
-				m.appendLine(bannerStyle.Render(strings.TrimSpace(idx)))
-			}
-		}
+		// which returns "" for reads and ErrDisabled for writes.
+		m.appendLine(m.handleMemoryCommand(args))
 	case "/mcp":
 		var servers []MCPServerInfo
 		if m.sess.MCP != nil {
