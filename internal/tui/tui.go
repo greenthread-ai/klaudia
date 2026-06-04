@@ -626,11 +626,11 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.follow = m.vp.AtBottom()
 		return m, nil
 	case tea.KeyCtrlU:
-		m.vp.HalfViewUp()
+		m.vp.HalfPageUp()
 		m.follow = false
 		return m, nil
 	case tea.KeyCtrlD:
-		m.vp.HalfViewDown()
+		m.vp.HalfPageDown()
 		m.follow = m.vp.AtBottom()
 		return m, nil
 	}
@@ -2118,13 +2118,20 @@ func (m *Model) markdown(s string) string {
 // phaseLabel returns the verb shown in the spinner row. Cancellation
 // outranks everything (so Esc/queued-Enter gets the dominant feedback);
 // otherwise we surface whatever phase renderEvent last set, defaulting to
-// "working" before the first event has landed in a turn.
+// "working" before the first event has landed in a turn. When in an active
+// tool, the elapsed wall-clock of that specific call is appended so a
+// long-running tool is visible separately from the turn timer — for the
+// "ran two quick tools, then this one stalled" case the spinner reads
+// "running Bash 42s… 1m12s" and the user can tell the LATEST call is the
+// stalled one rather than the whole turn.
 func (m *Model) phaseLabel() string {
 	switch {
 	case m.cancelling:
 		return "cancelling"
 	case m.phase == "":
 		return "working"
+	case m.activeToolName != "":
+		return "running " + m.activeToolName + " " + fmtDuration(time.Since(m.activeToolStart))
 	default:
 		return m.phase
 	}

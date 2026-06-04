@@ -552,6 +552,28 @@ func TestPhaseLabelDefaults(t *testing.T) {
 	}
 }
 
+func TestPhaseLabelShowsToolElapsed(t *testing.T) {
+	// When a tool is in flight, phaseLabel appends its wall-clock elapsed so
+	// the spinner reads "running Bash 2s… <turn time>". The user can tell
+	// the LATEST call is the long-running one rather than the whole turn.
+	m := newTestModel()
+	m.phase = "running Bash"
+	m.activeToolName = "Bash"
+	m.activeToolStart = time.Now().Add(-2 * time.Second)
+	got := m.phaseLabel()
+	if !strings.HasPrefix(got, "running Bash ") {
+		t.Errorf("expected 'running Bash <elapsed>'; got %q", got)
+	}
+	if !strings.Contains(got, "s") {
+		t.Errorf("expected a duration suffix; got %q", got)
+	}
+	// Cancellation still outranks: no "running Bash" leakage during cancel.
+	m.cancelling = true
+	if got := m.phaseLabel(); got != "cancelling" {
+		t.Errorf("cancelling must outrank active tool; got %q", got)
+	}
+}
+
 func TestReconcileUsageNoDoubleCount(t *testing.T) {
 	// Three scenarios for the doneMsg reconciliation arithmetic:
 	tests := []struct {
