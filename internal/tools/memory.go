@@ -24,18 +24,18 @@ type MemoryInput struct {
 // instead of re-deriving or re-asking.
 type Memory struct {
 	schema *schema.Schema
-	store  *memory.Store
+	store  memory.Store
 	cwd    string
 }
 
 // NewMemory constructs the Memory tool backed by store.
-func NewMemory(store *memory.Store) (*Memory, error) {
+func NewMemory(store memory.Store) (*Memory, error) {
 	return NewMemoryForProject(store, "")
 }
 
 // NewMemoryForProject constructs the Memory tool with a project cwd for
 // project-scope writes to .klaudia/KNOWLEDGE.md.
-func NewMemoryForProject(store *memory.Store, cwd string) (*Memory, error) {
+func NewMemoryForProject(store memory.Store, cwd string) (*Memory, error) {
 	s, err := schema.For[MemoryInput]()
 	if err != nil {
 		return nil, fmt.Errorf("memory: build schema: %w", err)

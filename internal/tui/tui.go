@@ -50,7 +50,7 @@ type Session struct {
 	Model          string         // model alias or full ID ("" = default)
 	ResolvedModel  string         // concrete model id for display
 	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
-	Memory         *memory.Store  // backs /memory (may be nil)
+	Memory         memory.Store   // backs /memory (may be nil)
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
 	Theme          string         // markdown render theme ("" = dark)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>

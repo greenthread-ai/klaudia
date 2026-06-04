@@ -269,7 +269,7 @@ func TestSearchIncludesDetailFiles(t *testing.T) {
 	}
 }
 
-func addNotes(t *testing.T, store *Store, notes ...string) {
+func addNotes(t *testing.T, store Store, notes ...string) {
 	t.Helper()
 	for _, note := range notes {
 		if err := store.Add(note); err != nil {

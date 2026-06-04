@@ -12,14 +12,10 @@ import (
 	"time"
 )
 
-// Store appends and reads memory notes from a MEMORY.md file in a given directory.
-type Store struct {
+// fsStore is the filesystem-backed Store implementation. The Store interface
+// and the New() constructor that returns it live in store.go.
+type fsStore struct {
 	dir string
-}
-
-// New returns a Store rooted at dir (e.g. ".klaudia").
-func New(dir string) *Store {
-	return &Store{dir: dir}
 }
 
 // KnowledgePath returns the project KNOWLEDGE.md path for cwd.
@@ -34,12 +30,12 @@ func AddKnowledge(cwd, text string) error {
 }
 
 // Path is the MEMORY.md file path.
-func (s *Store) Path() string {
+func (s *fsStore) Path() string {
 	return filepath.Join(s.dir, "MEMORY.md")
 }
 
 // Index returns the MEMORY.md contents, or "" if it does not exist yet.
-func (s *Store) Index() (string, error) {
+func (s *fsStore) Index() (string, error) {
 	contents, err := os.ReadFile(s.Path())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -51,7 +47,7 @@ func (s *Store) Index() (string, error) {
 }
 
 // Entries returns the individual memory notes from MEMORY.md.
-func (s *Store) Entries() ([]string, error) {
+func (s *fsStore) Entries() ([]string, error) {
 	contents, err := os.ReadFile(s.Path())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -74,7 +70,7 @@ func (s *Store) Entries() ([]string, error) {
 // detail note; matches from a detail file are tagged "name.md: <line>" so the
 // model knows which file to open for the full context. An empty query returns
 // just the index entries (use FilePointers / Read to reach detail notes).
-func (s *Store) Search(query string) ([]string, error) {
+func (s *fsStore) Search(query string) ([]string, error) {
 	entries, err := s.Entries()
 	if err != nil {
 		return nil, err
@@ -133,7 +129,7 @@ const linkedSectionHeader = "## Linked memory"
 // Add appends a timestamped bullet to MEMORY.md (creating the directory and a
 // header on first write), then refreshes the linked-memory section. Empty
 // (whitespace-only) text is rejected.
-func (s *Store) Add(text string) error {
+func (s *fsStore) Add(text string) error {
 	if err := appendBullet(s.Path(), "# Memory\n\n", text); err != nil {
 		return err
 	}
@@ -147,7 +143,7 @@ func (s *Store) Add(text string) error {
 // removed or renamed note is reflected on the next sync. When no detail notes
 // exist it strips any stale section; it never creates MEMORY.md just to hold an
 // empty section.
-func (s *Store) SyncLinks() error {
+func (s *fsStore) SyncLinks() error {
 	pointers := s.FilePointers()
 
 	existing, err := os.ReadFile(s.Path())
@@ -209,7 +205,7 @@ func stripLinkedSection(content string) string {
 // These let the index *reference* detail notes rather than inline them: recall
 // stays cheap as memory grows, and the model opens a file (via Read or a Memory
 // search) only when it's relevant.
-func (s *Store) FilePointers() []string {
+func (s *fsStore) FilePointers() []string {
 	paths, err := filepath.Glob(filepath.Join(s.dir, "memory", "*.md"))
 	if err != nil {
 		return nil
@@ -257,7 +253,7 @@ func fileHook(path string) string {
 func appendBullet(path, header, text string) error {
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return errors.New("memory text is empty")
+		return ErrEmpty
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
