@@ -552,6 +552,39 @@ func TestPhaseLabelDefaults(t *testing.T) {
 	}
 }
 
+func TestRenderQueuedHintSurfacesMessage(t *testing.T) {
+	// The queued message snippet must actually appear in the rendered hint
+	// — the previous all-dim version made it easy to miss during long turns
+	// (real session: a "ive setup caddy…" message got lost when a Bash tool
+	// stuck the goroutine and the hint visually blended with the spinner).
+	m := newTestModel()
+	m.queued = "deploy to staging when this is done"
+	out := m.renderQueuedHint()
+	if !strings.Contains(out, "deploy to staging") {
+		t.Errorf("queued message body must be visible; got %q", out)
+	}
+	if !strings.Contains(out, "queued:") || !strings.Contains(out, "Enter sends") {
+		t.Errorf("queued hint should keep the label and key hints; got %q", out)
+	}
+}
+
+func TestRenderQueuedHintLineCountForMultiline(t *testing.T) {
+	// Multi-line queued messages get a "(N lines · …)" annotation so the
+	// user knows they're not seeing the whole thing.
+	m := newTestModel()
+	m.queued = "line one\nline two\nline three"
+	out := m.renderQueuedHint()
+	if !strings.Contains(out, "3 lines") {
+		t.Errorf("multi-line queued message should show line count; got %q", out)
+	}
+	// Single-line: no line-count prefix.
+	m.queued = "just one"
+	out = m.renderQueuedHint()
+	if strings.Contains(out, "lines") {
+		t.Errorf("single-line queued message must not show line count; got %q", out)
+	}
+}
+
 func TestPhaseLabelShowsToolElapsed(t *testing.T) {
 	// When a tool is in flight, phaseLabel appends its wall-clock elapsed so
 	// the spinner reads "running Bash 2s… <turn time>". The user can tell

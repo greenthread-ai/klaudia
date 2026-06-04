@@ -2115,6 +2115,24 @@ func (m *Model) markdown(s string) string {
 	return strings.TrimRight(out, "\n")
 }
 
+// renderQueuedHint composes the "queued: <message>" line shown under the
+// input while the model is working. The message snippet is rendered in the
+// user-input style (Bold/accent2) so it's scannable at a glance — the
+// previous all-dim version was easy to miss during long turns, and the
+// session that lost a "ive setup caddy…" message to a stuck Bash showed
+// the cost. Wrapper text (label, key hints, line count) stays in hint
+// style so the visual weight goes to the queued content itself.
+func (m *Model) renderQueuedHint() string {
+	snippet := oneline(m.queued, 60)
+	label := hintStyle.Render("⏎ queued: ")
+	body := userStyle.Render(snippet)
+	tail := "  " + hintStyle.Render("(Enter sends · ↑ edits)")
+	if lines := strings.Count(m.queued, "\n") + 1; lines > 1 {
+		tail = "  " + hintStyle.Render(fmt.Sprintf("(%d lines · Enter sends · ↑ edits)", lines))
+	}
+	return label + body + tail
+}
+
 // phaseLabel returns the verb shown in the spinner row. Cancellation
 // outranks everything (so Esc/queued-Enter gets the dominant feedback);
 // otherwise we surface whatever phase renderEvent last set, defaulting to
@@ -2258,7 +2276,7 @@ func (m *Model) bottomView() string {
 		m.input.SetHeight(m.inputHeight())
 		bottom = work + "\n" + m.input.View()
 		if m.queued != "" {
-			bottom += "\n" + hintStyle.Render(fmt.Sprintf("⏎ queued: %q · Enter to send now · ↑ to edit", oneline(m.queued, 48)))
+			bottom += "\n" + m.renderQueuedHint()
 		}
 	case stateAwaitingPermission:
 		bottom = askStyle.Render(m.permissionPrompt())
