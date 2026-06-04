@@ -1,5 +1,7 @@
 package memory
 
+import "time"
+
 // Store is klaudia's substitutable memory backend. The current filesystem
 // implementation lives in fs.go (fsStore); a future Postgres implementation
 // against ../pgmarkdown will land behind the same interface — see the
@@ -42,6 +44,15 @@ type Store interface {
 	// current detail notes. Idempotent — only writes when the file would
 	// change.
 	SyncLinks() error
+
+	// Recent returns detail notes touched within the window, newest first.
+	// "Touched" means file mtime on the FS backend, indexed updated_at on
+	// PG. Empty slice (not nil error) when nothing matches.
+	Recent(within time.Duration) ([]Entry, error)
+
+	// Stale returns detail notes whose mtime / updated_at is older than the
+	// threshold — candidates for review, promotion, or archive. Oldest first.
+	Stale(olderThan time.Duration) ([]Entry, error)
 }
 
 // New returns the default filesystem-backed Store rooted at dir (typically
