@@ -79,6 +79,7 @@ func (c *Container) Run(ctx context.Context, req Request) (Response, error) {
 	}
 
 	cmd := exec.CommandContext(ctx, c.Runtime, c.buildArgs(req)...)
+	cmd.WaitDelay = postCancelWait // bound post-cancel I/O drain — see runArgv comment
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

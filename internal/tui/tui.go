@@ -642,6 +642,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.queued != "" && m.turnCancel != nil {
 				m.turnCancel()
 				m.turnCancel = nil
+				m.cancelling = true // bottom view swaps to "cancelling…" so user sees the cancel registered
 				m.appendLine(toolStyle.Render("  ⊘ interrupting to send your queued message…"))
 			}
 			return m, nil

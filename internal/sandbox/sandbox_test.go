@@ -35,6 +35,32 @@ func TestLocalRunTimeout(t *testing.T) {
 	}
 }
 
+func TestLocalRunDoesNotHangOnLeakedChildPipes(t *testing.T) {
+	// Repro of the real-world hang: a tool call like `npm run dev & sleep 1`
+	// backgrounds a long-lived child that inherits bash's stdout/stderr fds.
+	// The bash exits immediately (sleep 1 finishes), but cmd.Run would wait
+	// forever for the child's pipes to close — they never do, because the
+	// child keeps running. WaitDelay must bound the wait. We emulate it with
+	// `sh -c "(sleep 30 &) ; exit 0"` — the subshell backgrounds a 30s sleep
+	// that inherits stdout/stderr; without WaitDelay, Run blocks for ~30s.
+	// With WaitDelay = 5s, the call returns in well under 10s.
+	l := NewLocal()
+	deadline := time.Now().Add(15 * time.Second)
+	done := make(chan struct{})
+	go func() {
+		_, _ = l.Run(context.Background(), Request{Command: "(sleep 30 &) ; exit 0"})
+		close(done)
+	}()
+	select {
+	case <-done:
+		if remaining := time.Until(deadline); remaining < 5*time.Second {
+			t.Errorf("Run returned but took close to or past the 15s deadline (remaining=%s) — WaitDelay may not be firing", remaining)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("Run hung past 15s with a backgrounded child holding the pipes — WaitDelay missing")
+	}
+}
+
 func TestLocalRunWorkingDir(t *testing.T) {
 	dir := t.TempDir()
 	l := NewLocal()
