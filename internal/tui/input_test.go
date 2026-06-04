@@ -552,6 +552,30 @@ func TestPhaseLabelDefaults(t *testing.T) {
 	}
 }
 
+func TestStatusLineShowsContextUsage(t *testing.T) {
+	// When ContextWindow and residentTokens are both known, the status bar
+	// surfaces `· ctx N%` so the user sees context pressure rising without
+	// having to type /stats. Skipped when either is unknown (no fake number).
+	m := newTestModel()
+	m.sess.ContextWindow = 200_000
+	m.residentTokens = 50_000
+	if got := m.statusLine(); !strings.Contains(got, "ctx 25%") {
+		t.Errorf("expected `ctx 25%%` (50K/200K); got %q", got)
+	}
+	// Unknown window: no indicator.
+	m.sess.ContextWindow = 0
+	if got := m.statusLine(); strings.Contains(got, "ctx ") {
+		t.Errorf("unknown window must not show ctx indicator; got %q", got)
+	}
+	// Known window but no resident estimate (fresh session pre-first-turn):
+	// also no indicator — "ctx 0%" would be misleading.
+	m.sess.ContextWindow = 200_000
+	m.residentTokens = 0
+	if got := m.statusLine(); strings.Contains(got, "ctx ") {
+		t.Errorf("zero resident estimate must not show indicator; got %q", got)
+	}
+}
+
 func TestRenderQueuedHintSurfacesMessage(t *testing.T) {
 	// The queued message snippet must actually appear in the rendered hint
 	// — the previous all-dim version made it easy to miss during long turns

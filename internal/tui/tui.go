@@ -283,8 +283,15 @@ type Model struct {
 	lastEventAt     time.Time
 	activeToolName  string
 	activeToolStart time.Time
-	lastResult      string // full content of the most recent tool result (for /last)
-	queued          string // a message typed while the model is working (sent on completion)
+	// residentTokens is the last estimated input-context size, refreshed at
+	// doneMsg after history is reconciled. The status bar reads this as a
+	// `· ctx N%` indicator against sess.ContextWindow so users see context
+	// pressure without having to type /stats. Computed once per turn end
+	// rather than per render — compaction.EstimateTokens walks the whole
+	// history and isn't cheap on long sessions.
+	residentTokens int
+	lastResult     string // full content of the most recent tool result (for /last)
+	queued         string // a message typed while the model is working (sent on completion)
 	// Pending AskUserQuestion.
 	askReply    chan string
 	askOptions  []tools.AskOption
@@ -516,6 +523,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.res.Messages != nil {
 			m.history = msg.res.Messages
 		}
+		// Refresh the cached resident-tokens estimate for the status bar's
+		// `· ctx N%` indicator. Doing it here (after history is reconciled)
+		// avoids walking history on every render, which gets expensive on
+		// long sessions — the indicator updates once per turn, which is
+		// the natural rhythm for context-pressure feedback anyway.
+		m.residentTokens = compaction.EstimateTokens(m.history)
 		// Reconcile live usage with the authoritative Result. If every "usage"
 		// event made it through, these deltas are zero (no double-count); if
 		// some were dropped due to channel pressure, this catches the gap up
