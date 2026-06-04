@@ -19,14 +19,22 @@ type fsStore struct {
 }
 
 // KnowledgePath returns the project KNOWLEDGE.md path for cwd.
+//
+// Deprecated: construct a Knowledge via NewKnowledge(filepath.Join(cwd,
+// ".klaudia")) and call its Path() method. Kept as a thin shim so the
+// LLM-facing tool surface in internal/tools/memory.go doesn't churn.
 func KnowledgePath(cwd string) string {
-	return filepath.Join(cwd, ".klaudia", "KNOWLEDGE.md")
+	return NewKnowledge(filepath.Join(cwd, ".klaudia")).Path()
 }
 
 // AddKnowledge appends a timestamped bullet to .klaudia/KNOWLEDGE.md, creating
-// .klaudia and a header on first write. Empty text is rejected.
+// .klaudia and a header on first write. Empty text returns ErrEmpty.
+//
+// Deprecated: construct a Knowledge via NewKnowledge(filepath.Join(cwd,
+// ".klaudia")) and call its Add() method. Kept as a thin shim so the
+// LLM-facing tool surface in internal/tools/memory.go doesn't churn.
 func AddKnowledge(cwd, text string) error {
-	return appendBullet(KnowledgePath(cwd), "# Project Knowledge\n\n", text)
+	return NewKnowledge(filepath.Join(cwd, ".klaudia")).Add(text)
 }
 
 // Path is the MEMORY.md file path.

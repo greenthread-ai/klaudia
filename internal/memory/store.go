@@ -58,6 +58,19 @@ type Store interface {
 	// Files without frontmatter (the common case today) match nothing and
 	// are absent from the result rather than producing an error.
 	ByTag(tag string) ([]Entry, error)
+
+	// Promote copies the body (frontmatter stripped) of a detail note into
+	// KNOWLEDGE.md and rewrites the source's frontmatter to mark it
+	// superseded. Keeps the source file present so the audit trail walks;
+	// callers can prune via Stale + an external archive policy.
+	// ErrNotFound when name doesn't exist.
+	Promote(name string) error
+
+	// Supersede records that oldName's content is replaced by newName.
+	// Rewrites both files' frontmatter (status / supersedes / superseded_by)
+	// idempotently — calling twice has no further effect. ErrNotFound if
+	// either name doesn't exist.
+	Supersede(oldName, newName string) error
 }
 
 // New returns the default filesystem-backed Store rooted at dir (typically

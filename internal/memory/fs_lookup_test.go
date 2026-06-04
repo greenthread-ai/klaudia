@@ -7,6 +7,17 @@ import (
 	"time"
 )
 
+// mustParseTime parses an RFC3339 time and aborts the test on a bad
+// fixture. Shared by tests that need a stable timestamp for writeNote.
+func mustParseTime(t *testing.T, s string) time.Time {
+	t.Helper()
+	tt, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatalf("mustParseTime(%q): %v", s, err)
+	}
+	return tt
+}
+
 // writeNote drops a memory/<name>.md file under dir and stamps its mtime to
 // `at`, so tests can drive Recent/Stale without sleeps or wall-clock races.
 func writeNote(t *testing.T, dir, name, body string, at time.Time) string {
