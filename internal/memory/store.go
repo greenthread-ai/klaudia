@@ -53,6 +53,11 @@ type Store interface {
 	// Stale returns detail notes whose mtime / updated_at is older than the
 	// threshold — candidates for review, promotion, or archive. Oldest first.
 	Stale(olderThan time.Duration) ([]Entry, error)
+
+	// ByTag returns detail notes whose frontmatter `tags` list contains tag.
+	// Files without frontmatter (the common case today) match nothing and
+	// are absent from the result rather than producing an error.
+	ByTag(tag string) ([]Entry, error)
 }
 
 // New returns the default filesystem-backed Store rooted at dir (typically
