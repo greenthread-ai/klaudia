@@ -11,12 +11,16 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/memory"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 func newTestModel() *Model {
 	in := newPromptInput()
-	return &Model{input: in, sess: &Session{}, histPos: 0, follow: true}
+	// memory.Disabled() in the session keeps /memory tests branchless —
+	// Add returns ErrDisabled, reads return "", no nil deref on the new
+	// interface-typed Session.Memory field.
+	return &Model{input: in, sess: &Session{Memory: memory.Disabled()}, histPos: 0, follow: true}
 }
 
 func TestHistoryNavigation(t *testing.T) {

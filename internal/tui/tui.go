@@ -50,7 +50,7 @@ type Session struct {
 	Model          string         // model alias or full ID ("" = default)
 	ResolvedModel  string         // concrete model id for display
 	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
-	Memory         memory.Store   // backs /memory (may be nil)
+	Memory         memory.Store   // backs /memory; never nil — set to memory.Disabled() when unavailable
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
 	Theme          string         // markdown render theme ("" = dark)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
@@ -1313,14 +1313,16 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(bannerStyle.Render("Standing goal set; it will be re-stated each turn:\n" + m.sess.Goal))
 		}
 	case "/memory":
-		if m.sess.Memory == nil {
-			m.appendLine(errStyle.Render("memory is not available"))
-			break
-		}
+		// Memory is always an interface value; headless mode gets memory.Disabled()
+		// which returns "" for reads and ErrDisabled for writes — see below.
 		if len(args) > 0 && strings.ToLower(args[0]) == "add" {
 			note := strings.TrimSpace(strings.TrimPrefix(strings.Join(args, " "), args[0]))
 			if err := m.sess.Memory.Add(note); err != nil {
-				m.appendLine(errStyle.Render("memory: " + err.Error()))
+				if errors.Is(err, memory.ErrDisabled) {
+					m.appendLine(errStyle.Render("memory is not available in this run"))
+				} else {
+					m.appendLine(errStyle.Render("memory: " + err.Error()))
+				}
 			} else {
 				m.appendLine(bannerStyle.Render("Saved to memory."))
 			}

@@ -11,3 +11,9 @@ var ErrEmpty = errors.New("memory text is empty")
 // doesn't exist under memory/. Callers can errors.Is check to differentiate
 // "user typo" from "permission / I/O".
 var ErrNotFound = errors.New("memory: note not found")
+
+// ErrDisabled is returned by Disabled() Store's write methods to signal
+// that the caller is running headless without a writable memory backend.
+// Reads on Disabled() return zero values, not this error — the read path
+// is intentionally branchless.
+var ErrDisabled = errors.New("memory: backend disabled")
