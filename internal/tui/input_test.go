@@ -398,6 +398,158 @@ func TestLiveUsageEventsUpdateStats(t *testing.T) {
 		t.Errorf("per-turn tally: turns=%d in=%d out=%d, want 2/2000/450",
 			m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut)
 	}
+	// Regression insurance: usage events also bump the activity clock so
+	// the quiet-detector resets each time the model heartbeats. (Phase is
+	// covered by TestPhaseTransitions / TestUsageDoesNotClobberRunningPhase
+	// — the no-prior-phase startup case is artificial since startTurn
+	// always sets phase to "thinking" before any event arrives.)
+	if m.lastEventAt.IsZero() {
+		t.Error("lastEventAt should be set after any event")
+	}
+}
+
+func TestPhaseTransitions(t *testing.T) {
+	// Drive the four event types through renderEvent in a representative
+	// order and assert the phase tracker keeps up — this is what the spinner
+	// row's phase indicator reads to show "running Bash"/"streaming"/etc.
+	m := newTestModel()
+
+	m.renderEvent(agent.Event{Type: "tool_use", ToolName: "Bash"})
+	if m.phase != "running Bash" || m.activeToolName != "Bash" {
+		t.Errorf("after tool_use: phase=%q activeTool=%q, want running Bash / Bash", m.phase, m.activeToolName)
+	}
+	if m.activeToolStart.IsZero() {
+		t.Error("activeToolStart should be stamped at tool_use")
+	}
+
+	m.renderEvent(agent.Event{Type: "tool_result", ToolName: "Bash", Content: "ok"})
+	if m.phase != "thinking" || m.activeToolName != "" {
+		t.Errorf("after tool_result: phase=%q activeTool=%q, want thinking / empty", m.phase, m.activeToolName)
+	}
+
+	m.renderEvent(agent.Event{Type: "assistant", Text: "hi"})
+	if m.phase != "streaming" {
+		t.Errorf("after assistant text: phase=%q, want streaming", m.phase)
+	}
+
+	m.renderEvent(agent.Event{Type: "compaction", Content: "summarised"})
+	if m.phase != "compacting" {
+		t.Errorf("after compaction: phase=%q, want compacting", m.phase)
+	}
+
+	// Reset to streaming, then a usage event should demote back to thinking
+	// (one inner LLM call done; if more text is coming, the next assistant
+	// event will flip back to streaming).
+	m.phase = "streaming"
+	m.renderEvent(agent.Event{Type: "usage", InputDelta: 100, OutputDelta: 50, TurnDelta: 1})
+	if m.phase != "thinking" {
+		t.Errorf("usage after streaming should demote: phase=%q, want thinking", m.phase)
+	}
+}
+
+func TestUsageDoesNotClobberRunningPhase(t *testing.T) {
+	// Subtle case: a usage event arriving between tool_use and tool_result
+	// (the model finishing its pre-tool turn while we still wait for the
+	// tool to run) mustn't demote "running Bash" to "thinking" — the spinner
+	// would briefly lie about what's in flight.
+	m := newTestModel()
+	m.renderEvent(agent.Event{Type: "tool_use", ToolName: "Bash"})
+	m.renderEvent(agent.Event{Type: "usage", InputDelta: 1, OutputDelta: 1, TurnDelta: 1})
+	if m.phase != "running Bash" {
+		t.Errorf("usage during tool dispatch should preserve phase: got %q, want running Bash", m.phase)
+	}
+}
+
+func TestToolLatencySuffixInResult(t *testing.T) {
+	// tool_result should suffix the tool name with the wall-clock duration
+	// of the matched tool_use, so users see fast vs slow tools without
+	// reading timestamps. The suffix lives on the scrollback line itself
+	// (not the prior tool_use line) so we don't reflow the viewport.
+	m := newTestModel()
+	m.activeToolName = "Bash"
+	m.activeToolStart = time.Now().Add(-250 * time.Millisecond)
+	m.renderEvent(agent.Event{Type: "tool_result", ToolName: "Bash", Content: "done"})
+	out := m.transcript.String()
+	if !strings.Contains(out, "Bash · ") {
+		t.Errorf("expected tool-name-then-duration suffix in result; got %q", out)
+	}
+	// Activity tracking must clear after the result so a following turn
+	// doesn't accidentally suffix a stale tool name onto an unrelated event.
+	if m.activeToolName != "" {
+		t.Errorf("activeToolName should be cleared after tool_result; got %q", m.activeToolName)
+	}
+}
+
+func TestToolLatencyMismatchedNameLeavesResultClean(t *testing.T) {
+	// If a tool_result arrives for a different tool than the one we last
+	// dispatched (event reordering, sub-agent interleaving), don't apply
+	// the duration — it'd be wrong. The result line should render cleanly.
+	m := newTestModel()
+	m.activeToolName = "Bash"
+	m.activeToolStart = time.Now().Add(-1 * time.Second)
+	m.renderEvent(agent.Event{Type: "tool_result", ToolName: "Read", Content: "ok"})
+	out := m.transcript.String()
+	if strings.Contains(out, "Read · ") {
+		t.Errorf("mismatched tool_result must not get duration suffix; got %q", out)
+	}
+}
+
+func TestQuietSuffixInBottomView(t *testing.T) {
+	// bottomView surfaces a "quiet for…" suffix when no events have arrived
+	// for 30s — this is the visible signal of "is it stuck?" the user
+	// specifically asked for. Re-computed every spinner tick.
+	m := newTestModel()
+	m.state = stateRunning
+	m.lastEventAt = time.Now().Add(-45 * time.Second)
+	if out := m.bottomView(); !strings.Contains(out, "quiet for") {
+		t.Errorf("expected 'quiet for' after >30s silence; got %q", out)
+	}
+	// Within the 30s window, no suffix.
+	m.lastEventAt = time.Now()
+	if out := m.bottomView(); strings.Contains(out, "quiet for") {
+		t.Errorf("fresh activity should hide the quiet suffix; got %q", out)
+	}
+	// Never-touched lastEventAt (e.g. very first render before any event)
+	// shouldn't trigger the suffix either — zero-time means "no info yet".
+	m.lastEventAt = time.Time{}
+	if out := m.bottomView(); strings.Contains(out, "quiet for") {
+		t.Errorf("zero lastEventAt should suppress the quiet suffix; got %q", out)
+	}
+}
+
+func TestCancellingSuppressesQuietSuffix(t *testing.T) {
+	// During cancellation the phase label is "cancelling" and the quiet
+	// suffix must NOT appear — "cancelling… quiet for 12s" is a worse
+	// signal than just "cancelling…".
+	m := newTestModel()
+	m.state = stateRunning
+	m.cancelling = true
+	m.lastEventAt = time.Now().Add(-90 * time.Second)
+	out := m.bottomView()
+	if strings.Contains(out, "quiet for") {
+		t.Errorf("cancelling must suppress the quiet suffix; got %q", out)
+	}
+	if !strings.Contains(out, "cancelling") {
+		t.Errorf("cancelling label should be rendered; got %q", out)
+	}
+}
+
+func TestPhaseLabelDefaults(t *testing.T) {
+	// Empty phase pre-event-1 falls back to the generic "working" so the
+	// spinner row never shows a bare "… 3s" gap before the first event.
+	m := newTestModel()
+	if got := m.phaseLabel(); got != "working" {
+		t.Errorf("empty phase should default to 'working'; got %q", got)
+	}
+	m.cancelling = true
+	if got := m.phaseLabel(); got != "cancelling" {
+		t.Errorf("cancelling outranks phase; got %q", got)
+	}
+	m.cancelling = false
+	m.phase = "streaming"
+	if got := m.phaseLabel(); got != "streaming" {
+		t.Errorf("phase passthrough: got %q, want streaming", got)
+	}
 }
 
 func TestReconcileUsageNoDoubleCount(t *testing.T) {

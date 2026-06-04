@@ -273,8 +273,18 @@ type Model struct {
 	turnLiveTurns int
 	turnLiveIn    int64
 	turnLiveOut   int64
-	lastResult    string // full content of the most recent tool result (for /last)
-	queued        string // a message typed while the model is working (sent on completion)
+	// Phase tracking for the spinner row. phase reflects the most recent
+	// meaningful event ("streaming", "running <Tool>", "compacting",
+	// "thinking"); lastEventAt is bumped on every event the renderer sees,
+	// used by bottomView to surface a "quiet for…" suffix when an API call
+	// sits silent. activeTool* track the most recent in-flight tool_use so
+	// tool_result can compute elapsed and append a duration to the result.
+	phase           string
+	lastEventAt     time.Time
+	activeToolName  string
+	activeToolStart time.Time
+	lastResult      string // full content of the most recent tool result (for /last)
+	queued          string // a message typed while the model is working (sent on completion)
 	// Pending AskUserQuestion.
 	askReply    chan string
 	askOptions  []tools.AskOption
@@ -514,6 +524,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statIn += msg.res.InputTokens - m.turnLiveIn
 		m.statOut += msg.res.OutputTokens - m.turnLiveOut
 		m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
+		// Clear phase state too so a queued-message follow-up turn starts
+		// fresh — a stale "running Bash" or "quiet for 90s" would otherwise
+		// briefly flash on the next turn's first render before its own
+		// startTurn reset.
+		m.phase = ""
+		m.lastEventAt = time.Time{}
+		m.activeToolName = ""
+		m.activeToolStart = time.Time{}
 		// Drop any approval/ask/plan channels a turn was interrupted mid-prompt.
 		m.pending, m.askReply, m.planReply = nil, nil, nil
 		// Goal loop: run the next iteration (or the wrap-up turn) unless the goal
@@ -1959,6 +1977,13 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	// doneMsg can't poison the next reconcile. The normal path also resets
 	// these on doneMsg, so this is just a guard.
 	m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
+	// Phase tracking: start every turn in "thinking" and mark the clock now
+	// so the quiet-detector doesn't fire on a fresh turn that legitimately
+	// takes 30s+ to receive its first event (some providers stream slowly).
+	m.phase = "thinking"
+	m.lastEventAt = time.Now()
+	m.activeToolName = ""
+	m.activeToolStart = time.Time{}
 	// Frame the turn. Goal-setting interviews the user and drafts the spec; an
 	// active loop's prompt is already goal.IterationPrompt (built by the caller),
 	// so leave it untouched; otherwise re-state any standing /goal (drift guard).
@@ -1985,9 +2010,13 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 }
 
 func (m *Model) renderEvent(ev agent.Event) {
+	// Bump the activity clock on every event — bottomView reads this to
+	// decide whether to surface the "quiet for…" stuck-state suffix.
+	m.lastEventAt = time.Now()
 	switch ev.Type {
 	case "assistant":
 		m.appendText(ev.Text) // streamed deltas (raw until flushed)
+		m.phase = "streaming"
 	case "tool_use":
 		m.flushAssistant() // the assistant message before a tool call is complete
 		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
@@ -1995,6 +2024,9 @@ func (m *Model) renderEvent(ev agent.Event) {
 		if diff := toolDiff(ev.ToolName, ev.Input); diff != "" {
 			m.appendLine(diff)
 		}
+		m.phase = "running " + ev.ToolName
+		m.activeToolName = ev.ToolName
+		m.activeToolStart = time.Now()
 	case "tool_result":
 		m.flushAssistant()
 		m.lastResult = ev.Content // keep the full result for /last (#3)
@@ -2003,11 +2035,18 @@ func (m *Model) renderEvent(ev agent.Event) {
 			s = "completed"
 		}
 		style := toolStyle
-		prefix := "✓ " + ev.ToolName + ": "
+		prefix := "✓ " + ev.ToolName
 		if ev.IsError {
 			style = errStyle
-			prefix = "✗ " + ev.ToolName + ": "
+			prefix = "✗ " + ev.ToolName
 		}
+		// Append the tool's wall-clock duration to its result line so users
+		// can see whether a tool was fast or slow without reading timestamps.
+		// Matched on ToolName so a misordered event can't suffix the wrong tool.
+		if m.activeToolName != "" && m.activeToolName == ev.ToolName {
+			prefix += " · " + fmtDuration(time.Since(m.activeToolStart))
+		}
+		prefix += ": "
 		// Syntax-highlight fenced code in results (#5), else truncated plain text.
 		if !ev.IsError && strings.Contains(s, "```") && len(s) <= 4000 {
 			m.appendLine(toolStyle.Render("  " + prefix))
@@ -2018,9 +2057,12 @@ func (m *Model) renderEvent(ev agent.Event) {
 			}
 			m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(s, "\n", "\n  ")))
 		}
+		m.activeToolName = ""
+		m.phase = "thinking"
 	case "compaction":
 		m.flushAssistant()
 		m.appendLine(bannerStyle.Render("· " + ev.Content))
+		m.phase = "compacting"
 	case "usage":
 		// One inner LLM call's usage. Update both the session counters and the
 		// per-turn tally so doneMsg's reconciliation knows what we already
@@ -2033,6 +2075,13 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.turnLiveTurns += ev.TurnDelta
 		m.turnLiveIn += ev.InputDelta
 		m.turnLiveOut += ev.OutputDelta
+		// Demote streaming → thinking when a usage event arrives mid-turn —
+		// it signals the model has finished one inner call. Don't clobber a
+		// "running <Tool>" phase, since a usage event between tool_use and
+		// tool_result is just the assistant's pre-tool turn-finalisation.
+		if m.phase == "streaming" {
+			m.phase = "thinking"
+		}
 	}
 }
 
@@ -2064,6 +2113,21 @@ func (m *Model) markdown(s string) string {
 		return s
 	}
 	return strings.TrimRight(out, "\n")
+}
+
+// phaseLabel returns the verb shown in the spinner row. Cancellation
+// outranks everything (so Esc/queued-Enter gets the dominant feedback);
+// otherwise we surface whatever phase renderEvent last set, defaulting to
+// "working" before the first event has landed in a turn.
+func (m *Model) phaseLabel() string {
+	switch {
+	case m.cancelling:
+		return "cancelling"
+	case m.phase == "":
+		return "working"
+	default:
+		return m.phase
+	}
 }
 
 // buildGlamour (re)builds the Markdown renderer for the given viewport width.
@@ -2168,13 +2232,22 @@ func (m *Model) bottomView() string {
 	var bottom string
 	switch m.state {
 	case stateRunning:
-		label := " working… "
+		label := " " + m.phaseLabel() + "… "
 		hint := "  (esc to interrupt)"
 		if m.cancelling {
-			label = " cancelling… "
 			hint = "  (Ctrl+C to force quit)"
 		}
 		work := m.spin.View() + label + bannerStyle.Render(m.sw.View()) + hintStyle.Render(hint)
+		// Surface "stuck" by tracking time since the last event the renderer
+		// saw. Suppressed during cancellation — "cancelling… quiet for 12s"
+		// is a worse signal than "cancelling…". 30s threshold picked so a
+		// fast turn never sees the suffix; a long API call or tool-bound
+		// stall does. Re-evaluated every spinner tick (~80ms).
+		if !m.cancelling && !m.lastEventAt.IsZero() {
+			if q := time.Since(m.lastEventAt); q > 30*time.Second {
+				work += hintStyle.Render(fmt.Sprintf("  · quiet for %s", fmtDuration(q)))
+			}
+		}
 		m.input.SetHeight(m.inputHeight())
 		bottom = work + "\n" + m.input.View()
 		if m.queued != "" {
