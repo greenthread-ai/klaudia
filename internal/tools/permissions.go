@@ -7,7 +7,7 @@ import "github.com/greenthread-ai/klaudia/internal/permission"
 // in read-only plan mode, denied under dontAsk, otherwise ask. (bypass is
 // handled upstream by permission.Check.)
 func editClassDecision(pctx permission.Context) permission.Decision {
-	switch pctx.Mode {
+	switch pctx.Mode() {
 	case permission.ModeAcceptEdits:
 		return permission.Decision{Behavior: permission.Allow}
 	case permission.ModePlan:
@@ -23,7 +23,7 @@ func editClassDecision(pctx permission.Context) permission.Decision {
 // (Bash): acceptEdits does NOT auto-accept execution, plan blocks it, dontAsk
 // denies, otherwise ask.
 func execClassDecision(pctx permission.Context) permission.Decision {
-	switch pctx.Mode {
+	switch pctx.Mode() {
 	case permission.ModePlan:
 		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; command execution is not allowed"}
 	case permission.ModeDontAsk:
@@ -46,7 +46,7 @@ func allowAlways(permission.Context) permission.Decision {
 // otherwise ask (acceptEdits does not auto-accept — that's only for file
 // edits). Users can pre-approve with an allow rule, e.g. /allow WebSearch.
 func networkClassDecision(pctx permission.Context) permission.Decision {
-	switch pctx.Mode {
+	switch pctx.Mode() {
 	case permission.ModePlan:
 		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; web/network access is not allowed"}
 	case permission.ModeDontAsk:

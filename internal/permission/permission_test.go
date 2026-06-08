@@ -15,7 +15,7 @@ func (f fakeTool) CheckPermissions(Context, PermissionRequest) Decision {
 
 func TestCheckDenyRuleWins(t *testing.T) {
 	pctx := Context{
-		Mode: ModeBypassPermissions, // even bypass must lose to an explicit deny
+		Mode: StaticMode(ModeBypassPermissions), // even bypass must lose to an explicit deny
 		Deny: []Rule{{Tool: "Bash", Specifier: "rm -rf:*"}},
 	}
 	tool := fakeTool{name: "Bash", intrinsic: Decision{Behavior: Allow}}
@@ -26,7 +26,7 @@ func TestCheckDenyRuleWins(t *testing.T) {
 }
 
 func TestCheckBypassAllows(t *testing.T) {
-	pctx := Context{Mode: ModeBypassPermissions}
+	pctx := Context{Mode: StaticMode(ModeBypassPermissions)}
 	tool := fakeTool{name: "Bash", intrinsic: Decision{Behavior: Ask}}
 	if got := Check(pctx, tool, PermissionRequest{Specifier: "ls"}); got.Behavior != Allow {
 		t.Errorf("bypass behavior = %q, want allow", got.Behavior)
@@ -35,7 +35,7 @@ func TestCheckBypassAllows(t *testing.T) {
 
 func TestCheckAllowRule(t *testing.T) {
 	pctx := Context{
-		Mode:  ModeDefault,
+		Mode:  StaticMode(ModeDefault),
 		Allow: []Rule{{Tool: "Bash", Specifier: "git status"}},
 	}
 	tool := fakeTool{name: "Bash", intrinsic: Decision{Behavior: Ask}}
@@ -49,10 +49,34 @@ func TestCheckAllowRule(t *testing.T) {
 }
 
 func TestCheckFallsThroughToIntrinsic(t *testing.T) {
-	pctx := Context{Mode: ModeDefault}
+	pctx := Context{Mode: StaticMode(ModeDefault)}
 	tool := fakeTool{name: "Write", intrinsic: Decision{Behavior: Ask}}
 	if got := Check(pctx, tool, PermissionRequest{}); got.Behavior != Ask {
 		t.Errorf("behavior = %q, want ask", got.Behavior)
+	}
+}
+
+// TestCheckModeIsLive pins the actual bug we fixed: a Context built once at
+// turn start used to freeze the mode for every inner permission check, so a
+// `/mode bypass` mid-turn didn't take effect until the next TUI turn —
+// painful in a long /goal iteration. Now Mode is a function that re-reads
+// the live session setting on every Check.
+func TestCheckModeIsLive(t *testing.T) {
+	current := ModeDefault
+	pctx := Context{Mode: func() Mode { return current }}
+	tool := fakeTool{name: "Write", intrinsic: Decision{Behavior: Ask}}
+
+	if got := Check(pctx, tool, PermissionRequest{}); got.Behavior != Ask {
+		t.Fatalf("default mode: behavior = %q, want ask", got.Behavior)
+	}
+	// Flip the live source between calls — same Context, new mode picked up.
+	current = ModeBypassPermissions
+	if got := Check(pctx, tool, PermissionRequest{}); got.Behavior != Allow {
+		t.Errorf("after live flip to bypass: behavior = %q, want allow", got.Behavior)
+	}
+	current = ModeDefault
+	if got := Check(pctx, tool, PermissionRequest{}); got.Behavior != Ask {
+		t.Errorf("after live flip back to default: behavior = %q, want ask", got.Behavior)
 	}
 }
 

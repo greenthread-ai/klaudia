@@ -666,7 +666,8 @@ func run(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		return fmt.Errorf("--disallowedTools/permissions.deny: %w", err)
 	}
-	permCtx := permission.Context{Mode: mode, Allow: allowRules, Deny: denyRules}
+	// Headless path: the mode is fixed for the lifetime of this command.
+	permCtx := permission.Context{Mode: permission.StaticMode(mode), Allow: allowRules, Deny: denyRules}
 	// Refresh MEMORY.md's links to the .klaudia/memory/*.md detail notes before
 	// building the prompt, so recall surfaces them (best-effort; idempotent).
 	_ = memory.New(filepath.Join(cwd, ".klaudia")).SyncLinks()
@@ -810,9 +811,17 @@ func run(cmd *cobra.Command, opts *options) error {
 			},
 		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
-			// Rebuild the permission context from the live session mode each turn
-			// so ExitPlanMode (which flips sess.PermissionMode) takes effect.
-			turnPerm := permission.Context{Mode: permission.Mode(sess.PermissionMode), Allow: allowRules, Deny: denyRules}
+			// Permission mode reads live from the session every check, so a
+			// /mode bypass (or ExitPlanMode flipping out of plan) takes effect
+			// on the very next tool dispatch inside the agent loop — not just
+			// at the next TUI turn boundary. The Context itself is rebuilt
+			// here so the rule lists stay snapshot-stable for the duration of
+			// this turn, but the mode probe is live.
+			turnPerm := permission.Context{
+				Mode:  func() permission.Mode { return permission.Mode(sess.PermissionMode) },
+				Allow: allowRules,
+				Deny:  denyRules,
+			}
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,
 				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
