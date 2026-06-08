@@ -104,6 +104,17 @@ func StaticMode(m Mode) func() Mode {
 	return func() Mode { return m }
 }
 
+// CurrentMode returns c.Mode() with a nil-safe default of ModeDefault. Use
+// this instead of calling c.Mode() directly — it keeps tests that construct
+// a zero-value Context (e.g. Options{}, no Permission set) compatible with
+// the live-mode refactor.
+func CurrentMode(c Context) Mode {
+	if c.Mode == nil {
+		return ModeDefault
+	}
+	return c.Mode()
+}
+
 // IntrinsicChecker is implemented by a tool to express its own permission
 // stance given the mode (e.g. Read always allows; Edit allows under acceptEdits
 // but asks under default). It is consulted only after rule/mode short-circuits.
@@ -169,7 +180,7 @@ func Check(pctx Context, tool IntrinsicChecker, req PermissionRequest) Decision 
 	if anyMatch(pctx.Deny, name, req.Specifier) {
 		return Decision{Behavior: Deny, Message: "denied by permission rule"}
 	}
-	if pctx.Mode() == ModeBypassPermissions {
+	if CurrentMode(pctx) == ModeBypassPermissions {
 		return Decision{Behavior: Allow}
 	}
 	if anyMatch(pctx.Allow, name, req.Specifier) {

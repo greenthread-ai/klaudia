@@ -403,31 +403,57 @@ const repeatFailureLimit = 2
 // or produces a different error. The point: identical-args retry detection
 // misses "same mistake, different values" — like Read called repeatedly with
 // `line_start`/`line_end` (wrong field names) but new line numbers each time.
+//
+// `firstInput`/`varied` track whether the model actually changed its inputs
+// across the failing calls. If it did, the failure is almost certainly
+// environmental (shell wedged, network down, disk full) rather than a
+// tool-input bug — the model is varying its guesses in good faith and still
+// hitting the same wall. shortCircuit uses the flag to choose between two
+// directive messages.
 type errStreak struct {
-	sig   string // last error message text
-	count int    // consecutive occurrences of sig
+	sig        string // last error message text
+	count      int    // consecutive occurrences of sig
+	firstInput string // raw JSON of the input on the first failure in this streak
+	varied     bool   // true once a same-sig failure arrived with a different input
 }
 
 // bumpErrStreak records a new failure for tool. If the message matches the
-// prior signature, the count grows; otherwise the streak starts over.
-func bumpErrStreak(streaks map[string]errStreak, tool, msg string) {
+// prior signature, the count grows and the input-varied flag tracks whether
+// the model is changing inputs across calls. Otherwise the streak starts over.
+func bumpErrStreak(streaks map[string]errStreak, tool, msg, input string) {
 	prev := streaks[tool]
 	if prev.sig == msg {
 		prev.count++
+		if input != prev.firstInput {
+			prev.varied = true
+		}
 	} else {
-		prev = errStreak{sig: msg, count: 1}
+		prev = errStreak{sig: msg, count: 1, firstInput: input}
 	}
 	streaks[tool] = prev
 }
 
-// repeatedShapeFailureMsg is the directive returned when loop-breaker B fires:
-// the tool keeps producing the same error and the next attempt would too.
-// Quoting the recurring error in the message forces the model to confront the
-// real problem rather than guess again.
+// repeatedShapeFailureMsg is the directive returned when loop-breaker B fires
+// AND the model kept submitting the same input — classic "stop guessing" case.
+// Quoting the recurring error forces the model to confront the real problem
+// rather than retry with cosmetic variations.
 func repeatedShapeFailureMsg(tool string, n int, sig string) string {
 	return fmt.Sprintf(
 		"%s has failed with the SAME error %d times in a row. Stop calling it until you've understood the error below — guessing different values for the same wrong call won't help.\n\n--- recurring error ---\n%s",
 		tool, n, sig,
+	)
+}
+
+// envFailureMsg is the directive returned when loop-breaker B fires but the
+// model HAD varied its inputs across the failing calls. The error shape is
+// stable while the inputs aren't — the env, not the call, is broken. Telling
+// the model to "stop guessing" in this case is actively misleading (it WAS
+// trying different things) and pushes it into useless workaround loops.
+// Suggest concrete recovery moves instead.
+func envFailureMsg(tool string, n int, sig string) string {
+	return fmt.Sprintf(
+		"%s has failed %d times in a row with the same error shape across DIFFERENT inputs. This looks like an environment issue (shell wedged, leaked background process, network unreachable, filesystem broken) rather than a tool-input problem — varying the inputs more won't help. Options: (a) reset the relevant state (e.g. KillShell for a stuck Bash; restart a stuck server); (b) try a different tool that doesn't depend on the broken substrate; (c) ask the user. Stop retrying %s with new inputs.\n\n--- recurring error ---\n%s",
+		tool, n, tool, sig,
 	)
 }
 
@@ -448,9 +474,10 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	}
 
 	key := tu.Name + "\x00" + string(raw)
+	rawStr := string(raw)
 	errResult := func(msg string) anthropic.BetaContentBlockParamUnion {
 		failures[key]++
-		bumpErrStreak(errStreaks, tu.Name, msg)
+		bumpErrStreak(errStreaks, tu.Name, msg, rawStr)
 		if emit != nil {
 			emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
 		}
@@ -463,14 +490,17 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		return errResult(repeatedFailureMsg(tu.Name, failures[key]))
 	}
 	// Loop-breaker B: the same tool has produced the same KIND of error for
-	// `repeatFailureLimit` consecutive calls (different args, same mistake —
-	// e.g. a weaker model retrying Read with new line numbers but always with
-	// the wrong parameter names). Short-circuit with a directive that quotes
-	// the recurring error so the model has to read it.
+	// `repeatFailureLimit` consecutive calls. Two cases — identical inputs (the
+	// model is in a guessing loop) or varied inputs (the environment is wedged
+	// and the same error shape comes back regardless). Different directives.
 	if streak := errStreaks[tu.Name]; streak.count >= repeatFailureLimit {
 		// Use shortCircuit() so we don't keep growing the streak on each fired
 		// short-circuit (the model isn't actually trying — we're refusing).
-		return shortCircuit(emit, tu, repeatedShapeFailureMsg(tu.Name, streak.count, streak.sig))
+		msg := repeatedShapeFailureMsg(tu.Name, streak.count, streak.sig)
+		if streak.varied {
+			msg = envFailureMsg(tu.Name, streak.count, streak.sig)
+		}
+		return shortCircuit(emit, tu, msg)
 	}
 
 	tool, ok := l.tools.Lookup(tu.Name)
@@ -539,7 +569,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	}
 	if isErr {
 		failures[key]++
-		bumpErrStreak(errStreaks, tu.Name, content)
+		bumpErrStreak(errStreaks, tu.Name, content, rawStr)
 	} else {
 		// A clean run resets both counters: this exact call's retry count and
 		// the per-tool same-shape streak (the tool clearly isn't fundamentally

@@ -16,7 +16,7 @@ import (
 // modes, blocked in plan/dontAsk. (bypass is handled upstream.) MCP tools are
 // external code, so they are never auto-allowed by mode alone.
 func mcpPermission(pctx permission.Context) permission.Decision {
-	switch pctx.Mode() {
+	switch permission.CurrentMode(pctx) {
 	case permission.ModePlan:
 		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; MCP tools are not allowed"}
 	case permission.ModeDontAsk:
