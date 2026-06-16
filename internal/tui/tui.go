@@ -2058,8 +2058,18 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.phase = "thinking"
 	case "compaction":
 		m.flushAssistant()
-		m.appendLine(bannerStyle.Render("· " + ev.Content))
-		m.phase = "compacting"
+		if ev.Content == "" {
+			// Start of a slow (model-based) autocompact — show progress until
+			// the matching done banner arrives. Microcompact never sends this.
+			m.phase = "compacting"
+		} else {
+			// Completion banner. The compaction is already finished by the time
+			// this arrives; what follows is the model turn, so leave the phase
+			// as "thinking" rather than stranding it on "compacting" while we
+			// wait on the (post-compaction, still large) request's first token.
+			m.appendLine(bannerStyle.Render("· " + ev.Content))
+			m.phase = "thinking"
+		}
 	case "usage":
 		// One inner LLM call's usage. Update both the session counters and the
 		// per-turn tally so doneMsg's reconciliation knows what we already

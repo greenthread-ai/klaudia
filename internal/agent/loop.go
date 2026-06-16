@@ -282,6 +282,13 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 
 	if os.Getenv("DISABLE_AUTO_COMPACT") == "" &&
 		compaction.ShouldAutocompact(compaction.EstimateTokens(messages), opts.ContextWindow) {
+		// Autocompact is a model call that runs silently (emit=nil), so signal
+		// its start with a contentless "compaction" event — the frontend shows
+		// "compacting…" for the duration. Microcompact above is instant and
+		// skips this: it only drops the done banner below.
+		if emit != nil {
+			emit(Event{Type: "compaction"})
+		}
 		if out, ok := l.autocompact(ctx, messages, opts); ok {
 			messages = out
 			if emit != nil {

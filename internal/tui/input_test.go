@@ -436,9 +436,18 @@ func TestPhaseTransitions(t *testing.T) {
 		t.Errorf("after assistant text: phase=%q, want streaming", m.phase)
 	}
 
-	m.renderEvent(agent.Event{Type: "compaction", Content: "summarised"})
+	// A contentless compaction event marks the start of a slow autocompact and
+	// shows "compacting…" for the duration.
+	m.renderEvent(agent.Event{Type: "compaction"})
 	if m.phase != "compacting" {
-		t.Errorf("after compaction: phase=%q, want compacting", m.phase)
+		t.Errorf("after compaction start: phase=%q, want compacting", m.phase)
+	}
+	// The done banner (microcompact, or autocompact completion) reports finished
+	// work — the phase must fall back to "thinking" (the model turn that follows)
+	// rather than stranding on "compacting" while we wait on its first token.
+	m.renderEvent(agent.Event{Type: "compaction", Content: "summarised"})
+	if m.phase != "thinking" {
+		t.Errorf("after compaction banner: phase=%q, want thinking", m.phase)
 	}
 
 	// Reset to streaming, then a usage event should demote back to thinking
