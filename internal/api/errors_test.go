@@ -349,6 +349,50 @@ func TestFriendlyError429SessionLimitAdvisesNotToRetry(t *testing.T) {
 	}
 }
 
+func TestFriendlyError429LongContextCreditsAdvisesNotToRetry(t *testing.T) {
+	// The long-context-tier credits 429: an entitlement/billing gate, so the
+	// "set KLAUDIA_MAX_RETRIES" and OAuth-sharing hints are both wrong. Detect
+	// the shape and swap in the add-credits / shrink-context advice instead.
+	body := []byte(`{"error":{"type":"rate_limit_error","message":"Usage credits are required for long context requests."}}`)
+	var anthErr anthropic.Error
+	if err := anthErr.UnmarshalJSON(body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	anthErr.StatusCode = 429
+
+	got := FriendlyError(&anthErr)
+	if !strings.Contains(got, "Usage credits are required") {
+		t.Errorf("upstream long-context-credits message must be surfaced; got %q", got)
+	}
+	if !strings.Contains(got, "Retries won't help") {
+		t.Errorf("must advise against retrying; got %q", got)
+	}
+	if !strings.Contains(got, "contextWindow") || !strings.Contains(got, "/compact") {
+		t.Errorf("must point at the shrink-context fix; got %q", got)
+	}
+	for _, forbidden := range []string{"token is in use by another session", "KLAUDIA_MAX_RETRIES"} {
+		if strings.Contains(got, forbidden) {
+			t.Errorf("should not suggest %q for a long-context-credits 429; got %q", forbidden, got)
+		}
+	}
+}
+
+func TestIsLongContextCreditsRecognition(t *testing.T) {
+	if !isLongContextCredits("Usage credits are required for long context requests.") {
+		t.Error("should recognise the long-context-credits shape")
+	}
+	// Must not over-match a plain throttle or a generic credits message.
+	for _, in := range []string{
+		"You've hit your session limit · resets 12:40am",
+		"Insufficient credits on your account",
+		"long context window is large",
+	} {
+		if isLongContextCredits(in) {
+			t.Errorf("should not match: %q", in)
+		}
+	}
+}
+
 func TestIsSessionLimitRecognition(t *testing.T) {
 	for _, in := range []string{
 		"You've hit your session limit · resets 12:40am",

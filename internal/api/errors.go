@@ -53,6 +53,15 @@ func FriendlyError(err error) string {
 					if isSessionLimit(detail) {
 						return out + ": " + detail + " (Retries won't help — wait for the reset time shown, switch to a key-based provider, or sign in with a different account.)"
 					}
+					// Long-context-tier credits gate ("Usage credits are required
+					// for long context requests"): an entitlement/billing wall, not
+					// a transient throttle, so retrying is futile and the
+					// OAuth-sharing hint is wrong. Point at the two real fixes —
+					// add credits, or shrink the request below the long-context
+					// threshold via earlier autocompaction / /compact.
+					if isLongContextCredits(detail) {
+						return out + ": " + detail + " (Retries won't help — this needs pay-as-you-go usage credits for the long-context tier. Add credits, or reduce context: lower `contextWindow` in .klaudia/config.toml so autocompaction triggers earlier, and run /compact.)"
+					}
 					return out + ": " + detail + " (If you signed in via Claude Code OAuth this often happens when the token is in use by another session. Set KLAUDIA_MAX_RETRIES to retry more.)"
 				}
 				return out + ": if you signed in via Claude Code OAuth this often happens when the token is in use by another session — try closing other sessions and waiting a moment. (Set KLAUDIA_MAX_RETRIES to retry more.)"
@@ -206,6 +215,17 @@ func codeIs(raw json.RawMessage, want string) bool {
 func isSessionLimit(detail string) bool {
 	d := strings.ToLower(detail)
 	return strings.Contains(d, "session limit") || strings.Contains(d, "session_limit")
+}
+
+// isLongContextCredits recognises the Anthropic 429 returned when a request
+// crosses into the long-context (1M-token) tier that requires pay-as-you-go
+// usage credits. Unlike the per-minute throttle, retrying never clears it — it's
+// a billing/entitlement gate — so FriendlyError must drop the "retry more"
+// advice. Captured shape: "Usage credits are required for long context
+// requests." Both substrings are too specific to appear in benign messages.
+func isLongContextCredits(detail string) bool {
+	d := strings.ToLower(detail)
+	return strings.Contains(d, "usage credits") && strings.Contains(d, "long context")
 }
 
 // isContextOverflow recognises provider error messages that actually mean
