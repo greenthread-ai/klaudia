@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -114,9 +115,35 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 	}
 	body, _ := json.Marshal(reqBody)
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/chat/completions", bytes.NewReader(body))
+	// Same idle-watchdog + stall-retry policy as the Anthropic provider: a
+	// half-open SSE connection would otherwise park bufio.Scanner.Scan() forever
+	// with the TUI stuck on "thinking…". See provider.go for the rationale.
+	idle := streamIdleTimeout()
+	for attempt := 0; ; attempt++ {
+		acc, delivered, stalled, serr := p.streamAttempt(ctx, body, string(params.Model), sink, idle)
+		if !stalled {
+			return acc, serr
+		}
+		if !delivered && attempt < maxStreamStallRetries {
+			continue
+		}
+		return acc, fmt.Errorf("%w: no data for %s: %w", ErrStreamStalled, idle, serr)
+	}
+}
+
+// streamAttempt issues one Chat Completions request and consumes its SSE
+// response under an idle watchdog. It returns the assembled message, whether
+// any output reached the sink, whether the watchdog tripped (a stall distinct
+// from a user interrupt), and the terminal error. The watchdog cancels only a
+// child of ctx, so a tripped watchdog with ctx still live marks a genuine
+// stall; a cancelled ctx is the user's interrupt and is returned as-is.
+func (p *OpenAIProvider) streamAttempt(ctx context.Context, body []byte, model string, sink StreamSink, idle time.Duration) (acc anthropic.BetaMessage, delivered, stalled bool, err error) {
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(streamCtx, http.MethodPost, p.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return anthropic.BetaMessage{}, err
+		return anthropic.BetaMessage{}, false, false, err
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -124,15 +151,34 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 
 	resp, err := p.doWithRetry(httpReq, body)
 	if err != nil {
-		return anthropic.BetaMessage{}, err
+		return anthropic.BetaMessage{}, false, false, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		b, _ := readAll(resp.Body, 4096)
-		return anthropic.BetaMessage{}, &OpenAIError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(b)}
+		return anthropic.BetaMessage{}, false, false, &OpenAIError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(b)}
 	}
 
-	return p.consumeStream(resp.Body, string(params.Model), sink)
+	var tripped atomic.Bool
+	var timer *time.Timer
+	if idle > 0 {
+		timer = time.AfterFunc(idle, func() {
+			tripped.Store(true)
+			cancel() // aborts the in-flight resp.Body read → Scan() unblocks
+		})
+		defer timer.Stop()
+	}
+	onActivity := func() {
+		if timer != nil {
+			timer.Reset(idle)
+		}
+	}
+
+	acc, delivered, err = p.consumeStream(resp.Body, model, sink, onActivity)
+	if tripped.Load() && ctx.Err() == nil {
+		return acc, delivered, true, context.DeadlineExceeded
+	}
+	return acc, delivered, false, err
 }
 
 // translateRequest converts the Anthropic params into an OpenAI chat request.

@@ -3,6 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"strconv"
+	"sync/atomic"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
@@ -42,10 +48,50 @@ type Provider interface {
 	StreamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, sink StreamSink) (anthropic.BetaMessage, error)
 }
 
+// defaultStreamIdleTimeout bounds how long the streamed turn may go without
+// receiving any event before we treat the connection as dead. A stalled SSE
+// connection (a proxy/NAT silently drops the flow, or the server stops sending
+// after message_start) leaves the TCP socket "alive" while the read blocks
+// forever — without this watchdog the agent loop parks indefinitely and the TUI
+// just shows "thinking… quiet for <minutes>". 120s is comfortably longer than
+// any legitimate gap between events for a model that's actively generating
+// (extended-thinking deltas arrive well inside this window).
+const defaultStreamIdleTimeout = 120 * time.Second
+
+// streamIdleTimeout resolves the per-event idle deadline, overridable via
+// KLAUDIA_STREAM_IDLE_TIMEOUT (seconds). A value <= 0 disables the watchdog.
+func streamIdleTimeout() time.Duration {
+	if v := os.Getenv("KLAUDIA_STREAM_IDLE_TIMEOUT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return defaultStreamIdleTimeout
+}
+
+// maxStreamStallRetries bounds how many times StreamTurn transparently re-issues
+// a request that stalled before delivering any output. Kept small: a stall that
+// recurs immediately points at a real outage, which should surface as an error
+// rather than loop silently.
+const maxStreamStallRetries = 2
+
+// ErrStreamStalled marks a turn aborted by the idle watchdog (no stream event
+// for streamIdleTimeout) rather than a server-side timeout. FriendlyError keys
+// off it to give network-stall advice instead of the generic baseURL hint.
+var ErrStreamStalled = errors.New("model stream stalled")
+
 // StreamTurn implements Provider for the native Anthropic client: it streams the
 // Beta Messages API and accumulates the response. Default betas are applied
 // when the caller set none. Each raw stream event is forwarded to the sink
 // (for partial-message output) and text deltas are forwarded via OnText.
+//
+// An idle watchdog guards every attempt: if no stream event arrives within
+// streamIdleTimeout the in-flight read is cancelled. When the stall happened
+// before any output reached the caller, the whole request is re-issued
+// transparently (up to maxStreamStallRetries); once output has been delivered a
+// silent retry would duplicate it, so the stall surfaces as a DeadlineExceeded
+// error instead. A genuine user interrupt cancels the caller's ctx and is
+// always returned as-is — never retried.
 func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, sink StreamSink) (anthropic.BetaMessage, error) {
 	if len(params.Betas) == 0 {
 		params.Betas = DefaultBetas
@@ -58,10 +104,56 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	// on the first system block — without it, every request 429s regardless of
 	// headers. See augmentSystem for why.
 	params.System = c.augmentSystem(params.System)
-	stream := c.sdk.Beta.Messages.NewStreaming(ctx, params)
 
-	var acc anthropic.BetaMessage
+	return c.streamRetrying(ctx, params, sink, streamIdleTimeout())
+}
+
+// streamRetrying runs streamOnce under the stall-retry policy. Split out from
+// StreamTurn so tests can drive the watchdog with a sub-second idle window
+// instead of the user-facing seconds-granularity default.
+func (c *Client) streamRetrying(ctx context.Context, params anthropic.BetaMessageNewParams, sink StreamSink, idle time.Duration) (anthropic.BetaMessage, error) {
+	for attempt := 0; ; attempt++ {
+		acc, delivered, stalled, err := c.streamOnce(ctx, params, sink, idle)
+		if !stalled {
+			return acc, err
+		}
+		// The watchdog fired with the caller's ctx still live — a dead
+		// connection, not a user interrupt. Retry only while nothing has been
+		// handed to the sink yet; otherwise a fresh request would re-emit the
+		// text/events already shown.
+		if !delivered && attempt < maxStreamStallRetries {
+			continue
+		}
+		return acc, fmt.Errorf("%w: no data for %s: %w", ErrStreamStalled, idle, err)
+	}
+}
+
+// streamOnce runs a single streamed request under an idle watchdog. It returns
+// the accumulated message, whether any output was delivered to the sink,
+// whether the watchdog tripped (a stall distinct from a caller-driven cancel),
+// and the terminal stream error. A non-positive idle disables the watchdog.
+func (c *Client) streamOnce(ctx context.Context, params anthropic.BetaMessageNewParams, sink StreamSink, idle time.Duration) (acc anthropic.BetaMessage, delivered, stalled bool, err error) {
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var tripped atomic.Bool
+	var timer *time.Timer
+	if idle > 0 {
+		timer = time.AfterFunc(idle, func() {
+			tripped.Store(true)
+			cancel()
+		})
+		defer timer.Stop()
+	}
+
+	stream := c.sdk.Beta.Messages.NewStreaming(streamCtx, params)
 	for stream.Next() {
+		if timer != nil {
+			// An event arrived — push the idle deadline out. A late firing that
+			// races this Reset is harmless: tripped is already set and the
+			// cancelled ctx ends the stream on the next read.
+			timer.Reset(idle)
+		}
 		ev := stream.Current()
 		// Defend against an SDK bug in Accumulate (upstream issue #292):
 		// BetaRawContentBlockStopEvent and BetaRawMessageStopEvent run
@@ -77,15 +169,24 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 		// author with uncertainty; ours is narrower (only the stop-event
 		// marshal paths, only invalid Input fields).
 		repairInvalidToolInputs(&acc, ev)
-		if err := acc.Accumulate(ev); err != nil {
-			return acc, err
+		if aerr := acc.Accumulate(ev); aerr != nil {
+			return acc, delivered, false, aerr
 		}
-		sink.raw(ev)
+		if sink.OnRawEvent != nil {
+			delivered = true
+			sink.raw(ev)
+		}
 		if d := ev.AsContentBlockDelta(); d.Delta.Text != "" {
+			delivered = true
 			sink.text(d.Delta.Text)
 		}
 	}
-	return acc, stream.Err()
+	// Distinguish an idle-watchdog cancel from a user interrupt: the watchdog
+	// cancels only streamCtx, so the caller's ctx is still live when it trips.
+	if tripped.Load() && ctx.Err() == nil {
+		return acc, delivered, true, context.DeadlineExceeded
+	}
+	return acc, delivered, false, stream.Err()
 }
 
 // repairInvalidToolInputs replaces any json.RawMessage Input that wouldn't
