@@ -142,7 +142,7 @@ func TestConsumeStreamAssembles(t *testing.T) {
 		OnText:     func(s string) { streamed.WriteString(s) },
 		OnRawEvent: func(ev anthropic.BetaRawMessageStreamEventUnion) { rawTypes = append(rawTypes, ev.Type) },
 	}
-	msg, err := p.consumeStream(strings.NewReader(sse), "openai/gpt-5.5", sink)
+	msg, _, err := p.consumeStream(strings.NewReader(sse), "openai/gpt-5.5", sink, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

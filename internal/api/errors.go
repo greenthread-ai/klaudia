@@ -115,6 +115,15 @@ func FriendlyError(err error) string {
 			"connection and the baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml.\n" +
 			"Details: " + err.Error()
 	}
+	// The stall wraps DeadlineExceeded, so check it first: the connection went
+	// idle mid-stream (flaky network/proxy/VPN), which is unrelated to the
+	// baseURL the generic timeout branch below points at.
+	if errors.Is(err, ErrStreamStalled) {
+		return "The model connection stalled (no data received before the idle timeout) and was " +
+			"auto-retried without success — usually a flaky network, proxy, or VPN dropping the " +
+			"streaming connection. Send your message again; tune the window with KLAUDIA_STREAM_IDLE_TIMEOUT " +
+			"(seconds, 0 disables)."
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "The request to the model endpoint timed out. Check the endpoint is reachable " +
 			"and the baseURL is correct.\nDetails: " + err.Error()
