@@ -9,7 +9,10 @@ port mirrors (see `internal/version`).
 - **Prompt caching (Anthropic).** Requests now set `cache_control` breakpoints on
   the stable prefix (tools + system prompt) and a rolling conversation
   breakpoint, so each turn no longer re-pays full price for the whole history.
-  Cache usage is reported in the result envelope (`cache_read_input_tokens` /
+  Because the system prompt and tools are byte-stable across launches, this also
+  caches across `--continue`/resume (verified live: the resumed turn reads the
+  whole prior prefix from cache rather than re-creating it). Cache usage is
+  reported in the result envelope (`cache_read_input_tokens` /
   `cache_creation_input_tokens`). Disable with `KLAUDIA_DISABLE_PROMPT_CACHE`.
 
 ### Fixed

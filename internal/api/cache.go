@@ -42,9 +42,15 @@ func applyCacheControl(params *anthropic.BetaMessageNewParams) {
 	}
 
 	cc := anthropic.NewBetaCacheControlEphemeralParam()
-	// Tools are the base of the cached prefix and stable for the session.
-	if n := len(params.Tools); n > 0 && params.Tools[n-1].OfTool != nil {
-		params.Tools[n-1].OfTool.CacheControl = cc
+	// Tools are the base of the cached prefix and stable for the session. Mark the
+	// last *regular* tool: server-side tools (web_search/web_fetch) are appended
+	// at the end via a different union variant with no OfTool/CacheControl, so
+	// marking the literal last element would be a silent no-op.
+	for i := len(params.Tools) - 1; i >= 0; i-- {
+		if params.Tools[i].OfTool != nil {
+			params.Tools[i].OfTool.CacheControl = cc
+			break
+		}
 	}
 	// System prompt: large and stable across the whole session.
 	if n := len(params.System); n > 0 {

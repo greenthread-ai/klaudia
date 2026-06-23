@@ -80,6 +80,20 @@ func TestApplyCacheControlDoesNotAccumulate(t *testing.T) {
 	}
 }
 
+// With server-side web tools appended (OfTool == nil), the tools breakpoint must
+// land on the last regular tool, not be skipped — otherwise it's a silent no-op.
+func TestApplyCacheControlMarksLastRegularTool(t *testing.T) {
+	p := sampleParams()
+	// Append a server-side tool with no OfTool, as the loop does for web tools.
+	p.Tools = append(p.Tools, anthropic.BetaToolUnionParam{
+		OfWebSearchTool20250305: &anthropic.BetaWebSearchTool20250305Param{},
+	})
+	applyCacheControl(p)
+	if p.Tools[1].OfTool.CacheControl.Type == "" {
+		t.Error("last regular tool not marked when a server-side tool trails it")
+	}
+}
+
 func TestApplyCacheControlDisabled(t *testing.T) {
 	t.Setenv("KLAUDIA_DISABLE_PROMPT_CACHE", "1")
 	p := sampleParams()
