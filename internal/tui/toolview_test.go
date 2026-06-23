@@ -74,3 +74,24 @@ func TestStatusLine(t *testing.T) {
 		}
 	}
 }
+
+func TestLooksLineNumbered(t *testing.T) {
+	// Read's cat -n format ("%6d\t%s") — even when the file content is Markdown
+	// with code fences, the preview must NOT be treated as renderable Markdown.
+	readMD := "     1\t# Title\n     2\t```go\n     3\tx := 1\n     4\t```\n"
+	if !looksLineNumbered(readMD) {
+		t.Errorf("Read cat -n output should be detected as line-numbered:\n%q", readMD)
+	}
+	// Genuine Markdown tool output (no leading line numbers) must stay eligible
+	// for the Markdown render path.
+	for _, s := range []string{
+		"Here is the result:\n```go\nfunc main() {}\n```",
+		"plain text\nwith two lines",
+		"",
+		"3 blind mice\nran up the clock", // a numbered word ≠ a line number (no tab)
+	} {
+		if looksLineNumbered(s) {
+			t.Errorf("should NOT be line-numbered: %q", s)
+		}
+	}
+}

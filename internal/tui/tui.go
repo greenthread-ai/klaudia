@@ -2045,7 +2045,10 @@ func (m *Model) renderEvent(ev agent.Event) {
 		}
 		prefix += ": "
 		// Syntax-highlight fenced code in results (#5), else truncated plain text.
-		if !ev.IsError && strings.Contains(s, "```") && len(s) <= 4000 {
+		// Skip the Markdown path for cat -n line-numbered output (Read previews):
+		// glamour treats it as prose and reflows every line into one run-on block,
+		// inlining the line numbers — show such results verbatim instead.
+		if !ev.IsError && strings.Contains(s, "```") && len(s) <= 4000 && !looksLineNumbered(s) {
 			m.appendLine(toolStyle.Render("  " + prefix))
 			m.appendLine(m.markdown(s))
 		} else {
@@ -2120,6 +2123,34 @@ func (m *Model) markdown(s string) string {
 		return s
 	}
 	return strings.TrimRight(out, "\n")
+}
+
+// looksLineNumbered reports whether s is cat -n style output — the Read tool's
+// format of a right-aligned line number, a tab, then content ("%6d\t%s").
+// Markdown-rendering such preformatted text reflows every line into one run-on
+// block and inlines the numbers, so the caller must show it verbatim. Requires
+// every checked non-empty line (the first few) to match, so a genuine Markdown
+// result that merely happens to contain a numbered line isn't misclassified.
+func looksLineNumbered(s string) bool {
+	checked, numbered := 0, 0
+	for _, ln := range strings.SplitN(s, "\n", 6) {
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		checked++
+		i := 0
+		for i < len(ln) && ln[i] == ' ' {
+			i++
+		}
+		d := i
+		for d < len(ln) && ln[d] >= '0' && ln[d] <= '9' {
+			d++
+		}
+		if d > i && d < len(ln) && ln[d] == '\t' {
+			numbered++
+		}
+	}
+	return checked > 0 && numbered == checked
 }
 
 // renderQueuedHint composes the "queued: <message>" line shown under the
