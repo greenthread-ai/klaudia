@@ -118,27 +118,44 @@ func Now() string {
 	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
 }
 
-// Writer appends entries to a session transcript file.
+// Writer appends entries to a session transcript file. The directory and file
+// are created lazily on the first Append, so a session that records nothing — a
+// launch quit before any turn, or one whose turns all errored (e.g. an expired
+// auth token) — leaves no empty transcript behind to clutter the sessions dir
+// or shadow auto-resume.
 type Writer struct {
 	path string
 	f    *os.File
 }
 
-// NewWriter opens (creating dirs and the file) the transcript for append.
+// NewWriter prepares a transcript writer for the session. It performs no I/O:
+// the parent dir and file are created on the first Append, so merely
+// constructing a writer (and never appending) never leaves a file on disk.
 func NewWriter(cwd, sessionID string) (*Writer, error) {
-	path := Path(cwd, sessionID)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, err
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return nil, err
-	}
-	return &Writer{path: path, f: f}, nil
+	return &Writer{path: Path(cwd, sessionID)}, nil
 }
 
-// Append writes one entry as a JSON line.
+// open creates the parent dir and opens the file for append on first use.
+func (w *Writer) open() error {
+	if w.f != nil {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(w.path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	w.f = f
+	return nil
+}
+
+// Append writes one entry as a JSON line, creating the file on first call.
 func (w *Writer) Append(e Entry) error {
+	if err := w.open(); err != nil {
+		return err
+	}
 	b, err := json.Marshal(e)
 	if err != nil {
 		return err
@@ -148,11 +165,17 @@ func (w *Writer) Append(e Entry) error {
 	return err
 }
 
-// Path returns the transcript file path.
+// Path returns the transcript file path (whether or not it has been created).
 func (w *Writer) Path() string { return w.path }
 
-// Close closes the underlying file.
-func (w *Writer) Close() error { return w.f.Close() }
+// Close closes the underlying file. A writer that never appended is a no-op and
+// leaves no file behind.
+func (w *Writer) Close() error {
+	if w.f == nil {
+		return nil
+	}
+	return w.f.Close()
+}
 
 // Read parses all user/assistant entries from a transcript file, in order.
 // Non-message lines (queue-operation, ai-title, attachment, etc.) are skipped.

@@ -161,15 +161,12 @@ func TestMostRecentSkipsContentlessSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A newer launch that recorded nothing: O_CREATE leaves a 0-byte file.
-	ghost, err := NewWriter(cwd, "ghost-session")
-	if err != nil {
+	// An empty 0-byte transcript with the newest mtime — e.g. left by an older
+	// klaudia, an external tool, or an interrupted write. It must not shadow the
+	// real session even though it sorts first by mtime.
+	if err := os.WriteFile(Path(cwd, "ghost-session"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := ghost.Close(); err != nil {
-		t.Fatal(err)
-	}
-
 	// Make the real session older so the empty ghost is the newest by mtime —
 	// exactly the shadowing case the fix must defeat.
 	old := time.Now().Add(-time.Hour)
@@ -183,12 +180,49 @@ func TestMostRecentSkipsContentlessSessions(t *testing.T) {
 
 	// If every session is contentless, there is nothing to resume.
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-	empty, err := NewWriter("/work/other", "blank")
+	if err := os.MkdirAll(Dir("/work/other"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path("/work/other", "blank"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if id, ok := MostRecent("/work/other"); ok {
+		t.Fatalf("MostRecent = %q,%v; want \"\",false when all sessions are empty", id, ok)
+	}
+}
+
+// A writer that is constructed but never appended to must leave no file on disk
+// — so a session that records nothing doesn't litter the sessions dir.
+func TestNewWriterIsLazy(t *testing.T) {
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	cwd := "/work/proj"
+
+	w, err := NewWriter(cwd, "ephemeral")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = empty.Close()
-	if id, ok := MostRecent("/work/other"); ok {
-		t.Fatalf("MostRecent = %q,%v; want \"\",false when all sessions are empty", id, ok)
+	if _, err := os.Stat(w.Path()); !os.IsNotExist(err) {
+		t.Fatalf("file must not exist before Append; stat err = %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close on a never-appended writer should be a no-op: %v", err)
+	}
+	if _, err := os.Stat(w.Path()); !os.IsNotExist(err) {
+		t.Fatalf("Close without Append must leave no file; stat err = %v", err)
+	}
+
+	// First Append creates the file (and its parent dir).
+	w2, err := NewWriter(cwd, "real")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w2.Append(Entry{Type: "user", Message: json.RawMessage(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(Path(cwd, "real")); err != nil {
+		t.Fatalf("file must exist after Append: %v", err)
 	}
 }

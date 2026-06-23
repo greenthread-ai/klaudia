@@ -59,13 +59,7 @@ func TestResolveResumeIDStartsNewWhenNoSessionExists(t *testing.T) {
 func TestResolveResumeIDNewSessionSkipsAutoResume(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	cwd := "/work/proj"
-	w, err := session.NewWriter(cwd, "project-session")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
+	seedSession(t, cwd, "project-session")
 
 	got, err := resolveResumeID(cwd, options{newSession: true}, true)
 	if err != nil {
@@ -79,13 +73,7 @@ func TestResolveResumeIDNewSessionSkipsAutoResume(t *testing.T) {
 func TestResolveResumeIDExplicitResumeWinsOverAutoResume(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	cwd := "/work/proj"
-	w, err := session.NewWriter(cwd, "project-session")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
+	seedSession(t, cwd, "project-session")
 
 	got, err := resolveResumeID(cwd, options{resume: "explicit-session"}, true)
 	if err != nil {
