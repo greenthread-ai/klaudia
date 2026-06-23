@@ -104,6 +104,9 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	// on the first system block — without it, every request 429s regardless of
 	// headers. See augmentSystem for why.
 	params.System = c.augmentSystem(params.System)
+	// Cache the stable prefix (tools + system) plus a rolling conversation
+	// breakpoint so each turn doesn't re-pay full price for the whole history.
+	applyCacheControl(&params)
 
 	return c.streamRetrying(ctx, params, sink, streamIdleTimeout())
 }

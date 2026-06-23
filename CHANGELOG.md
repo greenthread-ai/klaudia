@@ -5,7 +5,18 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+- **Prompt caching (Anthropic).** Requests now set `cache_control` breakpoints on
+  the stable prefix (tools + system prompt) and a rolling conversation
+  breakpoint, so each turn no longer re-pays full price for the whole history.
+  Cache usage is reported in the result envelope (`cache_read_input_tokens` /
+  `cache_creation_input_tokens`). Disable with `KLAUDIA_DISABLE_PROMPT_CACHE`.
+
 ### Fixed
+- **Tool order is now stable.** `Registry.Names()` iterated a map, so the tool
+  list (and thus the request's cached prefix) was shuffled every turn — which by
+  itself defeated prompt caching. Names are now sorted; verified live to take
+  cache reads from 0 to most of the prefix.
 - **Streaming no longer hangs forever.** A stalled model stream (half-open SSE
   connection) used to leave the TUI stuck on "thinking…". An idle watchdog now
   breaks a stalled turn — transparently retrying when nothing has been emitted

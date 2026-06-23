@@ -104,6 +104,10 @@ type Result struct {
 	StopReason   string
 	InputTokens  int64
 	OutputTokens int64
+	// CacheReadInputTokens / CacheCreationInputTokens report prompt-cache usage
+	// across the run: tokens served from cache (cheap) vs. tokens written to it.
+	CacheReadInputTokens     int64
+	CacheCreationInputTokens int64
 	// Messages is the full conversation after the run (initial + this turn's
 	// exchanges), so a caller can carry it forward as InitialMessages for the
 	// next turn (used by the stream-json embedding frontend).
@@ -196,6 +200,8 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		res.StopReason = string(assistant.StopReason)
 		res.InputTokens += assistant.Usage.InputTokens
 		res.OutputTokens += assistant.Usage.OutputTokens
+		res.CacheReadInputTokens += assistant.Usage.CacheReadInputTokens
+		res.CacheCreationInputTokens += assistant.Usage.CacheCreationInputTokens
 		res.Text = finalText
 		// Live usage tick: emit per inner LLM call so frontends can update
 		// counters during long iterations. TurnDelta=1 mirrors res.NumTurns

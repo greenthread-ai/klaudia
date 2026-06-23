@@ -929,8 +929,10 @@ func run(cmd *cobra.Command, opts *options) error {
 		SessionID:     sessionID,
 		TotalCostUSD:  0, // Phase 3: derive from usage + pricing.
 		Usage: map[string]any{
-			"input_tokens":  res.InputTokens,
-			"output_tokens": res.OutputTokens,
+			"input_tokens":                res.InputTokens,
+			"output_tokens":               res.OutputTokens,
+			"cache_read_input_tokens":     res.CacheReadInputTokens,
+			"cache_creation_input_tokens": res.CacheCreationInputTokens,
 		},
 		UUID: uuid.NewString(),
 	}
