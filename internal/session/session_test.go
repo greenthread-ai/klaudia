@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestEncodePath is kept stable so existing Klaudia transcripts remain under the
@@ -132,10 +133,62 @@ func TestMostRecentIncludesLegacyProjectsRoot(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(legacy, []byte("{}\n"), 0o644); err != nil {
+	if err := os.WriteFile(legacy, []byte(`{"type":"user","message":{}}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if id, ok := MostRecent(cwd); !ok || id != "legacy-session" {
 		t.Fatalf("MostRecent = %q,%v; want legacy-session,true", id, ok)
+	}
+}
+
+// A launch that records nothing (quit before typing, or every turn errored on an
+// expired token) leaves an empty transcript with the newest mtime. Auto-resume
+// must skip it and land on the last real conversation, not "resume" into an
+// empty session with no memory.
+func TestMostRecentSkipsContentlessSessions(t *testing.T) {
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	cwd := "/work/proj"
+
+	// A real conversation.
+	w, err := NewWriter(cwd, "real-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Append(Entry{Type: "user", Message: json.RawMessage(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// A newer launch that recorded nothing: O_CREATE leaves a 0-byte file.
+	ghost, err := NewWriter(cwd, "ghost-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ghost.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make the real session older so the empty ghost is the newest by mtime —
+	// exactly the shadowing case the fix must defeat.
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(Path(cwd, "real-session"), old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	if id, ok := MostRecent(cwd); !ok || id != "real-session" {
+		t.Fatalf("MostRecent = %q,%v; want real-session,true (empty ghost must be skipped)", id, ok)
+	}
+
+	// If every session is contentless, there is nothing to resume.
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	empty, err := NewWriter("/work/other", "blank")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = empty.Close()
+	if id, ok := MostRecent("/work/other"); ok {
+		t.Fatalf("MostRecent = %q,%v; want \"\",false when all sessions are empty", id, ok)
 	}
 }

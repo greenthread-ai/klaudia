@@ -11,21 +11,29 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/session"
 )
 
+// seedSession writes a transcript with one real message so MostRecent treats it
+// as a resumable conversation (an empty file is now skipped as contentless).
+func seedSession(t *testing.T, cwd, id string) {
+	t.Helper()
+	w, err := session.NewWriter(cwd, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Append(session.Entry{Type: "user", Message: []byte("{}")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestResolveResumeIDAutoResumesMostRecentSessionForCWD(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	cwd := "/work/proj"
 	otherCWD := "/work/other"
 
-	if w, err := session.NewWriter(otherCWD, "other-session"); err != nil {
-		t.Fatal(err)
-	} else if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if w, err := session.NewWriter(cwd, "project-session"); err != nil {
-		t.Fatal(err)
-	} else if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
+	seedSession(t, otherCWD, "other-session")
+	seedSession(t, cwd, "project-session")
 
 	got, err := resolveResumeID(cwd, options{}, true)
 	if err != nil {
@@ -98,13 +106,7 @@ func TestResolveResumeIDNewSessionConflictsWithExplicitResume(t *testing.T) {
 func TestResolveResumeIDHeadlessDoesNotAutoResume(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	cwd := "/work/proj"
-	w, err := session.NewWriter(cwd, "project-session")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
+	seedSession(t, cwd, "project-session")
 
 	// Headless (interactive=false): a prior session is NOT auto-resumed.
 	if got, err := resolveResumeID(cwd, options{}, false); err != nil || got != "" {

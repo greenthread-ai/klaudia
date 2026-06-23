@@ -199,8 +199,8 @@ func MostRecent(cwd string) (string, bool) {
 	var files []fi
 	for _, m := range matches {
 		st, err := os.Stat(m)
-		if err != nil {
-			continue
+		if err != nil || st.Size() == 0 {
+			continue // unreadable, or an empty file from a launch that recorded nothing
 		}
 		files = append(files, fi{path: m, mod: st.ModTime()})
 	}
@@ -208,6 +208,42 @@ func MostRecent(cwd string) (string, bool) {
 		return "", false
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].mod.After(files[j].mod) })
-	name := filepath.Base(files[0].path)
-	return strings.TrimSuffix(name, ".jsonl"), true
+	// Return the newest transcript that actually holds a conversation. A launch
+	// creates its transcript eagerly (O_CREATE) but only records on a real turn,
+	// so a session abandoned before any message — or one whose turns all errored
+	// (e.g. an expired auth token) — leaves a contentless file with the newest
+	// mtime. Auto-resuming that would silently drop the user's real history
+	// ("resumed but no memory"), so skip to the newest one with messages.
+	for _, f := range files {
+		if hasMessages(f.path) {
+			name := filepath.Base(f.path)
+			return strings.TrimSuffix(name, ".jsonl"), true
+		}
+	}
+	return "", false
+}
+
+// hasMessages reports whether a transcript holds at least one user/assistant
+// message, scanning only until the first match so large transcripts stay cheap.
+// A file with only non-message lines (or none) is treated as contentless.
+func hasMessages(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	for sc.Scan() {
+		if len(sc.Bytes()) == 0 {
+			continue
+		}
+		var e struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(sc.Bytes(), &e) == nil && (e.Type == "user" || e.Type == "assistant") {
+			return true
+		}
+	}
+	return false
 }
