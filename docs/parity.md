@@ -54,9 +54,9 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | --- | --- | --- | --- | --- |
 | Agentic tool loop | 05-app-core | `agent/loop.go` | ✅ done | Emitter, per-turn tool params, Approver/Asker/Planner seams. |
 | Provider abstraction | 03-providers | `api/provider.go` | 🔀 divergent | Multi-provider interface (Anthropic + OpenAI-compatible); JS was Anthropic-centric. |
-| Anthropic Messages (Beta, streaming, caching) | 02/03 | `api/client.go` | ✅ done | |
+| Anthropic Messages (Beta, streaming) | 02/03 | `api/client.go` | ✅ done | Streamed with an idle watchdog (`KLAUDIA_STREAM_IDLE_TIMEOUT`). |
 | OpenAI-compatible Chat Completions | — | `api/openai*.go` | 🔀 divergent | Translation shim; SSE stream:true. Image tool_results translated to `image_url` content parts. |
-| Prompt caching | 03-providers | `api/client.go` | ✅ done | |
+| Prompt caching | 03-providers | `api/client.go` | 🔜 planned | Not yet implemented — no `cache_control` is sent. High-value follow-up (re-sending the full system prompt + history uncached every turn is the dominant cost/latency). |
 | stream-json output (authoritative envelope) | 08-entry | `streamjson/` + `cli/envelope.go` | ✅ done | |
 | stream-json partial deltas | 08-entry | `cli/partial.go` + `api/StreamSink` | ✅ done | Behind `--include-partial-messages`; emits JS `stream_event` lines. OpenAI shim synthesizes the sequence. |
 

@@ -1,3 +1,6 @@
+// Package tasks holds the in-memory task store backing the TaskCreate, TaskList,
+// TaskGet, and TaskUpdate tools — a lightweight, session-scoped to-do list the
+// agent uses to track multi-step work.
 package tasks
 
 import (

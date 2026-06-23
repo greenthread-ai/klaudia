@@ -243,6 +243,18 @@ overlays it (project wins). Settings merge per field.
   expired tokens and writes them back), or
 - a provider key via `apiKey` / `apiKeyEnv` in `.klaudia/config.toml`.
 
+### Streaming & reliability
+
+- `KLAUDIA_STREAM_IDLE_TIMEOUT` — seconds a streamed model turn may go without
+  any event before it's treated as a stalled connection (default `120`). On a
+  stall Klaudia transparently retries the turn if nothing has been emitted yet,
+  otherwise it fails the turn with a clear timeout instead of hanging forever.
+  Set to `0` to disable the watchdog.
+- **Long-context credits (429)** — if the API returns *"Usage credits are
+  required for long context requests"*, that's a billing/entitlement gate, not a
+  transient throttle: retries won't help. Add usage credits, or reduce context
+  (lower `contextWindow` so autocompaction triggers earlier, and `/compact`).
+
 ## Sandboxing the Bash tool
 
 `.klaudia/config.toml` → `sandbox.mode`:
