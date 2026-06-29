@@ -14,10 +14,13 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/greenthread/klaudia/internal/api"
 	"github.com/greenthread/klaudia/internal/remotecontrol"
 )
 
@@ -34,7 +37,9 @@ type remoteLoggedInMsg struct {
 }
 
 type remoteOpenedMsg struct {
-	sess *remotecontrol.Session
+	sess     *remotecontrol.Session
+	provider api.Provider
+	models   []remotecontrol.Model
 }
 
 type remoteFailedMsg struct{ err error }
@@ -42,6 +47,11 @@ type remoteFailedMsg struct{ err error }
 type remoteClosedMsg struct{}
 
 type remoteInputMsg struct{ in remotecontrol.Input }
+
+type remoteModelsRefreshedMsg struct {
+	models []remotecontrol.Model
+	err    error
+}
 
 // startRemoteControl kicks off device-code login (if needed) and then
 // opens the WS. All work happens in goroutines; results post back to
@@ -104,7 +114,19 @@ func (m *Model) startRemoteControl(baseURL string) {
 		}
 		sess.SendMeta(meta, title)
 
-		m.events <- remoteOpenedMsg{sess: sess}
+		// Build the OpenAI shim provider pointing at ai-console so the
+		// agent loop's next turn routes through the user's account.
+		provider := api.NewOpenAIProvider(strings.TrimRight(cred.BaseURL, "/")+"/v1", cred.Secret)
+
+		// Pull the model catalog up-front; the /model picker reads it.
+		catCtx, catCancel := context.WithTimeout(ctx, 15*time.Second)
+		models, modelsErr := remotecontrol.ListModels(catCtx, cred)
+		catCancel()
+		if modelsErr != nil {
+			m.events <- remoteFailedMsg{err: fmt.Errorf("warning: model catalog: %w", modelsErr)}
+		}
+
+		m.events <- remoteOpenedMsg{sess: sess, provider: provider, models: models}
 
 		// Drain inputs back to the TUI event channel.
 		go func(s *remotecontrol.Session) {
@@ -113,6 +135,24 @@ func (m *Model) startRemoteControl(baseURL string) {
 			}
 			m.events <- remoteClosedMsg{}
 		}(sess)
+	}()
+}
+
+// refreshRemoteModels re-fetches /v1/models in the background. Called
+// when the user picks /model to make sure the list is fresh.
+func (m *Model) refreshRemoteModels() {
+	if m.remote == nil {
+		return
+	}
+	go func() {
+		cred, _ := remotecontrol.LoadCredential()
+		if cred == nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(m.ctx, 15*time.Second)
+		defer cancel()
+		models, err := remotecontrol.ListModels(ctx, cred)
+		m.events <- remoteModelsRefreshedMsg{models: models, err: err}
 	}()
 }
 

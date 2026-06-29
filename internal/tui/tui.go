@@ -68,6 +68,15 @@ type Session struct {
 	Doctor func() string
 	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
 	MCP MCPController
+
+	// RemoteProvider, when set, overrides the default api.Provider for
+	// the next turn. /remote-control populates this with an OpenAI shim
+	// pointing at ai-console's /v1, so inference flows through the
+	// signed-in account. nil when not signed in.
+	RemoteProvider api.Provider
+	// RemoteCatalog, when set, is the list of models the ai-console
+	// gateway can serve. Read by the /model picker when in remote mode.
+	RemoteCatalog []remotecontrol.Model
 }
 
 // MCPController lets the TUI manage MCP servers without owning the manager.
@@ -271,6 +280,10 @@ type Model struct {
 	// a WebSocket and the server can inject user input back. nil when
 	// disconnected. See remote.go.
 	remote *remotecontrol.Session
+	// pendingModelPick is true when the user typed /model while the
+	// remote catalog was still empty; the next refresh-done message
+	// opens the picker automatically.
+	pendingModelPick bool
 }
 
 type transcriptBlock struct {
@@ -502,7 +515,45 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 	case remoteOpenedMsg:
 		m.remote = msg.sess
+		if m.sess != nil {
+			m.sess.RemoteProvider = msg.provider
+			m.sess.RemoteCatalog = msg.models
+		}
 		m.appendLine(bannerStyle.Render("Remote-control session " + msg.sess.SessionID() + " is live."))
+		if len(msg.models) > 0 {
+			m.appendLine(bannerStyle.Render(fmt.Sprintf("%d models available — /model to pick one.", len(msg.models))))
+		}
+		return m, m.waitForEvent()
+	case remoteModelsRefreshedMsg:
+		if msg.err != nil {
+			m.appendLine(errStyle.Render("models: " + msg.err.Error()))
+			m.pendingModelPick = false
+			return m, m.waitForEvent()
+		}
+		if m.sess != nil {
+			m.sess.RemoteCatalog = msg.models
+		}
+		if m.pendingModelPick {
+			m.pendingModelPick = false
+			if len(msg.models) == 0 {
+				m.appendLine(bannerStyle.Render("No chat models available on ai-console."))
+				return m, m.waitForEvent()
+			}
+			items := make([]choiceItem, 0, len(msg.models))
+			for _, md := range msg.models {
+				md := md
+				label := md.ID
+				if md.Description != "" {
+					label = md.ID + " — " + md.Description
+				}
+				items = append(items, choiceItem{label: label, apply: func() string {
+					m.sess.Model = md.ID
+					return "Model set to " + md.ID + " (applies to the next turn)."
+				}})
+			}
+			m.startChoice("Pick a model from ai-console:", items)
+			return m, nil
+		}
 		return m, m.waitForEvent()
 	case remoteFailedMsg:
 		m.appendLine(errStyle.Render("remote-control: " + msg.err.Error()))
@@ -510,6 +561,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case remoteClosedMsg:
 		if m.remote != nil {
 			m.remote = nil
+			if m.sess != nil {
+				m.sess.RemoteProvider = nil
+				m.sess.RemoteCatalog = nil
+			}
 			m.appendLine(bannerStyle.Render("Remote-control connection closed."))
 		}
 		return m, m.waitForEvent()
@@ -964,6 +1019,31 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(toolStyle.Render(m.lastResult))
 		}
 	case "/model":
+		// When signed in to ai-console, the catalog comes from the live
+		// /v1/models endpoint and /model with no args opens a picker.
+		if m.remote != nil && len(args) == 0 {
+			catalog := m.sess.RemoteCatalog
+			if len(catalog) == 0 {
+				m.appendLine(bannerStyle.Render("Fetching models from ai-console…"))
+				m.pendingModelPick = true
+				m.refreshRemoteModels()
+				break
+			}
+			items := make([]choiceItem, 0, len(catalog))
+			for _, md := range catalog {
+				md := md
+				label := md.ID
+				if md.Description != "" {
+					label = md.ID + " — " + md.Description
+				}
+				items = append(items, choiceItem{label: label, apply: func() string {
+					m.sess.Model = md.ID
+					return "Model set to " + md.ID + " (applies to the next turn)."
+				}})
+			}
+			m.startChoice("Pick a model from ai-console:", items)
+			return m, nil
+		}
 		if len(args) == 0 {
 			cur := m.sess.Model
 			if cur == "" {

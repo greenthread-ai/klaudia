@@ -755,6 +755,13 @@ func run(cmd *cobra.Command, opts *options) error {
 			// Rebuild the permission context from the live session mode each turn
 			// so ExitPlanMode (which flips sess.PermissionMode) takes effect.
 			turnPerm := permission.Context{Mode: permission.Mode(sess.PermissionMode), Allow: allowRules, Deny: denyRules}
+			// /remote-control populates sess.RemoteProvider so inference flows
+			// through ai-console. Server-side web_search/web_fetch don't exist
+			// over the OpenAI shim, so disable them when remote is in effect.
+			webTools := true
+			if sess.RemoteProvider != nil {
+				webTools = false
+			}
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,
 				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
@@ -767,8 +774,9 @@ func run(cmd *cobra.Command, opts *options) error {
 				Planner:         planner,
 				InitialMessages: history,
 				Recorder:        recorder,
-				WebTools:        true,
+				WebTools:        webTools,
 				OnSummary:       onSummary,
+				Provider:        sess.RemoteProvider,
 			}, emit)
 		}
 		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages, sess)
