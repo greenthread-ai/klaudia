@@ -75,6 +75,15 @@ type Session struct {
 	Doctor func() string
 	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
 	MCP MCPController
+
+	// RemoteProvider, when set, overrides the default api.Provider for
+	// the next turn. /remote-control populates this with an OpenAI shim
+	// pointing at ai-console's /v1, so inference flows through the
+	// signed-in account. nil when not signed in.
+	RemoteProvider api.Provider
+	// RemoteCatalog, when set, is the list of models the ai-console
+	// gateway can serve. Read by the /model picker when in remote mode.
+	RemoteCatalog []remotecontrol.Model
 }
 
 // MCPController lets the TUI manage MCP servers without owning the manager.
@@ -318,8 +327,17 @@ type Model struct {
 	glamWidth int
 	// Intro banner inputs, so it can be regenerated (recoloured) on theme change.
 	// introTagline is chosen once so it stays stable across regenerations.
-	introModel, introBranch, introTagline string
-	hasIntro                              bool
+	introModel, introBranch, introSession, introTagline string
+	hasIntro                                            bool
+
+	// Remote-control: when set, agent events fan out to ai-console over
+	// a WebSocket and the server can inject user input back. nil when
+	// disconnected. See remote.go.
+	remote *remotecontrol.Session
+	// pendingModelPick is true when the user typed /model while the
+	// remote catalog was still empty; the next refresh-done message
+	// opens the picker automatically.
+	pendingModelPick bool
 }
 
 type transcriptBlock struct {
@@ -566,6 +584,107 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setState(stateIdle)
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW)
+
+	case remoteCodeMsg:
+		// Show the verification URL + user code so the user can approve in
+		// the browser. Stays visible in scrollback so they don't have to scroll.
+		m.appendLine(bannerStyle.Render("Open this URL in your browser to connect klaudia:"))
+		m.appendLine("  " + msg.verificationURL)
+		m.appendLine(bannerStyle.Render("  code: " + msg.userCode))
+		return m, m.waitForEvent()
+	case remoteLoggedInMsg:
+		m.appendLine(bannerStyle.Render("Signed in to ai-console — opening session…"))
+		return m, m.waitForEvent()
+	case remoteOpenedMsg:
+		m.remote = msg.sess
+		if m.sess != nil {
+			m.sess.RemoteProvider = msg.provider
+			m.sess.RemoteCatalog = msg.models
+		}
+		m.appendLine(bannerStyle.Render("Remote-control session " + msg.sess.SessionID() + " is live."))
+		if len(msg.models) > 0 {
+			m.appendLine(bannerStyle.Render(fmt.Sprintf("%d models available — /model to pick one.", len(msg.models))))
+		}
+		return m, m.waitForEvent()
+	case remoteModelsRefreshedMsg:
+		if msg.err != nil {
+			m.appendLine(errStyle.Render("models: " + msg.err.Error()))
+			m.pendingModelPick = false
+			return m, m.waitForEvent()
+		}
+		if m.sess != nil {
+			m.sess.RemoteCatalog = msg.models
+		}
+		if m.pendingModelPick {
+			m.pendingModelPick = false
+			if len(msg.models) == 0 {
+				m.appendLine(bannerStyle.Render("No chat models available on ai-console."))
+				return m, m.waitForEvent()
+			}
+			items := make([]choiceItem, 0, len(msg.models))
+			for _, md := range msg.models {
+				md := md
+				label := md.ID
+				if md.Description != "" {
+					label = md.ID + " — " + md.Description
+				}
+				items = append(items, choiceItem{label: label, apply: func() string {
+					m.sess.Model = md.ID
+					return "Model set to " + md.ID + " (applies to the next turn)."
+				}})
+			}
+			m.startChoice("Pick a model from ai-console:", items)
+			return m, nil
+		}
+		return m, m.waitForEvent()
+	case remoteFailedMsg:
+		m.appendLine(errStyle.Render("remote-control: " + msg.err.Error()))
+		return m, m.waitForEvent()
+	case remoteClosedMsg:
+		if m.remote != nil {
+			m.remote = nil
+			if m.sess != nil {
+				m.sess.RemoteProvider = nil
+				m.sess.RemoteCatalog = nil
+			}
+			m.appendLine(bannerStyle.Render("Remote-control connection closed."))
+		}
+		return m, m.waitForEvent()
+	case remoteInputMsg:
+		// Inject server-side input as if the user typed it. Messages start
+		// a new turn (or queue if one is running); permission replies are
+		// handled inside the session approver (never reach the TUI).
+		switch msg.in.Kind {
+		case remotecontrol.InputKindMessage:
+			text := strings.TrimSpace(msg.in.Text)
+			if text == "" {
+				return m, m.waitForEvent()
+			}
+			if m.state == stateRunning {
+				if strings.TrimSpace(m.queued) == "" {
+					m.queued = text
+				} else {
+					m.queued += "\n" + text
+				}
+				m.appendLine(userStyle.Render("› (queued from ai-console) ") + text)
+				return m, m.waitForEvent()
+			}
+			m.pushHistory(text)
+			m.appendLine(userStyle.Render("› (from ai-console) ") + text)
+			m.setState(stateRunning)
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(text))
+		case remotecontrol.InputKindSlash:
+			switch msg.in.Command {
+			case "abort":
+				if m.turnCancel != nil {
+					m.turnCancel()
+				}
+			case "close":
+				m.stopRemoteControl()
+			}
+			return m, m.waitForEvent()
+		}
+		return m, m.waitForEvent()
 
 	case compactDoneMsg:
 		if msg.err != nil {
@@ -1253,6 +1372,31 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(toolStyle.Render(m.lastResult))
 		}
 	case "/model":
+		// When signed in to ai-console, the catalog comes from the live
+		// /v1/models endpoint and /model with no args opens a picker.
+		if m.remote != nil && len(args) == 0 {
+			catalog := m.sess.RemoteCatalog
+			if len(catalog) == 0 {
+				m.appendLine(bannerStyle.Render("Fetching models from ai-console…"))
+				m.pendingModelPick = true
+				m.refreshRemoteModels()
+				break
+			}
+			items := make([]choiceItem, 0, len(catalog))
+			for _, md := range catalog {
+				md := md
+				label := md.ID
+				if md.Description != "" {
+					label = md.ID + " — " + md.Description
+				}
+				items = append(items, choiceItem{label: label, apply: func() string {
+					m.sess.Model = md.ID
+					return "Model set to " + md.ID + " (applies to the next turn)."
+				}})
+			}
+			m.startChoice("Pick a model from ai-console:", items)
+			return m, nil
+		}
 		if len(args) == 0 {
 			cur := m.sess.Model
 			if cur == "" {
@@ -1496,6 +1640,25 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		// The y/n lives in the persistent bottom view (stateAwaitingConfirm);
 		// scrollback just records the question and the diff being committed.
 		m.appendLine(askStyle.Render("Stage all changes and commit?\n" + strings.TrimRight(status, "\n")))
+	case "/remote-control":
+		if m.remote != nil {
+			m.stopRemoteControl()
+			m.appendLine(bannerStyle.Render("Remote-control disconnected."))
+			break
+		}
+		baseURL := ""
+		if len(args) > 0 {
+			baseURL = args[0]
+		}
+		m.appendLine(bannerStyle.Render("Starting remote-control sign-in…"))
+		m.startRemoteControl(baseURL)
+	case "/logout":
+		m.stopRemoteControl()
+		if err := remotecontrol.ClearCredential(); err != nil {
+			m.appendLine(errStyle.Render("logout: " + err.Error()))
+		} else {
+			m.appendLine(bannerStyle.Render("Cleared ai-console credential."))
+		}
 	default:
 		// A /<skill> matching a user-defined skill renders its body and submits it
 		// as the turn prompt. Built-in commands above always win (a skill that
@@ -1993,14 +2156,28 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	case m.sess != nil && m.sess.Goal != "":
 		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
 	}
-	approver := &uiApprover{events: m.events}
+	var approver agent.Approver = &uiApprover{events: m.events}
 	asker := &uiAsker{events: m.events}
 	planner := &uiPlanner{events: m.events}
 	emit := func(ev agent.Event) { m.events <- eventMsg{ev} }
+	// Fan events out to the remote-control WS when it's open. Permission
+	// asks go to the remote approver (browser/mobile) with the local TUI
+	// approver as a fallback so the agent never wedges if the WS dies.
+	if m.remote != nil {
+		emit = m.remote.WrapEmitter(emit)
+		approver = m.remote.Approver(approver)
+		// Echo the user's prompt so the UI sees it.
+		m.remote.SendUserMessage(prompt)
+		m.remote.SendStatus("thinking")
+	}
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.turnCancel = cancel
 	go func() {
 		res, err := m.run(ctx, prompt, m.history, approver, asker, planner, emit)
+		if m.remote != nil {
+			m.remote.SendTurnDone(res.StopReason)
+			m.remote.SendStatus("idle")
+		}
 		m.events <- doneMsg{res: res, err: err}
 	}()
 	return tea.Batch(m.spin.Tick, m.sw.Reset(), m.sw.Start())

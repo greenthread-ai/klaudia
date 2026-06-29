@@ -86,6 +86,7 @@ var builtinSlashCommands = map[string]bool{
 	"compact": true, "add-dir": true,
 	"plan": true, "doctor": true, "diff": true, "commit": true, "export": true,
 	"last": true,
+	"remote-control": true, "logout": true,
 }
 
 // withExtraDirs appends an "additional working directories" note to the system
@@ -811,6 +812,15 @@ func run(cmd *cobra.Command, opts *options) error {
 			},
 		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
+			// Rebuild the permission context from the live session mode each turn
+			// so ExitPlanMode (which flips sess.PermissionMode) takes effect.
+			turnPerm := permission.Context{Mode: permission.Mode(sess.PermissionMode), Allow: allowRules, Deny: denyRules}
+			// /remote-control populates sess.RemoteProvider so inference flows
+			// through ai-console. Server-side web_search/web_fetch don't exist
+			// over the OpenAI shim, so disable them when remote is in effect.
+			webTools := true
+			if sess.RemoteProvider != nil {
+				webTools = false
 			// Permission mode reads live from the session every check, so a
 			// /mode bypass (or ExitPlanMode flipping out of plan) takes effect
 			// on the very next tool dispatch inside the agent loop — not just
@@ -835,8 +845,9 @@ func run(cmd *cobra.Command, opts *options) error {
 				Planner:         planner,
 				InitialMessages: history,
 				Recorder:        recorder,
-				WebTools:        true,
+				WebTools:        webTools,
 				OnSummary:       onSummary,
+				Provider:        sess.RemoteProvider,
 			}, emit)
 		}
 		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages, sess)

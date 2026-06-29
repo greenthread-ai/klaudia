@@ -95,6 +95,10 @@ type Options struct {
 	// produces (autocompact). The CLI persists it alongside the transcript for
 	// token-saving resume. May be nil.
 	OnSummary func(summary string)
+	// Provider, if set, overrides the Loop's default provider for this Run.
+	// Used by /remote-control to route inference through ai-console's /v1
+	// shim when the user has signed in. nil = use the Loop's provider.
+	Provider api.Provider
 }
 
 // Result is the outcome of a Run.
@@ -192,7 +196,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			Betas:     betas,
 		}
 
-		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages)
+		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages, opts.Provider)
 		if err != nil {
 			res.Messages = messages
 			return res, err
@@ -312,7 +316,7 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model) ([]anthropic.BetaMessageParam, string, error) {
 	req := compaction.BuildSummaryRequest(messages, model, 4096)
 	req.Betas = api.DefaultBetas
-	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+	assistant, _, err := l.streamTurn(ctx, req, nil, nil, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -328,7 +332,7 @@ func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessagePara
 func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options) ([]anthropic.BetaMessageParam, bool) {
 	req := compaction.BuildSummaryRequest(messages, opts.Model, 4096)
 	req.Betas = api.DefaultBetas
-	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+	assistant, _, err := l.streamTurn(ctx, req, nil, nil, nil)
 	if err != nil {
 		return messages, false
 	}
@@ -346,7 +350,10 @@ func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessage
 // assistant-text events as deltas arrive, and returns the assembled message.
 // rawSink, if non-nil, receives the raw stream events for partial-message
 // output; it is nil for compaction summary turns.
-func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, emit Emitter, rawSink func(anthropic.BetaRawMessageStreamEventUnion)) (anthropic.BetaMessage, string, error) {
+func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, emit Emitter, rawSink func(anthropic.BetaRawMessageStreamEventUnion), provider api.Provider) (anthropic.BetaMessage, string, error) {
+	if provider == nil {
+		provider = l.provider
+	}
 	sink := api.StreamSink{
 		OnText: func(delta string) {
 			if emit != nil {
@@ -355,7 +362,7 @@ func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewPa
 		},
 		OnRawEvent: rawSink,
 	}
-	assistant, err := l.provider.StreamTurn(ctx, params, sink)
+	assistant, err := provider.StreamTurn(ctx, params, sink)
 	if err != nil {
 		return assistant, "", fmt.Errorf("stream: %w", err)
 	}
