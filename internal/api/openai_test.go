@@ -9,7 +9,7 @@ import (
 )
 
 func TestTranslateRequest(t *testing.T) {
-	p := NewOpenAIProvider("https://x/v1", "k")
+	p := NewOpenAIProvider("https://x/v1", "k", nil)
 	params := anthropic.BetaMessageNewParams{
 		Model:     "openai/gpt-5.5",
 		MaxTokens: 1024,
@@ -59,7 +59,7 @@ func TestTranslateToolResultMessage(t *testing.T) {
 	}
 	toolRes := anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock(id, "file contents", false))
 
-	p := NewOpenAIProvider("https://x/v1", "k")
+	p := NewOpenAIProvider("https://x/v1", "k", nil)
 	req, err := p.translateRequest(anthropic.BetaMessageNewParams{
 		Model:    "m",
 		Messages: []anthropic.BetaMessageParam{assistant, toolRes},
@@ -104,7 +104,7 @@ func TestTranslateToolResultImages(t *testing.T) {
 		}},
 	}
 
-	p := NewOpenAIProvider("https://x/v1", "k")
+	p := NewOpenAIProvider("https://x/v1", "k", nil)
 	req, err := p.translateRequest(anthropic.BetaMessageNewParams{
 		Model:    "m",
 		Messages: []anthropic.BetaMessageParam{assistant, toolRes},
@@ -135,14 +135,14 @@ func TestConsumeStreamAssembles(t *testing.T) {
 		`data: [DONE]`,
 	}, "\n")
 
-	p := NewOpenAIProvider("https://x/v1", "k")
+	p := NewOpenAIProvider("https://x/v1", "k", nil)
 	var streamed strings.Builder
 	var rawTypes []string
 	sink := StreamSink{
 		OnText:     func(s string) { streamed.WriteString(s) },
 		OnRawEvent: func(ev anthropic.BetaRawMessageStreamEventUnion) { rawTypes = append(rawTypes, ev.Type) },
 	}
-	msg, err := p.consumeStream(strings.NewReader(sse), "openai/gpt-5.5", sink)
+	msg, _, err := p.consumeStream(strings.NewReader(sse), "openai/gpt-5.5", sink, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

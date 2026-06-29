@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/greenthread/klaudia/internal/browser"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/browser"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
 type BrowserNavigateInput struct {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread/klaudia/internal/session"
+	"github.com/greenthread-ai/klaudia/internal/session"
 )
 
 // MessagesFromEntries reconstructs the conversation as API message params from

@@ -150,64 +150,126 @@ func TestSearchEmptyQueryReturnsAll(t *testing.T) {
 	}
 }
 
-func TestAddLinksMemoryFiles(t *testing.T) {
+func TestFilePointers(t *testing.T) {
 	dir := t.TempDir()
 	store := New(dir)
 	memDir := filepath.Join(dir, "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Tools\n"), 0o644); err != nil {
+	// A file whose hook comes from its first heading.
+	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Preferred tools\n\n- rg\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(memDir, "prefs.md"), []byte("# Prefs\n"), 0o644); err != nil {
+	// A file with no heading: hook is the first non-empty line.
+	if err := os.WriteFile(filepath.Join(memDir, "prefs.md"), []byte("\nlikes tabs\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// A nested index file must be ignored.
 	if err := os.WriteFile(filepath.Join(memDir, "MEMORY.md"), []byte("# Legacy\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := store.Add("remember this"); err != nil {
-		t.Fatalf("Add() error = %v", err)
+	got := store.FilePointers()
+	want := []string{
+		"- [prefs](memory/prefs.md) — likes tabs",
+		"- [tools](memory/tools.md) — Preferred tools",
 	}
-
-	contents, err := store.Index()
-	if err != nil {
-		t.Fatalf("Index() error = %v", err)
-	}
-	for _, want := range []string{"## Linked memory", "[prefs](memory/prefs.md)", "[tools](memory/tools.md)"} {
-		if !strings.Contains(contents, want) {
-			t.Fatalf("Index() = %q, want %q", contents, want)
-		}
-	}
-	if strings.Contains(contents, "memory/MEMORY.md") {
-		t.Fatalf("Index() = %q, should not link legacy MEMORY.md", contents)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("FilePointers() = %#v, want %#v", got, want)
 	}
 }
 
-func TestAddDoesNotDuplicateMemoryFileLinks(t *testing.T) {
+func TestSyncLinksWritesAndIsIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	store := New(dir)
 	memDir := filepath.Join(dir, "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Tools\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Preferred tools\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Seed an index with a session bullet.
+	if err := store.Add("prefer table tests"); err != nil { // Add also syncs
 		t.Fatal(err)
 	}
 
-	addNotes(t, store, "first", "second")
-
 	contents, err := store.Index()
 	if err != nil {
-		t.Fatalf("Index() error = %v", err)
+		t.Fatal(err)
 	}
-	if got := strings.Count(contents, "[tools](memory/tools.md)"); got != 1 {
-		t.Fatalf("tools link count = %d, want 1; contents = %q", got, contents)
+	for _, want := range []string{"prefer table tests", "## Linked memory", "- [tools](memory/tools.md) — Preferred tools"} {
+		if !strings.Contains(contents, want) {
+			t.Fatalf("Index() = %q, missing %q", contents, want)
+		}
+	}
+
+	// Re-syncing without changes must not rewrite the file (idempotent) and must
+	// not duplicate the section.
+	before, _ := os.ReadFile(store.Path())
+	infoBefore, _ := os.Stat(store.Path())
+	if err := store.SyncLinks(); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(store.Path())
+	if string(before) != string(after) {
+		t.Fatalf("SyncLinks rewrote an unchanged file:\nbefore=%q\nafter=%q", before, after)
+	}
+	if infoAfter, _ := os.Stat(store.Path()); !infoAfter.ModTime().Equal(infoBefore.ModTime()) {
+		t.Error("SyncLinks touched the file despite no change")
+	}
+	if got := strings.Count(string(after), linkedSectionHeader); got != 1 {
+		t.Fatalf("linked section appears %d times, want 1", got)
+	}
+
+	// Removing the note strips the section on the next sync.
+	if err := os.Remove(filepath.Join(memDir, "tools.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SyncLinks(); err != nil {
+		t.Fatal(err)
+	}
+	final, _ := os.ReadFile(store.Path())
+	if strings.Contains(string(final), linkedSectionHeader) {
+		t.Fatalf("stale linked section survived removal: %q", final)
+	}
+	if !strings.Contains(string(final), "prefer table tests") {
+		t.Fatalf("session bullets must survive link sync: %q", final)
 	}
 }
 
-func addNotes(t *testing.T, store *Store, notes ...string) {
+func TestSearchIncludesDetailFiles(t *testing.T) {
+	dir := t.TempDir()
+	store := New(dir)
+	if err := store.Add("prefer table tests"); err != nil {
+		t.Fatal(err)
+	}
+	memDir := filepath.Join(dir, "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "browser.md"),
+		[]byte("# Browser port\n\n- DDG search hits an anomaly modal in headless Chrome\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A term only present in the detail file is found, tagged with the filename.
+	matches, err := store.Search("anomaly")
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(matches) != 1 || !strings.HasPrefix(matches[0], "browser.md: ") || !strings.Contains(matches[0], "anomaly modal") {
+		t.Fatalf("Search(anomaly) = %#v, want one browser.md-tagged hit", matches)
+	}
+
+	// Headings are not matchable content lines.
+	if got, _ := store.Search("Browser port"); len(got) != 0 {
+		t.Fatalf("Search should skip headings, got %#v", got)
+	}
+}
+
+func addNotes(t *testing.T, store Store, notes ...string) {
 	t.Helper()
 	for _, note := range notes {
 		if err := store.Add(note); err != nil {

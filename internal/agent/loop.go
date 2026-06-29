@@ -12,13 +12,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread/klaudia/internal/api"
-	"github.com/greenthread/klaudia/internal/compaction"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/compaction"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // defaultMaxTokens is the per-response output cap when the caller doesn't set one.
@@ -30,13 +32,22 @@ type Emitter func(event Event)
 
 // Event is a streaming event emitted during a run (stream-json mode).
 type Event struct {
-	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_result"
+	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_result" | "usage" | "compaction"
 	Text      string `json:"text,omitempty"`        // assistant text
 	ToolName  string `json:"tool_name,omitempty"`   // tool_use / tool_result
 	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use / tool_result
 	Input     any    `json:"input,omitempty"`       // tool_use input
 	Content   string `json:"content,omitempty"`     // tool_result content
 	IsError   bool   `json:"is_error,omitempty"`    // tool_result error flag
+	// Usage deltas for one inner-loop LLM call, emitted after each streamTurn so
+	// the TUI/stream-json frontend can update token counters live during long
+	// goal iterations rather than waiting for the whole Run to return. The
+	// matching Result fields (NumTurns/InputTokens/OutputTokens) stay
+	// authoritative — the TUI reconciles against them at doneMsg so dropped
+	// usage events still settle correctly.
+	InputDelta  int64 `json:"input_delta,omitempty"`
+	OutputDelta int64 `json:"output_delta,omitempty"`
+	TurnDelta   int   `json:"turn_delta,omitempty"`
 }
 
 // Recorder persists conversation messages to a transcript as the loop runs.
@@ -97,6 +108,10 @@ type Result struct {
 	StopReason   string
 	InputTokens  int64
 	OutputTokens int64
+	// CacheReadInputTokens / CacheCreationInputTokens report prompt-cache usage
+	// across the run: tokens served from cache (cheap) vs. tokens written to it.
+	CacheReadInputTokens     int64
+	CacheCreationInputTokens int64
 	// Messages is the full conversation after the run (initial + this turn's
 	// exchanges), so a caller can carry it forward as InitialMessages for the
 	// next turn (used by the stream-json embedding frontend).
@@ -133,9 +148,13 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		system = []anthropic.BetaTextBlockParam{{Text: opts.System}}
 	}
 
-	// failures tracks how many times each identical tool call (name+input) has
-	// failed within this Run, so dispatch can break a model out of a retry loop.
+	// failures tracks how many times each IDENTICAL tool call (name+input) has
+	// failed within this Run; errStreaks tracks how many consecutive failures
+	// of the same SHAPE a tool has produced (regardless of input). Together
+	// they break a model out of retry loops where either the same call or the
+	// same kind of mistake keeps recurring.
 	failures := map[string]int{}
+	errStreaks := map[string]errStreak{}
 
 	messages := append([]anthropic.BetaMessageParam{}, opts.InitialMessages...)
 	if opts.Prompt != "" {
@@ -165,10 +184,13 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			toolParams = append(toolParams, webToolParams()...)
 		}
 
+		// Repair any message with empty content (e.g. an old refusal recorded with
+		// content: null) before sending — the Anthropic API otherwise rejects the
+		// whole request with "messages.<i>.content: Field required".
 		params := anthropic.BetaMessageNewParams{
 			Model:     opts.Model,
 			MaxTokens: maxTokens,
-			Messages:  messages,
+			Messages:  sanitizeMessages(messages),
 			System:    system,
 			Tools:     toolParams,
 			Betas:     betas,
@@ -182,24 +204,41 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		res.StopReason = string(assistant.StopReason)
 		res.InputTokens += assistant.Usage.InputTokens
 		res.OutputTokens += assistant.Usage.OutputTokens
+		res.CacheReadInputTokens += assistant.Usage.CacheReadInputTokens
+		res.CacheCreationInputTokens += assistant.Usage.CacheCreationInputTokens
 		res.Text = finalText
+		// Live usage tick: emit per inner LLM call so frontends can update
+		// counters during long iterations. TurnDelta=1 mirrors res.NumTurns
+		// being incremented at the top of this loop iteration.
+		if emit != nil {
+			emit(Event{
+				Type:        "usage",
+				InputDelta:  assistant.Usage.InputTokens,
+				OutputDelta: assistant.Usage.OutputTokens,
+				TurnDelta:   1,
+			})
+		}
 
-		// Persist the assistant turn (including the final, tool-less answer) and
-		// add it to the running conversation.
-		record(opts.Recorder, "assistant", assistant)
+		// Add the assistant turn to the running conversation. Persisting to the
+		// transcript is DEFERRED until we know it's either final (no tools) or
+		// has its tool_result paired up — see the record calls below. Persisting
+		// here, then dying mid-dispatch (Ctrl+C / SIGTERM / OOM), would leak an
+		// orphan tool_use to disk and poison the next resume.
 		messages = append(messages, assistant.ToParam())
 
 		// pause_turn: the API paused a long-running server-side tool (e.g. web
-		// search). Re-send the accumulated turn to let it continue.
+		// search). Re-send the accumulated turn to let it continue. The
+		// assistant has no local tool_use to pair, so record it now.
 		if assistant.StopReason == "pause_turn" {
+			record(opts.Recorder, "assistant", assistant)
 			continue
 		}
 
 		// Collect tool_use blocks from this turn.
 		toolUses := toolUseBlocks(assistant)
 		if len(toolUses) == 0 {
-			// No tools requested → the model is done (server-side tool results,
-			// if any, were already resolved inline by the API).
+			// Final (tool-less) answer: structurally fine on its own, record now.
+			record(opts.Recorder, "assistant", assistant)
 			res.Messages = messages
 			return res, nil
 		}
@@ -213,12 +252,18 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		}
 		resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
 		for _, tu := range toolUses {
-			block := l.dispatch(ctx, tu, opts, emit, reveal, failures)
+			block := l.dispatch(ctx, tu, opts, emit, reveal, failures, errStreaks)
 			resultBlocks = append(resultBlocks, block)
 		}
 		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
-		record(opts.Recorder, "user", toolResultMsg)
 		messages = append(messages, toolResultMsg)
+
+		// Now persist BOTH back-to-back. The window for process termination
+		// between them is microseconds (two Recorder.Record calls), whereas the
+		// dispatch above can be seconds-to-minutes — that gap is where orphans
+		// used to land in the transcript.
+		record(opts.Recorder, "assistant", assistant)
+		record(opts.Recorder, "user", toolResultMsg)
 
 		if opts.MaxTurns > 0 && res.NumTurns >= opts.MaxTurns {
 			res.StopReason = "max_turns"
@@ -247,6 +292,13 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 
 	if os.Getenv("DISABLE_AUTO_COMPACT") == "" &&
 		compaction.ShouldAutocompact(compaction.EstimateTokens(messages), opts.ContextWindow) {
+		// Autocompact is a model call that runs silently (emit=nil), so signal
+		// its start with a contentless "compaction" event — the frontend shows
+		// "compacting…" for the duration. Microcompact above is instant and
+		// skips this: it only drops the done banner below.
+		if emit != nil {
+			emit(Event{Type: "compaction"})
+		}
 		if out, ok := l.autocompact(ctx, messages, opts); ok {
 			messages = out
 			if emit != nil {
@@ -329,7 +381,19 @@ func (l *Loop) unknownToolMsg(name string) string {
 				"Agent(subagent_type=%q, prompt=…).", name, name)
 		}
 	}
-	return fmt.Sprintf("No such tool available: %s", name)
+	// List the real tool names so a model that's improvised a name (e.g. "Find"
+	// when it meant Glob/Grep) sees what's actually on offer and can self-correct
+	// — without us having to maintain a fuzzy-match table per typo.
+	all := l.tools.All()
+	names := make([]string, 0, len(all))
+	for _, t := range all {
+		names = append(names, t.Name())
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return fmt.Sprintf("No such tool available: %s", name)
+	}
+	return fmt.Sprintf("No such tool available: %s. Available tools: %s.", name, strings.Join(names, ", "))
 }
 
 // repeatedFailureMsg is returned when the model retries an identical tool call
@@ -354,26 +418,109 @@ func repeatedFailureMsg(name string, n int) string {
 // exact same failing call indefinitely, burning the whole turn budget.
 const repeatFailureLimit = 2
 
-func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), failures map[string]int) anthropic.BetaContentBlockParamUnion {
+// errStreak counts how many consecutive failures of the same SHAPE a tool has
+// produced (same exact error message). It's reset whenever the tool succeeds
+// or produces a different error. The point: identical-args retry detection
+// misses "same mistake, different values" — like Read called repeatedly with
+// `line_start`/`line_end` (wrong field names) but new line numbers each time.
+//
+// `firstInput`/`varied` track whether the model actually changed its inputs
+// across the failing calls. If it did, the failure is almost certainly
+// environmental (shell wedged, network down, disk full) rather than a
+// tool-input bug — the model is varying its guesses in good faith and still
+// hitting the same wall. shortCircuit uses the flag to choose between two
+// directive messages.
+type errStreak struct {
+	sig        string // last error message text
+	count      int    // consecutive occurrences of sig
+	firstInput string // raw JSON of the input on the first failure in this streak
+	varied     bool   // true once a same-sig failure arrived with a different input
+}
+
+// bumpErrStreak records a new failure for tool. If the message matches the
+// prior signature, the count grows and the input-varied flag tracks whether
+// the model is changing inputs across calls. Otherwise the streak starts over.
+func bumpErrStreak(streaks map[string]errStreak, tool, msg, input string) {
+	prev := streaks[tool]
+	if prev.sig == msg {
+		prev.count++
+		if input != prev.firstInput {
+			prev.varied = true
+		}
+	} else {
+		prev = errStreak{sig: msg, count: 1, firstInput: input}
+	}
+	streaks[tool] = prev
+}
+
+// repeatedShapeFailureMsg is the directive returned when loop-breaker B fires
+// AND the model kept submitting the same input — classic "stop guessing" case.
+// Quoting the recurring error forces the model to confront the real problem
+// rather than retry with cosmetic variations.
+func repeatedShapeFailureMsg(tool string, n int, sig string) string {
+	return fmt.Sprintf(
+		"%s has failed with the SAME error %d times in a row. Stop calling it until you've understood the error below — guessing different values for the same wrong call won't help.\n\n--- recurring error ---\n%s",
+		tool, n, sig,
+	)
+}
+
+// envFailureMsg is the directive returned when loop-breaker B fires but the
+// model HAD varied its inputs across the failing calls. The error shape is
+// stable while the inputs aren't — the env, not the call, is broken. Telling
+// the model to "stop guessing" in this case is actively misleading (it WAS
+// trying different things) and pushes it into useless workaround loops.
+// Suggest concrete recovery moves instead.
+func envFailureMsg(tool string, n int, sig string) string {
+	return fmt.Sprintf(
+		"%s has failed %d times in a row with the same error shape across DIFFERENT inputs. This looks like an environment issue (shell wedged, leaked background process, network unreachable, filesystem broken) rather than a tool-input problem — varying the inputs more won't help. Options: (a) reset the relevant state (e.g. KillShell for a stuck Bash; restart a stuck server); (b) try a different tool that doesn't depend on the broken substrate; (c) ask the user. Stop retrying %s with new inputs.\n\n--- recurring error ---\n%s",
+		tool, n, tool, sig,
+	)
+}
+
+// shortCircuit returns a tool_result without touching the failure counters
+// (the loop-breaker is refusing the call, not registering another attempt).
+// Used by loop-breaker B; A reuses errResult since it bumps state intentionally.
+func shortCircuit(emit Emitter, tu anthropic.BetaToolUseBlock, msg string) anthropic.BetaContentBlockParamUnion {
+	if emit != nil {
+		emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
+	}
+	return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
+}
+
+func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), failures map[string]int, errStreaks map[string]errStreak) anthropic.BetaContentBlockParamUnion {
 	raw, _ := json.Marshal(tu.Input)
 	if emit != nil {
 		emit(Event{Type: "tool_use", ToolName: tu.Name, ToolUseID: tu.ID, Input: tu.Input})
 	}
 
 	key := tu.Name + "\x00" + string(raw)
+	rawStr := string(raw)
 	errResult := func(msg string) anthropic.BetaContentBlockParamUnion {
 		failures[key]++
+		bumpErrStreak(errStreaks, tu.Name, msg, rawStr)
 		if emit != nil {
 			emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
 		}
 		return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
 	}
 
-	// Loop-breaker: this exact call has already failed repeatedly. Don't run it
-	// again (it would fail identically); return directive steering instead so a
-	// model stuck in a retry loop gets a clear push to do something different.
+	// Loop-breaker A: this exact call has already failed repeatedly. Don't run
+	// it again — it would fail identically.
 	if failures[key] >= repeatFailureLimit {
 		return errResult(repeatedFailureMsg(tu.Name, failures[key]))
+	}
+	// Loop-breaker B: the same tool has produced the same KIND of error for
+	// `repeatFailureLimit` consecutive calls. Two cases — identical inputs (the
+	// model is in a guessing loop) or varied inputs (the environment is wedged
+	// and the same error shape comes back regardless). Different directives.
+	if streak := errStreaks[tu.Name]; streak.count >= repeatFailureLimit {
+		// Use shortCircuit() so we don't keep growing the streak on each fired
+		// short-circuit (the model isn't actually trying — we're refusing).
+		msg := repeatedShapeFailureMsg(tu.Name, streak.count, streak.sig)
+		if streak.varied {
+			msg = envFailureMsg(tu.Name, streak.count, streak.sig)
+		}
+		return shortCircuit(emit, tu, msg)
 	}
 
 	tool, ok := l.tools.Lookup(tu.Name)
@@ -413,7 +560,14 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	}
 
 	if err := tool.ValidateInput(raw); err != nil {
-		return errResult(fmt.Sprintf("Input validation error: %v", err))
+		msg := fmt.Sprintf("Input validation error: %v", err)
+		// Tell the model what the tool actually accepts. Smaller models hallucinate
+		// param names ("line_start" instead of "offset") and keep retrying with the
+		// same wrong shape — listing the real fields lets them self-correct.
+		if fields := schemaFieldList(tool.InputSchema()); fields != "" {
+			msg += fmt.Sprintf(" — %s accepts: %s.", tu.Name, fields)
+		}
+		return errResult(msg)
 	}
 
 	results, err := tool.Execute(ctx, tools.Context{Ask: opts.Asker, Plan: opts.Planner, Reveal: reveal}, raw)
@@ -435,8 +589,13 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	}
 	if isErr {
 		failures[key]++
+		bumpErrStreak(errStreaks, tu.Name, content, rawStr)
 	} else {
-		delete(failures, key) // a clean run clears the retry counter for this call
+		// A clean run resets both counters: this exact call's retry count and
+		// the per-tool same-shape streak (the tool clearly isn't fundamentally
+		// broken for the caller).
+		delete(failures, key)
+		delete(errStreaks, tu.Name)
 	}
 	if emit != nil {
 		emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr})
@@ -509,6 +668,36 @@ func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[strin
 
 // splitSchema pulls "properties" and "required" out of a generated JSON Schema
 // object so they can be placed into BetaToolInputSchemaParam.
+// schemaFieldList renders a tool's accepted input fields as
+// "file_path (required), offset, limit" — appended to validation errors so the
+// model sees what's correct, not just what was wrong. Returns "" when the
+// schema has no properties (e.g. parameterless tools).
+func schemaFieldList(raw json.RawMessage) string {
+	props, required := splitSchema(raw)
+	pm, ok := props.(map[string]any)
+	if !ok || len(pm) == 0 {
+		return ""
+	}
+	req := make(map[string]bool, len(required))
+	for _, r := range required {
+		req[r] = true
+	}
+	names := make([]string, 0, len(pm))
+	for k := range pm {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	parts := make([]string, len(names))
+	for i, n := range names {
+		if req[n] {
+			parts[i] = n + " (required)"
+		} else {
+			parts[i] = n
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
 func splitSchema(raw json.RawMessage) (properties any, required []string) {
 	var s struct {
 		Properties json.RawMessage `json:"properties"`

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -19,17 +20,20 @@ import (
 // SSE response, and assembling an anthropic.BetaMessage so the rest of Klaudia
 // (loop, tools, sessions, compaction) is unchanged.
 type OpenAIProvider struct {
-	baseURL string // e.g. https://api.demo.gthread.dev/v1
-	apiKey  string
-	http    *http.Client
+	baseURL     string // e.g. https://api.demo.gthread.dev/v1
+	apiKey      string
+	temperature *float64
+	http        *http.Client
 }
 
 // NewOpenAIProvider builds the provider. baseURL should include the /v1 suffix.
-func NewOpenAIProvider(baseURL, apiKey string) *OpenAIProvider {
+// temperature may be nil (omit from request) or a pointer to a value.
+func NewOpenAIProvider(baseURL, apiKey string, temperature *float64) *OpenAIProvider {
 	return &OpenAIProvider{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
-		http:    &http.Client{},
+		baseURL:     strings.TrimRight(baseURL, "/"),
+		apiKey:      apiKey,
+		temperature: temperature,
+		http:        &http.Client{},
 	}
 }
 
@@ -84,7 +88,7 @@ type oaRequest struct {
 	Model               string        `json:"model"`
 	Messages            []oaMessage   `json:"messages"`
 	Tools               []oaTool      `json:"tools,omitempty"`
-	Temperature         float64       `json:"temperature"`
+	Temperature         *float64      `json:"temperature,omitempty"` // optional per OpenAI spec; omitted when nil
 	MaxCompletionTokens int64         `json:"max_completion_tokens,omitempty"`
 	Stream              bool          `json:"stream"`
 	StreamOptions       *oaStreamOpts `json:"stream_options,omitempty"`
@@ -111,9 +115,35 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 	}
 	body, _ := json.Marshal(reqBody)
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/chat/completions", bytes.NewReader(body))
+	// Same idle-watchdog + stall-retry policy as the Anthropic provider: a
+	// half-open SSE connection would otherwise park bufio.Scanner.Scan() forever
+	// with the TUI stuck on "thinking…". See provider.go for the rationale.
+	idle := streamIdleTimeout()
+	for attempt := 0; ; attempt++ {
+		acc, delivered, stalled, serr := p.streamAttempt(ctx, body, string(params.Model), sink, idle)
+		if !stalled {
+			return acc, serr
+		}
+		if !delivered && attempt < maxStreamStallRetries {
+			continue
+		}
+		return acc, fmt.Errorf("%w: no data for %s: %w", ErrStreamStalled, idle, serr)
+	}
+}
+
+// streamAttempt issues one Chat Completions request and consumes its SSE
+// response under an idle watchdog. It returns the assembled message, whether
+// any output reached the sink, whether the watchdog tripped (a stall distinct
+// from a user interrupt), and the terminal error. The watchdog cancels only a
+// child of ctx, so a tripped watchdog with ctx still live marks a genuine
+// stall; a cancelled ctx is the user's interrupt and is returned as-is.
+func (p *OpenAIProvider) streamAttempt(ctx context.Context, body []byte, model string, sink StreamSink, idle time.Duration) (acc anthropic.BetaMessage, delivered, stalled bool, err error) {
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(streamCtx, http.MethodPost, p.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return anthropic.BetaMessage{}, err
+		return anthropic.BetaMessage{}, false, false, err
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -121,22 +151,41 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 
 	resp, err := p.doWithRetry(httpReq, body)
 	if err != nil {
-		return anthropic.BetaMessage{}, err
+		return anthropic.BetaMessage{}, false, false, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		b, _ := readAll(resp.Body, 4096)
-		return anthropic.BetaMessage{}, &OpenAIError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(b)}
+		return anthropic.BetaMessage{}, false, false, &OpenAIError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(b)}
 	}
 
-	return p.consumeStream(resp.Body, string(params.Model), sink)
+	var tripped atomic.Bool
+	var timer *time.Timer
+	if idle > 0 {
+		timer = time.AfterFunc(idle, func() {
+			tripped.Store(true)
+			cancel() // aborts the in-flight resp.Body read → Scan() unblocks
+		})
+		defer timer.Stop()
+	}
+	onActivity := func() {
+		if timer != nil {
+			timer.Reset(idle)
+		}
+	}
+
+	acc, delivered, err = p.consumeStream(resp.Body, model, sink, onActivity)
+	if tripped.Load() && ctx.Err() == nil {
+		return acc, delivered, true, context.DeadlineExceeded
+	}
+	return acc, delivered, false, err
 }
 
 // translateRequest converts the Anthropic params into an OpenAI chat request.
 func (p *OpenAIProvider) translateRequest(params anthropic.BetaMessageNewParams) (oaRequest, error) {
 	out := oaRequest{
 		Model:               string(params.Model),
-		Temperature:         1,
+		Temperature:         p.temperature,
 		MaxCompletionTokens: params.MaxTokens,
 		Stream:              true,
 		StreamOptions:       &oaStreamOpts{IncludeUsage: true},
@@ -313,6 +362,41 @@ func (e *OpenAIError) Error() string {
 		return fmt.Sprintf("openai endpoint %d: %s", e.StatusCode, e.Body)
 	}
 	return fmt.Sprintf("openai endpoint %d", e.StatusCode)
+}
+
+// OpenAIErrorPayload is the structured error envelope OpenAI-compatible
+// providers return inside the response body:
+//
+//	{"error": {"message": "...", "type": "...", "code": "..."}}
+//
+// Surfacing it lets FriendlyError pass through the provider's own (often
+// actionable) wording instead of a generic guess.
+type OpenAIErrorPayload struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	// Code is provider-dependent: most OpenAI-compatible APIs send a string
+	// like "insufficient_quota", but some (e.g. gpt-oss-120b hosts) send a
+	// numeric HTTP status. json.RawMessage accepts both shapes without
+	// erroring the whole envelope parse.
+	Code json.RawMessage `json:"code"`
+}
+
+// Payload parses the response body for that envelope. Returns nil when the
+// body is empty or doesn't match (some providers ship plain-text errors).
+func (e *OpenAIError) Payload() *OpenAIErrorPayload {
+	if e == nil || e.Body == "" {
+		return nil
+	}
+	var wrap struct {
+		Error OpenAIErrorPayload `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(e.Body), &wrap); err != nil {
+		return nil
+	}
+	if wrap.Error.Message == "" && wrap.Error.Type == "" && len(wrap.Error.Code) == 0 {
+		return nil
+	}
+	return &wrap.Error
 }
 
 // doWithRetry issues the request, retrying transient failures (connection

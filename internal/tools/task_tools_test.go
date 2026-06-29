@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread/klaudia/internal/tasks"
+	"github.com/greenthread-ai/klaudia/internal/tasks"
 )
 
 func TestTaskToolsHappyPath(t *testing.T) {

@@ -6,19 +6,63 @@ macOS), no runtime dependencies. Klaudia began as a cleanroom of Claude Code
 the `js-reference` branch). See [Background](#background) for the story and
 [docs/parity.md](docs/parity.md) for the feature map.
 
+![Klaudia's terminal UI](docs/screenshot.png)
+
+Klaudia keeps full parity with the reference and then builds past it — the
+extras we lean on day to day:
+
+- **[Code intelligence (LSP)](#code-intelligence-lsp)** — real diagnostics and
+  go-to-definition from language servers you already have installed.
+- **[Memory & project knowledge](#memory--project-knowledge)** — a `MEMORY.md`
+  index that links out to detail notes, recalled into every session.
+- **[Themes](#themes)** — the whole UI (banner, prompts, menus, Markdown)
+  recolors, persisted in config.
+- **[Standing goals](#standing-goals)** — `/goal` pins an objective that's
+  re-stated to the model every turn.
+- Plus [OS/container Bash sandboxing](#sandboxing-the-bash-tool), local
+  [web search & browsing](#web-search--browsing), [MCP](#mcp), and
+  [skills](#skills).
+
 ## Getting started
 
+### Install
+
 ```bash
-CGO_ENABLED=0 go build -o klaudia ./cmd/klaudia
+go install github.com/greenthread-ai/klaudia/cmd/klaudia@main
 ```
 
-Before first run, configure credentials using one of these paths:
+This installs the `klaudia` binary into `$(go env GOPATH)/bin` (commonly
+`~/go/bin`) — make sure that's on your `PATH`. We track `main` while a release
+tag isn't published yet; `@main` always resolves to the current HEAD, whereas
+`@latest` (the usual Go default) routes through `proxy.golang.org` and can lag
+behind new commits on an untagged module. To force a refresh:
+`GOPROXY=direct go install github.com/greenthread-ai/klaudia/cmd/klaudia@latest`.
+
+Prefer to build from a checkout? See [Build](#build).
+
+### Create a config (optional but recommended)
+
+Klaudia reads `~/.klaudia/config.toml` automatically for every run; a project
+`./.klaudia/config.toml` overlays it when present. Generate a commented starter:
+
+```bash
+klaudia --create-config=global   # ~/.klaudia/config.toml  (your default)
+# or:
+klaudia --create-config=local    # ./.klaudia/config.toml  (project override)
+```
+
+Both commands refuse to overwrite an existing config (so you can't accidentally
+clobber settings); delete the file first if you want a fresh starter.
+
+### Authentication
+
+Pick one of these paths:
 
 **Anthropic API key**
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
-./klaudia
+klaudia
 ```
 
 **Existing Claude Code login on macOS**
@@ -28,23 +72,15 @@ Sign in with Claude Code first, then run Klaudia:
 
 ```bash
 claude
-./klaudia
+klaudia
 ```
 
 **OpenAI-compatible provider**
 
-Create a starter config globally or just for the current project:
-
-```bash
-./klaudia --create-config=global   # writes ~/.klaudia/config.toml
-# or:
-./klaudia --create-config=local    # writes ./.klaudia/config.toml
-```
-
-Edit the generated config:
+Edit the config you just generated and set the provider block:
 
 ```toml
-# Comments are supported.
+# ~/.klaudia/config.toml  (comments are supported)
 provider = "openai"
 model = "openai/gpt-5.5"
 baseURL = "https://api.example.com/v1"
@@ -59,11 +95,8 @@ Then export the variable you named in `apiKeyEnv` and run:
 
 ```bash
 export MY_API_KEY="sk-..."   # same name as apiKeyEnv above
-./klaudia
+klaudia
 ```
-
-`~/.klaudia/config.toml` is loaded automatically for every run; a project-local
-`./.klaudia/config.toml` overlays it when present.
 
 Once the TUI starts, type `/doctor` to verify auth and environment status.
 
@@ -135,14 +168,22 @@ channel for editor/SDK integrations (no terminal needed):
 ### Resuming
 
 ```bash
-./klaudia --continue                 # resume the most recent session here
+./klaudia                            # auto-resume the most recent session here
+./klaudia --new-session              # start fresh instead of auto-resuming
+./klaudia --continue                 # explicitly resume the most recent session here
 ./klaudia -r <session-id>            # resume a specific session
 ./klaudia -r <session-id> --full     # replay the whole transcript (not the summary)
 ```
 
-Sessions are JSONL transcripts under `~/.klaudia/projects/<encoded-cwd>/`
-(override the base with `KLAUDIA_CONFIG_DIR`). When a session has a persisted
-compaction summary, `--resume` seeds from it (token-saving) unless `--full`.
+Auto-resume is an interactive convenience: headless (`-p`) and embedding
+(`--input-format stream-json`) runs stay stateless unless you pass
+`--continue` or `-r <id>`.
+
+Sessions are JSONL transcripts under `~/.klaudia/sessions/<encoded-cwd>/`
+(override the base with `KLAUDIA_CONFIG_DIR`). Klaudia still reads legacy
+transcripts from `~/.klaudia/projects/<encoded-cwd>/` during migration. When a
+session has a persisted compaction summary, resume seeds from it (token-saving)
+unless `--full`.
 
 ## Permission modes
 
@@ -175,6 +216,13 @@ baseURL = "https://api.example.com/v1"
 # apiKeyEnv names the env var holding the key (you then `export MY_API_KEY=...`).
 # Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
+
+# Optional: set the model's context window in tokens so autocompaction kicks
+# in before the provider overflows. Defaults to 200000 (Anthropic-sized); set
+# this when running against smaller-context models (e.g. 128000 for many
+# OpenAI-compatible hosts) — otherwise long sessions can hit
+# "max_tokens must be at least 1, got -N" or "context length exceeded" 400s.
+# contextWindow = 128000
 ```
 
 Create a commented starter config with `./klaudia --create-config=global` for
@@ -194,6 +242,18 @@ overlays it (project wins). Settings merge per field.
 - an existing Claude Code OAuth session in the macOS Keychain (Klaudia refreshes
   expired tokens and writes them back), or
 - a provider key via `apiKey` / `apiKeyEnv` in `.klaudia/config.toml`.
+
+### Streaming & reliability
+
+- `KLAUDIA_STREAM_IDLE_TIMEOUT` — seconds a streamed model turn may go without
+  any event before it's treated as a stalled connection (default `120`). On a
+  stall Klaudia transparently retries the turn if nothing has been emitted yet,
+  otherwise it fails the turn with a clear timeout instead of hanging forever.
+  Set to `0` to disable the watchdog.
+- **Long-context credits (429)** — if the API returns *"Usage credits are
+  required for long context requests"*, that's a billing/entitlement gate, not a
+  transient throttle: retries won't help. Add usage credits, or reduce context
+  (lower `contextWindow` so autocompaction triggers earlier, and `/compact`).
 
 ## Sandboxing the Bash tool
 
@@ -264,9 +324,10 @@ disabled = ["python"]
 
 ## Skills
 
-Drop Markdown files with YAML frontmatter in `~/.claude/skills` or
-`.klaudia/skills/` (project wins). They become a `Skill` tool the model can
-invoke and `/＜name＞` commands in the TUI. Body supports `$ARGUMENTS`.
+Drop Markdown files with YAML frontmatter in `~/.klaudia/skills` (user) or
+`.klaudia/skills/` (project, wins on name collision). They become a `Skill` tool
+the model can invoke and `/＜name＞` commands in the TUI. Body supports
+`$ARGUMENTS`.
 
 ```markdown
 ---
@@ -276,10 +337,61 @@ description: Structured review of the current diff
 Review the staged changes carefully. $ARGUMENTS
 ```
 
+## Themes
+
+`/theme` recolors the whole UI — banner, prompts, menus, type-ahead, and
+Markdown rendering, not just code blocks. Built in: `dracula`, `gruvbox`,
+`tokyo-night`, `nord`, `catppuccin`. Persist a default in config (project
+`.klaudia` overrides `~/.klaudia`):
+
+```toml
+theme = "nord"
+```
+
+## Goals & autonomous iteration
+
+Two complementary modes for working toward an objective:
+
+- **Standing goal** — `/goal <text>` pins an objective re-stated to the model at
+  the start of every turn so it doesn't drift; `/goal clear` removes it.
+- **Goal spec + Ralph loop** — for bigger objectives:
+  - `/goal` (no args) enters **goal-setting**: it loads an existing spec
+    (`./PRD.md` or `./.klaudia/GOAL.md`) or, if none, helps you draft one
+    (objective, an acceptance-criteria checklist, and a verification command).
+    `/goal` again finishes.
+  - `/goal run [N]` then runs an **autonomous loop** against the spec: each
+    iteration re-reads the spec, makes the next valuable change, verifies, and
+    commits — progress accumulating in files and git, not the context window
+    (the [Ralph](https://ghuntley.com/ralph/) pattern). It runs on a dedicated
+    `klaudia/goal-<slug>` branch, stops when the model reports `<goal-complete/>`
+    or after `N` iterations (default 10, cap 50), and is interruptible any time
+    with `Esc` or `/goal stop`. The status bar shows `goal K/N`. On an incomplete
+    stop it runs a final wrap-up turn that records an end-of-run summary in the
+    spec (what's done, what remains, the next step) so a re-run resumes cleanly.
+    When it stops, it prints where the work landed and how to review/merge the
+    branch — the loop never touches your starting branch.
+  - **Completion is gated on the spec, not the model's word.** Before each run,
+    the spec's `## Progress` tracker is scanned: if the body describes phases
+    that the tracker doesn't list, the first iteration is a stub-fix turn that
+    repairs the tracker. After every claimed `<goal-complete/>` the loop runs
+    two checks — a mechanical count of remaining `- [ ]` items, and a one-shot
+    verification turn that re-reads the spec from disk and cross-references it
+    against git/build/tests — and only honours completion if both agree.
+  - Headless/scriptable: `klaudia --loop --dangerously-skip-permissions
+    [--max-iterations N]` runs the same loop without the TUI (each iteration with
+    a fresh context). It needs a spec in the cwd and bypass permissions (no human
+    to approve), and also stops if it stalls (no new commits for a few
+    iterations).
+
 ## Memory & project knowledge
 
-- **Auto-memory** — the `Memory` tool reads/writes notes under
-  `.klaudia/memory/`; the index is recalled into the system prompt.
+- **Auto-memory** — the `Memory` tool stores and recalls notes. `.klaudia/MEMORY.md`
+  is the index (session bullets); longer notes live as `.klaudia/memory/*.md`
+  detail files. The index keeps a `## Linked memory` section pointing at those
+  files (name + one-line hook), kept in sync automatically. Only the index is
+  recalled into the prompt — cheap as memory grows — and the model opens a
+  detail note on demand. `Memory` search spans both the index and the detail
+  notes (a hit is tagged with its filename).
 - **Project knowledge** — `.klaudia/KNOWLEDGE.md` (curated, durable lessons) is
   injected into the system prompt when present.
 
@@ -340,8 +452,10 @@ tools.
   Anthropic provider).
 - Config and sessions live under `~/.klaudia` (`KLAUDIA_CONFIG_DIR`), not
   `~/.claude`.
-- New capabilities with no reference analogue: OS/container Bash sandboxing,
-  persisted resume summaries, project `KNOWLEDGE.md`, background shells.
+- New capabilities with no reference analogue: language-server code intelligence
+  (Diagnostics/Definition/References), OS/container Bash sandboxing, persisted
+  resume summaries, project `KNOWLEDGE.md`, an index→detail memory store,
+  standing goals (`/goal`), chrome-wide themes, and background shells.
 
 ## Roadmap
 

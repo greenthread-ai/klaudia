@@ -29,6 +29,17 @@ type Config struct {
 	Theme string `toml:"theme,omitempty"`
 	// BaseURL is the OpenAI-compatible endpoint (including /v1), if provider=openai.
 	BaseURL string `toml:"baseURL,omitempty"`
+	// Temperature for the OpenAI-compatible provider. Omitted from the request
+	// when nil (lets the server pick its default).
+	Temperature *float64 `toml:"temperature,omitempty"`
+	// ContextWindow is the model's effective context size in tokens. Used to
+	// drive autocompaction: when the estimated message size approaches this,
+	// the loop summarises history to stay below the model's actual cap.
+	// 0 (unset) uses the package default of 200000 — fine for Claude, but
+	// often wrong for OpenAI-compatible models (e.g. gpt-oss-120b at 128k).
+	// Set this when a provider rejects requests with negative max_tokens or
+	// "context length exceeded" errors deep into a session.
+	ContextWindow int `toml:"contextWindow,omitempty"`
 	// APIKey is the bearer token. Prefer APIKeyEnv to keep secrets out of files.
 	APIKey string `toml:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable holding the key.
@@ -228,6 +239,12 @@ func merge(dst *Config, src Config) {
 	}
 	if src.APIKeyEnv != "" {
 		dst.APIKeyEnv = src.APIKeyEnv
+	}
+	if src.Temperature != nil {
+		dst.Temperature = src.Temperature
+	}
+	if src.ContextWindow != 0 {
+		dst.ContextWindow = src.ContextWindow
 	}
 	if src.Sandbox.Mode != "" {
 		dst.Sandbox.Mode = src.Sandbox.Mode

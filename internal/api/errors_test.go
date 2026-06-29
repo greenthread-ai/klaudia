@@ -50,6 +50,184 @@ func TestFriendlyErrorOpenAI(t *testing.T) {
 	}
 }
 
+func TestFriendlyError429AnthropicSurfacesUpstreamMessage(t *testing.T) {
+	// A real-shape 429 body from Anthropic: an actionable provider message we
+	// were throwing away in favour of a generic guess. After the fix we splice
+	// the upstream type and message into the output (and keep the OAuth-token
+	// note as a possible cause).
+	body := []byte(`{"error":{"type":"rate_limit_error","message":"This request would exceed your organization's input-tokens-per-minute rate limit."}}`)
+	var anthErr anthropic.Error
+	if err := anthErr.UnmarshalJSON(body); err != nil {
+		t.Fatalf("unmarshal anthropic.Error: %v", err)
+	}
+	anthErr.StatusCode = 429 // the status comes off the HTTP response, not the body
+
+	got := FriendlyError(&anthErr)
+	for _, want := range []string{
+		"Rate limited (429)",
+		"[rate_limit_error]",
+		"input-tokens-per-minute rate limit",
+		"Claude Code OAuth",   // OAuth-sharing remains as a possible cause
+		"KLAUDIA_MAX_RETRIES", // the retry knob is still relevant
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in: %q", want, got)
+		}
+	}
+	// Generic "API is busy" boilerplate should NOT appear once we have the real
+	// upstream message — that was the previous misleading phrasing.
+	if strings.Contains(got, "API is busy") {
+		t.Errorf("upstream message available; should not fall back to generic boilerplate: %q", got)
+	}
+}
+
+func TestFriendlyError429AnthropicUselessMessageFallsBack(t *testing.T) {
+	// Real shape Anthropic sometimes returns on an OAuth-token-sharing 429:
+	// the body has a type but the "message" is the literal word "Error",
+	// which we used to splice in verbatim — producing the broken-looking
+	// "Rate limited (429) [rate_limit_error]: Error (..." output. Detect the
+	// useless message and promote the OAuth-sharing hint to primary.
+	body := []byte(`{"error":{"type":"rate_limit_error","message":"Error"}}`)
+	var anthErr anthropic.Error
+	if err := anthErr.UnmarshalJSON(body); err != nil {
+		t.Fatalf("unmarshal anthropic.Error: %v", err)
+	}
+	anthErr.StatusCode = 429
+
+	got := FriendlyError(&anthErr)
+	// Type still surfaces — that's actually informative.
+	if !strings.Contains(got, "[rate_limit_error]") {
+		t.Errorf("type label missing: %q", got)
+	}
+	// Useless upstream "Error" must NOT appear as the explanation.
+	if strings.Contains(got, ": Error (") || strings.Contains(got, ": Error.") {
+		t.Errorf("upstream 'Error' should not be spliced in verbatim: %q", got)
+	}
+	// OAuth hint promoted to the primary explanation.
+	for _, want := range []string{"Claude Code OAuth", "token is in use by another session"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in: %q", want, got)
+		}
+	}
+}
+
+func TestFriendlyError429HintIsProviderSpecific(t *testing.T) {
+	// The Claude Code OAuth-token hint is Anthropic-specific and must not surface
+	// for OpenAI-compatible providers (the original "even though we're using
+	// ChatGPT we're told to check our Claude Code OAuth" bug).
+	openAI := FriendlyError(&OpenAIError{StatusCode: 429})
+	if strings.Contains(openAI, "OAuth") || strings.Contains(openAI, "Claude Code") {
+		t.Errorf("OpenAI 429 leaked the Claude-Code OAuth hint: %q", openAI)
+	}
+	if !strings.Contains(openAI, "KLAUDIA_MAX_RETRIES") {
+		t.Errorf("OpenAI 429 should still mention the retries env: %q", openAI)
+	}
+	anth := FriendlyError(&anthropic.Error{StatusCode: 429})
+	if !strings.Contains(anth, "Claude Code OAuth") {
+		t.Errorf("Anthropic 429 should mention the OAuth-token cause: %q", anth)
+	}
+}
+
+func TestFriendlyErrorInsufficientQuotaDoesNotRecommendRetry(t *testing.T) {
+	// Real OpenAI body for an exhausted-quota 429: the provider already gives a
+	// useful message, and retries won't help — so we surface their wording and
+	// drop the misleading "retries / KLAUDIA_MAX_RETRIES" advice.
+	body := `{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","param":null,"code":"insufficient_quota"}}`
+	msg := FriendlyError(&OpenAIError{StatusCode: 429, Body: body})
+
+	for _, want := range []string{"Insufficient quota", "exceeded your current quota", "Retries won't help"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("missing %q in: %q", want, msg)
+		}
+	}
+	for _, banned := range []string{"KLAUDIA_MAX_RETRIES", "retries were exhausted", "Wait a moment"} {
+		if strings.Contains(msg, banned) {
+			t.Errorf("should not recommend retrying for insufficient_quota: %q (contains %q)", msg, banned)
+		}
+	}
+}
+
+func TestFriendlyError429PassesThroughOpenAIMessage(t *testing.T) {
+	// For a non-quota 429 with a useful provider message, surface it verbatim
+	// instead of the generic "API is busy" guess.
+	body := `{"error":{"message":"You are sending requests too quickly.","type":"requests","code":"rate_limit_exceeded"}}`
+	msg := FriendlyError(&OpenAIError{StatusCode: 429, Body: body})
+	if !strings.Contains(msg, "You are sending requests too quickly") {
+		t.Errorf("expected the upstream message to pass through: %q", msg)
+	}
+	if !strings.Contains(msg, "KLAUDIA_MAX_RETRIES") {
+		t.Errorf("transient 429 should still mention the retry knob: %q", msg)
+	}
+}
+
+func TestFriendlyErrorPassesThroughUpstreamDetail(t *testing.T) {
+	body := func(msg, code string) string {
+		return fmt.Sprintf(`{"error":{"message":%q,"type":"invalid_request_error","code":%q}}`, msg, code)
+	}
+	cases := []struct {
+		name, body string
+		status     int
+		wantSubs   []string
+	}{
+		{
+			name: "401 splices upstream message with the config hint",
+			body: body("Incorrect API key provided: sk-***xyz", "invalid_api_key"), status: 401,
+			wantSubs: []string{"Authentication failed (401)", "Incorrect API key provided", "Check your API key", ".klaudia/config.toml"},
+		},
+		{
+			name: "403 splices upstream message",
+			body: body("You don't have access to this model.", "model_not_found"), status: 403,
+			wantSubs: []string{"Authentication failed (403)", "don't have access to this model"},
+		},
+		{
+			name: "500 surfaces provider message and keeps the try-again hint",
+			body: body("Internal server error", "server_error"), status: 500,
+			wantSubs: []string{"API server error (500)", "Internal server error", "Try again shortly"},
+		},
+		{
+			name: "529 surfaces provider message and keeps the try-again hint",
+			body: body("Service temporarily overloaded.", "overloaded"), status: 529,
+			wantSubs: []string{"overloaded (529)", "Service temporarily overloaded", "Try again shortly"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FriendlyError(&OpenAIError{StatusCode: tc.status, Body: tc.body})
+			for _, w := range tc.wantSubs {
+				if !strings.Contains(got, w) {
+					t.Errorf("missing %q in %q", w, got)
+				}
+			}
+		})
+	}
+	// Without a parseable body, the generic templates are still used.
+	if got := FriendlyError(&OpenAIError{StatusCode: 401, Body: "plain text"}); !strings.Contains(got, "check your API key") {
+		t.Errorf("401 without payload should fall back to the generic template; got %q", got)
+	}
+}
+
+func TestOpenAIErrorPayload(t *testing.T) {
+	// Parses the OpenAI error envelope; returns nil for empty / non-JSON bodies.
+	p := (&OpenAIError{Body: `{"error":{"message":"m","type":"t","code":"c"}}`}).Payload()
+	if p == nil || p.Message != "m" || p.Type != "t" || string(p.Code) != `"c"` {
+		t.Errorf("payload = %+v", p)
+	}
+	// Numeric codes (some hosts send "code":400) parse cleanly too — they used
+	// to abort the whole envelope parse when Code was typed `string`.
+	if p := (&OpenAIError{Body: `{"error":{"message":"bad","type":"BadRequestError","code":400}}`}).Payload(); p == nil || p.Message != "bad" || string(p.Code) != "400" {
+		t.Errorf("numeric code: payload = %+v", p)
+	}
+	if (&OpenAIError{Body: ""}).Payload() != nil {
+		t.Error("empty body should parse to nil")
+	}
+	if (&OpenAIError{Body: "plain text"}).Payload() != nil {
+		t.Error("non-JSON body should parse to nil")
+	}
+	if (&OpenAIError{Body: `{}`}).Payload() != nil {
+		t.Error("envelope without an error object should parse to nil")
+	}
+}
+
 func TestBackoffGrows(t *testing.T) {
 	if backoff(1) >= backoff(2) {
 		t.Error("backoff should grow with attempt")
@@ -107,5 +285,131 @@ func TestMaxRetriesEnvOverride(t *testing.T) {
 	t.Setenv("KLAUDIA_MAX_RETRIES", "")
 	if maxRetries() != defaultMaxRetries {
 		t.Errorf("maxRetries = %d, want default %d", maxRetries(), defaultMaxRetries)
+	}
+}
+
+func TestFriendlyError400ContextOverflowSuggestsContextWindow(t *testing.T) {
+	// Real shape from a hosted gpt-oss-120b endpoint: after enough turns the
+	// provider's internal max_tokens = ctx - input goes negative, and we get
+	// a 400 with a misleading "max_tokens must be at least 1, got -71". The
+	// user can't tell from that string that their context window is the real
+	// issue — translate it.
+	body := `{"error":{"message":"max_tokens must be at least 1, got -71. (parameter=max_tokens, value=-71)","type":"BadRequestError","param":"max_tokens","code":400}}`
+	msg := FriendlyError(&OpenAIError{StatusCode: 400, Body: body})
+	for _, want := range []string{
+		"outgrew the model's context window",
+		"contextWindow",
+		".klaudia/config.toml",
+		"/compact",
+		"got -71", // the upstream message is still shown so the user knows what was raw
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("missing %q in: %q", want, msg)
+		}
+	}
+}
+
+func TestFriendlyError400OtherStillSurfacesUpstream(t *testing.T) {
+	// A normal 400 (bad input shape) gets the upstream message but NOT the
+	// context-window advice.
+	body := `{"error":{"message":"invalid model parameter","type":"BadRequestError","code":400}}`
+	msg := FriendlyError(&OpenAIError{StatusCode: 400, Body: body})
+	if !strings.Contains(msg, "Bad request (400)") || !strings.Contains(msg, "invalid model parameter") {
+		t.Errorf("upstream 400 should pass through; got %q", msg)
+	}
+	if strings.Contains(msg, "context window") {
+		t.Errorf("non-overflow 400 should not suggest contextWindow; got %q", msg)
+	}
+}
+
+func TestFriendlyError429SessionLimitAdvisesNotToRetry(t *testing.T) {
+	// Claude Max / Claude Code "session limit" 429: the OAuth-sharing hint
+	// would be misleading (it's a daily/period quota wait, not concurrent use)
+	// and the "set KLAUDIA_MAX_RETRIES" suggestion is actively wrong since
+	// no retry will help until the reset time the message names. Detect the
+	// shape and swap the advice.
+	body := []byte(`{"error":{"type":"rate_limit_error","message":"You've hit your session limit · resets 12:40am (Australia/Sydney)"}}`)
+	var anthErr anthropic.Error
+	if err := anthErr.UnmarshalJSON(body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	anthErr.StatusCode = 429
+
+	got := FriendlyError(&anthErr)
+	if !strings.Contains(got, "session limit") {
+		t.Errorf("upstream session-limit message must be surfaced; got %q", got)
+	}
+	if !strings.Contains(got, "Retries won't help") {
+		t.Errorf("must advise against retrying; got %q", got)
+	}
+	for _, forbidden := range []string{"token is in use by another session", "KLAUDIA_MAX_RETRIES"} {
+		if strings.Contains(got, forbidden) {
+			t.Errorf("should not suggest %q for a session-limit 429; got %q", forbidden, got)
+		}
+	}
+}
+
+func TestFriendlyError429LongContextCreditsAdvisesNotToRetry(t *testing.T) {
+	// The long-context-tier credits 429: an entitlement/billing gate, so the
+	// "set KLAUDIA_MAX_RETRIES" and OAuth-sharing hints are both wrong. Detect
+	// the shape and swap in the add-credits / shrink-context advice instead.
+	body := []byte(`{"error":{"type":"rate_limit_error","message":"Usage credits are required for long context requests."}}`)
+	var anthErr anthropic.Error
+	if err := anthErr.UnmarshalJSON(body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	anthErr.StatusCode = 429
+
+	got := FriendlyError(&anthErr)
+	if !strings.Contains(got, "Usage credits are required") {
+		t.Errorf("upstream long-context-credits message must be surfaced; got %q", got)
+	}
+	if !strings.Contains(got, "Retries won't help") {
+		t.Errorf("must advise against retrying; got %q", got)
+	}
+	if !strings.Contains(got, "contextWindow") || !strings.Contains(got, "/compact") {
+		t.Errorf("must point at the shrink-context fix; got %q", got)
+	}
+	for _, forbidden := range []string{"token is in use by another session", "KLAUDIA_MAX_RETRIES"} {
+		if strings.Contains(got, forbidden) {
+			t.Errorf("should not suggest %q for a long-context-credits 429; got %q", forbidden, got)
+		}
+	}
+}
+
+func TestIsLongContextCreditsRecognition(t *testing.T) {
+	if !isLongContextCredits("Usage credits are required for long context requests.") {
+		t.Error("should recognise the long-context-credits shape")
+	}
+	// Must not over-match a plain throttle or a generic credits message.
+	for _, in := range []string{
+		"You've hit your session limit · resets 12:40am",
+		"Insufficient credits on your account",
+		"long context window is large",
+	} {
+		if isLongContextCredits(in) {
+			t.Errorf("should not match: %q", in)
+		}
+	}
+}
+
+func TestIsSessionLimitRecognition(t *testing.T) {
+	for _, in := range []string{
+		"You've hit your session limit · resets 12:40am",
+		"Rate limit hit (session_limit) — try later",
+		"SESSION LIMIT exceeded",
+	} {
+		if !isSessionLimit(in) {
+			t.Errorf("should recognise session-limit shape: %q", in)
+		}
+	}
+	for _, in := range []string{
+		"Too many requests",
+		"You've hit your input-tokens-per-minute rate limit",
+		"",
+	} {
+		if isSessionLimit(in) {
+			t.Errorf("false positive on non-session-limit message: %q", in)
+		}
 	}
 }

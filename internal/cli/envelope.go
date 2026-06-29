@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/greenthread/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/agent"
 )
 
 // envelopeRecorder emits each conversation message as a JS-compatible

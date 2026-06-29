@@ -80,8 +80,12 @@ func recalledKnowledge(cwd string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// recalledMemory returns the project memory index and linked memory notes for
-// priming the model, or "" if there is none.
+// recalledMemory returns the project memory index for priming the model, or ""
+// if there is none. MEMORY.md is the index: it holds the session bullets and a
+// "## Linked memory" section pointing at the .klaudia/memory/*.md detail notes
+// (maintained by memory.Store.SyncLinks). The detail notes themselves are not
+// inlined — the model opens one (Read / Memory search) only when it's relevant,
+// so recall stays cheap as memory grows.
 func recalledMemory(cwd string) string {
 	klaudiaDir := filepath.Join(cwd, ".klaudia")
 	parts := readMarkdownFiles(filepath.Join(klaudiaDir, "MEMORY.md"))
@@ -89,15 +93,6 @@ func recalledMemory(cwd string) string {
 	// Backward compatibility for projects that still have the old session-memory
 	// index under .klaudia/memory/MEMORY.md.
 	parts = append(parts, readMarkdownFiles(filepath.Join(klaudiaDir, "memory", "MEMORY.md"))...)
-
-	if paths, err := filepath.Glob(filepath.Join(klaudiaDir, "memory", "*.md")); err == nil {
-		for _, path := range paths {
-			if filepath.Base(path) == "MEMORY.md" {
-				continue
-			}
-			parts = append(parts, readMarkdownFiles(path)...)
-		}
-	}
 
 	return strings.TrimSpace(strings.Join(parts, "\n\n"))
 }

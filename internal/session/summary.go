@@ -14,6 +14,10 @@ func SummaryPath(cwd, sessionID string) string {
 }
 
 func legacySummaryPath(cwd, sessionID string) string {
+	return filepath.Join(legacyDir(cwd), sessionID+".summary.md")
+}
+
+func localLegacySummaryPath(cwd, sessionID string) string {
 	return filepath.Join(cwd, ".klaudia", "sessions", sessionID+".summary.md")
 }
 
@@ -43,7 +47,10 @@ func ReadSummary(cwd, sessionID string) (string, bool) {
 	if err != nil {
 		data, err = os.ReadFile(legacySummaryPath(cwd, sessionID))
 		if err != nil {
-			return "", false
+			data, err = os.ReadFile(localLegacySummaryPath(cwd, sessionID))
+			if err != nil {
+				return "", false
+			}
 		}
 	}
 	body := stripSummaryHeader(string(data))

@@ -16,24 +16,24 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
-	"github.com/greenthread/klaudia/internal/agent"
-	"github.com/greenthread/klaudia/internal/api"
-	"github.com/greenthread/klaudia/internal/browser"
-	"github.com/greenthread/klaudia/internal/config"
-	"github.com/greenthread/klaudia/internal/doctor"
-	"github.com/greenthread/klaudia/internal/lsp"
-	"github.com/greenthread/klaudia/internal/mcp"
-	"github.com/greenthread/klaudia/internal/memory"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/prompt"
-	"github.com/greenthread/klaudia/internal/sandbox"
-	"github.com/greenthread/klaudia/internal/session"
-	"github.com/greenthread/klaudia/internal/skill"
-	"github.com/greenthread/klaudia/internal/streamjson"
-	"github.com/greenthread/klaudia/internal/subagent"
-	"github.com/greenthread/klaudia/internal/tools"
-	"github.com/greenthread/klaudia/internal/tui"
-	"github.com/greenthread/klaudia/internal/version"
+	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/browser"
+	"github.com/greenthread-ai/klaudia/internal/config"
+	"github.com/greenthread-ai/klaudia/internal/doctor"
+	"github.com/greenthread-ai/klaudia/internal/lsp"
+	"github.com/greenthread-ai/klaudia/internal/mcp"
+	"github.com/greenthread-ai/klaudia/internal/memory"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/prompt"
+	"github.com/greenthread-ai/klaudia/internal/sandbox"
+	"github.com/greenthread-ai/klaudia/internal/session"
+	"github.com/greenthread-ai/klaudia/internal/skill"
+	"github.com/greenthread-ai/klaudia/internal/streamjson"
+	"github.com/greenthread-ai/klaudia/internal/subagent"
+	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/tui"
+	"github.com/greenthread-ai/klaudia/internal/version"
 )
 
 func compactAndPersist(ctx context.Context, history []anthropic.BetaMessageParam, compact tui.CompactFunc, onSummary func(string)) ([]anthropic.BetaMessageParam, string, error) {
@@ -106,6 +106,7 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 	for _, s := range servers {
 		lspServers = append(lspServers, doctor.LSPServer{Name: s.Bin, Language: s.Language, Version: s.Version})
 	}
+	ctxLimit, ctxSource := api.ContextWindow(string(model), cfg.ContextWindow)
 	in := doctor.Input{
 		Provider:        providerName(cfg),
 		Model:           string(model),
@@ -115,6 +116,8 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 		LSPServers:      lspServers,
 		MissingLSPHints: hints,
 		AuthKind:        "none",
+		ContextWindow:   ctxLimit,
+		ContextSource:   ctxSource,
 	}
 	if cfg.Provider == config.ProviderOpenAI {
 		if cfg.ResolveAPIKey() != "" {
@@ -207,7 +210,7 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 		if key == "" {
 			return nil, "", fmt.Errorf("provider \"openai\" needs apiKey or apiKeyEnv in ~/.klaudia/config.toml or ./.klaudia/config.toml; if using apiKeyEnv, export that variable before running")
 		}
-		return api.NewOpenAIProvider(cfg.BaseURL, key), cfg.Model, nil
+		return api.NewOpenAIProvider(cfg.BaseURL, key, cfg.Temperature), cfg.Model, nil
 	default:
 		cred, err := api.ResolveCredential()
 		if err != nil {
@@ -393,6 +396,17 @@ baseURL = "https://api.example.com/v1"
 # Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
 
+# Temperature for the model. Omitted by default (server picks its own default).
+# Some providers reject this field; remove the line to omit it from the request.
+# temperature = 1.0
+
+# Context window in tokens — drives autocompaction so long sessions don't
+# overflow the model upstream ("max_tokens must be at least 1, got -N" or
+# "context length exceeded"). Defaults to 200000 (Anthropic-sized); set this
+# to the actual window your provider/model exposes. Common values: 8192, 16384,
+# 32768, 128000.
+# contextWindow = 8192
+
 # TUI theme (Markdown + chrome). /theme switches it for a session.
 # theme = "nord" # dracula | gruvbox | tokyo-night | nord | catppuccin
 
@@ -452,12 +466,42 @@ type options struct {
 	maxTurns        int
 	resume          string // --resume <session-id>
 	continueSession bool   // --continue
+	newSession      bool   // --new-session
 	forkSession     bool   // --fork-session
 	fullResume      bool   // --full (replay entire transcript, not the summary)
+
 	allowedTools    []string
 	disallowedTools []string
 	partialMessages bool   // --include-partial-messages
 	createConfig    string // --create-config global|local
+	loop            bool   // --loop: autonomous goal-spec iteration
+	maxIterations   int    // --max-iterations: outer-loop cap for --loop
+}
+
+// resolveResumeID selects the prior session to seed from, if any.
+// resolveResumeID selects the prior session to seed from, if any. An explicit
+// --resume/--continue is honored in any mode; the implicit "pick up the most
+// recent project session" is an interactive convenience only, so headless (-p)
+// and embedding (stream-json) runs stay stateless unless asked.
+func resolveResumeID(cwd string, opts options, interactive bool) (string, error) {
+	if opts.newSession && (opts.resume != "" || opts.continueSession) {
+		return "", fmt.Errorf("--new-session cannot be combined with --resume or --continue")
+	}
+	if opts.resume != "" {
+		return opts.resume, nil
+	}
+	if opts.continueSession {
+		if id, ok := session.MostRecent(cwd); ok {
+			return id, nil
+		}
+		return "", fmt.Errorf("--continue: no previous session found in this directory")
+	}
+	if interactive && !opts.newSession {
+		if id, ok := session.MostRecent(cwd); ok {
+			return id, nil
+		}
+	}
+	return "", nil
 }
 
 // NewRootCommand builds the top-level `klaudia` command.
@@ -495,13 +539,16 @@ func NewRootCommand() *cobra.Command {
 	f.BoolVar(&opts.verbose, "verbose", false, "Verbose output (required for stream-json)")
 	f.IntVar(&opts.maxTurns, "max-turns", 0, "Limit the number of agentic loop turns (0 = unlimited)")
 	f.StringVarP(&opts.resume, "resume", "r", "", "Resume a session by ID")
-	f.BoolVar(&opts.continueSession, "continue", false, "Resume the most recent session in this directory")
+	f.BoolVar(&opts.continueSession, "continue", false, "Resume the most recent session in this directory (default when available)")
+	f.BoolVar(&opts.newSession, "new-session", false, "Start a fresh session instead of auto-resuming the most recent session in this directory")
 	f.BoolVar(&opts.forkSession, "fork-session", false, "When resuming, start a new session ID (preserves the original)")
 	f.BoolVar(&opts.fullResume, "full", false, "When resuming, replay the entire transcript instead of the compacted summary")
 	f.StringSliceVar(&opts.allowedTools, "allowedTools", nil, "Auto-allow tool rules, e.g. 'Edit' or 'Bash(git status:*)' (repeatable, comma-separated)")
 	f.StringSliceVar(&opts.disallowedTools, "disallowedTools", nil, "Deny tool rules (same format as --allowedTools)")
 	f.BoolVar(&opts.partialMessages, "include-partial-messages", false, "Include partial message chunks as they arrive (only with --print and --output-format=stream-json)")
 	f.StringVar(&opts.createConfig, "create-config", "", "Create a starter TOML config and exit: global (~/.klaudia/config.toml) or local (./.klaudia/config.toml)")
+	f.BoolVar(&opts.loop, "loop", false, "Autonomous loop: iterate against the goal spec (PRD.md or .klaudia/GOAL.md) until complete or --max-iterations. Requires --dangerously-skip-permissions.")
+	f.IntVar(&opts.maxIterations, "max-iterations", 0, "Max iterations for --loop (0 = default 10, hard cap 50)")
 
 	return cmd
 }
@@ -525,8 +572,17 @@ func run(cmd *cobra.Command, opts *options) error {
 		return nil
 	}
 
-	// Mode: stream-json input (embedding) | headless -p | interactive TUI.
-	interactive := !opts.print && opts.inputFormat != "stream-json"
+	// Mode: autonomous --loop | stream-json input (embedding) | headless -p |
+	// interactive TUI. --loop is non-interactive and renders as text.
+	interactive := !opts.print && !opts.loop && opts.inputFormat != "stream-json"
+	if opts.loop {
+		if opts.inputFormat == "stream-json" {
+			return fmt.Errorf("--loop cannot be combined with --input-format stream-json")
+		}
+		if format != FormatText {
+			return fmt.Errorf("--loop only supports --output-format text")
+		}
+	}
 	if opts.print && format == FormatStreamJSON && !opts.verbose {
 		return fmt.Errorf("--output-format stream-json requires --verbose")
 	}
@@ -538,16 +594,13 @@ func run(cmd *cobra.Command, opts *options) error {
 	ctx := cmd.Context()
 	r := NewRenderer(format, cmd.OutOrStdout())
 
-	// Resolve the session: resume by id, continue the most recent, or start new.
+	// Resolve the session: explicit resume by id, auto-resume the most recent
+	// project session by default, or start new when requested/no prior session.
 	// --fork-session writes to a fresh id while preserving the original.
 	var initialMessages []anthropic.BetaMessageParam
-	resumeID := opts.resume
-	if opts.continueSession && resumeID == "" {
-		if id, ok := session.MostRecent(cwd); ok {
-			resumeID = id
-		} else {
-			return fmt.Errorf("--continue: no previous session found in this directory")
-		}
+	resumeID, err := resolveResumeID(cwd, *opts, interactive)
+	if err != nil {
+		return err
 	}
 	sessionID := uuid.NewString()
 	if resumeID != "" {
@@ -561,7 +614,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			}
 			fmt.Fprintln(cmd.ErrOrStderr(), "resuming from compacted summary (--full for the entire transcript)")
 		} else {
-			entries, rerr := session.Read(session.Path(cwd, resumeID))
+			entries, rerr := session.Read(session.ExistingPath(cwd, resumeID))
 			if rerr != nil {
 				return fmt.Errorf("resume %s: %w", resumeID, rerr)
 			}
@@ -614,7 +667,11 @@ func run(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		return fmt.Errorf("--disallowedTools/permissions.deny: %w", err)
 	}
-	permCtx := permission.Context{Mode: mode, Allow: allowRules, Deny: denyRules}
+	// Headless path: the mode is fixed for the lifetime of this command.
+	permCtx := permission.Context{Mode: permission.StaticMode(mode), Allow: allowRules, Deny: denyRules}
+	// Refresh MEMORY.md's links to the .klaudia/memory/*.md detail notes before
+	// building the prompt, so recall surfaces them (best-effort; idempotent).
+	_ = memory.New(filepath.Join(cwd, ".klaudia")).SyncLinks()
 	// Assemble the full system prompt (base instructions + env context +
 	// CLAUDE.md) once for this run.
 	sysPrompt := prompt.System(cwd, string(model))
@@ -665,7 +722,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		baseTools = append(baseTools, memTool)
 	}
 
-	// User-defined skills (~/.claude/skills overlaid by .klaudia/skills) become a
+	// User-defined skills (~/.klaudia/skills overlaid by .klaudia/skills) become a
 	// single Skill tool the model can invoke; the TUI also dispatches /<skill>.
 	skills := skill.Load(cwd, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
 	skillInfos := skillToolInfos(skills)
@@ -725,22 +782,25 @@ func run(cmd *cobra.Command, opts *options) error {
 	// It drives the same loop, prompting the user to resolve permission asks.
 	if interactive {
 		// Shared settings so slash commands can read/change them between turns.
+		ctxLimit, ctxSource := api.ContextWindow(string(model), cfg.ContextWindow)
 		sess := &tui.Session{
 			// Effective model (flag or config default), never "" — otherwise a
 			// non-Anthropic provider would wrongly resolve to the Anthropic default.
-			SessionID:      sessionID,
-			Model:          modelStr,
-			ResolvedModel:  string(model),
-			Theme:          themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
-			PermissionMode: string(mode),
-			Memory:         memStore,
-			MCP:            mcpController{mgr: mcpMgr, ctx: ctx},
-			Skills:         tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
-			Provider:       providerName(cfg),
-			SandboxMode:    sandboxMode(cfg.Sandbox),
-			CWD:            cwd,
-			GitBranch:      gitBranch(cwd),
-			Agents:         tuiAgents(),
+			SessionID:           sessionID,
+			Model:               modelStr,
+			ResolvedModel:       string(model),
+			Theme:               themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
+			PermissionMode:      string(mode),
+			Memory:              memStore,
+			MCP:                 mcpController{mgr: mcpMgr, ctx: ctx},
+			Skills:              tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
+			Provider:            providerName(cfg),
+			SandboxMode:         sandboxMode(cfg.Sandbox),
+			CWD:                 cwd,
+			GitBranch:           gitBranch(cwd),
+			Agents:              tuiAgents(),
+			ContextWindow:       ctxLimit,
+			ContextWindowSource: ctxSource,
 			Compact: func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 				return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 					return loop.Compact(ctx, history, api.ResolveModel(modelStr))
@@ -761,12 +821,23 @@ func run(cmd *cobra.Command, opts *options) error {
 			webTools := true
 			if sess.RemoteProvider != nil {
 				webTools = false
+			// Permission mode reads live from the session every check, so a
+			// /mode bypass (or ExitPlanMode flipping out of plan) takes effect
+			// on the very next tool dispatch inside the agent loop — not just
+			// at the next TUI turn boundary. The Context itself is rebuilt
+			// here so the rule lists stay snapshot-stable for the duration of
+			// this turn, but the mode probe is live.
+			turnPerm := permission.Context{
+				Mode:  func() permission.Mode { return permission.Mode(sess.PermissionMode) },
+				Allow: allowRules,
+				Deny:  denyRules,
 			}
 			return loop.Run(ctx, agent.Options{
 				Prompt:          prompt,
 				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
 				System:          withExtraDirs(sysPrompt, sess.ExtraDirs),
 				MaxTurns:        opts.maxTurns,
+				ContextWindow:   cfg.ContextWindow,
 				Permission:      turnPerm,
 				DeferredTools:   deferredTools,
 				Approver:        ap,
@@ -793,6 +864,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				Model:           model,
 				System:          sysPrompt,
 				MaxTurns:        opts.maxTurns,
+				ContextWindow:   cfg.ContextWindow,
 				Permission:      permCtx,
 				Approver:        ap,
 				DeferredTools:   deferredTools,
@@ -803,6 +875,25 @@ func run(cmd *cobra.Command, opts *options) error {
 			}, emit)
 		}
 		return driver.Run(ctx, cmd.InOrStdin(), runFn)
+	}
+
+	// Autonomous goal loop: iterate against the spec until complete or capped.
+	if opts.loop {
+		return runGoalLoop(ctx, cmd, loopRun{
+			loop:       loop,
+			cwd:        cwd,
+			mode:       mode,
+			model:      model,
+			system:     sysPrompt,
+			maxTurns:   opts.maxTurns,
+			iterations: opts.maxIterations,
+			permCtx:    permCtx,
+			approver:   approver,
+			deferred:   deferredTools,
+			recorder:   recorder,
+			onSummary:  onSummary,
+			render:     r,
+		})
 	}
 
 	// Single-shot headless run. For stream-json output, emit JS-compatible
@@ -826,6 +917,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		Model:           model,
 		System:          sysPrompt,
 		MaxTurns:        opts.maxTurns,
+		ContextWindow:   cfg.ContextWindow,
 		Permission:      permCtx,
 		Approver:        approver,
 		DeferredTools:   deferredTools,
@@ -848,8 +940,10 @@ func run(cmd *cobra.Command, opts *options) error {
 		SessionID:     sessionID,
 		TotalCostUSD:  0, // Phase 3: derive from usage + pricing.
 		Usage: map[string]any{
-			"input_tokens":  res.InputTokens,
-			"output_tokens": res.OutputTokens,
+			"input_tokens":                res.InputTokens,
+			"output_tokens":               res.OutputTokens,
+			"cache_read_input_tokens":     res.CacheReadInputTokens,
+			"cache_creation_input_tokens": res.CacheCreationInputTokens,
 		},
 		UUID: uuid.NewString(),
 	}

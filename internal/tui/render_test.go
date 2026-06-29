@@ -9,8 +9,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread/klaudia/internal/agent"
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -225,14 +225,21 @@ func TestMarkdownAndFlush(t *testing.T) {
 }
 
 func TestIntro(t *testing.T) {
-	got := intro("openai/gpt-5.5", "go-port", "session-123", "your preferred coding agent")
-	for _, want := range []string{"Klaudia", "your preferred coding agent", "openai/gpt-5.5", "go-port", "session-123", "klaudia --resume session-123", "Esc to interrupt"} {
+	got := intro("openai/gpt-5.5", "go-port", "your preferred coding agent")
+	for _, want := range []string{"Klaudia", "your preferred coding agent", "openai/gpt-5.5", "go-port", "Esc to interrupt"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("intro missing %q", want)
 		}
 	}
-	// No model/branch/session → still renders the logo + tagline + tip.
-	if bare := intro("", "", "", "the better coding agent"); !strings.Contains(bare, "Klaudia") {
+	// The session id and the manual --resume hint are intentionally absent
+	// (interactive auto-resumes; /status surfaces the id on demand).
+	for _, unwanted := range []string{"session:", "--resume"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("intro should not include %q", unwanted)
+		}
+	}
+	// No model/branch → still renders the logo + tagline + tip.
+	if bare := intro("", "", "the better coding agent"); !strings.Contains(bare, "Klaudia") {
 		t.Errorf("bare intro = %q", bare)
 	}
 }

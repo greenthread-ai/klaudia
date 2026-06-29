@@ -76,8 +76,8 @@ func TestLoadProjectOverlaysHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	write(t, filepath.Join(home, ".claude", "skills", "review.md"), "---\nname: review\ndescription: home version\n---\nhome body")
-	write(t, filepath.Join(home, ".claude", "skills", "deploy.md"), "---\nname: deploy\ndescription: deploy\n---\ndeploy")
+	write(t, filepath.Join(home, ".klaudia", "skills", "review.md"), "---\nname: review\ndescription: home version\n---\nhome body")
+	write(t, filepath.Join(home, ".klaudia", "skills", "deploy.md"), "---\nname: deploy\ndescription: deploy\n---\ndeploy")
 	// Project overrides review and adds plan.
 	write(t, filepath.Join(cwd, ".klaudia", "skills", "review.md"), "---\nname: review\ndescription: project version\n---\nproject body")
 	write(t, filepath.Join(cwd, ".klaudia", "skills", "plan.md"), "---\nname: plan\ndescription: plan\n---\nplan")

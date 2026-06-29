@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 // Web/network tools must never be auto-allowed: they reach the network and can
@@ -29,7 +29,7 @@ func TestWebToolsArePermissionGated(t *testing.T) {
 	}
 	for _, tool := range web {
 		for _, c := range cases {
-			got := tool.CheckPermissions(permission.Context{Mode: c.mode}, permission.PermissionRequest{})
+			got := tool.CheckPermissions(permission.Context{Mode: permission.StaticMode(c.mode)}, permission.PermissionRequest{})
 			if got.Behavior != c.want {
 				t.Errorf("%s in %s: behavior = %q, want %q", tool.Name(), c.mode, got.Behavior, c.want)
 			}

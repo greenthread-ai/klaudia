@@ -18,6 +18,14 @@ import (
 	"time"
 )
 
+// postCancelWait is the budget WaitDelay gets to drain stdout/stderr pipes
+// after the parent process exits or ctx is cancelled. Picked so a well-behaved
+// command can flush a few lines of output (most do this in milliseconds) but
+// an inherited-fd-leak from a backgrounded child (npm run dev, dev servers,
+// long-lived daemons) can't pin the goroutine forever. The TUI surfaces this
+// as a bounded TimedOut + ExitCode 124 instead of a 43-minute spinner.
+const postCancelWait = 5 * time.Second
+
 // Request describes a command to execute.
 type Request struct {
 	Command    string        // the shell command line
@@ -91,6 +99,15 @@ func runArgv(ctx context.Context, req Request, name string, args []string) (Resp
 	if len(req.Env) > 0 {
 		cmd.Env = append(os.Environ(), req.Env...)
 	}
+	// Bound how long cmd.Run keeps waiting for stdout/stderr pipes after the
+	// parent process exits or ctx is cancelled. Without this, a command like
+	// `npm run dev & sleep 1` returns instantly from bash (because sleep 1
+	// finished) but Go keeps waiting forever for the backgrounded npm
+	// process's pipes — npm inherited bash's stdout/stderr fds and never
+	// closes them. WaitDelay sends SIGKILL to lingering children and bounds
+	// the I/O copy at this duration. The result might be marked TimedOut
+	// (ExitCode 124), which is more informative than "still working… 43m".
+	cmd.WaitDelay = postCancelWait
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -193,6 +210,7 @@ func StartBackground(parent context.Context, e Executor, req Request) (*Backgrou
 	if len(req.Env) > 0 {
 		cmd.Env = append(os.Environ(), req.Env...)
 	}
+	cmd.WaitDelay = postCancelWait // same I/O drain guard as runArgv
 	p := &BackgroundProcess{cancel: cancel}
 	cmd.Stdout = p
 	cmd.Stderr = p // same writer ⇒ exec serializes both streams into one pipe

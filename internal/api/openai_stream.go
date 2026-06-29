@@ -39,7 +39,13 @@ type toolAccum struct {
 // content_block_delta… → message_stop) are best-effort — there is no native
 // Anthropic SSE to forward — but they let partial-message consumers (SDKs,
 // editors) receive incremental chunks regardless of provider.
-func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink StreamSink) (anthropic.BetaMessage, error) {
+//
+// onActivity (nil-safe) fires once per received line so the caller's idle
+// watchdog can push its deadline out. The returned bool reports whether any
+// observable output (text or, with a raw sink, synthesized events) reached the
+// sink — the caller uses it to decide whether a stalled attempt is safe to
+// retry transparently.
+func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink StreamSink, onActivity func()) (anthropic.BetaMessage, bool, error) {
 	sc := bufio.NewScanner(body)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
@@ -47,6 +53,7 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 	tools := map[int]*toolAccum{}
 	finish := ""
 	var inTok, outTok int64
+	delivered := false
 
 	// Synthesize the opening events for a single text content block. We emit a
 	// message_start with a placeholder message, then a text content_block_start;
@@ -60,6 +67,9 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 			return
 		}
 		started = true
+		if sink.OnRawEvent != nil {
+			delivered = true
+		}
 		sink.raw(synthEvent(map[string]any{
 			"type": "message_start",
 			"message": map[string]any{
@@ -75,6 +85,9 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 	}
 
 	for sc.Scan() {
+		if onActivity != nil {
+			onActivity() // a line arrived — reset the idle watchdog
+		}
 		line := strings.TrimSpace(sc.Text())
 		data, ok := strings.CutPrefix(line, "data:")
 		if !ok {
@@ -94,6 +107,7 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 		for _, ch := range chunk.Choices {
 			if ch.Delta.Content != "" {
 				startBlocks()
+				delivered = true
 				text.WriteString(ch.Delta.Content)
 				sink.text(ch.Delta.Content)
 				sink.raw(synthEvent(map[string]any{
@@ -121,7 +135,7 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return anthropic.BetaMessage{}, err
+		return anthropic.BetaMessage{}, delivered, err
 	}
 
 	// Close out the synthesized event sequence (only if we opened it — a
@@ -136,7 +150,8 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 		sink.raw(synthEvent(map[string]any{"type": "message_stop"}))
 	}
 
-	return assembleMessage(model, text.String(), tools, finish, inTok, outTok)
+	msg, err := assembleMessage(model, text.String(), tools, finish, inTok, outTok)
+	return msg, delivered, err
 }
 
 // synthEvent builds a BetaRawMessageStreamEventUnion from a payload map by
@@ -156,6 +171,21 @@ func assembleMessage(model, text string, tools map[int]*toolAccum, finish string
 	var content []map[string]any
 	if text != "" {
 		content = append(content, map[string]any{"type": "text", "text": text})
+	}
+	// A refusal / empty response (the model returned no text AND no tool calls)
+	// otherwise marshals to "content": null, which the Anthropic API later
+	// rejects on resume ("messages.<i>.content: Field required"). Synthesize a
+	// visible placeholder block so the refusal is recorded honestly, the
+	// transcript stays well-formed, and the model can see what happened.
+	if text == "" && len(tools) == 0 {
+		reason := finish
+		if reason == "" {
+			reason = "empty response"
+		}
+		content = append(content, map[string]any{
+			"type": "text",
+			"text": "[Provider returned no content — finish_reason=" + reason + "]",
+		})
 	}
 	// Emit tool_use blocks in ascending index order.
 	idxs := make([]int, 0, len(tools))

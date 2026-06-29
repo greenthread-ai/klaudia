@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 func TestWriteCreatesFileAndDirs(t *testing.T) {
@@ -162,7 +162,7 @@ func TestEditClassPermissionByMode(t *testing.T) {
 		{permission.ModeBypassPermissions, permission.Allow},
 	}
 	for _, c := range cases {
-		got := permission.Check(permission.Context{Mode: c.mode}, e, req)
+		got := permission.Check(permission.Context{Mode: permission.StaticMode(c.mode)}, e, req)
 		if got.Behavior != c.want {
 			t.Errorf("mode %s: behavior = %q, want %q", c.mode, got.Behavior, c.want)
 		}

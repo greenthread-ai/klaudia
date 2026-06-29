@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,14 +27,15 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/greenthread/klaudia/internal/agent"
-	"github.com/greenthread/klaudia/internal/api"
-	"github.com/greenthread/klaudia/internal/config"
-	"github.com/greenthread/klaudia/internal/memory"
-	"github.com/greenthread/klaudia/internal/native/search"
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/remotecontrol"
-	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/compaction"
+	"github.com/greenthread-ai/klaudia/internal/config"
+	"github.com/greenthread-ai/klaudia/internal/goal"
+	"github.com/greenthread-ai/klaudia/internal/memory"
+	"github.com/greenthread-ai/klaudia/internal/native/search"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // RunFunc drives one user turn against the agent core, threading conversation
@@ -48,7 +50,7 @@ type Session struct {
 	Model          string         // model alias or full ID ("" = default)
 	ResolvedModel  string         // concrete model id for display
 	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
-	Memory         *memory.Store  // backs /memory (may be nil)
+	Memory         memory.Store   // backs /memory; never nil — set to memory.Disabled() when unavailable
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
 	Theme          string         // markdown render theme ("" = dark)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
@@ -60,6 +62,11 @@ type Session struct {
 	GitBranch   string      // current git branch (may be "")
 	Agents      []AgentInfo // built-in sub-agent types, for /agents
 	ExtraDirs   []string    // additional working dirs added via /add-dir
+	// ContextWindow is the input-token limit /stats reports against; resolved
+	// at startup via api.ContextWindow (config override > model default > 0).
+	// Zero means "unknown"; /stats omits the usage ratio in that case.
+	ContextWindow       int
+	ContextWindowSource string
 
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
@@ -194,7 +201,11 @@ func applyChromeTheme(p themePalette) {
 
 // intro is the welcoming banner shown at startup. The model name/branch/session
 // id are filled in by the caller.
-func intro(model, branch, sessionID, tagline string) string {
+// intro renders the startup banner. The session id is intentionally absent:
+// interactive runs auto-resume the most recent project session, so reciting it
+// (and a manual `--resume` command) on every launch is noise; /status surfaces
+// it on demand.
+func intro(model, branch, tagline string) string {
 	logo := logoStyle.Render("✦ Klaudia")
 	tag := bannerStyle.Render(" " + tagline)
 	var meta string
@@ -203,9 +214,6 @@ func intro(model, branch, sessionID, tagline string) string {
 	}
 	if branch != "" {
 		meta += bannerStyle.Render("   ⎇ " + branch)
-	}
-	if sessionID != "" {
-		meta += "\n" + bannerStyle.Render("  session: "+sessionID+"  (resume with: klaudia --resume "+sessionID+")")
 	}
 	tip := hintStyle.Render("\n  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C to quit")
 	return logo + tag + meta + tip + "\n"
@@ -241,12 +249,58 @@ type Model struct {
 	// Accessed only from the UI goroutine (Update) to avoid races.
 	sessionAllow []permission.Rule
 	sessionDeny  []permission.Rule
-	// Cumulative session stats for /stats.
-	statTurns  int
-	statIn     int64
-	statOut    int64
-	lastResult string // full content of the most recent tool result (for /last)
-	queued     string // a message typed while the model is working (sent on completion)
+	// Goal/loop state (the "/goal" feature). goalSetting frames turns as
+	// spec-authoring. loopRemaining>0 means the "/goal run" Ralph loop is active:
+	// each finished iteration starts the next (via the doneMsg hook) until the
+	// goal completes, the count hits 0, or the user stops it.
+	goalSetting    bool
+	loopRemaining  int
+	loopTotal      int
+	loopSpecPath   string
+	loopWrapUp     bool   // the next loop turn is the end-of-run summary
+	loopStubFixing bool   // the next loop turn is the up-front Progress-stub repair
+	loopVerifying  bool   // the next loop turn is the final-review verification
+	loopBranch     string // the goal branch the loop's work lands on
+	loopBaseBranch string // the branch the loop started from (merge target)
+	// cancelling is set when the user pressed Esc but the agent goroutine
+	// hasn't returned yet (e.g. blocked in SDK retry backoff or a tool that's
+	// slow to honour ctx). The bottom view swaps "working…" for "cancelling…"
+	// so the user gets immediate feedback that Esc registered, and knows Ctrl+C
+	// is the next escalation. Cleared on doneMsg.
+	cancelling bool
+	// Cumulative session stats for /stats. Updated live via "usage" events from
+	// the agent loop (per inner LLM call), then reconciled against the
+	// authoritative Result fields when doneMsg arrives — so a long /goal
+	// iteration shows progress in the status bar mid-turn rather than staying
+	// at zero until the whole iteration concludes.
+	statTurns int
+	statIn    int64
+	statOut   int64
+	// Per-turn tally of what we already counted via live "usage" events. Reset
+	// at startTurn and subtracted from the final Result at doneMsg so a dropped
+	// usage event still settles correctly without double-counting.
+	turnLiveTurns int
+	turnLiveIn    int64
+	turnLiveOut   int64
+	// Phase tracking for the spinner row. phase reflects the most recent
+	// meaningful event ("streaming", "running <Tool>", "compacting",
+	// "thinking"); lastEventAt is bumped on every event the renderer sees,
+	// used by bottomView to surface a "quiet for…" suffix when an API call
+	// sits silent. activeTool* track the most recent in-flight tool_use so
+	// tool_result can compute elapsed and append a duration to the result.
+	phase           string
+	lastEventAt     time.Time
+	activeToolName  string
+	activeToolStart time.Time
+	// residentTokens is the last estimated input-context size, refreshed at
+	// doneMsg after history is reconciled. The status bar reads this as a
+	// `· ctx N%` indicator against sess.ContextWindow so users see context
+	// pressure without having to type /stats. Computed once per turn end
+	// rather than per render — compaction.EstimateTokens walks the whole
+	// history and isn't cheap on long sessions.
+	residentTokens int
+	lastResult     string // full content of the most recent tool result (for /last)
+	queued         string // a message typed while the model is working (sent on completion)
 	// Pending AskUserQuestion.
 	askReply    chan string
 	askOptions  []tools.AskOption
@@ -317,13 +371,13 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	}
 	// Colour the chrome for the session's theme before drawing the banner.
 	applyChromeTheme(chromePaletteFor(m.currentThemeID()))
-	model, branch, sessionID := "", "", ""
+	model, branch := "", ""
 	if sess != nil {
-		model, branch, sessionID = sess.displayModel(), sess.GitBranch, sess.SessionID
+		model, branch = sess.displayModel(), sess.GitBranch
 	}
-	m.introModel, m.introBranch, m.introSession = model, branch, sessionID
+	m.introModel, m.introBranch = model, branch
 	m.introTagline, m.hasIntro = randomTagline(), true
-	introText := intro(model, branch, sessionID, m.introTagline)
+	introText := intro(model, branch, m.introTagline)
 	m.transcript.WriteString(introText)
 	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: introText})
 	return m
@@ -474,7 +528,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		elapsed := m.sw.Elapsed()
 		stopSW := m.sw.Stop()
 		m.turnCancel = nil
-		m.flushAssistant() // prettify the final answer through glamour
+		m.cancelling = false // the goroutine returned; we're past the cancel window
+		m.flushAssistant()   // prettify the final answer through glamour
 		switch {
 		case errors.Is(msg.err, context.Canceled):
 			m.appendLine(toolStyle.Render(fmt.Sprintf("  ⊘ interrupted after %s", fmtDuration(elapsed))))
@@ -486,11 +541,38 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.res.Messages != nil {
 			m.history = msg.res.Messages
 		}
-		m.statTurns += msg.res.NumTurns
-		m.statIn += msg.res.InputTokens
-		m.statOut += msg.res.OutputTokens
+		// Refresh the cached resident-tokens estimate for the status bar's
+		// `· ctx N%` indicator. Doing it here (after history is reconciled)
+		// avoids walking history on every render, which gets expensive on
+		// long sessions — the indicator updates once per turn, which is
+		// the natural rhythm for context-pressure feedback anyway.
+		m.residentTokens = compaction.EstimateTokens(m.history)
+		// Reconcile live usage with the authoritative Result. If every "usage"
+		// event made it through, these deltas are zero (no double-count); if
+		// some were dropped due to channel pressure, this catches the gap up
+		// to the final accurate totals.
+		m.statTurns += msg.res.NumTurns - m.turnLiveTurns
+		m.statIn += msg.res.InputTokens - m.turnLiveIn
+		m.statOut += msg.res.OutputTokens - m.turnLiveOut
+		m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
+		// Clear phase state too so a queued-message follow-up turn starts
+		// fresh — a stale "running Bash" or "quiet for 90s" would otherwise
+		// briefly flash on the next turn's first render before its own
+		// startTurn reset.
+		m.phase = ""
+		m.lastEventAt = time.Time{}
+		m.activeToolName = ""
+		m.activeToolStart = time.Time{}
 		// Drop any approval/ask/plan channels a turn was interrupted mid-prompt.
 		m.pending, m.askReply, m.planReply = nil, nil, nil
+		// Goal loop: run the next iteration (or the wrap-up turn) unless the goal
+		// is complete, the turn errored/was interrupted, or we've fully stopped.
+		if m.loopRemaining > 0 || m.loopWrapUp {
+			if next := m.loopNext(msg.res, msg.err); next != "" {
+				m.setState(stateRunning)
+				return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
+			}
+		}
 		// A message queued while this turn ran is sent now as the next turn.
 		if q := strings.TrimSpace(m.queued); q != "" {
 			m.queued = ""
@@ -657,7 +739,9 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.turnCancel != nil {
 			m.turnCancel()
 			m.turnCancel = nil
-			m.appendLine(toolStyle.Render("  ⊘ interrupting…"))
+			m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false // Esc also halts a goal loop
+			m.cancelling = true
+			m.appendLine(toolStyle.Render("  ⊘ interrupting… (Ctrl+C to force quit if it doesn't return)"))
 			return m, nil
 		}
 	}
@@ -674,21 +758,32 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.follow = m.vp.AtBottom()
 		return m, nil
 	case tea.KeyCtrlU:
-		m.vp.HalfViewUp()
+		m.vp.HalfPageUp()
 		m.follow = false
 		return m, nil
 	case tea.KeyCtrlD:
-		m.vp.HalfViewDown()
+		m.vp.HalfPageDown()
 		m.follow = m.vp.AtBottom()
 		return m, nil
 	}
 
-	// While the model works, the input stays editable to queue a follow-up:
-	// Enter queues it; Enter again (empty) interrupts and sends it; ↑ edits it.
+	// While the model works, the input stays editable. A slash command runs
+	// immediately (display/config ones apply now; the few that mutate history or
+	// start a turn refuse until you interrupt). Plain text is queued as a
+	// follow-up: Enter queues it; Enter again (empty) interrupts and sends it; ↑
+	// edits it.
 	if m.state == stateRunning {
 		switch msg.Type {
 		case tea.KeyEnter:
-			if text := strings.TrimSpace(m.input.Value()); text != "" {
+			text := strings.TrimSpace(m.input.Value())
+			if strings.HasPrefix(text, "/") {
+				m.input.Reset()
+				m.pushHistory(text)
+				m.appendLine(userStyle.Render("› ") + text)
+				m.syncInputHeight()
+				return m.handleSlash(text)
+			}
+			if text != "" {
 				m.queued = text
 				m.input.Reset()
 				m.syncInputHeight()
@@ -697,6 +792,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.queued != "" && m.turnCancel != nil {
 				m.turnCancel()
 				m.turnCancel = nil
+				m.cancelling = true // bottom view swaps to "cancelling…" so user sees the cancel registered
 				m.appendLine(toolStyle.Render("  ⊘ interrupting to send your queued message…"))
 			}
 			return m, nil
@@ -859,8 +955,8 @@ var commandList = []cmdInfo{
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
 	{"/allow", "<rule>", "Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)"},
 	{"/deny", "<rule>", "Auto-deny a tool rule this session"},
-	{"/goal", "[text]", "Set/show a standing goal re-stated each turn (/goal clear to stop)"},
-	{"/memory", "[add …]", "Show recalled memory, or add a note"},
+	{"/goal", "[run N|stop|text]", "No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder"},
+	{"/memory", "[add|recent|stale|tag|promote|supersede]", "Show / audit / curate memory; no args views the index"},
 	{"/mcp", "", "List MCP servers; reconnect or disconnect them"},
 	{"/stats", "", "Show session stats (turns, tokens)"},
 	{"/status", "", "Show the current session settings"},
@@ -991,8 +1087,262 @@ func (m *Model) modeChoices() []choiceItem {
 	return items
 }
 
+// busyGuard reports whether a slash command must be refused because a turn is
+// in flight. Display/config commands run fine while the model works, but ones
+// that mutate the conversation history, change the run state, or start another
+// turn would race the active turn — those call this first. what is the command
+// label used in the hint (e.g. "/clear").
+func (m *Model) busyGuard(what string) bool {
+	if m.state == stateRunning {
+		m.appendLine(toolStyle.Render("  " + what + " isn't available while Klaudia is working — press Esc to interrupt first."))
+		return true
+	}
+	return false
+}
+
+// toggleGoalSetting flips goal-setting mode. Turning it on loads any existing
+// spec (PRD.md / .klaudia/GOAL.md) or invites the user to describe the goal so
+// the model can draft one on the next turn; turning it off readies the loop.
+func (m *Model) toggleGoalSetting() (tea.Model, tea.Cmd) {
+	if m.goalSetting {
+		m.goalSetting = false
+		m.appendLine(bannerStyle.Render("Goal-setting finished. /goal run [N] to start the loop."))
+		return m, nil
+	}
+	m.goalSetting = true
+	cwd := ""
+	if m.sess != nil {
+		cwd = m.sess.CWD
+	}
+	text, specPath, _ := goal.Read(cwd)
+	if strings.TrimSpace(text) != "" {
+		m.appendLine(bannerStyle.Render(fmt.Sprintf(
+			"Goal-setting on. Loaded spec from %s:\n  %s\nRefine it in chat, /goal to finish, then /goal run to start.",
+			specPath, oneLine(text, 100))))
+	} else {
+		m.appendLine(bannerStyle.Render(fmt.Sprintf(
+			"Goal-setting on — no spec yet. Tell me what you're building and I'll draft %s. /goal to finish.",
+			specPath)))
+	}
+	return m, nil
+}
+
+// startGoalLoop kicks off the "/goal run [N]" Ralph loop: requires a spec, moves
+// onto a dedicated branch when possible, then runs up to N interruptible
+// iterations (each re-invoking the agent with goal.IterationPrompt; subsequent
+// iterations are started by the doneMsg hook). Reached only from an idle
+// KeyMsg, so — like the normal turn-start — it must NOT arm waitForEvent (the
+// single reader is already outstanding).
+func (m *Model) startGoalLoop(args []string) (tea.Model, tea.Cmd) {
+	cwd := ""
+	if m.sess != nil {
+		cwd = m.sess.CWD
+	}
+	specText, specPath, _ := goal.Read(cwd)
+	if strings.TrimSpace(specText) == "" {
+		m.appendLine(errStyle.Render("No goal spec found. Run /goal first to create one (PRD.md or .klaudia/GOAL.md)."))
+		return m, nil
+	}
+
+	n := goal.DefaultIterations
+	if len(args) > 0 {
+		v, err := strconv.Atoi(args[0])
+		if err != nil || v <= 0 {
+			m.appendLine(errStyle.Render("usage: /goal run [N]  (N = max iterations, a positive integer)"))
+			return m, nil
+		}
+		n = v
+	}
+	if n > goal.MaxIterations {
+		n = goal.MaxIterations
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  capped at %d iterations.", goal.MaxIterations)))
+	}
+
+	// Move onto a dedicated branch so iterations stay isolated and revertible.
+	// Reuse the branch if it already exists (resume prior work) rather than
+	// resetting it, so a second /goal run continues from earlier commits.
+	m.loopBranch, m.loopBaseBranch = "", ""
+	if cwd != "" {
+		branch := goal.BranchName(specText)
+		// Capture the branch we're starting from (the merge target) before we
+		// switch, unless we're already sitting on the goal branch (a resume).
+		if base, err := gitOutput(cwd, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
+			if b := strings.TrimSpace(base); b != branch {
+				m.loopBaseBranch = b
+			}
+		}
+		args := []string{"checkout", "-b", branch}
+		if _, err := gitOutput(cwd, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
+			args = []string{"checkout", branch}
+		}
+		if out, err := gitOutput(cwd, args...); err != nil {
+			m.appendLine(toolStyle.Render("  (not branching: " + strings.TrimSpace(out) + ")"))
+		} else {
+			m.loopBranch = branch
+			m.appendLine(toolStyle.Render("  ↳ on branch " + branch))
+		}
+	}
+
+	m.goalSetting = false
+	m.loopTotal, m.loopRemaining, m.loopSpecPath = n, n, specPath
+	m.loopStubFixing, m.loopVerifying = false, false
+	m.appendLine(bannerStyle.Render(fmt.Sprintf("Goal loop: up to %d iterations against %s. Esc or /goal stop to halt.", n, specPath)))
+
+	prompt := m.prepareFirstLoopTurn(specPath, n)
+	m.setState(stateRunning)
+	return m, m.startTurn(prompt)
+}
+
+// prepareFirstLoopTurn selects the first turn's prompt for /goal run: either
+// a stub-fix turn (when the Progress tracker doesn't list every phase the body
+// describes — fixing that up-front makes the mechanical CountUnchecked gate
+// trustworthy for the rest of the run) or the normal iteration prompt. Side
+// effects (loopStubFixing, scrollback) are confined here so the caller stays
+// linear and tests can drive this without standing up a full Tea runtime.
+func (m *Model) prepareFirstLoopTurn(specPath string, n int) string {
+	if missing, err := goal.RequiresStubFix(specPath); err == nil && len(missing) > 0 {
+		m.loopStubFixing = true
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  ⚠ Progress tracker missing stubs for: %s — repairing first.", strings.Join(missing, ", "))))
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration 1/%d (stub fix)", n)))
+		return goal.StubFixPrompt(specPath, missing)
+	}
+	m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration 1/%d", n)))
+	return goal.IterationPrompt(specPath)
+}
+
+// loopIsStall reports whether a finished iteration looks like an undetected
+// failure — finished without error, but the model produced literally nothing
+// (no text, no turn count, no output tokens). Anthropic's session-limit and
+// some other throttling cases can manifest as a successful HTTP response with
+// an empty stream rather than a 429, and without this check the loop happily
+// decrements its budget for nothing while the user wonders why the spinner is
+// spinning. All three signals must be zero — a turn that returned text but
+// no tokens (e.g. a stubby test fixture) or no text but at least one inner
+// turn (refusal, tool-only) is real work and shouldn't trip this.
+func loopIsStall(res agent.Result, err error) bool {
+	return err == nil && res.Text == "" && res.NumTurns == 0 && res.OutputTokens == 0
+}
+
+// loopNext updates goal-loop state after a turn finished and returns the prompt
+// for the next loop turn, or "" to stop. The completion path runs a two-layer
+// gate against premature <goal-complete/>:
+//
+//  1. Mechanical: count `- [ ]` lines in the spec. If any remain, reject the
+//     claim and continue iterating — catches "model forgot one it could see".
+//  2. Verification: if the mechanical gate passes, fire ONE final-review turn
+//     that forces a holistic re-read (body vs Progress tracker vs git/tests).
+//     Only completion from THAT turn ends the loop — belt-and-suspenders for
+//     "tracker is missing rows that body phases never had" (the huedoku failure
+//     mode that RequiresStubFix already tries to prevent up-front).
+//
+// Stub-fix and verification turns don't consume an iteration each: stub-fix
+// happens before normal iteration starts (counted as iteration 1 in display
+// only), and verification is a single check on top.
+func (m *Model) loopNext(res agent.Result, err error) string {
+	if m.loopWrapUp { // the wrap-up turn just finished
+		m.loopWrapUp = false
+		if err == nil {
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  summary written to %s — /goal run to resume.", filepath.Base(m.loopSpecPath))))
+		}
+		m.appendMergeHint()
+		return ""
+	}
+	if err != nil {
+		m.loopRemaining = 0
+		m.appendLine(toolStyle.Render("  ⊘ goal loop halted."))
+		m.appendMergeHint()
+		return ""
+	}
+	// Stall: turn finished without error but produced nothing. Most often this
+	// is the Anthropic API returning a successful-looking empty stream during
+	// session-limit / quota throttling — without this check the loop would
+	// blow through its budget on empty turns. Halt with a clear line so the
+	// user can fix the underlying cause (wait for limit reset, switch model,
+	// etc.) before re-running.
+	if loopIsStall(res, err) {
+		m.loopRemaining = 0
+		m.appendLine(errStyle.Render("  ⊘ empty response from model — likely rate-limited or session-limit-hit. Stopping the loop."))
+		m.appendMergeHint()
+		return ""
+	}
+	// Stub-fix turn just finished — fall through to normal iteration for the
+	// remaining budget (decrement happens in the default branch).
+	if m.loopStubFixing {
+		m.loopStubFixing = false
+	}
+
+	if goal.IsComplete(res.Text) {
+		// Mechanical gate first.
+		if n, cerr := goal.CountUnchecked(m.loopSpecPath); cerr == nil && n > 0 {
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  ✗ completion claim rejected: %d unchecked item(s) remain in %s", n, filepath.Base(m.loopSpecPath))))
+			m.loopVerifying = false
+			return m.continueIteration()
+		}
+		// If we just ran the verification turn and it also says complete, exit.
+		if m.loopVerifying {
+			m.loopVerifying = false
+			done := m.loopTotal - m.loopRemaining + 1
+			m.loopRemaining = 0
+			m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ goal complete (verified) in %d iteration(s).", done)))
+			m.appendMergeHint()
+			return ""
+		}
+		// Mechanical passed but verification hasn't fired yet — fire it once.
+		// Doesn't decrement the budget; it's an insurance check, not new work.
+		m.loopVerifying = true
+		m.appendLine(toolStyle.Render("  completion claimed; running final verification…"))
+		return goal.VerificationPrompt(m.loopSpecPath)
+	}
+
+	// Non-complete turn. If we just did a verification turn, the model decided
+	// more work was needed — surface that and resume normal iteration.
+	if m.loopVerifying {
+		m.loopVerifying = false
+		m.appendLine(toolStyle.Render("  verification flagged remaining work; continuing iteration."))
+	}
+	return m.continueIteration()
+}
+
+// continueIteration consumes one slot from loopRemaining and returns the prompt
+// for the next iteration — or kicks off the wrap-up turn when the cap is hit.
+// Centralised so the rejection path and the ordinary path can't drift apart.
+func (m *Model) continueIteration() string {
+	m.loopRemaining--
+	if m.loopRemaining > 0 {
+		next := m.loopTotal - m.loopRemaining + 1
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration %d/%d", next, m.loopTotal)))
+		return goal.IterationPrompt(m.loopSpecPath)
+	}
+	m.loopWrapUp = true
+	m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); summarising progress to the spec…", m.loopTotal)))
+	return goal.WrapUpPrompt(m.loopSpecPath)
+}
+
+// formatStats renders the /stats line. When the context limit is known, the
+// caller passes the live estimated resident size (via compaction.EstimateTokens
+// over current history) and we surface it as "context: ~R/L (P%, source)".
+// Unknown limits omit the suffix rather than show a misleading percentage.
+// Extracted so the test can pin the format without standing up a Model.
+func formatStats(turns int, inTok, outTok int64, resident, ctxLimit int, ctxSource string) string {
+	base := fmt.Sprintf("Session: turns=%d  input_tokens=%d  output_tokens=%d", turns, inTok, outTok)
+	if ctxLimit <= 0 {
+		return base
+	}
+	pct := float64(resident) / float64(ctxLimit) * 100
+	return fmt.Sprintf("%s  context: ~%d/%d (%.0f%%, %s)", base, resident, ctxLimit, pct, ctxSource)
+}
+
+// appendMergeHint tells the user where the loop's work landed and how to merge
+// it (only when the loop actually moved onto a branch).
+func (m *Model) appendMergeHint() {
+	if m.loopBranch != "" {
+		m.appendLine(toolStyle.Render("  " + goal.MergeHint(m.loopBranch, m.loopBaseBranch)))
+	}
+}
+
 // handleSlash dispatches a slash command. Commands run locally and never reach
-// the model.
+// the model. Most are safe to run while a turn is in flight; the destructive
+// ones guard with busyGuard.
 func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	fields := strings.Fields(input)
 	cmd := fields[0]
@@ -1004,6 +1354,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	case "/quit", "/exit":
 		return m, tea.Quit
 	case "/clear":
+		if m.busyGuard("/clear") {
+			break
+		}
 		m.transcript.Reset()
 		m.rawBlocks = nil
 		m.history = nil
@@ -1059,6 +1412,10 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 	case "/theme":
 		if len(args) == 0 {
+			if m.state == stateRunning {
+				m.appendLine(toolStyle.Render("  use /theme <name> while Klaudia is working (the picker needs an idle session). Names: " + themeNames()))
+				break
+			}
 			m.startChoice("Theme — choose Markdown render colours:", m.themeChoices())
 			return m, nil
 		}
@@ -1072,12 +1429,27 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	case "/goal":
 		switch {
 		case len(args) == 0:
-			if m.sess.Goal == "" {
-				m.appendLine(bannerStyle.Render("No standing goal set. /goal <text> to set one."))
-			} else {
-				m.appendLine(bannerStyle.Render("Goal: " + m.sess.Goal))
+			if m.busyGuard("/goal") {
+				break
 			}
-		case strings.ToLower(args[0]) == "clear":
+			return m.toggleGoalSetting()
+		case strings.EqualFold(args[0], "run"):
+			if m.busyGuard("/goal run") {
+				break
+			}
+			return m.startGoalLoop(args[1:])
+		case strings.EqualFold(args[0], "stop"):
+			if m.loopRemaining > 0 || m.loopWrapUp || m.turnCancel != nil {
+				m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false
+				if m.turnCancel != nil {
+					m.turnCancel()
+					m.turnCancel = nil
+				}
+				m.appendLine(toolStyle.Render("  ⊘ goal loop stopped."))
+			} else {
+				m.appendLine(bannerStyle.Render("No goal loop running."))
+			}
+		case strings.EqualFold(args[0], "clear"):
 			m.sess.Goal = ""
 			m.appendLine(bannerStyle.Render("Standing goal cleared."))
 		default:
@@ -1085,25 +1457,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(bannerStyle.Render("Standing goal set; it will be re-stated each turn:\n" + m.sess.Goal))
 		}
 	case "/memory":
-		if m.sess.Memory == nil {
-			m.appendLine(errStyle.Render("memory is not available"))
-			break
-		}
-		if len(args) > 0 && strings.ToLower(args[0]) == "add" {
-			note := strings.TrimSpace(strings.TrimPrefix(strings.Join(args, " "), args[0]))
-			if err := m.sess.Memory.Add(note); err != nil {
-				m.appendLine(errStyle.Render("memory: " + err.Error()))
-			} else {
-				m.appendLine(bannerStyle.Render("Saved to memory."))
-			}
-		} else {
-			idx, _ := m.sess.Memory.Index()
-			if strings.TrimSpace(idx) == "" {
-				m.appendLine(bannerStyle.Render("No memory yet. /memory add <note> to save one."))
-			} else {
-				m.appendLine(bannerStyle.Render(strings.TrimSpace(idx)))
-			}
-		}
+		// Memory is always an interface value; headless mode gets memory.Disabled()
+		// which returns "" for reads and ErrDisabled for writes.
+		m.appendLine(m.handleMemoryCommand(args))
 	case "/mcp":
 		var servers []MCPServerInfo
 		if m.sess.MCP != nil {
@@ -1143,8 +1499,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.startChoice("Manage MCP servers (Esc to leave as-is):", items)
 		return m, nil
 	case "/stats":
-		m.appendLine(bannerStyle.Render(fmt.Sprintf("Session: turns=%d  input_tokens=%d  output_tokens=%d",
-			m.statTurns, m.statIn, m.statOut)))
+		resident := compaction.EstimateTokens(m.history)
+		m.appendLine(bannerStyle.Render(formatStats(m.statTurns, m.statIn, m.statOut, resident, m.sess.ContextWindow, m.sess.ContextWindowSource)))
 	case "/allow", "/deny":
 		if len(args) == 0 {
 			m.appendLine(errStyle.Render("usage: " + cmd + " <rule>  e.g. " + cmd + " Bash(go test:*)"))
@@ -1203,6 +1559,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.sess.ExtraDirs = append(m.sess.ExtraDirs, dir)
 		m.appendLine(bannerStyle.Render("Added directory (referenced in the prompt context next turn): " + dir))
 	case "/compact":
+		if m.busyGuard("/compact") {
+			break
+		}
 		if m.sess.Compact == nil {
 			m.appendLine(errStyle.Render("compaction is not available"))
 			break
@@ -1250,6 +1609,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(bannerStyle.Render("Exported transcript to " + path))
 		}
 	case "/commit":
+		if m.busyGuard("/commit") {
+			break
+		}
 		if len(args) == 0 {
 			m.appendLine(errStyle.Render("usage: /commit <message>"))
 			break
@@ -1302,6 +1664,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		// as the turn prompt. Built-in commands above always win (a skill that
 		// shadows one is unreachable here).
 		if sk, ok := m.lookupSkill(strings.TrimPrefix(cmd, "/")); ok {
+			if m.busyGuard("/" + sk.Name) {
+				break
+			}
 			rendered := sk.Render(strings.Join(args, " "))
 			m.appendLine(bannerStyle.Render("Running skill /" + sk.Name))
 			m.setState(stateRunning)
@@ -1768,7 +2133,27 @@ func (m *Model) answer(d permission.Decision) {
 // runs under a cancellable context so Esc can interrupt it. A standing /goal is
 // re-stated to the model each turn (Ralph-style).
 func (m *Model) startTurn(prompt string) tea.Cmd {
-	if m.sess != nil && m.sess.Goal != "" {
+	// Belt-and-braces: zero the per-turn live tally so a path that skipped
+	// doneMsg can't poison the next reconcile. The normal path also resets
+	// these on doneMsg, so this is just a guard.
+	m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
+	// Phase tracking: start every turn in "thinking" and mark the clock now
+	// so the quiet-detector doesn't fire on a fresh turn that legitimately
+	// takes 30s+ to receive its first event (some providers stream slowly).
+	m.phase = "thinking"
+	m.lastEventAt = time.Now()
+	m.activeToolName = ""
+	m.activeToolStart = time.Time{}
+	// Frame the turn. Goal-setting interviews the user and drafts the spec; an
+	// active loop's prompt is already goal.IterationPrompt (built by the caller),
+	// so leave it untouched; otherwise re-state any standing /goal (drift guard).
+	switch {
+	case m.goalSetting && m.sess != nil:
+		existing, specPath, _ := goal.Read(m.sess.CWD)
+		prompt = goal.FacilitatorPrompt(specPath, existing) + "\n\nUser: " + prompt
+	case m.loopRemaining > 0 || m.loopWrapUp:
+		// prompt is the iteration / wrap-up prompt already; no framing added.
+	case m.sess != nil && m.sess.Goal != "":
 		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
 	}
 	var approver agent.Approver = &uiApprover{events: m.events}
@@ -1799,9 +2184,13 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 }
 
 func (m *Model) renderEvent(ev agent.Event) {
+	// Bump the activity clock on every event — bottomView reads this to
+	// decide whether to surface the "quiet for…" stuck-state suffix.
+	m.lastEventAt = time.Now()
 	switch ev.Type {
 	case "assistant":
 		m.appendText(ev.Text) // streamed deltas (raw until flushed)
+		m.phase = "streaming"
 	case "tool_use":
 		m.flushAssistant() // the assistant message before a tool call is complete
 		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
@@ -1809,6 +2198,9 @@ func (m *Model) renderEvent(ev agent.Event) {
 		if diff := toolDiff(ev.ToolName, ev.Input); diff != "" {
 			m.appendLine(diff)
 		}
+		m.phase = "running " + ev.ToolName
+		m.activeToolName = ev.ToolName
+		m.activeToolStart = time.Now()
 	case "tool_result":
 		m.flushAssistant()
 		m.lastResult = ev.Content // keep the full result for /last (#3)
@@ -1817,13 +2209,23 @@ func (m *Model) renderEvent(ev agent.Event) {
 			s = "completed"
 		}
 		style := toolStyle
-		prefix := "✓ " + ev.ToolName + ": "
+		prefix := "✓ " + ev.ToolName
 		if ev.IsError {
 			style = errStyle
-			prefix = "✗ " + ev.ToolName + ": "
+			prefix = "✗ " + ev.ToolName
 		}
+		// Append the tool's wall-clock duration to its result line so users
+		// can see whether a tool was fast or slow without reading timestamps.
+		// Matched on ToolName so a misordered event can't suffix the wrong tool.
+		if m.activeToolName != "" && m.activeToolName == ev.ToolName {
+			prefix += " · " + fmtDuration(time.Since(m.activeToolStart))
+		}
+		prefix += ": "
 		// Syntax-highlight fenced code in results (#5), else truncated plain text.
-		if !ev.IsError && strings.Contains(s, "```") && len(s) <= 4000 {
+		// Skip the Markdown path for cat -n line-numbered output (Read previews):
+		// glamour treats it as prose and reflows every line into one run-on block,
+		// inlining the line numbers — show such results verbatim instead.
+		if !ev.IsError && strings.Contains(s, "```") && len(s) <= 4000 && !looksLineNumbered(s) {
 			m.appendLine(toolStyle.Render("  " + prefix))
 			m.appendLine(m.markdown(s))
 		} else {
@@ -1832,9 +2234,41 @@ func (m *Model) renderEvent(ev agent.Event) {
 			}
 			m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(s, "\n", "\n  ")))
 		}
+		m.activeToolName = ""
+		m.phase = "thinking"
 	case "compaction":
 		m.flushAssistant()
-		m.appendLine(bannerStyle.Render("· " + ev.Content))
+		if ev.Content == "" {
+			// Start of a slow (model-based) autocompact — show progress until
+			// the matching done banner arrives. Microcompact never sends this.
+			m.phase = "compacting"
+		} else {
+			// Completion banner. The compaction is already finished by the time
+			// this arrives; what follows is the model turn, so leave the phase
+			// as "thinking" rather than stranding it on "compacting" while we
+			// wait on the (post-compaction, still large) request's first token.
+			m.appendLine(bannerStyle.Render("· " + ev.Content))
+			m.phase = "thinking"
+		}
+	case "usage":
+		// One inner LLM call's usage. Update both the session counters and the
+		// per-turn tally so doneMsg's reconciliation knows what we already
+		// counted. No scrollback line — the status bar at the bottom shows
+		// the running totals, and we don't want a stream of "+1234 tokens"
+		// noise during an iteration.
+		m.statTurns += ev.TurnDelta
+		m.statIn += ev.InputDelta
+		m.statOut += ev.OutputDelta
+		m.turnLiveTurns += ev.TurnDelta
+		m.turnLiveIn += ev.InputDelta
+		m.turnLiveOut += ev.OutputDelta
+		// Demote streaming → thinking when a usage event arrives mid-turn —
+		// it signals the model has finished one inner call. Don't clobber a
+		// "running <Tool>" phase, since a usage event between tool_use and
+		// tool_result is just the assistant's pre-tool turn-finalisation.
+		if m.phase == "streaming" {
+			m.phase = "thinking"
+		}
 	}
 }
 
@@ -1866,6 +2300,74 @@ func (m *Model) markdown(s string) string {
 		return s
 	}
 	return strings.TrimRight(out, "\n")
+}
+
+// looksLineNumbered reports whether s is cat -n style output — the Read tool's
+// format of a right-aligned line number, a tab, then content ("%6d\t%s").
+// Markdown-rendering such preformatted text reflows every line into one run-on
+// block and inlines the numbers, so the caller must show it verbatim. Requires
+// every checked non-empty line (the first few) to match, so a genuine Markdown
+// result that merely happens to contain a numbered line isn't misclassified.
+func looksLineNumbered(s string) bool {
+	checked, numbered := 0, 0
+	for _, ln := range strings.SplitN(s, "\n", 6) {
+		if strings.TrimSpace(ln) == "" {
+			continue
+		}
+		checked++
+		i := 0
+		for i < len(ln) && ln[i] == ' ' {
+			i++
+		}
+		d := i
+		for d < len(ln) && ln[d] >= '0' && ln[d] <= '9' {
+			d++
+		}
+		if d > i && d < len(ln) && ln[d] == '\t' {
+			numbered++
+		}
+	}
+	return checked > 0 && numbered == checked
+}
+
+// renderQueuedHint composes the "queued: <message>" line shown under the
+// input while the model is working. The message snippet is rendered in the
+// user-input style (Bold/accent2) so it's scannable at a glance — the
+// previous all-dim version was easy to miss during long turns, and the
+// session that lost a "ive setup caddy…" message to a stuck Bash showed
+// the cost. Wrapper text (label, key hints, line count) stays in hint
+// style so the visual weight goes to the queued content itself.
+func (m *Model) renderQueuedHint() string {
+	snippet := oneline(m.queued, 60)
+	label := hintStyle.Render("⏎ queued: ")
+	body := userStyle.Render(snippet)
+	tail := "  " + hintStyle.Render("(Enter sends · ↑ edits)")
+	if lines := strings.Count(m.queued, "\n") + 1; lines > 1 {
+		tail = "  " + hintStyle.Render(fmt.Sprintf("(%d lines · Enter sends · ↑ edits)", lines))
+	}
+	return label + body + tail
+}
+
+// phaseLabel returns the verb shown in the spinner row. Cancellation
+// outranks everything (so Esc/queued-Enter gets the dominant feedback);
+// otherwise we surface whatever phase renderEvent last set, defaulting to
+// "working" before the first event has landed in a turn. When in an active
+// tool, the elapsed wall-clock of that specific call is appended so a
+// long-running tool is visible separately from the turn timer — for the
+// "ran two quick tools, then this one stalled" case the spinner reads
+// "running Bash 42s… 1m12s" and the user can tell the LATEST call is the
+// stalled one rather than the whole turn.
+func (m *Model) phaseLabel() string {
+	switch {
+	case m.cancelling:
+		return "cancelling"
+	case m.phase == "":
+		return "working"
+	case m.activeToolName != "":
+		return "running " + m.activeToolName + " " + fmtDuration(time.Since(m.activeToolStart))
+	default:
+		return m.phase
+	}
 }
 
 // buildGlamour (re)builds the Markdown renderer for the given viewport width.
@@ -1905,7 +2407,7 @@ func (m *Model) rerenderTranscript() {
 	}
 	// Regenerate the intro banner so it picks up the new theme's chrome colours.
 	if m.hasIntro && len(m.rawBlocks) > 0 {
-		m.rawBlocks[0].text = intro(m.introModel, m.introBranch, m.introSession, m.introTagline)
+		m.rawBlocks[0].text = intro(m.introModel, m.introBranch, m.introTagline)
 	}
 	m.transcript.Reset()
 	for _, block := range m.rawBlocks {
@@ -1970,11 +2472,26 @@ func (m *Model) bottomView() string {
 	var bottom string
 	switch m.state {
 	case stateRunning:
-		work := m.spin.View() + " working… " + bannerStyle.Render(m.sw.View()) + hintStyle.Render("  (esc to interrupt)")
+		label := " " + m.phaseLabel() + "… "
+		hint := "  (esc to interrupt)"
+		if m.cancelling {
+			hint = "  (Ctrl+C to force quit)"
+		}
+		work := m.spin.View() + label + bannerStyle.Render(m.sw.View()) + hintStyle.Render(hint)
+		// Surface "stuck" by tracking time since the last event the renderer
+		// saw. Suppressed during cancellation — "cancelling… quiet for 12s"
+		// is a worse signal than "cancelling…". 30s threshold picked so a
+		// fast turn never sees the suffix; a long API call or tool-bound
+		// stall does. Re-evaluated every spinner tick (~80ms).
+		if !m.cancelling && !m.lastEventAt.IsZero() {
+			if q := time.Since(m.lastEventAt); q > 30*time.Second {
+				work += hintStyle.Render(fmt.Sprintf("  · quiet for %s", fmtDuration(q)))
+			}
+		}
 		m.input.SetHeight(m.inputHeight())
 		bottom = work + "\n" + m.input.View()
 		if m.queued != "" {
-			bottom += "\n" + hintStyle.Render(fmt.Sprintf("⏎ queued: %q · Enter to send now · ↑ to edit", oneline(m.queued, 48)))
+			bottom += "\n" + m.renderQueuedHint()
 		}
 	case stateAwaitingPermission:
 		bottom = askStyle.Render(m.permissionPrompt())

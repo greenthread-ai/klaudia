@@ -54,9 +54,9 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | --- | --- | --- | --- | --- |
 | Agentic tool loop | 05-app-core | `agent/loop.go` | ✅ done | Emitter, per-turn tool params, Approver/Asker/Planner seams. |
 | Provider abstraction | 03-providers | `api/provider.go` | 🔀 divergent | Multi-provider interface (Anthropic + OpenAI-compatible); JS was Anthropic-centric. |
-| Anthropic Messages (Beta, streaming, caching) | 02/03 | `api/client.go` | ✅ done | |
+| Anthropic Messages (Beta, streaming) | 02/03 | `api/client.go` | ✅ done | Streamed with an idle watchdog (`KLAUDIA_STREAM_IDLE_TIMEOUT`). |
 | OpenAI-compatible Chat Completions | — | `api/openai*.go` | 🔀 divergent | Translation shim; SSE stream:true. Image tool_results translated to `image_url` content parts. |
-| Prompt caching | 03-providers | `api/client.go` | ✅ done | |
+| Prompt caching | 03-providers | `api/cache.go` | ✅ done | `cache_control` breakpoints on tools + system + a rolling conversation tail; usage surfaced as `cache_read/creation_input_tokens`. Disable with `KLAUDIA_DISABLE_PROMPT_CACHE`. |
 | stream-json output (authoritative envelope) | 08-entry | `streamjson/` + `cli/envelope.go` | ✅ done | |
 | stream-json partial deltas | 08-entry | `cli/partial.go` + `api/StreamSink` | ✅ done | Behind `--include-partial-messages`; emits JS `stream_event` lines. OpenAI shim synthesizes the sequence. |
 
@@ -64,8 +64,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 
 | Feature | JS ref | Klaudia pkg | Status | Notes |
 | --- | --- | --- | --- | --- |
-| JSONL transcripts | 07-app-features | `session/` | ✅ done | `~/.claude/projects/<encoded-cwd>/`; EncodePath matches JS K0A. |
-| Resume / continue / fork | 07/08 | `session/` + `cli/` | ✅ done | `-r/--resume`, `--continue`, `--fork-session`. |
+| JSONL transcripts | 07-app-features | `session/` | ✅ done | `~/.klaudia/sessions/<encoded-cwd>/` (honors `KLAUDIA_CONFIG_DIR`); reads legacy `~/.klaudia/projects/<encoded-cwd>/`; EncodePath matches JS K0A. |
+| Resume / continue / fork | 07/08 | `session/` + `cli/` | ✅ done | Auto-resumes most recent project session by default; `--new-session` starts fresh; `-r/--resume`, `--continue`, `--fork-session` remain. |
 | Microcompaction (local) | 07-app-features | `compaction/` | ✅ done | |
 | Autocompaction (model summary) | 07-app-features | `compaction/` | ✅ done | |
 | Persisted summaries + resume seeding | — | `session/summary.go` + `agent.OnSummary` | 🔀 divergent | Compaction summaries persisted to `.klaudia/sessions/<id>.summary.md`; `--resume` seeds from them (token-saving), `--full` replays the transcript. |

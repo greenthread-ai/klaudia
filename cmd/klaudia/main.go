@@ -5,7 +5,7 @@ package main
 import (
 	"os"
 
-	"github.com/greenthread/klaudia/internal/cli"
+	"github.com/greenthread-ai/klaudia/internal/cli"
 )
 
 func main() {

@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
 // SkillInfo is one skill the model can invoke through the Skill tool. It mirrors
@@ -30,7 +30,7 @@ type SkillInput struct {
 
 // Skill lets the model invoke a named, user-defined skill: the rendered skill
 // body is returned as a tool_result (injected instructions the model then
-// follows). Skills are discovered from ~/.claude/skills and <cwd>/.klaudia/skills.
+// follows). Skills are discovered from ~/.klaudia/skills and <cwd>/.klaudia/skills.
 type Skill struct {
 	schema *schema.Schema
 	byName map[string]SkillInfo

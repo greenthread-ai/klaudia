@@ -85,10 +85,34 @@ type Rule struct {
 }
 
 // Context carries the active mode and the allow/deny rule sets for a run.
+// Mode is a function rather than a value so each permission check reads the
+// live session setting at decision time — when a user types `/mode bypass`
+// mid-turn (or mid /goal-iteration), subsequent tool dispatches see the new
+// mode without waiting for the next TUI turn boundary. Callers with a fixed
+// mode (tests, headless single-shot) wrap their value with StaticMode.
 type Context struct {
-	Mode  Mode
+	Mode  func() Mode
 	Allow []Rule
 	Deny  []Rule
+}
+
+// StaticMode returns a Mode-function that always reports m. Convenience for
+// callers without a live mode source — tests, headless one-shot runs, and
+// any spot where the mode genuinely cannot change for the lifetime of the
+// Context.
+func StaticMode(m Mode) func() Mode {
+	return func() Mode { return m }
+}
+
+// CurrentMode returns c.Mode() with a nil-safe default of ModeDefault. Use
+// this instead of calling c.Mode() directly — it keeps tests that construct
+// a zero-value Context (e.g. Options{}, no Permission set) compatible with
+// the live-mode refactor.
+func CurrentMode(c Context) Mode {
+	if c.Mode == nil {
+		return ModeDefault
+	}
+	return c.Mode()
 }
 
 // IntrinsicChecker is implemented by a tool to express its own permission
@@ -156,7 +180,7 @@ func Check(pctx Context, tool IntrinsicChecker, req PermissionRequest) Decision 
 	if anyMatch(pctx.Deny, name, req.Specifier) {
 		return Decision{Behavior: Deny, Message: "denied by permission rule"}
 	}
-	if pctx.Mode == ModeBypassPermissions {
+	if CurrentMode(pctx) == ModeBypassPermissions {
 		return Decision{Behavior: Allow}
 	}
 	if anyMatch(pctx.Allow, name, req.Specifier) {

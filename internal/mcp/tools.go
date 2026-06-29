@@ -8,15 +8,15 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/greenthread/klaudia/internal/permission"
-	"github.com/greenthread/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // mcpPermission is the intrinsic decision for MCP tools: ask in interactive
 // modes, blocked in plan/dontAsk. (bypass is handled upstream.) MCP tools are
 // external code, so they are never auto-allowed by mode alone.
 func mcpPermission(pctx permission.Context) permission.Decision {
-	switch pctx.Mode {
+	switch permission.CurrentMode(pctx) {
 	case permission.ModePlan:
 		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; MCP tools are not allowed"}
 	case permission.ModeDontAsk:

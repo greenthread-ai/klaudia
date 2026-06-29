@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 var (
@@ -170,6 +170,23 @@ func (m *Model) statusLine() string {
 		}
 	}
 	toks := m.statIn + m.statOut
-	return hintStyle.Render(fmt.Sprintf("%s · %s · %d turns · %s tokens",
-		model, shortMode(m.currentMode()), m.statTurns, humanTokens(toks)))
+	line := fmt.Sprintf("%s · %s · %d turns · %s tokens",
+		model, shortMode(m.currentMode()), m.statTurns, humanTokens(toks))
+	// Surface context-window pressure as a percentage when we know both the
+	// limit (from sess.ContextWindow, resolved at startup via api.ContextWindow)
+	// and the current resident estimate (refreshed at each doneMsg). Skipped
+	// for unknown windows so we don't fabricate a number.
+	if m.sess != nil && m.sess.ContextWindow > 0 && m.residentTokens > 0 {
+		pct := float64(m.residentTokens) / float64(m.sess.ContextWindow) * 100
+		line += fmt.Sprintf(" · ctx %.0f%%", pct)
+	}
+	if m.loopRemaining > 0 {
+		// While the /goal loop runs, show which iteration we're on.
+		line += fmt.Sprintf(" · goal %d/%d", m.loopTotal-m.loopRemaining+1, m.loopTotal)
+	} else if m.loopWrapUp {
+		line += " · goal summary"
+	} else if m.goalSetting {
+		line += " · goal-setting"
+	}
+	return hintStyle.Render(line)
 }

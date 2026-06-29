@@ -9,8 +9,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"sort"
 
-	"github.com/greenthread/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
 // Result is a single tool_result content block produced by a tool execution.
@@ -124,11 +125,16 @@ func (r *Registry) Lookup(name string) (Tool, bool) {
 }
 
 // Names returns the registered tool names in no particular order.
+// Names returns the registered tool names in a stable (sorted) order. Stability
+// matters: the order drives the tool list sent on every turn, and a varying
+// order would change the request's cached prefix each turn and defeat prompt
+// caching (the cached prefix begins with the tool definitions).
 func (r *Registry) Names() []string {
 	names := make([]string, 0, len(r.byName))
 	for n := range r.byName {
 		names = append(names, n)
 	}
+	sort.Strings(names)
 	return names
 }
 

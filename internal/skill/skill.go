@@ -1,7 +1,7 @@
 // Package skill loads reusable prompt/command skills from Markdown files with
-// YAML frontmatter. Skills live in ~/.claude/skills (user) overlaid by
+// YAML frontmatter. Skills live in ~/.klaudia/skills (user) overlaid by
 // <cwd>/.klaudia/skills (project, wins on name collision) — the same overlay
-// pattern as config.Load and mcp.LoadConfig.
+// pattern (and the same ~/.klaudia base) as config.Load and mcp.LoadConfig.
 //
 // A skill file looks like:
 //
@@ -63,7 +63,7 @@ func (s Skill) Render(args string) string {
 	return strings.TrimRight(s.Body, "\n") + "\n\n" + args
 }
 
-// Load reads skills from ~/.claude/skills then overlays <cwd>/.klaudia/skills
+// Load reads skills from ~/.klaudia/skills then overlays <cwd>/.klaudia/skills
 // (project skills win on name collision). Malformed files are skipped, reporting
 // the reason to warn (warn may be nil). The result is sorted by name.
 func Load(cwd string, warn func(string)) []Skill {
@@ -71,7 +71,7 @@ func Load(cwd string, warn func(string)) []Skill {
 
 	dirs := make([]string, 0, 2)
 	if home, err := os.UserHomeDir(); err == nil {
-		dirs = append(dirs, filepath.Join(home, ".claude", "skills"))
+		dirs = append(dirs, filepath.Join(home, ".klaudia", "skills"))
 	}
 	dirs = append(dirs, filepath.Join(cwd, ".klaudia", "skills")) // project wins
 
