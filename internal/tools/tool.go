@@ -27,6 +27,20 @@ type Result struct {
 	// Data carries structured output (metadata) when Content alone is
 	// insufficient; serialized by the API layer as needed.
 	Data map[string]any
+	// Full is the untruncated output, for local display only — it is never sent
+	// to the model. Tools that clamp Content to protect the context window set
+	// it so the UI can still show everything the command actually printed;
+	// leaving it empty means Content is already complete.
+	Full string
+}
+
+// Display returns the text a local frontend should show: the untruncated output
+// when the tool kept one, else the model-facing content.
+func (r Result) Display() string {
+	if r.Full != "" {
+		return r.Full
+	}
+	return r.Content
 }
 
 // ResultImage is a base64-encoded image returned to the model for vision.

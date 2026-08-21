@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"github.com/charmbracelet/bubbles/spinner"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +21,12 @@ func newTestModel() *Model {
 	// memory.Disabled() in the session keeps /memory tests branchless —
 	// Add returns ErrDisabled, reads return "", no nil deref on the new
 	// interface-typed Session.Memory field.
-	return &Model{input: in, sess: &Session{Memory: memory.Disabled()}, histPos: 0}
+	// A real spinner, not the zero value: spinner.Model{}.View() renders the
+	// literal "(error)" when it has no frames, which shows up in any test that
+	// renders the running state.
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	return &Model{input: in, spin: sp, sess: &Session{Memory: memory.Disabled()}, histPos: 0}
 }
 
 func TestHistoryNavigation(t *testing.T) {

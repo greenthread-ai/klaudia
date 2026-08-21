@@ -94,7 +94,7 @@ func TestSpillWritesFullOutputAndFormatNamesIt(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 
 	full := strings.Repeat("build output line\n", 5000)
-	out := formatBashOutput(sandbox.Response{Stdout: full})
+	out, fullOut := formatBashOutput(sandbox.Response{Stdout: full})
 
 	if !strings.Contains(out, "full output:") {
 		t.Fatalf("truncated output should name the spill file:\n%s", oneLineOf(out))
@@ -110,13 +110,20 @@ func TestSpillWritesFullOutputAndFormatNamesIt(t *testing.T) {
 	if string(data) != full {
 		t.Errorf("spill should hold the complete output: got %d bytes, want %d", len(data), len(full))
 	}
+	// The UI channel carries the same untruncated text, without a disk read.
+	if fullOut != full {
+		t.Errorf("Full = %d bytes, want the untruncated %d", len(fullOut), len(full))
+	}
+	if len(out) >= len(fullOut) {
+		t.Error("the model-facing copy should be shorter than the full one")
+	}
 }
 
 func TestNoSpillForShortOutput(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KLAUDIA_CONFIG_DIR", dir)
 
-	out := formatBashOutput(sandbox.Response{Stdout: "all good\n"})
+	out, _ := formatBashOutput(sandbox.Response{Stdout: "all good\n"})
 	if strings.Contains(out, "full output:") {
 		t.Error("short output needs no spill file")
 	}
@@ -159,11 +166,15 @@ func TestPruneRemovesStaleSpillsOnly(t *testing.T) {
 // Exit status and timeout annotations must still land after clamping.
 func TestExitAnnotationSurvivesClamping(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-	out := formatBashOutput(sandbox.Response{
+	out, fullOut := formatBashOutput(sandbox.Response{
 		Stdout: strings.Repeat("noise\n", 20000), ExitCode: 1,
 	})
 	if !strings.Contains(out, "[exit code 1]") {
 		t.Errorf("exit annotation lost:\n%s", oneLineOf(out))
+	}
+	// A reader of the full output still needs to know the command failed.
+	if !strings.Contains(fullOut, "[exit code 1]") {
+		t.Error("exit annotation missing from the full output")
 	}
 }
 
@@ -200,15 +211,19 @@ func TestBashEndToEndKeepsHeadAndTail(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := res[0].Content
-	t.Logf("model sees %d bytes", len(out))
+	t.Logf("model sees %d bytes, UI gets %d", len(out), len(res[0].Display()))
+	if res[0].Full == "" {
+		t.Error("a clamped result must carry the untruncated text for the UI")
+	}
+	if len(res[0].Display()) <= len(out) {
+		t.Error("Display() should be the longer, untruncated variant")
+	}
 	for _, want := range []string{"FIRST_LINE_MARKER", "LAST_LINE_MARKER", "bytes elided", "[exit code 3]", "full output:"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q", want)
 		}
 	}
-	path, ok := SpillPath(out)
-	if !ok {
-		t.Fatal("no spill path")
+	if path := spillPathFrom(out); path == "" {
+		t.Fatal("the model-facing output should name the spill file it can read")
 	}
-	t.Logf("spill file: %s", path)
 }

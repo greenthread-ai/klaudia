@@ -2,14 +2,11 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // The TUI shows a short preview of each tool result and used to keep only the
@@ -29,7 +26,8 @@ type toolResult struct {
 	tool    string
 	isError bool
 	at      time.Time
-	content string
+	content string // untruncated when the tool kept a fuller copy
+	clamped bool   // the model saw a shorter version of this
 }
 
 type resultRing struct {
@@ -135,17 +133,11 @@ func (m *Model) showResult(args []string) tea.Cmd {
 	if res.isError {
 		mark = "✗"
 	}
-	// A clamped Bash result names a file holding the untruncated output; show
-	// that instead, so /last means "everything the command printed" rather than
-	// "everything the model was given".
-	if path, ok := tools.SpillPath(res.content); ok {
-		if full, err := os.ReadFile(path); err == nil {
-			m.appendLine(bannerStyle.Render(fmt.Sprintf("%s %s · #%d · %s (full output, untruncated)",
-				mark, res.tool, res.seq, humanBytes(len(full)))))
-			return m.showLong(res.tool, string(full))
-		}
+	header := fmt.Sprintf("%s %s · #%d · %s", mark, res.tool, res.seq, humanBytes(len(res.content)))
+	if res.clamped {
+		// Worth saying: what follows is more than the model was given.
+		header += " (full output — the model saw a clamped copy)"
 	}
-	m.appendLine(bannerStyle.Render(fmt.Sprintf("%s %s · #%d · %s",
-		mark, res.tool, res.seq, humanBytes(len(res.content)))))
+	m.appendLine(bannerStyle.Render(header))
 	return m.showLong(res.tool, res.content)
 }

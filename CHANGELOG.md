@@ -6,6 +6,15 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Changed
+- **The input is drawn in a box, and the status line is its caption.** A dim
+  full-width "model · mode · turns · tokens" line reads as a status bar, and
+  status bars belong pinned to the bottom of a window — so inline rendering,
+  which leaves it wherever the cursor is, made it look misplaced. The position
+  was never the problem: the line had nothing visible to belong to. Framing the
+  input gives it one. The caption also drops whole segments rather than
+  characters when the terminal is narrow, so it degrades to "opus-5 · ask"
+  instead of "opus-5 · ask · 0 tur", and the box gives way to a bare input below
+  30 columns or 10 rows, where the border costs more than it buys.
 - **The default model is now `claude-opus-5`** (was `claude-sonnet-4-6`), and
   the `opus`/`sonnet` aliases track the current lineup (`claude-opus-5` /
   `claude-sonnet-5`); `fable` is added for `claude-fable-5`.
@@ -74,6 +83,14 @@ port mirrors (see `internal/version`).
   listing instead of re-walking it on every Tab keystroke, and ranks files
   Klaudia recently read or wrote first — the previous code discarded
   `search.Glob`'s mtime ordering by re-sorting alphabetically.
+- **The model and the UI no longer share one truncated string.** `tools.Result`
+  gained a `Full` field (surfaced as `agent.Event.FullContent`) carrying the
+  untruncated output for local display only. Bash clamps what the model sees to
+  protect the context window; `/last` now shows everything the command actually
+  printed — 245 KB where the model saw 30 KB, in the end-to-end test — and says
+  so. This also removes the TUI's coupling to a magic string in the tool's own
+  output: it was parsing the spill-file path back out of the notice. That notice
+  remains, because it is what lets the *model* read the elided middle.
 - **Bash output keeps its tail.** Output over 30 KB was truncated head-only, so
   the part people actually want — the `FAIL` summary from `go test ./...`, the
   error that stopped a build, the end of a stack trace — was thrown away, for

@@ -2,10 +2,10 @@ package tui
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/greenthread-ai/klaudia/internal/agent"
 )
 
 // The regression: only the newest tool result used to be recoverable, so a big
@@ -179,37 +179,42 @@ func contains(ss []string, want string) bool {
 	return false
 }
 
-// A clamped Bash result names a spill file; /last should show that, not the
-// truncated text the model was given.
-func TestLastPrefersTheUntruncatedSpillFile(t *testing.T) {
-	dir := t.TempDir()
-	spill := filepath.Join(dir, "bash-x.log")
+// The untruncated output arrives on the event's FullContent channel, so /last
+// shows everything the command printed rather than the model's clamped copy.
+func TestLastShowsUntruncatedOutput(t *testing.T) {
 	full := "THE COMPLETE LOG\n" + strings.Repeat("middle\n", 100) + "THE VERY END\n"
-	if err := os.WriteFile(spill, []byte(full), 0o600); err != nil {
-		t.Fatal(err)
-	}
 
 	m := newTestModel()
 	m.resize(80, 400) // tall, so showLong prints instead of paging
-	m.renderEvent(mkResult("Bash", "head only…\n[full output: "+spill+"]", false))
+	m.renderEvent(agent.Event{
+		Type: "tool_result", ToolName: "Bash",
+		Content:     "head only…\n[full output: /tmp/x.log]",
+		FullContent: full,
+	})
 
 	m.showResult(nil)
 	out := visibleText(m.transcript.String())
 	if !strings.Contains(out, "THE COMPLETE LOG") || !strings.Contains(out, "THE VERY END") {
-		t.Errorf("/last should show the untruncated spill file:\n%s", out)
+		t.Errorf("/last should show the untruncated output:\n%s", out)
 	}
-	if !strings.Contains(out, "untruncated") {
-		t.Error("the header should say this is the full output")
+	if !strings.Contains(out, "the model saw a clamped copy") {
+		t.Error("the header should say this is more than the model got")
 	}
 }
 
-func TestLastFallsBackWhenSpillIsGone(t *testing.T) {
+// An unclamped result has no second copy; /last shows the content as-is and
+// says nothing about clamping.
+func TestLastShowsContentWhenNothingWasClamped(t *testing.T) {
 	m := newTestModel()
 	m.resize(80, 400)
-	m.renderEvent(mkResult("Bash", "what the model saw\n[full output: /nonexistent/gone.log]", false))
+	m.renderEvent(mkResult("Bash", "everything the command printed", false))
 
 	m.showResult(nil)
-	if !strings.Contains(visibleText(m.transcript.String()), "what the model saw") {
-		t.Error("a missing spill file should fall back to the stored content, not fail")
+	out := visibleText(m.transcript.String())
+	if !strings.Contains(out, "everything the command printed") {
+		t.Error("unclamped output should show as-is")
+	}
+	if strings.Contains(out, "clamped copy") {
+		t.Error("nothing was clamped; don't claim otherwise")
 	}
 }

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/stopwatch"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -207,6 +206,10 @@ func applyChromeTheme(p themePalette) {
 	userStyle = baseStyle().Bold(true).Foreground(accent2)
 	toolStyle = baseStyle().Foreground(muted)
 	hintStyle = baseStyle().Faint(true).Italic(true).Foreground(muted)
+	promptBoxStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(muted).
+		Padding(0, 1)
 }
 
 // intro is the welcoming banner shown at startup. The model name/branch/session
@@ -398,19 +401,6 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	m.introTagline, m.hasIntro = randomTagline(), true
 	m.appendLine(m.introText())
 	return m
-}
-
-func newPromptInput() textarea.Model {
-	in := textarea.New()
-	in.Placeholder = "Ask Klaudia… (Enter to send, Ctrl+J for newline, Ctrl+C twice to quit)"
-	in.Prompt = ""
-	in.ShowLineNumbers = false
-	in.EndOfBufferCharacter = ' '
-	in.CharLimit = 0
-	in.MaxHeight = 6
-	in.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "newline"))
-	in.Focus()
-	return in
 }
 
 // setState changes the UI state and re-syncs the layout (the running and idle
@@ -2252,9 +2242,15 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.activeToolStart = time.Now()
 	case "tool_result":
 		m.flushAssistant()
+		// Store the untruncated output when the tool kept one: /last should show
+		// everything the command printed, not the clamped copy the model saw.
+		stored := ev.Content
+		if ev.FullContent != "" {
+			stored = ev.FullContent
+		}
 		seq := m.results.add(toolResult{
 			id: ev.ToolUseID, tool: ev.ToolName, isError: ev.IsError,
-			at: time.Now(), content: ev.Content,
+			at: time.Now(), content: stored, clamped: ev.FullContent != "",
 		})
 		s := strings.TrimSpace(ev.Content)
 		if s == "" {
@@ -2568,7 +2564,7 @@ func (m *Model) commit(b transcriptBlock) {
 func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
 	m.ready = true
-	m.input.SetWidth(w - 4)
+	m.input.SetWidth(m.inputWidth())
 	if m.glam == nil || m.glamWidth != w {
 		m.buildGlamour(w)
 	}
@@ -2633,7 +2629,7 @@ func (m *Model) bottomView() string {
 			}
 		}
 		m.input.SetHeight(m.inputHeight())
-		bottom = work + "\n" + m.input.View()
+		bottom = caption(work) + "\n" + m.promptBox()
 		// Show the not-yet-committed tail of the streaming message above the
 		// working line, so the user sees text arriving even though the finished
 		// part has already gone to scrollback.
@@ -2641,27 +2637,27 @@ func (m *Model) bottomView() string {
 			bottom = tail + "\n" + bottom
 		}
 		if m.queued != "" {
-			bottom += "\n" + m.renderQueuedHint()
+			bottom += "\n" + caption(m.renderQueuedHint())
 		}
 	case stateAwaitingPermission:
-		bottom = askStyle.Render(m.permissionPrompt())
+		bottom = caption(askStyle.Render(m.permissionPrompt()))
 	case stateAwaitingAnswer:
-		bottom = askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions)))
+		bottom = caption(askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions))))
 	case stateAwaitingPlan:
-		bottom = askStyle.Render("Approve plan? (y)es / (n)o")
+		bottom = caption(askStyle.Render("Approve plan? (y)es / (n)o"))
 	case stateAwaitingConfirm:
-		bottom = askStyle.Render("Confirm? (y)es / (n)o")
+		bottom = caption(askStyle.Render("Confirm? (y)es / (n)o"))
 	case stateAwaitingChoice:
-		bottom = askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.choiceItems))) + hintStyle.Render("  (esc to cancel)")
+		bottom = caption(askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.choiceItems))) + hintStyle.Render("  (esc to cancel)"))
 	default:
 		m.input.SetHeight(m.inputHeight())
-		bottom = m.input.View()
+		bottom = m.promptBox()
 		if sug := m.slashSuggestionLine(); sug != "" {
-			bottom += "\n" + sug
+			bottom += "\n" + caption(sug)
 		}
 	}
 	// Persistent status bar at the very bottom, in every state.
-	return bottom + "\n" + m.statusLine()
+	return bottom + "\n" + caption(m.statusLine())
 }
 
 // uiApprover implements agent.Approver by asking the UI and blocking for the

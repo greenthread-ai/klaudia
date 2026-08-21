@@ -120,26 +120,8 @@ func pruneSpills(dir string, maxAge time.Duration) {
 	}
 }
 
-// spillMarker is the notice appended when full output was written to disk. It
-// is exported through SpillPath so the format lives in exactly one place: the
-// TUI parses it back out to offer the complete log.
+// spillMarker prefixes the notice naming the full-output file. It is written
+// for the model to read — a path it can Read or grep to recover the elided
+// middle. Local frontends don't parse it: they get the untruncated text
+// directly via Result.Full.
 const spillMarker = "[full output: "
-
-// SpillPath extracts the full-output file path from clamped Bash output,
-// reporting false when there isn't one or the file is gone.
-func SpillPath(content string) (string, bool) {
-	i := strings.LastIndex(content, spillMarker)
-	if i < 0 {
-		return "", false
-	}
-	rest := content[i+len(spillMarker):]
-	j := strings.IndexByte(rest, ']')
-	if j < 0 {
-		return "", false
-	}
-	path := rest[:j]
-	if info, err := os.Stat(path); err != nil || info.IsDir() {
-		return "", false
-	}
-	return path, true
-}

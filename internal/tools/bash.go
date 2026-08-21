@@ -121,13 +121,15 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 		return []Result{{Content: fmt.Sprintf("Failed to run command: %v", err), IsError: true}}, nil
 	}
 
-	return []Result{{Content: formatBashOutput(resp), IsError: resp.ExitCode != 0}}, nil
+	model, full := formatBashOutput(resp)
+	return []Result{{Content: model, Full: full, IsError: resp.ExitCode != 0}}, nil
 }
 
-// formatBashOutput combines stdout/stderr and annotates non-zero exit / timeout,
-// clamping to bashMaxOutput (see output.go for why it keeps a tail as well as a
-// head, and where the full text goes).
-func formatBashOutput(resp sandbox.Response) string {
+// formatBashOutput combines stdout/stderr and annotates non-zero exit / timeout.
+// It returns two strings: the model-facing text, clamped to bashMaxOutput (see
+// output.go for why it keeps a tail as well as a head), and the untruncated
+// text for local display. full is empty when nothing was clamped.
+func formatBashOutput(resp sandbox.Response) (model, full string) {
 	var b strings.Builder
 	b.WriteString(resp.Stdout)
 	if resp.Stderr != "" {
@@ -136,20 +138,34 @@ func formatBashOutput(resp sandbox.Response) string {
 		}
 		b.WriteString(resp.Stderr)
 	}
-	out := b.String()
-	if clamped, elided := clampOutput(out); elided > 0 {
+	raw := b.String()
+	out := raw
+	if clamped, elided := clampOutput(raw); elided > 0 {
 		out = clamped
-		if path, ok := spillOutput(b.String()); ok {
+		// The spill file is the *model's* escape hatch to the elided middle —
+		// it can Read or grep the path. The UI doesn't need it: `full` carries
+		// the same text in memory.
+		if path, ok := spillOutput(raw); ok {
 			out += "\n" + spillMarker + path + "]"
 		}
+		full = raw
 	}
+
+	// Status annotations belong on both variants — a reader of the full output
+	// still needs to know the command failed.
+	var status string
 	if resp.TimedOut {
-		out += fmt.Sprintf("\n[command timed out, exit code %d]", resp.ExitCode)
+		status = fmt.Sprintf("\n[command timed out, exit code %d]", resp.ExitCode)
 	} else if resp.ExitCode != 0 {
-		out += fmt.Sprintf("\n[exit code %d]", resp.ExitCode)
+		status = fmt.Sprintf("\n[exit code %d]", resp.ExitCode)
 	}
+	out += status
+	if full != "" {
+		full += status
+	}
+
 	if out == "" {
-		return "[no output]"
+		return "[no output]", ""
 	}
-	return out
+	return out, full
 }

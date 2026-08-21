@@ -161,40 +161,76 @@ func shortMode(m permission.Mode) string {
 	}
 }
 
-// statusLine renders the persistent context bar: model · mode · turns · tokens.
+// statusLine renders the context caption under the input box.
+//
 // A pending "press Ctrl+C again to quit" takes over the whole line — it is a
 // transient, one-keystroke-lived state and the user needs to see it without
-// hunting. Keeping it to a single line also means the bottom block's measured
-// height (and so the viewport reservation) doesn't change while it is armed.
+// hunting.
+//
+// Otherwise the line is assembled from segments in priority order and truncated
+// by dropping whole segments, not characters: on a narrow terminal "opus-5 ·
+// ask" is useful where "opus-5 · ask · 0 tur" is just broken. Which model and
+// which permission mode matter most; token counts matter least.
 func (m *Model) statusLine() string {
 	if m.quitArmed {
 		return askStyle.Render("Press Ctrl+C again to quit") +
 			hintStyle.Render("  ·  any other key cancels")
 	}
+
 	model := "(default)"
 	if m.sess != nil {
 		if dm := m.sess.displayModel(); dm != "" {
 			model = dm
 		}
 	}
-	toks := m.statIn + m.statOut
-	line := fmt.Sprintf("%s · %s · %d turns · %s tokens",
-		model, shortMode(m.currentMode()), m.statTurns, humanTokens(toks))
-	// Surface context-window pressure as a percentage when we know both the
-	// limit (from sess.ContextWindow, resolved at startup via api.ContextWindow)
-	// and the current resident estimate (refreshed at each doneMsg). Skipped
-	// for unknown windows so we don't fabricate a number.
+	segments := []string{model, shortMode(m.currentMode())}
+
+	// Goal state outranks the counters: it says the session is doing something
+	// unattended, which is the thing you would most want to notice.
+	switch {
+	case m.loopRemaining > 0:
+		segments = append(segments, fmt.Sprintf("goal %d/%d", m.loopTotal-m.loopRemaining+1, m.loopTotal))
+	case m.loopWrapUp:
+		segments = append(segments, "goal summary")
+	case m.goalSetting:
+		segments = append(segments, "goal-setting")
+	}
+	// Context pressure is actionable (it tells you when to /compact); raw turn
+	// and token counts are just information.
 	if m.sess != nil && m.sess.ContextWindow > 0 && m.residentTokens > 0 {
 		pct := float64(m.residentTokens) / float64(m.sess.ContextWindow) * 100
-		line += fmt.Sprintf(" · ctx %.0f%%", pct)
+		segments = append(segments, fmt.Sprintf("ctx %.0f%%", pct))
 	}
-	if m.loopRemaining > 0 {
-		// While the /goal loop runs, show which iteration we're on.
-		line += fmt.Sprintf(" · goal %d/%d", m.loopTotal-m.loopRemaining+1, m.loopTotal)
-	} else if m.loopWrapUp {
-		line += " · goal summary"
-	} else if m.goalSetting {
-		line += " · goal-setting"
+	segments = append(segments,
+		fmt.Sprintf("%d turns", m.statTurns),
+		fmt.Sprintf("%s tokens", humanTokens(m.statIn+m.statOut)))
+
+	return hintStyle.Render(fitSegments(segments, m.width-2))
+}
+
+// statusLineAt renders the caption as if the terminal were width cells wide.
+// Exists so the segment-dropping can be tested without a full resize.
+func (m *Model) statusLineAt(width int) string {
+	saved := m.width
+	m.width = width
+	defer func() { m.width = saved }()
+	return m.statusLine()
+}
+
+// fitSegments joins segments with " · ", dropping from the low-priority end
+// until the result fits. The first segment is always kept, even when it alone
+// overflows — a clipped model name still identifies the model. A width of zero
+// means the terminal size isn't known yet (no WindowSizeMsg has arrived), which
+// is not the same as "no room": keep everything rather than collapsing to one
+// segment on the strength of a value we haven't been told.
+func fitSegments(segments []string, width int) string {
+	if width <= 0 {
+		return strings.Join(segments, " · ")
 	}
-	return hintStyle.Render(line)
+	for n := len(segments); n > 1; n-- {
+		if line := strings.Join(segments[:n], " · "); len([]rune(line)) <= width {
+			return line
+		}
+	}
+	return segments[0]
 }

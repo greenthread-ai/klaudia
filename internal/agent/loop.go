@@ -37,8 +37,12 @@ type Event struct {
 	ToolName  string `json:"tool_name,omitempty"`   // tool_use / tool_result
 	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use / tool_result
 	Input     any    `json:"input,omitempty"`       // tool_use input
-	Content   string `json:"content,omitempty"`     // tool_result content
+	Content   string `json:"content,omitempty"`     // tool_result content (what the model sees)
 	IsError   bool   `json:"is_error,omitempty"`    // tool_result error flag
+	// FullContent is the untruncated tool output when the tool clamped Content
+	// to protect the context window. Local frontends show this; it never goes
+	// back to the model. Empty means Content is already complete.
+	FullContent string `json:"full_content,omitempty"`
 	// Usage deltas for one inner-loop LLM call, emitted after each streamTurn so
 	// the TUI/stream-json frontend can update token counters live during long
 	// goal iterations rather than waiting for the whole Run to return. The
@@ -568,15 +572,25 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))
 	}
 
-	// Collapse the result text, and collect any image blocks (vision).
-	var content string
+	// Collapse the result text, and collect any image blocks (vision). `full`
+	// tracks the display-only variant in parallel: a tool that clamped its
+	// output sets Result.Full, and the UI gets that while the model gets the
+	// clamped Content. clamped stays false when no tool did, so the event
+	// carries no redundant copy of the same string.
+	var content, full string
 	isErr := false
+	clamped := false
 	var images []tools.ResultImage
 	for i, r := range results {
 		if i > 0 && r.Content != "" {
 			content += "\n"
+			full += "\n"
 		}
 		content += r.Content
+		full += r.Display()
+		if r.Full != "" {
+			clamped = true
+		}
 		isErr = isErr || r.IsError
 		images = append(images, r.Images...)
 	}
@@ -591,7 +605,11 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		delete(errStreaks, tu.Name)
 	}
 	if emit != nil {
-		emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr})
+		ev := Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr}
+		if clamped {
+			ev.FullContent = full
+		}
+		emit(ev)
 	}
 	if len(images) == 0 {
 		return anthropic.NewBetaToolResultBlock(tu.ID, content, isErr)
