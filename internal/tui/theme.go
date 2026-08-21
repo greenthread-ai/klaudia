@@ -7,6 +7,8 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/glamour/styles"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 type renderTheme struct {
@@ -19,6 +21,7 @@ type renderTheme struct {
 }
 
 type themePalette struct {
+	light   bool // base the Markdown style on glamour's light config
 	fg      string
 	muted   string
 	accent  string
@@ -57,6 +60,13 @@ var renderThemes = []renderTheme{
 		name:    "Nord",
 		desc:    "clean arctic blues",
 		palette: themePalette{fg: "#d8dee9", muted: "#4c566a", accent: "#88c0d0", accent2: "#81a1c1", accent3: "#a3be8c", bg: "#2e3440", codeBG: "#3b4252"},
+	},
+	{
+		id:      "light",
+		name:    "Light",
+		desc:    "for light terminal backgrounds",
+		aliases: []string{"day", "paper"},
+		palette: themePalette{light: true, fg: "#24292f", muted: "#6e7781", accent: "#0550ae", accent2: "#8250df", accent3: "#116329", bg: "#ffffff", codeBG: "#eff1f3"},
 	},
 	{
 		id:      "catppuccin",
@@ -163,18 +173,54 @@ func (m *Model) themeChoices() []choiceItem {
 	return items
 }
 
+// glamourThemeOption picks the Markdown style. Every path ends in WithStyles
+// rather than one of glamour's built-in styles, because the built-ins carry the
+// margins and block backgrounds that make rendered code impossible to copy
+// cleanly, and a style we don't own is a style we can't fix.
 func (m *Model) glamourThemeOption() glamour.TermRendererOption {
-	if theme, ok := lookupTheme(m.currentThemeID()); ok {
-		if theme.standard != "" {
-			return glamour.WithStandardStyle(theme.standard)
+	var style ansi.StyleConfig
+	switch {
+	case lipgloss.ColorProfile() == termenv.Ascii:
+		// NO_COLOR, or a terminal without colour. glamour defaults to a
+		// TrueColor profile and ignores NO_COLOR entirely, so the style itself
+		// has to be the plain one.
+		style = styles.NoTTYStyleConfig
+	default:
+		palette := defaultChromePalette
+		if theme, ok := lookupTheme(m.currentThemeID()); ok {
+			palette = theme.palette
 		}
-		return glamour.WithStyles(themeStyle(theme.palette))
+		style = themeStyle(palette)
 	}
-	return glamour.WithStandardStyle("dark")
+	stripCopyHostileStyling(&style)
+	return glamour.WithStyles(style)
+}
+
+// stripCopyHostileStyling removes the parts of a Markdown style that look fine
+// on screen but ruin the text when it is selected and pasted: the document and
+// code-block margins (which prefix every copied line with spaces) and the block
+// backgrounds (which make glamour pad every line out to the full wrap width).
+// Applied to every style, including glamour's own, so the guarantee holds
+// whichever one is in play.
+func stripCopyHostileStyling(style *ansi.StyleConfig) {
+	style.Document.Margin = uintPtr(0)
+	style.CodeBlock.Margin = uintPtr(0)
+	style.Document.StylePrimitive.BackgroundColor = nil
+	style.CodeBlock.StyleBlock.StylePrimitive.BackgroundColor = nil
+	if style.CodeBlock.Chroma != nil {
+		// Copy before mutating: the built-in styles are package-level values
+		// whose Chroma pointer would otherwise be shared across renderers.
+		chroma := *style.CodeBlock.Chroma
+		chroma.Background.BackgroundColor = nil
+		style.CodeBlock.Chroma = &chroma
+	}
 }
 
 func themeStyle(p themePalette) ansi.StyleConfig {
 	style := styles.DarkStyleConfig
+	if p.light {
+		style = styles.LightStyleConfig
+	}
 	if style.CodeBlock.Chroma != nil {
 		chroma := *style.CodeBlock.Chroma
 		style.CodeBlock.Chroma = &chroma
@@ -196,7 +242,6 @@ func themeStyle(p themePalette) ansi.StyleConfig {
 	style.Code.StylePrimitive.Color = strPtr(p.accent3)
 	style.Code.StylePrimitive.BackgroundColor = strPtr(p.codeBG)
 	style.CodeBlock.StyleBlock.StylePrimitive.Color = strPtr(p.fg)
-	style.CodeBlock.StyleBlock.StylePrimitive.BackgroundColor = strPtr(p.bg)
 	if style.CodeBlock.Chroma != nil {
 		style.CodeBlock.Chroma.Text.Color = strPtr(p.fg)
 		style.CodeBlock.Chroma.Error.Color = strPtr(p.fg)
@@ -222,12 +267,13 @@ func themeStyle(p themePalette) ansi.StyleConfig {
 		style.CodeBlock.Chroma.GenericDeleted.Color = strPtr("#bf616a")
 		style.CodeBlock.Chroma.GenericInserted.Color = strPtr(p.accent3)
 		style.CodeBlock.Chroma.GenericSubheading.Color = strPtr(p.accent)
-		style.CodeBlock.Chroma.Background.BackgroundColor = strPtr(p.bg)
 	}
 	style.DefinitionDescription.BlockPrefix = "\n🠶 "
 	return style
 }
 
 func strPtr(s string) *string { return &s }
+
+func uintPtr(u uint) *uint { return &u }
 
 func boolPtr(b bool) *bool { return &b }

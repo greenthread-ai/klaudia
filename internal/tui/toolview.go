@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	diffAddStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
-	diffDelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // red
+	diffAddStyle = baseStyle().Foreground(lipgloss.Color("2")) // green
+	diffDelStyle = baseStyle().Foreground(lipgloss.Color("1")) // red
 )
 
 const (

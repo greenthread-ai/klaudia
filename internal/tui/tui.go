@@ -161,15 +161,25 @@ type planMsg struct {
 // re-derived from the active theme by applyChromeTheme; errors stay red and
 // banner/tool/hint stay neutral so body text and warnings read clearly on any
 // theme. Initialised to the default palette here.
+// baseStyle is the root of every chrome style. TabWidth(NoTabConversion) is the
+// important part: lipgloss expands tabs to four spaces by default, which
+// silently destroys the column structure of anything tabular a tool prints
+// (kubectl, `go test`, TSV) and means a tab can never survive to the clipboard.
+// Letting the literal tab through matches what the user would see running the
+// command themselves.
+func baseStyle() lipgloss.Style {
+	return lipgloss.NewStyle().TabWidth(lipgloss.NoTabConversion)
+}
+
 var (
-	userStyle    = lipgloss.NewStyle()
-	toolStyle    = lipgloss.NewStyle()
-	errStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	askStyle     = lipgloss.NewStyle()
-	bannerStyle  = lipgloss.NewStyle().Faint(true)
-	logoStyle    = lipgloss.NewStyle()
-	hintStyle    = lipgloss.NewStyle().Faint(true).Italic(true)
-	suggestStyle = lipgloss.NewStyle()
+	userStyle    = baseStyle()
+	toolStyle    = baseStyle()
+	errStyle     = baseStyle().Foreground(lipgloss.Color("9"))
+	askStyle     = baseStyle()
+	bannerStyle  = baseStyle().Faint(true)
+	logoStyle    = baseStyle()
+	hintStyle    = baseStyle().Faint(true).Italic(true)
+	suggestStyle = baseStyle()
 )
 
 func init() { applyChromeTheme(defaultChromePalette) }
@@ -181,12 +191,12 @@ func applyChromeTheme(p themePalette) {
 	accent := lipgloss.Color(p.accent)
 	accent2 := lipgloss.Color(p.accent2)
 	muted := lipgloss.Color(p.muted)
-	logoStyle = lipgloss.NewStyle().Bold(true).Foreground(accent)
-	askStyle = lipgloss.NewStyle().Bold(true).Foreground(accent)
-	suggestStyle = lipgloss.NewStyle().Foreground(accent2)
-	userStyle = lipgloss.NewStyle().Bold(true).Foreground(accent2)
-	toolStyle = lipgloss.NewStyle().Foreground(muted)
-	hintStyle = lipgloss.NewStyle().Faint(true).Italic(true).Foreground(muted)
+	logoStyle = baseStyle().Bold(true).Foreground(accent)
+	askStyle = baseStyle().Bold(true).Foreground(accent)
+	suggestStyle = baseStyle().Foreground(accent2)
+	userStyle = baseStyle().Bold(true).Foreground(accent2)
+	toolStyle = baseStyle().Foreground(muted)
+	hintStyle = baseStyle().Faint(true).Italic(true).Foreground(muted)
 }
 
 // intro is the welcoming banner shown at startup. The model name/branch/session
@@ -290,7 +300,15 @@ type Model struct {
 	// history and isn't cheap on long sessions.
 	residentTokens int
 	lastResult     string // full content of the most recent tool result (for /last)
-	queued         string // a message typed while the model is working (sent on completion)
+	// lastAssistantText is the raw Markdown of the most recent assistant
+	// message, kept so /copy can work from source rather than scraping it back
+	// out of rendered output. msgAccum collects it across progressive chunks.
+	lastAssistantText string
+	msgAccum          strings.Builder
+	// pendingOSC holds a clipboard escape sequence to emit on the next frame.
+	// Writing it through View keeps it ordered with respect to the renderer.
+	pendingOSC string
+	queued     string // a message typed while the model is working (sent on completion)
 	// Pending AskUserQuestion.
 	askReply    chan string
 	askOptions  []tools.AskOption
@@ -930,6 +948,7 @@ var commandList = []cmdInfo{
 	{"/commit", "<msg>", "Stage all changes and commit (asks first)"},
 	{"/export", "", "Export the conversation to a Markdown file"},
 	{"/last", "", "Reprint the most recent tool output in full"},
+	{"/copy", "[target]", "Copy to the clipboard: answer (default) | code [N] | out | all"},
 	{"/clear", "", "Clear the screen and conversation history"},
 	{"/quit", "", "Exit Klaudia (alias /exit)"},
 }
@@ -1077,7 +1096,7 @@ func (m *Model) toggleGoalSetting() (tea.Model, tea.Cmd) {
 	if strings.TrimSpace(text) != "" {
 		m.appendLine(bannerStyle.Render(fmt.Sprintf(
 			"Goal-setting on. Loaded spec from %s:\n  %s\nRefine it in chat, /goal to finish, then /goal run to start.",
-			specPath, oneLine(text, 100))))
+			specPath, oneline(text, 100))))
 	} else {
 		m.appendLine(bannerStyle.Render(fmt.Sprintf(
 			"Goal-setting on — no spec yet. Tell me what you're building and I'll draft %s. /goal to finish.",
@@ -1325,6 +1344,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		// stays scrollable, which is the point of rendering inline.
 		m.appendLine(bannerStyle.Render("Cleared conversation. Earlier output remains in terminal scrollback."))
 		return m, tea.Sequence(tea.ClearScreen, m.out.drainCmd())
+	case "/copy":
+		m.appendLine(bannerStyle.Render(m.copyToClipboard(args)))
 	case "/last":
 		if strings.TrimSpace(m.lastResult) == "" {
 			m.appendLine(bannerStyle.Render("No tool output yet."))
@@ -1956,7 +1977,7 @@ func permissionDetail(req agent.ApprovalRequest) string {
 		}
 	case "Bash":
 		if cmd := stringField(req.Input, "command"); cmd != "" {
-			return "command: " + oneLine(cmd, 220)
+			return "command: " + oneline(cmd, 220)
 		}
 	}
 	if req.Suggestion != "" {
@@ -1974,7 +1995,7 @@ func editPermissionDetail(raw json.RawMessage) string {
 		parts = append(parts, "file: "+path)
 	}
 	if oldText != "" || newText != "" {
-		parts = append(parts, fmt.Sprintf("replace %q → %q", oneLine(oldText, 80), oneLine(newText, 80)))
+		parts = append(parts, fmt.Sprintf("replace %q → %q", oneline(oldText, 80), oneline(newText, 80)))
 	}
 	return strings.Join(parts, "\n  ")
 }
@@ -1998,14 +2019,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func oneLine(s string, limit int) string {
-	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > limit {
-		return s[:limit] + "…"
-	}
-	return s
 }
 
 // rememberPermission records a permission rule for the current UI session and,
@@ -2135,10 +2148,12 @@ func (m *Model) renderEvent(ev agent.Event) {
 			m.appendLine(toolStyle.Render("  " + prefix))
 			m.appendLine(m.markdown(s))
 		} else {
-			if len(s) > 240 {
-				s = s[:240] + "…  " + hintStyle.Render("(/last for full output)")
+			clipped, dropped := clipPreview(s, maxPreviewLines, maxPreviewRunes)
+			if dropped > 0 {
+				clipped += fmt.Sprintf("\n…  %s", hintStyle.Render(
+					fmt.Sprintf("(%d more lines · /last for full output)", dropped)))
 			}
-			m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(s, "\n", "\n  ")))
+			m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(clipped, "\n", "\n  ")))
 		}
 		m.activeToolName = ""
 		m.phase = "thinking"
@@ -2192,6 +2207,14 @@ func (m *Model) appendText(s string) {
 // few-row preview.
 const streamFlushMin = 12
 
+// Inline preview budget for a tool result. Counted in lines first and runes
+// second: a flat byte budget produced an unreadable ribbon for multi-line
+// output, and slicing bytes cut multi-byte characters in half.
+const (
+	maxPreviewLines = 8
+	maxPreviewRunes = 480
+)
+
 // streamTailLines caps the live preview of the unflushed remainder.
 const streamTailLines = 6
 
@@ -2216,6 +2239,7 @@ func (m *Model) emitChunk(text string) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
+	m.msgAccum.WriteString(text)
 	rendered := strings.Trim(m.markdown(text), "\n")
 	if m.chunked {
 		rendered = "\n" + rendered
@@ -2253,13 +2277,14 @@ func (m *Model) streamTail() string {
 // flushAssistant commits the buffered assistant message to the transcript,
 // rendered as Markdown via glamour. No-op when nothing is buffered.
 func (m *Model) flushAssistant() {
-	if m.streamBuf.Len() == 0 {
-		m.scan.reset()
-		m.chunked = false
-		return
+	if m.streamBuf.Len() > 0 {
+		m.emitChunk(m.streamBuf.String())
+		m.streamBuf.Reset()
 	}
-	m.emitChunk(m.streamBuf.String())
-	m.streamBuf.Reset()
+	if m.msgAccum.Len() > 0 {
+		m.lastAssistantText = m.msgAccum.String()
+		m.msgAccum.Reset()
+	}
 	m.scan.reset()
 	m.chunked = false
 }
@@ -2274,7 +2299,9 @@ func (m *Model) markdown(s string) string {
 	if err != nil {
 		return s
 	}
-	return strings.TrimRight(out, "\n")
+	// Glamour pads every line to the wrap width; strip it so selecting a code
+	// block yields the source rather than the source plus forty spaces.
+	return trimRenderedPadding(strings.TrimRight(out, "\n"))
 }
 
 // looksLineNumbered reports whether s is cat -n style output — the Read tool's
@@ -2357,7 +2384,14 @@ func (m *Model) buildGlamour(width int) {
 	if w < 20 {
 		w = 20
 	}
-	if r, err := glamour.NewTermRenderer(m.glamourThemeOption(), glamour.WithWordWrap(w)); err == nil {
+	// glamour hardcodes a TrueColor profile and ignores NO_COLOR; pass lipgloss's
+	// detected profile (which honours NO_COLOR and CLICOLOR) so Markdown degrades
+	// in step with the rest of the chrome.
+	if r, err := glamour.NewTermRenderer(
+		m.glamourThemeOption(),
+		glamour.WithWordWrap(w),
+		glamour.WithColorProfile(lipgloss.ColorProfile()),
+	); err == nil {
 		m.glam = r
 		m.glamWidth = width
 	}
@@ -2401,7 +2435,11 @@ func (m *Model) View() string {
 	if !m.ready {
 		return ""
 	}
-	return m.clampBottom(m.bottomView())
+	out := m.clampBottom(m.bottomView())
+	if m.pendingOSC != "" {
+		out, m.pendingOSC = m.pendingOSC+out, ""
+	}
+	return out
 }
 
 // clampBottom keeps the live region strictly shorter than the terminal. Bubble
