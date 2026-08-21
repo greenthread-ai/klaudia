@@ -71,6 +71,10 @@ type Session struct {
 	Compact CompactFunc
 	// Doctor, if set, returns a rendered environment diagnostic. Backs /doctor.
 	Doctor func() string
+	// ListModels, if set, enumerates the models the configured provider serves,
+	// backing the /model picker. Nil when the provider can't enumerate them, in
+	// which case /model stays type-the-name only.
+	ListModels func(context.Context) ([]api.ModelInfo, error)
 	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
 	MCP MCPController
 }
@@ -141,6 +145,13 @@ type doneMsg struct {
 	res agent.Result
 	err error
 }
+
+// modelsMsg carries the result of a background model-list fetch.
+type modelsMsg struct {
+	models []api.ModelInfo
+	err    error
+}
+
 type compactDoneMsg struct {
 	history []anthropic.BetaMessageParam
 	summary string
@@ -597,6 +608,15 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW)
 
+	case modelsMsg:
+		if msg.err != nil {
+			m.appendLine(errStyle.Render("model: " + api.FriendlyError(msg.err)))
+			m.appendLine(hintStyle.Render("  You can still set one by name: /model <id>"))
+			return m, nil
+		}
+		m.showModelPicker(msg.models)
+		return m, nil
+
 	case pagerDoneMsg:
 		if msg.path != "" {
 			os.Remove(msg.path)
@@ -950,7 +970,7 @@ type cmdInfo struct{ name, args, desc string }
 
 var commandList = []cmdInfo{
 	{"/help", "", "Show this help"},
-	{"/model", "[name]", "Show or set the model (alias: haiku|sonnet|opus, or full ID)"},
+	{"/model", "[name]", "Pick a model from the provider (no arg), or set one by alias/ID"},
 	{"/theme", "[name]", "Change Markdown render theme (no arg = picker)"},
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
 	{"/allow", "<rule>", "Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)"},
@@ -1395,19 +1415,24 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	case "/last":
 		return m, m.showResult(args)
 	case "/model":
-		if len(args) == 0 {
-			cur := m.sess.Model
-			if cur == "" {
-				cur = m.sess.ResolvedModel // show the concrete default, by name
-			}
-			if cur == "" {
-				cur = "(default)"
-			}
-			m.appendLine(bannerStyle.Render("Model: " + cur))
-		} else {
-			m.sess.Model = args[0]
-			m.appendLine(bannerStyle.Render("Model set to " + args[0] + " (applies to the next turn)."))
+		if len(args) > 0 {
+			m.setModel(args[0], 0)
+			break
 		}
+		cur := m.sess.Model
+		if cur == "" {
+			cur = m.sess.ResolvedModel // show the concrete default, by name
+		}
+		if cur == "" {
+			cur = "(default)"
+		}
+		if m.sess.ListModels == nil {
+			// Provider can't enumerate — report the current model as before.
+			m.appendLine(bannerStyle.Render("Model: " + cur))
+			break
+		}
+		m.appendLine(bannerStyle.Render("Model: " + cur + " — fetching available models…"))
+		return m, m.fetchModels()
 	case "/theme":
 		if len(args) == 0 {
 			if m.state == stateRunning {
@@ -1979,10 +2004,16 @@ func throughput(outTokens int64, d time.Duration) string {
 
 // humanTokens renders a token count compactly: 980 → "980", 1240 → "1.2k".
 func humanTokens(n int64) string {
-	if n < 1000 {
+	switch {
+	case n < 1000:
 		return fmt.Sprintf("%d", n)
+	case n < 1_000_000:
+		return fmt.Sprintf("%.1fk", float64(n)/1000)
+	default:
+		// Million-token context windows are ordinary now; without this tier a
+		// 1M window renders as the unreadable "1000.0k".
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
 	}
-	return fmt.Sprintf("%.1fk", float64(n)/1000)
 }
 
 // capitalize upper-cases the first rune (role headers in the export).

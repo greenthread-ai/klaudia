@@ -201,6 +201,20 @@ func TestThroughput(t *testing.T) {
 	if got := throughput(0, 10*time.Second); got != "" {
 		t.Errorf("zero tokens should yield empty, got %q", got)
 	}
+	for _, tc := range []struct {
+		in   int64
+		want string
+	}{
+		{980, "980"},
+		{1500, "1.5k"},
+		{999_000, "999.0k"},
+		{1_000_000, "1.0M"},
+		{200_000, "200.0k"},
+	} {
+		if got := humanTokens(tc.in); got != tc.want {
+			t.Errorf("humanTokens(%d) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
 	if got := humanTokens(980); got != "980" {
 		t.Errorf("humanTokens(980) = %q", got)
 	}

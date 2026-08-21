@@ -196,6 +196,18 @@ func tuiSkills(skills []skill.Skill, warn func(string)) []tui.SkillCommand {
 	return out
 }
 
+// modelLister exposes the provider's model enumeration to the TUI when it has
+// one. Both shipped providers do, but the capability is an optional interface
+// rather than part of Provider — so a future backend that can't list models
+// still satisfies Provider, and /model degrades to accepting a typed id.
+func modelLister(p api.Provider) func(context.Context) ([]api.ModelInfo, error) {
+	lister, ok := p.(api.ModelLister)
+	if !ok {
+		return nil
+	}
+	return lister.ListModels
+}
+
 // buildProvider selects and constructs the model provider from config. It
 // returns the provider and the provider's default model. Anthropic is the
 // default; "openai" uses an OpenAI-compatible Chat Completions endpoint.
@@ -809,6 +821,9 @@ func run(cmd *cobra.Command, opts *options) error {
 			Doctor: func() string {
 				return doctor.Format(doctor.Run(buildDoctorInput(cfg, model, cwd, len(mcpCfg.MCPServers))))
 			},
+			// Nil unless the provider can enumerate its models; /model falls
+			// back to type-the-id when it is.
+			ListModels: modelLister(provider),
 		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
 			// Permission mode reads live from the session every check, so a

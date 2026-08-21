@@ -146,6 +146,13 @@ You can **queue a follow-up while the model is working**: type and press Enter t
 queue it (it's sent when the current turn finishes); press Enter again to
 interrupt and send it now, or `↑` to edit it.
 
+`/model` with no argument asks the provider which models it serves and offers
+them as a picker — Anthropic and OpenAI-compatible endpoints both answer at
+`GET /v1/models` — so you don't have to remember an exact model ID. `/model
+<alias|id>` still sets one directly (`opus`, `sonnet`, `haiku`, `fable`, or any
+full ID). Picking from the list also records that model's real context window,
+which is what the status bar's `ctx N%` measures against.
+
 `/theme` switches the colour theme (Markdown + chrome) for the session; set a
 durable default with `theme = "nord"` in `.klaudia/config.toml` (dracula |
 gruvbox | tokyo-night | nord | light | catppuccin). `NO_COLOR` is honoured.

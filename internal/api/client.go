@@ -44,7 +44,7 @@ var WebToolBetas = []anthropic.AnthropicBeta{
 
 // DefaultModel is used when no --model is given. Server-side resolution may
 // pick a newer snapshot; this is the alias we send.
-const DefaultModel = "claude-sonnet-4-6"
+const DefaultModel = "claude-opus-5"
 
 // modelAliases maps the short CLI aliases to current model IDs (resolveModelId,
 // 07-app-features.js:7901). Full IDs pass through unchanged, so users can
@@ -53,22 +53,32 @@ const DefaultModel = "claude-sonnet-4-6"
 // lineup — verified live against /v1/messages with a one-shot probe.
 var modelAliases = map[string]string{
 	"haiku":  "claude-haiku-4-5",
-	"sonnet": "claude-sonnet-4-6",
-	"opus":   "claude-opus-4-8",
+	"sonnet": "claude-sonnet-5",
+	"opus":   "claude-opus-5",
+	"fable":  "claude-fable-5",
 }
 
-// modelContextWindows is the per-model input-token limit klaudia would actually
-// receive on a request, given the betas we ship today. The Claude 4.x lineup
-// supports 1M context via `context-1m-2025-08-07`, but DefaultBetas doesn't
-// enable it, so the honest reportable limit is 200K. Bump alongside DefaultBetas
-// if/when we opt into the 1M beta. Older snapshots (e.g. opus-4-7) stay in the
-// table so a user pinning a specific older ID still gets a sourced limit
-// instead of "unknown".
+// modelContextWindows is the offline fallback for the input-token limit, used
+// before (or instead of) a live answer from the provider's models endpoint —
+// which is authoritative and is what /model now records when you pick a model.
+//
+// These values were verified against GET /v1/models rather than assumed. The
+// previous table claimed 200K across the board on the theory that 1M needed
+// `context-1m-2025-08-07`, which DefaultBetas doesn't send; the API reports 1M
+// for the current lineup regardless, so the status bar's `ctx N%` had been
+// overstating context pressure roughly fivefold.
 var modelContextWindows = map[string]int{
-	"claude-opus-4-8":   200_000,
-	"claude-opus-4-7":   200_000,
-	"claude-sonnet-4-6": 200_000,
-	"claude-haiku-4-5":  200_000,
+	"claude-opus-5":              1_000_000,
+	"claude-sonnet-5":            1_000_000,
+	"claude-fable-5":             1_000_000,
+	"claude-opus-4-8":            1_000_000,
+	"claude-opus-4-7":            1_000_000,
+	"claude-opus-4-6":            1_000_000,
+	"claude-sonnet-4-6":          1_000_000,
+	"claude-sonnet-4-5-20250929": 1_000_000,
+	"claude-opus-4-5-20251101":   200_000,
+	"claude-haiku-4-5":           200_000,
+	"claude-haiku-4-5-20251001":  200_000,
 }
 
 // ContextWindow source labels for /stats and /doctor reporting.

@@ -6,6 +6,9 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Changed
+- **The default model is now `claude-opus-5`** (was `claude-sonnet-4-6`), and
+  the `opus`/`sonnet` aliases track the current lineup (`claude-opus-5` /
+  `claude-sonnet-5`); `fable` is added for `claude-fable-5`.
 - **The TUI renders inline instead of taking over the screen.** Klaudia used the
   alternate screen with a custom viewport, which hid the shell scrollback you
   launched from, denied the terminal's own search and selection over the
@@ -26,6 +29,14 @@ port mirrors (see `internal/version`).
   pager's job.
 
 ### Added
+- **Model discovery in `/model`.** With no argument it now asks the provider
+  which models it actually serves and offers them as a picker, instead of
+  requiring you to type an exact ID from memory. Both backends answer at
+  `GET /v1/models` — Anthropic via the SDK (with the OAuth beta header the rest
+  of the client sends), OpenAI-compatible endpoints by convention — exposed as
+  an optional `api.ModelLister` so a future backend that can't enumerate still
+  satisfies `api.Provider` and simply falls back to type-the-ID. Selecting a
+  model also records the context window the provider reports for it.
 - **`/copy`** — put the last answer, a code block, a tool result or the whole
   conversation on the system clipboard using OSC 52, so it works over SSH and
   inside tmux. It copies from raw sources, never from rendered output.
@@ -71,6 +82,14 @@ port mirrors (see `internal/version`).
   and named in the notice, so `/last` shows the complete log and the model can
   grep it. Spill files are pruned after 24 hours. The old truncation also
   sliced bytes, which could cut a multi-byte character in half.
+- **Context-window reporting was understating the window ~5×.** The static
+  per-model table claimed 200K for the current lineup, on the theory that 1M
+  needed the `context-1m-2025-08-07` beta that `DefaultBetas` doesn't send.
+  `GET /v1/models` reports 1M for those models, so the status bar's `ctx N%`
+  had been overstating context pressure accordingly. The table is corrected
+  against the live endpoint, and `/model` now prefers the provider's own figure
+  over any table at all. `humanTokens` gained an M tier — a 1M window rendered
+  as the unreadable "1000.0k".
 - **`Ctrl+U` and `Ctrl+D` reach the input.** They were bound to viewport paging
   and matched before the textarea saw them, so readline's kill-line and
   delete-forward never worked.
