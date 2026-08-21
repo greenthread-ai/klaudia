@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
 // The agent core is UI-agnostic. A frontend (headless CLI, Bubble Tea TUI, an
@@ -23,6 +24,24 @@ type ApprovalRequest struct {
 	Specifier string
 	// Suggestion is the message from the intrinsic check (may be empty).
 	Suggestion string
+	// HostChange, when set, means this approval is about a change to the
+	// machine Klaudia is running on rather than about a tool's ordinary
+	// permission. Frontends should render it as the host-change card — what
+	// changes and why — because "allow Bash?" is the wrong question to put to
+	// someone about `systemctl restart nginx`.
+	HostChange *HostChange
+}
+
+// HostChange describes a change to this machine for the approval UI.
+type HostChange struct {
+	// Summary is the human phrasing of what changes, from the classifier.
+	Summary string
+	Zone    trust.Zone
+	Effects []trust.Effect
+	// Drift is true when the user has already approved something and this falls
+	// outside it. Worth saying plainly: "this wasn't part of what you approved"
+	// is a different question from the first one.
+	Drift bool
 }
 
 // Approver resolves a permission "ask" for a tool invocation. It returns a

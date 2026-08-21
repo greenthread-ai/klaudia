@@ -29,6 +29,7 @@ type loopRun struct {
 	maxTurns   int
 	iterations int
 	permCtx    permission.Context
+	hostGate   *agent.HostGate
 	approver   agent.Approver
 	deferred   map[string]bool
 	recorder   agent.Recorder
@@ -84,6 +85,7 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 			System:        p.system,
 			MaxTurns:      p.maxTurns,
 			Permission:    p.permCtx,
+			Host:          p.hostGate,
 			Approver:      p.approver,
 			DeferredTools: p.deferred,
 			Recorder:      p.recorder,

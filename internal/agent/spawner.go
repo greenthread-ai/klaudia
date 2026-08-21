@@ -23,6 +23,7 @@ type Spawner struct {
 	maxTurns      int
 	deferredTools map[string]bool
 	workingDir    string
+	hostGate      *HostGate
 }
 
 // WithWorkingDir sets the project root sub-agents inherit. Without it a
@@ -30,6 +31,18 @@ type Spawner struct {
 // project — the kind of split that makes path-based policy meaningless.
 func (s *Spawner) WithWorkingDir(dir string) *Spawner {
 	s.workingDir = dir
+	return s
+}
+
+// WithHostGate gives sub-agents the parent's trust gate.
+//
+// Sharing the gate — and therefore the ledger — is the point: a sub-agent must
+// not be a way around the boundary, and an approval the user gave the parent
+// should cover the child doing the work. Without this a sub-agent's Bash calls
+// would be unclassified, which is the easiest hole to leave and the hardest to
+// notice.
+func (s *Spawner) WithHostGate(g *HostGate) *Spawner {
+	s.hostGate = g
 	return s
 }
 
@@ -66,6 +79,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string) (strin
 		System:        t.SystemPrompt,
 		MaxTurns:      s.maxTurns,
 		Permission:    s.permission,
+		Host:          s.hostGate,
 		WorkingDir:    s.workingDir,
 		Approver:      s.approver,
 		ContextWindow: 0,

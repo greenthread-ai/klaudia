@@ -406,3 +406,55 @@ func appendUniqueKind(ks []Kind, k Kind) []Kind {
 	}
 	return append(ks, k)
 }
+
+// MintFromEffects records a grant covering exactly what was just approved.
+//
+// This is the path taken when the user agrees to a change at the moment it is
+// attempted — the scope-drift card, and any frontend with no declaration tool
+// wired up. Approving one effect still widens to the operation, so the rest of
+// it proceeds; what it cannot do is invent reach the effects did not show.
+//
+// Effects that are not grantable in advance — a recursive delete of a root, an
+// unreadable script, an effect we could not pin down — are silently left out.
+// The caller has allowed this one call; it has not signed up for the next one.
+func (l *Ledger) MintFromEffects(summary, reason string, effects []Effect) (*Grant, error) {
+	var req Request
+	req.Summary = summary
+	req.Reason = reason
+	for _, e := range effects {
+		if !e.Certain || e.Kind == KindDestructiveBulk || e.Kind == KindOpaque {
+			continue
+		}
+		switch e.Res.Class {
+		case "path":
+			req.Paths = appendUnique(req.Paths, e.Res.ID)
+		case "service":
+			req.Services = appendUnique(req.Services, e.Res.ID)
+		case "package":
+			req.Packages = appendUnique(req.Packages, e.Res.ID)
+		default:
+			continue // no scope vocabulary: asked for again next time
+		}
+		req.Kinds = appendUniqueKind(req.Kinds, e.Kind)
+	}
+	if len(req.Paths) == 0 && len(req.Services) == 0 && len(req.Packages) == 0 {
+		// Nothing durable to record. The call proceeds on the caller's say-so
+		// and the next one asks again, which is the right outcome for a bulk
+		// delete or an unreadable line.
+		return nil, nil
+	}
+	// A path we would refuse to grant outright (a whole system directory) is
+	// dropped rather than failing the whole approval: the user said yes to this
+	// call, and the only question is how much of it to remember.
+	kept := req.Paths[:0]
+	for _, p := range req.Paths {
+		if widenPath(p) != "" {
+			kept = append(kept, p)
+		}
+	}
+	req.Paths = kept
+	if len(req.Paths) == 0 && len(req.Services) == 0 && len(req.Packages) == 0 {
+		return nil, nil
+	}
+	return l.Mint(req)
+}

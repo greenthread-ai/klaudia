@@ -32,6 +32,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/streamjson"
 	"github.com/greenthread-ai/klaudia/internal/subagent"
 	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/trust"
 	"github.com/greenthread-ai/klaudia/internal/tui"
 	"github.com/greenthread-ai/klaudia/internal/version"
 )
@@ -46,8 +47,10 @@ func compactAndPersist(ctx context.Context, history []anthropic.BetaMessageParam
 
 // withAgentTool returns a registry that is the base tools plus the Agent tool,
 // wired to a sub-agent spawner that draws from the base tools.
-func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string) (*tools.Registry, error) {
-	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).WithWorkingDir(workingDir)
+func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *agent.HostGate) (*tools.Registry, error) {
+	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).
+		WithWorkingDir(workingDir).
+		WithHostGate(host)
 
 	infos := make([]tools.AgentTypeInfo, 0)
 	for _, t := range subagent.Builtin() {
@@ -680,6 +683,26 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	// Headless path: the mode is fixed for the lifetime of this command.
 	permCtx := permission.Context{Mode: permission.StaticMode(mode), Allow: allowRules, Deny: denyRules}
+
+	// The host gate. extraDirs is read at check time rather than captured, so a
+	// directory added mid-session with /add-dir counts as project work on the
+	// next tool call.
+	hostPolicy, hostNotice := agent.ResolveHostPolicy(
+		cfg.Trust.Mode, len(allowRules) > 0 || len(denyRules) > 0)
+	var extraDirs func() []string
+	hostGate := &agent.HostGate{
+		Policy: hostPolicy,
+		Roots: func() trust.Roots {
+			home, _ := os.UserHomeDir()
+			roots := []string{cwd}
+			if extraDirs != nil {
+				roots = append(roots, extraDirs()...)
+			}
+			return trust.NewRoots(home, roots...)
+		},
+		Ledger: trust.NewLedger(trust.NewRoots(func() string { h, _ := os.UserHomeDir(); return h }(), cwd)),
+	}
+
 	// Refresh MEMORY.md's links to the .klaudia/memory/*.md detail notes before
 	// building the prompt, so recall surfaces them (best-effort; idempotent).
 	_ = memory.New(filepath.Join(cwd, ".klaudia")).SyncLinks()
@@ -763,7 +786,7 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Headless has no interactive approver, so permission "ask" denies.
 	approver := agent.DenyAll
-	registry, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd)
+	registry, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd, hostGate)
 	if err != nil {
 		return err
 	}
@@ -792,6 +815,16 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Interactive TUI: the default when not headless and not stream-json input.
 	// It drives the same loop, prompting the user to resolve permission asks.
 	if interactive {
+		// This config predates the trust model and already carries permission
+		// rules, so the gate starts in observe: it reports what it finds and
+		// changes nothing. Said once, at startup, because a behaviour change in
+		// this particular area should not be discovered by accident.
+		if hostNotice {
+			fmt.Fprintln(cmd.ErrOrStderr(),
+				"note: Klaudia now works autonomously inside the project and asks before changing this machine. "+
+					"Your existing permission rules still apply, so this session only reports what the new model "+
+					"would have done — run /trust to see it, or /trust upgrade to switch over.")
+		}
 		// Shared settings so slash commands can read/change them between turns.
 		ctxLimit, ctxSource := api.ContextWindow(string(model), cfg.ContextWindow)
 		sess := &tui.Session{
@@ -825,6 +858,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			// back to type-the-id when it is.
 			ListModels: modelLister(provider),
 		}
+		extraDirs = func() []string { return sess.ExtraDirs }
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
 			// Permission mode reads live from the session every check, so a
 			// /mode bypass (or ExitPlanMode flipping out of plan) takes effect
@@ -845,6 +879,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				MaxTurns:        opts.maxTurns,
 				ContextWindow:   cfg.ContextWindow,
 				Permission:      turnPerm,
+				Host:            hostGate,
 				DeferredTools:   deferredTools,
 				Approver:        ap,
 				Asker:           asker,
@@ -872,6 +907,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				MaxTurns:        opts.maxTurns,
 				ContextWindow:   cfg.ContextWindow,
 				Permission:      permCtx,
+				Host:            hostGate,
 				Approver:        ap,
 				DeferredTools:   deferredTools,
 				InitialMessages: history,
@@ -894,6 +930,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			maxTurns:   opts.maxTurns,
 			iterations: opts.maxIterations,
 			permCtx:    permCtx,
+			hostGate:   hostGate,
 			approver:   approver,
 			deferred:   deferredTools,
 			recorder:   recorder,
@@ -926,6 +963,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		MaxTurns:        opts.maxTurns,
 		ContextWindow:   cfg.ContextWindow,
 		Permission:      permCtx,
+		Host:            hostGate,
 		Approver:        approver,
 		DeferredTools:   deferredTools,
 		InitialMessages: initialMessages,

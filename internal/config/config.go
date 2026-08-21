@@ -52,10 +52,25 @@ type Config struct {
 	LSP LSP `toml:"lsp,omitempty"`
 	// Permissions holds persisted allow/deny rules for this project.
 	Permissions Permissions `toml:"permissions,omitempty"`
+	// Trust configures the host-change guardrail.
+	Trust Trust `toml:"trust,omitempty"`
 }
 
 // Permissions persists allow/deny rule strings (e.g. "Bash(git status:*)",
 // "Edit") loaded into the permission context at startup.
+// Trust configures the host-change guardrail: how Klaudia behaves when a tool
+// call would change the machine it is running on.
+//
+// This reads command lines and tool inputs. It is a guardrail against
+// well-intentioned mistakes, not a security boundary — see [Sandbox] for the
+// setting that is actually enforced by the kernel.
+type Trust struct {
+	// Mode is "enforce" (default), "observe" (classify and report, change no
+	// decisions) or "off". Unset means enforce, except for a config that
+	// already has permission rules, which starts in observe.
+	Mode string `toml:"mode,omitempty"`
+}
+
 type Permissions struct {
 	// Mode is the default permission mode when no --permission-mode flag is
 	// given: default | acceptEdits | bypassPermissions | plan | dontAsk.
@@ -295,6 +310,9 @@ func merge(dst *Config, src Config) {
 	// Permission rules accumulate (home rules + project rules).
 	dst.Permissions.Allow = append(dst.Permissions.Allow, src.Permissions.Allow...)
 	dst.Permissions.Deny = append(dst.Permissions.Deny, src.Permissions.Deny...)
+	if src.Trust.Mode != "" {
+		dst.Trust.Mode = src.Trust.Mode
+	}
 	// Disabled LSP languages accumulate (union of home + project).
 	dst.LSP.Disabled = append(dst.LSP.Disabled, src.LSP.Disabled...)
 }

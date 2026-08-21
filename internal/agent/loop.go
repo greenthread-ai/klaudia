@@ -68,6 +68,10 @@ type Options struct {
 	MaxTurns   int   // 0 = unlimited
 	MaxTokens  int64 // 0 = defaultMaxTokens
 	Permission permission.Context
+	// Host is the trust gate: it classifies each tool call and refuses changes
+	// to this machine that the user has not agreed to. Nil disables the whole
+	// feature, which is what every caller that has not been wired up yet gets.
+	Host *HostGate
 	// WorkingDir is the project root every tool operates relative to — the
 	// directory Bash runs in and the default root for Grep/Glob. Empty means
 	// the process cwd, which is only correct for callers that already chdir'd.
@@ -527,6 +531,25 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	tool, ok := l.tools.Lookup(tu.Name)
 	if !ok {
 		return errResult(l.unknownToolMsg(tu.Name))
+	}
+
+	// The host gate runs BEFORE the allow/deny rules, not after. An allow rule
+	// says a command prefix is fine; it does not say that anything sharing that
+	// prefix may change the machine. Checking rules first would let one launder
+	// the other. See hostgate.go.
+	//
+	// bypassPermissions skips it, because that mode's entire contract is "no
+	// checks" and honouring half of it would be worse than honouring none.
+	if permission.CurrentMode(opts.Permission) != permission.ModeBypassPermissions {
+		hd := opts.Host.Check(tu.Name, raw, opts.WorkingDir)
+		switch {
+		case hd.Refuse != "":
+			return errResult(hd.Refuse)
+		case len(hd.Ask) > 0:
+			if !l.approveHostChange(ctx, tu, raw, opts, hd) {
+				return errResult(hostDeclinedMsg(hd))
+			}
+		}
 	}
 
 	req := tool.PermissionRequest(raw)
