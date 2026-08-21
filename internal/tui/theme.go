@@ -128,6 +128,10 @@ func (m *Model) currentThemeID() string {
 	return "dark"
 }
 
+// setTheme switches the palette for subsequent output. Text already printed
+// belongs to the terminal's scrollback and cannot be restyled, so unlike the
+// old full-screen renderer this does not repaint the conversation — /theme says
+// as much when it reports the change.
 func (m *Model) setTheme(id string) {
 	if m.sess != nil {
 		m.sess.Theme = id
@@ -136,8 +140,6 @@ func (m *Model) setTheme(id string) {
 	m.glam = nil
 	if m.ready {
 		m.buildGlamour(m.width)
-		m.rerenderTranscript()
-		m.syncViewport()
 	}
 }
 
@@ -154,7 +156,7 @@ func (m *Model) themeChoices() []choiceItem {
 			label: label,
 			apply: func() string {
 				m.setTheme(theme.id)
-				return "Theme: " + theme.name
+				return "Theme: " + theme.name + " — applies to new output"
 			},
 		})
 	}

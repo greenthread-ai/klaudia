@@ -20,7 +20,7 @@ func newTestModel() *Model {
 	// memory.Disabled() in the session keeps /memory tests branchless —
 	// Add returns ErrDisabled, reads return "", no nil deref on the new
 	// interface-typed Session.Memory field.
-	return &Model{input: in, sess: &Session{Memory: memory.Disabled()}, histPos: 0, follow: true}
+	return &Model{input: in, sess: &Session{Memory: memory.Disabled()}, histPos: 0}
 }
 
 func TestHistoryNavigation(t *testing.T) {

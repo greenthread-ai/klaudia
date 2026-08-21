@@ -153,25 +153,33 @@ func TestThemeChoicesApplyTheme(t *testing.T) {
 	}
 }
 
-func TestSetThemeRerendersMarkdownTranscript(t *testing.T) {
+// Rendering inline makes scrollback immutable, so a theme change can only
+// affect subsequent output. What must still hold is that the renderer is
+// rebuilt and that already-printed text is left exactly as it was.
+func TestSetThemeAffectsNewOutputOnly(t *testing.T) {
 	m := newTestModel()
 	m.ready = true
 	m.width = 80
 	m.buildGlamour(80)
 	m.appendMarkdown("# Title")
 	before := m.transcript.String()
+	oldRenderer := m.glam
 
 	m.setTheme("dracula")
-	after := m.transcript.String()
 
 	if m.sess.Theme != "dracula" {
 		t.Fatalf("theme = %q, want dracula", m.sess.Theme)
 	}
-	if before == after {
-		t.Fatal("expected transcript to be rerendered after theme change")
+	if m.glam == oldRenderer {
+		t.Error("theme change should rebuild the Markdown renderer")
 	}
-	if !strings.Contains(stripANSI(after), "Title") {
-		t.Fatalf("rerendered transcript missing markdown text: %q", after)
+	if m.transcript.String() != before {
+		t.Error("already-printed scrollback must not be rewritten")
+	}
+
+	m.appendMarkdown("# Later")
+	if !strings.Contains(stripANSI(m.transcript.String()), "Later") {
+		t.Error("output after the theme change should still render")
 	}
 }
 

@@ -22,7 +22,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/stopwatch"
 	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
@@ -206,7 +205,7 @@ func intro(model, branch, tagline string) string {
 	if branch != "" {
 		meta += bannerStyle.Render("   ⎇ " + branch)
 	}
-	tip := hintStyle.Render("\n  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C to quit")
+	tip := hintStyle.Render("\n  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C twice to quit")
 	return logo + tag + meta + tip + "\n"
 }
 
@@ -216,22 +215,17 @@ type Model struct {
 	events chan tea.Msg
 	ctx    context.Context
 
-	vp     viewport.Model
 	input  textarea.Model
 	spin   spinner.Model
 	state  uiState
 	ready  bool
 	width  int
 	height int
-	// follow keeps the viewport pinned to the bottom as new output arrives. It
-	// is true until the user scrolls up to read history, and becomes true again
-	// when they scroll back to the bottom. Programmatic appends and viewport
-	// resizes honor it rather than re-deriving "are we at the bottom?", which is
-	// unreliable across height changes (e.g. the "working…" line shrinking vp).
-	follow bool
+	// out queues finished blocks for printing into the terminal's own
+	// scrollback (see scrollback.go). Drained once per Update cycle.
+	out printQueue
 
-	transcript strings.Builder // rendered scrollback
-	rawBlocks  []transcriptBlock
+	transcript transcriptLog // in-memory record of what we printed
 	history    []anthropic.BetaMessageParam
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
@@ -319,20 +313,19 @@ type Model struct {
 	// Elapsed-run stopwatch and per-turn cancel (Esc interrupts the model).
 	sw         stopwatch.Model
 	turnCancel context.CancelFunc
-	// streamBuf holds the in-progress assistant message (shown raw as it
-	// streams); on completion it's flushed through glamour into the transcript.
-	streamBuf strings.Builder
+	// streamBuf holds the not-yet-printed part of the in-progress assistant
+	// message; scan tracks how much of it is safe to commit to scrollback, and
+	// chunked records whether this message has already flushed a chunk (so the
+	// spacing between chunks matches a single render).
+	streamBuf streamBuffer
+	scan      streamScan
+	chunked   bool
 	glam      *glamour.TermRenderer
 	glamWidth int
 	// Intro banner inputs, so it can be regenerated (recoloured) on theme change.
 	// introTagline is chosen once so it stays stable across regenerations.
 	introModel, introBranch, introTagline string
 	hasIntro                              bool
-}
-
-type transcriptBlock struct {
-	text     string
-	markdown bool
 }
 
 // New builds the model. ctx cancels in-flight turns when the program exits.
@@ -357,7 +350,6 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		state:   stateIdle,
 		history: history,
 		sess:    sess,
-		follow:  true,
 	}
 	// Colour the chrome for the session's theme before drawing the banner.
 	applyChromeTheme(chromePaletteFor(m.currentThemeID()))
@@ -367,15 +359,13 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	}
 	m.introModel, m.introBranch = model, branch
 	m.introTagline, m.hasIntro = randomTagline(), true
-	introText := intro(model, branch, m.introTagline)
-	m.transcript.WriteString(introText)
-	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: introText})
+	m.appendLine(intro(model, branch, m.introTagline))
 	return m
 }
 
 func newPromptInput() textarea.Model {
 	in := textarea.New()
-	in.Placeholder = "Ask Klaudia… (Enter to send, Ctrl+J for newline, Ctrl+C to quit)"
+	in.Placeholder = "Ask Klaudia… (Enter to send, Ctrl+J for newline, Ctrl+C twice to quit)"
 	in.Prompt = ""
 	in.ShowLineNumbers = false
 	in.EndOfBufferCharacter = ' '
@@ -412,21 +402,14 @@ func (m *Model) inputHeight() int {
 	return h
 }
 
-// syncInputHeight (re)sizes the viewport to exactly fill the space above the
-// bottom area, measured from the rendered bottom block so the reservation can
-// never drift from what View actually draws. (View = viewport + "\n" + bottom,
-// so viewportHeight = terminalHeight - bottomHeight.)
+// syncInputHeight resizes the input to fit its content. Inline rendering means
+// there is no viewport to reserve space for — the live region is simply however
+// tall bottomView draws, clamped by clampBottom.
 func (m *Model) syncInputHeight() {
 	if !m.ready {
 		return
 	}
 	m.input.SetHeight(m.inputHeight())
-	h := m.height - lipgloss.Height(m.bottomView())
-	if h < 1 {
-		h = 1
-	}
-	m.vp.Height = h
-	m.syncViewport()
 }
 
 // displayModel returns the model name to show in the intro/status.
@@ -438,7 +421,8 @@ func (s *Session) displayModel() string {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, m.waitForEvent())
+	// Drain here too: New queued the intro banner before the program started.
+	return tea.Batch(textarea.Blink, m.waitForEvent(), m.out.drainCmd())
 }
 
 // waitForEvent yields the next message from the agent goroutine.
@@ -452,7 +436,20 @@ func (m *Model) waitForEvent() tea.Cmd {
 	return func() tea.Msg { return <-m.events }
 }
 
+// Update is a thin wrapper over update whose only job is to flush queued
+// scrollback exactly once per cycle. Doing it at one choke point rather than
+// threading a tea.Cmd back through the ~40 appendLine/appendMarkdown call sites
+// (many of them in helpers that return a string or nothing) means a forgotten
+// return can never silently swallow output.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, cmd := m.update(msg)
+	if out := m.out.drainCmd(); out != nil {
+		return model, tea.Batch(cmd, out)
+	}
+	return model, cmd
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
@@ -460,9 +457,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.onKey(msg)
-
-	case tea.MouseMsg:
-		return m.onMouse(msg)
 
 	case eventMsg:
 		m.renderEvent(msg.ev)
@@ -605,20 +599,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	m.vp, cmd = m.vp.Update(msg)
-	// A wheel scroll is a follow-intent signal: stop following when the user
-	// scrolls up, resume once they're back at the bottom.
-	switch msg.Button {
-	case tea.MouseButtonWheelUp:
-		m.follow = false
-	case tea.MouseButtonWheelDown:
-		m.follow = m.vp.AtBottom()
-	}
-	return m, cmd
-}
-
 // interruptTurn cancels the in-flight turn. The cancelled context unblocks the
 // agent goroutine (including any approval/question/plan prompt it is parked on,
 // since those select on ctx.Done()), which then sends doneMsg. Shared by Esc and
@@ -735,20 +715,10 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onPaste(string(msg.Runes))
 	}
 
-	// Scrollback works in any state and never reaches the text input. (Up/Down
-	// are reserved for input history, so paging uses PgUp/PgDn. Ctrl+U and
-	// Ctrl+D are deliberately NOT bound here — they belong to the input as
-	// readline kill-line and EOF.)
-	switch msg.Type {
-	case tea.KeyPgUp:
-		m.vp.PageUp()
-		m.follow = false
-		return m, nil
-	case tea.KeyPgDown:
-		m.vp.PageDown()
-		m.follow = m.vp.AtBottom()
-		return m, nil
-	}
+	// No scrollback keys are bound. Klaudia renders inline, so PgUp/PgDn, the
+	// wheel, Home/End, tmux copy mode and the terminal's own search all operate
+	// on real scrollback — intercepting any of them would only take away a
+	// behaviour the terminal already implements better.
 
 	// While the model works, the input stays editable. A slash command runs
 	// immediately (display/config ones apply now; the few that mutate history or
@@ -1347,10 +1317,14 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			break
 		}
 		m.transcript.Reset()
-		m.rawBlocks = nil
 		m.history = nil
 		m.pastes.reset()
-		m.appendLine(bannerStyle.Render("Cleared conversation and screen."))
+		// Erase the visible screen, but deliberately not the scrollback: ESC[3J
+		// would destroy whatever the user had in the terminal before Klaudia
+		// started, and in tmux it wipes the whole pane's history. Earlier output
+		// stays scrollable, which is the point of rendering inline.
+		m.appendLine(bannerStyle.Render("Cleared conversation. Earlier output remains in terminal scrollback."))
+		return m, tea.Sequence(tea.ClearScreen, m.out.drainCmd())
 	case "/last":
 		if strings.TrimSpace(m.lastResult) == "" {
 			m.appendLine(bannerStyle.Render("No tool output yet."))
@@ -2208,17 +2182,86 @@ func (m *Model) renderEvent(ev agent.Event) {
 // prettified through glamour on flush).
 func (m *Model) appendText(s string) {
 	m.streamBuf.WriteString(s)
-	m.syncViewport()
+	m.flushSafeChunks()
+}
+
+// streamFlushMin is how many complete lines a message must reach before we
+// start committing it in pieces. Below it we hold everything and render once at
+// the end, which keeps ordinary short answers byte-identical to a single
+// glamour pass; above it, waiting would leave a long answer stuck in a
+// few-row preview.
+const streamFlushMin = 12
+
+// streamTailLines caps the live preview of the unflushed remainder.
+const streamTailLines = 6
+
+// flushSafeChunks commits any prefix of the in-progress message that later
+// tokens cannot change (see stream.go).
+func (m *Model) flushSafeChunks() {
+	m.scan.advance(m.streamBuf.bytes())
+	if m.scan.lines < streamFlushMin || m.scan.safe <= 0 {
+		return
+	}
+	n := m.scan.safe
+	m.emitChunk(string(m.streamBuf.bytes()[:n]))
+	m.streamBuf.trim(n)
+	m.scan.rebase(n)
+}
+
+// emitChunk renders and commits one piece of an assistant message. Glamour puts
+// a margin and a leading newline on every document it renders, so chunks are
+// trimmed and the inter-chunk blank line is emitted deliberately — otherwise a
+// chunked message would be spaced differently from a single-pass one.
+func (m *Model) emitChunk(text string) {
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	rendered := strings.Trim(m.markdown(text), "\n")
+	if m.chunked {
+		rendered = "\n" + rendered
+	}
+	m.chunked = true
+	m.commit(transcriptBlock{text: text, markdown: true, rendered: rendered})
+}
+
+// truncateToWidth clips one line to w cells, preserving ANSI. The live region
+// must never soft-wrap: Bubble Tea's inline renderer tracks it by line count,
+// so a wrapped line desynchronises the cursor arithmetic and corrupts the frame.
+func truncateToWidth(s string, w int) string {
+	if w <= 0 {
+		return s
+	}
+	return lipgloss.NewStyle().MaxWidth(w).Render(s)
+}
+
+// streamTail is the live preview of the not-yet-committed remainder.
+func (m *Model) streamTail() string {
+	raw := strings.TrimRight(m.streamBuf.String(), "\n")
+	if raw == "" {
+		return ""
+	}
+	lines := strings.Split(raw, "\n")
+	if len(lines) > streamTailLines {
+		lines = lines[len(lines)-streamTailLines:]
+	}
+	for i, ln := range lines {
+		lines[i] = truncateToWidth(ln, m.width)
+	}
+	return toolStyle.Render(strings.Join(lines, "\n"))
 }
 
 // flushAssistant commits the buffered assistant message to the transcript,
 // rendered as Markdown via glamour. No-op when nothing is buffered.
 func (m *Model) flushAssistant() {
 	if m.streamBuf.Len() == 0 {
+		m.scan.reset()
+		m.chunked = false
 		return
 	}
-	m.appendMarkdown(m.streamBuf.String())
+	m.emitChunk(m.streamBuf.String())
 	m.streamBuf.Reset()
+	m.scan.reset()
+	m.chunked = false
 }
 
 // markdown renders s through glamour, falling back to the raw text on error or
@@ -2320,81 +2363,62 @@ func (m *Model) buildGlamour(width int) {
 	}
 }
 
-// appendLine appends a full, already-styled line.
+// appendMarkdown commits a Markdown block to scrollback.
 func (m *Model) appendMarkdown(s string) {
-	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: s, markdown: true})
-	m.transcript.WriteString(m.markdown(s) + "\n")
-	m.syncViewport()
+	m.commit(transcriptBlock{text: s, markdown: true, rendered: m.markdown(s)})
 }
 
+// appendLine commits a full, already-styled line to scrollback.
 func (m *Model) appendLine(s string) {
-	m.rawBlocks = append(m.rawBlocks, transcriptBlock{text: s})
-	m.transcript.WriteString(s + "\n")
-	m.syncViewport()
+	m.commit(transcriptBlock{text: s, rendered: s})
 }
 
-func (m *Model) rerenderTranscript() {
-	if len(m.rawBlocks) == 0 {
-		return
-	}
-	// Regenerate the intro banner so it picks up the new theme's chrome colours.
-	if m.hasIntro && len(m.rawBlocks) > 0 {
-		m.rawBlocks[0].text = intro(m.introModel, m.introBranch, m.introTagline)
-	}
-	m.transcript.Reset()
-	for _, block := range m.rawBlocks {
-		if block.markdown {
-			m.transcript.WriteString(m.markdown(block.text) + "\n")
-		} else {
-			m.transcript.WriteString(block.text + "\n")
-		}
-	}
+// commit records a block and queues it for printing. Once printed it is part of
+// the terminal's scrollback and can never be revised — every caller should be
+// sure the content is final.
+func (m *Model) commit(b transcriptBlock) {
+	m.transcript.add(b)
+	m.out.push(b.rendered)
 }
 
-func (m *Model) syncViewport() {
-	if !m.ready {
-		return
-	}
-	// Committed transcript (glamour-rendered answers + styled lines) plus the
-	// in-progress assistant message shown raw as it streams. Wrap to width;
-	// lipgloss preserves ANSI and won't re-wrap lines already within width.
-	content := m.transcript.String()
-	if m.streamBuf.Len() > 0 {
-		content += m.streamBuf.String()
-	}
-	wrapped := lipgloss.NewStyle().Width(m.vp.Width).Render(content)
-	m.vp.SetContent(wrapped)
-	// Follow new output to the bottom unless the user has scrolled up to read
-	// history (see m.follow). Honoring the flag — rather than re-checking
-	// AtBottom() here — keeps us pinned even when the viewport height changes
-	// under us (e.g. the "working…" line appearing shrinks vp), which would
-	// otherwise leave AtBottom() false and silently strand new content.
-	if m.follow {
-		m.vp.GotoBottom()
-	}
-}
-
+// resize re-measures the live region. It deliberately does not reflow anything
+// already printed: that text belongs to the terminal now, and whether it rewraps
+// on resize is the terminal's business (iTerm2 does, tmux does not — both are
+// correct). Only subsequent output picks up the new width.
 func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
-	if !m.ready {
-		m.vp = viewport.New(w, h)
-		m.ready = true
-	}
-	m.vp.Width = w
+	m.ready = true
 	m.input.SetWidth(w - 4)
 	if m.glam == nil || m.glamWidth != w {
 		m.buildGlamour(w)
 	}
-	// syncInputHeight does the state-aware height reservation (status bar, and
-	// the working line + queued hint while running) and syncs the viewport.
 	m.syncInputHeight()
 }
 
+// View draws only the live region. Everything finished has already been printed
+// into the terminal's scrollback by the print queue.
 func (m *Model) View() string {
 	if !m.ready {
-		return "initializing…"
+		return ""
 	}
-	return m.vp.View() + "\n" + m.bottomView()
+	return m.clampBottom(m.bottomView())
+}
+
+// clampBottom keeps the live region strictly shorter than the terminal. Bubble
+// Tea's inline renderer drops lines off the TOP of an over-tall frame
+// (standard_renderer.go), which would silently eat the status bar and input, so
+// we trim from the top ourselves — sacrificing the streaming preview first and
+// always keeping the input and status bar visible.
+func (m *Model) clampBottom(s string) string {
+	budget := m.height - 1
+	if budget < 1 {
+		budget = 1
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= budget {
+		return s
+	}
+	return strings.Join(lines[len(lines)-budget:], "\n")
 }
 
 // bottomView renders everything below the scrollback: the state-specific prompt
@@ -2422,6 +2446,12 @@ func (m *Model) bottomView() string {
 		}
 		m.input.SetHeight(m.inputHeight())
 		bottom = work + "\n" + m.input.View()
+		// Show the not-yet-committed tail of the streaming message above the
+		// working line, so the user sees text arriving even though the finished
+		// part has already gone to scrollback.
+		if tail := m.streamTail(); tail != "" {
+			bottom = tail + "\n" + bottom
+		}
 		if m.queued != "" {
 			bottom += "\n" + m.renderQueuedHint()
 		}
@@ -2501,15 +2531,16 @@ func (p *uiPlanner) ExitPlan(ctx context.Context, plan string) (bool, error) {
 // seeds a resumed conversation (may be nil); sess holds mutable settings shared
 // with the RunFunc closure (may be nil).
 func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam, sess *Session) error {
-	p := tea.NewProgram(
-		New(ctx, run, history, sess),
-		tea.WithAltScreen(),
-		// Capture the mouse so the wheel scrolls the viewport. Without this the
-		// terminal's alternate-scroll mode turns the wheel into ↑/↓ arrow keys,
-		// which would hijack input history / queued-message editing instead of
-		// scrolling. (Shift+drag still selects text in most terminals.)
-		tea.WithMouseCellMotion(),
-	)
+	// Deliberately NOT alt-screen and NOT mouse-capturing.
+	//
+	// Klaudia renders inline: finished output is printed into the terminal's own
+	// scrollback and only the input and status bar are redrawn in place. That
+	// keeps every terminal-native behaviour working — scroll, search, drag to
+	// select, tmux copy mode, and a conversation that is still there after you
+	// quit. Alt-screen would take all of those away (and would also make
+	// tea.Println a no-op), and mouse capture sets DECSET 1002, which is
+	// precisely what stops click-drag from selecting text.
+	p := tea.NewProgram(New(ctx, run, history, sess))
 	_, err := p.Run()
 	return err
 }
