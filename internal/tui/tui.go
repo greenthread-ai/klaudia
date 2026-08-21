@@ -253,6 +253,11 @@ type Model struct {
 	loopVerifying  bool   // the next loop turn is the final-review verification
 	loopBranch     string // the goal branch the loop's work lands on
 	loopBaseBranch string // the branch the loop started from (merge target)
+	// quitArmed is set by a Ctrl+C press that had nothing left to cancel (see
+	// onCtrlC). While armed the status bar says so, and an immediately repeated
+	// Ctrl+C quits; any other key disarms it. This is what stops a reflexive
+	// "stop the running thing" Ctrl+C from destroying the session.
+	quitArmed bool
 	// cancelling is set when the user pressed Esc but the agent goroutine
 	// hasn't returned yet (e.g. blocked in SDK retry backoff or a tool that's
 	// slow to honour ctx). The bottom view swaps "working…" for "cancelling…"
@@ -609,26 +614,86 @@ func (m *Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// interruptTurn cancels the in-flight turn. The cancelled context unblocks the
+// agent goroutine (including any approval/question/plan prompt it is parked on,
+// since those select on ctx.Done()), which then sends doneMsg. Shared by Esc and
+// the first press of Ctrl+C so the two can never drift apart.
+func (m *Model) interruptTurn() {
+	m.turnCancel()
+	m.turnCancel = nil
+	m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false // also halts a goal loop
+	m.cancelling = true
+	m.appendLine(toolStyle.Render("  ⊘ interrupting… (Ctrl+C again to force quit)"))
+}
+
+// onCtrlC implements two-press Ctrl+C. A terminal user's reflex is that Ctrl+C
+// stops the thing that is running, not that it destroys the session — so the
+// first press always does the smallest useful thing and only an immediately
+// repeated press quits. Resolution order:
+//
+//  1. armed by a previous press → quit;
+//  2. a turn is in flight → interrupt it (and arm, so a wedged turn can still
+//     be escaped — this is what the "Ctrl+C again to force quit" hint promises);
+//  3. a local y/n or picker prompt is open → cancel it;
+//  4. the draft line is non-empty → clear it (readline's Ctrl+C);
+//  5. otherwise → arm, and let the status bar say so.
+//
+// Note that the permission/ask/plan prompts are NOT handled in step 3: those
+// only exist while a turn is running, so step 2 catches them and cancelling the
+// turn context is what releases the blocked agent goroutine.
+func (m *Model) onCtrlC() (tea.Model, tea.Cmd) {
+	if m.quitArmed {
+		return m, tea.Quit
+	}
+	if m.turnCancel != nil {
+		m.interruptTurn()
+		m.quitArmed = true
+		return m, nil
+	}
+	switch m.state {
+	case stateAwaitingConfirm:
+		m.confirmAction = nil
+		m.setState(stateIdle)
+		m.appendLine(toolStyle.Render("  → cancelled"))
+		return m, nil
+	case stateAwaitingChoice:
+		m.choiceItems, m.choicePrompt = nil, ""
+		m.setState(stateIdle)
+		m.appendLine(toolStyle.Render("  → cancelled"))
+		return m, nil
+	}
+	if strings.TrimSpace(m.input.Value()) != "" {
+		m.input.Reset()
+		m.syncInputHeight()
+		return m, nil
+	}
+	m.quitArmed = true
+	return m, nil
+}
+
 func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Any key other than Ctrl+C disarms a pending "press again to quit".
+	if msg.Type != tea.KeyCtrlC {
+		m.quitArmed = false
+	}
+
 	switch msg.Type {
 	case tea.KeyCtrlC:
-		return m, tea.Quit
+		return m.onCtrlC()
 	case tea.KeyEsc:
 		// Interrupt the in-flight turn (and any pending approval/question it is
 		// blocked on). The cancelled context unblocks the agent goroutine, which
 		// then sends doneMsg.
 		if m.turnCancel != nil {
-			m.turnCancel()
-			m.turnCancel = nil
-			m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false // Esc also halts a goal loop
-			m.cancelling = true
-			m.appendLine(toolStyle.Render("  ⊘ interrupting… (Ctrl+C to force quit if it doesn't return)"))
+			m.interruptTurn()
 			return m, nil
 		}
 	}
 
 	// Scrollback works in any state and never reaches the text input. (Up/Down
-	// are reserved for input history, so paging uses PgUp/PgDn and Ctrl+U/D.)
+	// are reserved for input history, so paging uses PgUp/PgDn. Ctrl+U and
+	// Ctrl+D are deliberately NOT bound here — they belong to the input as
+	// readline kill-line and EOF.)
 	switch msg.Type {
 	case tea.KeyPgUp:
 		m.vp.PageUp()
@@ -636,14 +701,6 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyPgDown:
 		m.vp.PageDown()
-		m.follow = m.vp.AtBottom()
-		return m, nil
-	case tea.KeyCtrlU:
-		m.vp.HalfPageUp()
-		m.follow = false
-		return m, nil
-	case tea.KeyCtrlD:
-		m.vp.HalfPageDown()
 		m.follow = m.vp.AtBottom()
 		return m, nil
 	}
@@ -863,7 +920,7 @@ const keyHints = `Keys:
   ↑ / ↓            Cycle through previous prompts
   PgUp / PgDn      Scroll the conversation history
   Esc              Interrupt the model mid-turn
-  Ctrl+C           Quit`
+  Ctrl+C           Interrupt, or clear the line — press twice to quit`
 
 // slashHelp renders the command reference from commandList + keyHints.
 func slashHelp() string {

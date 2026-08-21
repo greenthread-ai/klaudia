@@ -162,7 +162,15 @@ func shortMode(m permission.Mode) string {
 }
 
 // statusLine renders the persistent context bar: model · mode · turns · tokens.
+// A pending "press Ctrl+C again to quit" takes over the whole line — it is a
+// transient, one-keystroke-lived state and the user needs to see it without
+// hunting. Keeping it to a single line also means the bottom block's measured
+// height (and so the viewport reservation) doesn't change while it is armed.
 func (m *Model) statusLine() string {
+	if m.quitArmed {
+		return askStyle.Render("Press Ctrl+C again to quit") +
+			hintStyle.Render("  ·  any other key cancels")
+	}
 	model := "(default)"
 	if m.sess != nil {
 		if dm := m.sess.displayModel(); dm != "" {
