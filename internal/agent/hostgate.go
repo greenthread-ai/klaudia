@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -68,6 +69,48 @@ type HostGate struct {
 	// observe-mode reporting, and it is deliberately called for allowed calls
 	// too: "a grant covered this" is the interesting half.
 	Observed func(HostReport)
+	// Granted, if set, is called when an approval mints a grant. The UI uses it
+	// to show what the approval actually bought — the widened scope, not the
+	// words the model used.
+	Granted func(*trust.Grant)
+
+	mu      sync.Mutex
+	reports []HostReport
+}
+
+// maxHostReports bounds the in-memory log. It exists so /trust can show what
+// the classifier found, especially in observe mode where nothing else does;
+// a session that runs for hours should not accumulate it without limit.
+const maxHostReports = 200
+
+func (g *HostGate) record(r HostReport) {
+	g.mu.Lock()
+	g.reports = append(g.reports, r)
+	if len(g.reports) > maxHostReports {
+		g.reports = g.reports[len(g.reports)-maxHostReports:]
+	}
+	g.mu.Unlock()
+	if g.Observed != nil {
+		g.Observed(r)
+	}
+}
+
+// Reports returns what the classifier has found this session, oldest first.
+func (g *HostGate) Reports() []HostReport {
+	if g == nil {
+		return nil
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return append([]HostReport(nil), g.reports...)
+}
+
+// Grants returns the live grants, for /trust.
+func (g *HostGate) Grants() []*trust.Grant {
+	if g == nil || g.Ledger == nil {
+		return nil
+	}
+	return g.Ledger.List()
 }
 
 // HostReport is one gate decision, for display.
@@ -110,8 +153,7 @@ func (g *HostGate) Check(tool string, input []byte, cwd string) HostDecision {
 		return HostDecision{Allow: true, Assessment: as}
 	}
 
-	var drift []trust.Effect
-	var covered []trust.Effect
+	var drift, covered []trust.Effect
 	if g.Ledger != nil {
 		covered, drift = g.Ledger.Cover(concerns)
 	} else {
@@ -127,28 +169,27 @@ func (g *HostGate) Check(tool string, input []byte, cwd string) HostDecision {
 	}
 
 	if len(drift) == 0 {
-		if g.Observed != nil {
-			g.Observed(report)
-		}
+		g.record(report)
 		return HostDecision{Allow: true, Assessment: as}
 	}
 
 	if g.Policy == HostObserve {
-		if g.Observed != nil {
-			g.Observed(report)
-		}
+		g.record(report)
 		return HostDecision{Allow: true, Assessment: as}
 	}
 
 	report.Enforced = true
-	if g.Observed != nil {
-		g.Observed(report)
-	}
+	g.record(report)
 
 	if g.DeclareTool == "" {
 		return HostDecision{Ask: drift, Assessment: as}
 	}
-	return HostDecision{Refuse: g.refusal(as, drift, len(covered) > 0), Assessment: as}
+	// "Outside what you approved" is judged against whether any approval exists,
+	// not against whether this particular call happened to overlap one. A model
+	// that declared nginx and then reached for postgresql has drifted even
+	// though nothing in that command was covered.
+	hadGrants := g.Ledger != nil && len(g.Ledger.List()) > 0
+	return HostDecision{Refuse: g.refusal(as, drift, hadGrants), Assessment: as}
 }
 
 // refusal is written to the model, so it says what was found, why it stopped,

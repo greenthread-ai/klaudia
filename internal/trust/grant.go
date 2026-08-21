@@ -105,6 +105,10 @@ func (l *Ledger) Mint(req Request) (*Grant, error) {
 	return g, nil
 }
 
+// Preview validates and widens a request without recording anything, so a
+// frontend can refuse an over-broad ask before putting it to the user.
+func (l *Ledger) Preview(req Request) (Scope, error) { return l.scopeFor(req) }
+
 func (l *Ledger) scopeFor(req Request) (Scope, error) {
 	var s Scope
 	for _, p := range req.Paths {

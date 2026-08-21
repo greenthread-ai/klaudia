@@ -701,6 +701,9 @@ func run(cmd *cobra.Command, opts *options) error {
 			return trust.NewRoots(home, roots...)
 		},
 		Ledger: trust.NewLedger(trust.NewRoots(func() string { h, _ := os.UserHomeDir(); return h }(), cwd)),
+		// Refusals point the model at the tool that gets an operation approved
+		// in one go, rather than leaving it to retry the command.
+		DeclareTool: "RequestHostChange",
 	}
 
 	// Refresh MEMORY.md's links to the .klaudia/memory/*.md detail notes before

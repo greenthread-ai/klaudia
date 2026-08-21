@@ -34,10 +34,23 @@ type ApprovalRequest struct {
 
 // HostChange describes a change to this machine for the approval UI.
 type HostChange struct {
-	// Summary is the human phrasing of what changes, from the classifier.
+	// Summary is the human phrasing of what changes: the model's own words when
+	// it declared the operation, the classifier's when it was caught.
 	Summary string
-	Zone    trust.Zone
+	// Reason is why the task needs it. Only set for a declared change — the
+	// classifier can say what a command does but not what it is for.
+	Reason string
+	Zone   trust.Zone
+	// Effects is what the classifier found. Empty for a declared change, which
+	// has not happened yet.
 	Effects []trust.Effect
+	// Paths, Services and Packages are the scope the model declared.
+	Paths    []string
+	Services []string
+	Packages []string
+	// Declared distinguishes "the model asked first" from "this was caught on
+	// the way past". The first is the flow working; the second is the fallback.
+	Declared bool
 	// Drift is true when the user has already approved something and this falls
 	// outside it. Worth saying plainly: "this wasn't part of what you approved"
 	// is a different question from the first one.

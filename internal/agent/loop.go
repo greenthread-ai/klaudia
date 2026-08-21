@@ -599,6 +599,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		Ask:        opts.Asker,
 		Plan:       opts.Planner,
 		Reveal:     reveal,
+		HostChange: hostChangeFor(opts),
 	}, raw)
 	if err != nil {
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))

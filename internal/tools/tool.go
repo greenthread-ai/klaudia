@@ -78,6 +78,9 @@ type Context struct {
 	Ask Asker
 	// Plan, if non-nil, handles ExitPlanMode approval.
 	Plan Planner
+	// HostChange, if non-nil, handles RequestHostChange approval. Nil means
+	// there is no one to ask, and the tool says so rather than pretending.
+	HostChange HostApprover
 	// Reveal, if non-nil, marks deferred tools active for the rest of the run
 	// (used by ToolSearch to load tools on demand).
 	Reveal func(names ...string)

@@ -490,18 +490,29 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case permissionMsg:
-		// Auto-resolve against session rules before prompting.
-		if permission.MatchAny(m.sessionDeny, msg.req.ToolName, msg.req.Specifier) {
-			msg.reply <- permission.Decision{Behavior: permission.Deny, Message: "denied by session rule"}
-			return m, m.waitForEvent()
-		}
-		if permission.MatchAny(m.sessionAllow, msg.req.ToolName, msg.req.Specifier) {
-			msg.reply <- permission.Decision{Behavior: permission.Allow}
-			return m, m.waitForEvent()
+		// Session rules are about tools, and a host change is not a question
+		// about a tool. An allow rule for Bash must not answer "may I restart
+		// nginx?" — that is exactly the laundering the gate ordering prevents
+		// in the agent loop, and it would be pointless to reintroduce here.
+		if msg.req.HostChange == nil {
+			if permission.MatchAny(m.sessionDeny, msg.req.ToolName, msg.req.Specifier) {
+				msg.reply <- permission.Decision{Behavior: permission.Deny, Message: "denied by session rule"}
+				return m, m.waitForEvent()
+			}
+			if permission.MatchAny(m.sessionAllow, msg.req.ToolName, msg.req.Specifier) {
+				msg.reply <- permission.Decision{Behavior: permission.Allow}
+				return m, m.waitForEvent()
+			}
 		}
 		m.setState(stateAwaitingPermission)
 		m.pending = msg.reply
 		m.pendingReq = msg.req
+		if msg.req.HostChange != nil {
+			for _, line := range hostCardLines(msg.req.HostChange) {
+				m.appendLine(line)
+			}
+			return m, m.waitForEvent()
+		}
 		m.appendLine(askStyle.Render("Permission required: " + m.permissionSummary(msg.req)))
 		if detail := permissionDetail(msg.req); detail != "" {
 			m.appendLine(toolStyle.Render("  " + detail))
@@ -879,15 +890,27 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingPermission {
+		host := m.pendingReq.HostChange != nil
 		switch strings.ToLower(msg.String()) {
 		case "y":
 			m.answer(permission.Decision{Behavior: permission.Allow})
 		case "a":
+			// No always-allow for a host change. A standing permission to
+			// reconfigure the machine is one the user cannot see and did not
+			// schedule the end of; approving the operation is the durable
+			// answer this model offers, and it ends with the session.
+			if host {
+				return m, nil
+			}
 			rule := permission.Rule{Tool: m.pendingReq.ToolName, Specifier: m.pendingReq.Specifier}
 			m.rememberPermission("allow", rule)
 			m.answer(permission.Decision{Behavior: permission.Allow})
 		case "n":
-			m.answer(permission.Decision{Behavior: permission.Deny, Message: "denied by user"})
+			msg := "denied by user"
+			if host {
+				msg = "the user declined this change to their machine"
+			}
+			m.answer(permission.Decision{Behavior: permission.Deny, Message: msg})
 		}
 		return m, nil
 	}
@@ -2076,6 +2099,9 @@ func (m *Model) permissionSummary(req agent.ApprovalRequest) string {
 }
 
 func (m *Model) permissionPrompt() string {
+	if hc := m.pendingReq.HostChange; hc != nil {
+		return hostPrompt(hc)
+	}
 	return fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", m.permissionSummary(m.pendingReq))
 }
 
@@ -2172,6 +2198,11 @@ func (m *Model) answer(d permission.Decision) {
 	verb := "allowed"
 	if d.Behavior != permission.Allow {
 		verb = "denied"
+	}
+	// For a host change, say what the answer reached rather than just that one
+	// was given. "allowed" tells the user nothing about how far it went.
+	if hc := m.pendingReq.HostChange; hc != nil {
+		verb = hostAnswerLine(hc, d.Behavior == permission.Allow)
 	}
 	m.appendLine(toolStyle.Render("  → " + verb))
 	m.setState(stateRunning)

@@ -323,10 +323,10 @@ func (s *stubBash) Execute(_ context.Context, _ tools.Context, raw json.RawMessa
 	return []tools.Result{{Content: "(stub)"}}, nil
 }
 
-func testRegistry(t *testing.T) (*tools.Registry, *stubBash) {
+func testRegistry(t *testing.T, extra ...tools.Tool) (*tools.Registry, *stubBash) {
 	t.Helper()
 	b := &stubBash{}
-	return tools.NewRegistry(b), b
+	return tools.NewRegistry(append([]tools.Tool{b}, extra...)...), b
 }
 
 func resultText(block anthropic.BetaContentBlockParamUnion) string {
