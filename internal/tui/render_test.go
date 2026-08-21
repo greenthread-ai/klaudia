@@ -82,7 +82,7 @@ func TestRenderConfigResolved(t *testing.T) {
 }
 
 func TestModeChoicesMarksCurrent(t *testing.T) {
-	m := &Model{sess: &Session{PermissionMode: "plan"}}
+	m := &Model{sess: &Session{PermissionMode: "plan", Trust: &fakeTrust{policy: agent.HostEnforce}}}
 	items := m.modeChoices()
 	var marked int
 	for _, it := range items {

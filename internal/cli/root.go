@@ -433,7 +433,7 @@ apiKeyEnv = "MY_API_KEY"
 # headless = true
 #
 # [permissions]
-# mode = "default" # default(ask) | acceptEdits | plan | dontAsk | bypassPermissions
+# mode = "autonomous" # autonomous | plan | bypassPermissions
 # allow = ["Bash(go test:*)"]
 # deny = ["Bash(rm:*)"]
 `
@@ -548,7 +548,7 @@ func NewRootCommand() *cobra.Command {
 	f.StringVar(&opts.model, "model", "", "Model alias (haiku|sonnet|opus) or full model ID")
 	f.StringVar(&opts.outputFormat, "output-format", "text", "Output format: text|json|stream-json")
 	f.StringVar(&opts.inputFormat, "input-format", "text", "Input format: text|stream-json (stream-json drives a persistent agent over stdin)")
-	f.StringVar(&opts.permissionMode, "permission-mode", "", "Permission mode: default|acceptEdits|bypassPermissions|plan|dontAsk (default: config [permissions] mode, else \"default\")")
+	f.StringVar(&opts.permissionMode, "permission-mode", "", "Permission mode: autonomous|plan|bypassPermissions (default: config [permissions] mode, else autonomous)")
 	f.BoolVar(&opts.dangerouslySkip, "dangerously-skip-permissions", false, "Skip all permission checks (sets bypassPermissions)")
 	f.BoolVar(&opts.verbose, "verbose", false, "Verbose output (required for stream-json)")
 	f.IntVar(&opts.maxTurns, "max-turns", 0, "Limit the number of agentic loop turns (0 = unlimited)")
@@ -649,22 +649,6 @@ func run(cmd *cobra.Command, opts *options) error {
 		return err
 	}
 
-	// Resolve the permission mode: --permission-mode flag wins, else the config
-	// default ([permissions] mode), else "default". --dangerously-skip wins over all.
-	modeStr := opts.permissionMode
-	if modeStr == "" {
-		modeStr = cfg.Permissions.Mode
-	}
-	if modeStr == "" {
-		modeStr = string(permission.ModeDefault)
-	}
-	mode := permission.Mode(modeStr)
-	if !mode.Valid() {
-		return fmt.Errorf("invalid permission mode %q (default|acceptEdits|bypassPermissions|plan|dontAsk)", modeStr)
-	}
-	if opts.dangerouslySkip {
-		mode = permission.ModeBypassPermissions
-	}
 	// --model overrides the config/provider default.
 	modelStr := opts.model
 	if modelStr == "" {
@@ -681,14 +665,44 @@ func run(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		return fmt.Errorf("--disallowedTools/permissions.deny: %w", err)
 	}
-	// Headless path: the mode is fixed for the lifetime of this command.
-	permCtx := permission.Context{Mode: permission.StaticMode(mode), Allow: allowRules, Deny: denyRules}
-
 	// The host gate. extraDirs is read at check time rather than captured, so a
 	// directory added mid-session with /add-dir counts as project work on the
 	// next tool call.
 	hostPolicy, hostNotice := agent.ResolveHostPolicy(
 		cfg.Trust.Mode, len(allowRules) > 0 || len(denyRules) > 0)
+
+	// Resolve the permission mode: --permission-mode flag wins, else the config
+	// default ([permissions] mode), else autonomous — but only when the host
+	// gate is enforcing. Autonomous without an enforcing gate is
+	// bypassPermissions wearing a friendlier name, so a session with trust off
+	// or in observe keeps asking per action until the user upgrades.
+	// --dangerously-skip wins over all.
+	modeStr := opts.permissionMode
+	if modeStr == "" {
+		modeStr = cfg.Permissions.Mode
+	}
+	if modeStr == "" {
+		if hostPolicy == agent.HostEnforce {
+			modeStr = string(permission.ModeAutonomous)
+		} else {
+			modeStr = string(permission.ModeDefault)
+		}
+	}
+	mode := permission.Mode(modeStr)
+	if !mode.Valid() {
+		return fmt.Errorf("invalid permission mode %q (autonomous|plan|bypassPermissions, or legacy default|acceptEdits|dontAsk)", modeStr)
+	}
+	if mode == permission.ModeAutonomous && hostPolicy != agent.HostEnforce {
+		return fmt.Errorf("permission mode %q needs the host guardrail enforcing, but [trust] mode is %q — "+
+			"autonomous without it would allow everything, which is what bypassPermissions is for",
+			mode, hostPolicy)
+	}
+	if opts.dangerouslySkip {
+		mode = permission.ModeBypassPermissions
+	}
+
+	// Headless path: the mode is fixed for the lifetime of this command.
+	permCtx := permission.Context{Mode: permission.StaticMode(mode), Allow: allowRules, Deny: denyRules}
 	var extraDirs func() []string
 	hostGate := &agent.HostGate{
 		Policy: hostPolicy,
@@ -860,6 +874,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			// Nil unless the provider can enumerate its models; /model falls
 			// back to type-the-id when it is.
 			ListModels: modelLister(provider),
+			Trust:      tui.NewTrustController(hostGate),
 		}
 		extraDirs = func() []string { return sess.ExtraDirs }
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {

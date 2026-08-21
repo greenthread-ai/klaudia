@@ -76,6 +76,10 @@ type Session struct {
 	ListModels func(context.Context) ([]api.ModelInfo, error)
 	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
 	MCP MCPController
+	// Trust, if set, backs /trust: the session's host guardrail, its approvals
+	// and what the classifier has found. Nil when there is no gate, which
+	// /trust reports rather than hiding.
+	Trust TrustController
 }
 
 // MCPController lets the TUI manage MCP servers without owning the manager.
@@ -986,6 +990,7 @@ var commandList = []cmdInfo{
 	{"/model", "[name]", "Pick a model from the provider (no arg), or set one by alias/ID"},
 	{"/theme", "[name]", "Change Markdown render theme (no arg = picker)"},
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
+	{"/trust", "[upgrade|observe|off|revoke <id>]", "Show what Klaudia may change on this machine, and what it already may"},
 	{"/allow", "<rule>", "Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)"},
 	{"/deny", "<rule>", "Auto-deny a tool rule this session"},
 	{"/goal", "[run N|stop|text]", "No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder"},
@@ -1124,6 +1129,9 @@ func (m *Model) modeChoices() []choiceItem {
 		items = append(items, choiceItem{
 			label: label,
 			apply: func() string {
+				if why := m.modeRefusal(mode); why != "" {
+					return why
+				}
 				m.sess.PermissionMode = string(mode)
 				return "Permission mode: " + mode.Label()
 			},
@@ -1570,12 +1578,18 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 				m.appendLine(errStyle.Render("unknown mode " + args[0] + ". Try /mode with no argument to pick one."))
 				break
 			}
+			if why := m.modeRefusal(want); why != "" {
+				m.appendLine(errStyle.Render(why))
+				break
+			}
 			m.sess.PermissionMode = string(want)
 			m.appendLine(bannerStyle.Render("Permission mode: " + want.Label()))
 			break
 		}
 		m.startChoice("Permission mode — choose how Klaudia asks before acting:", m.modeChoices())
 		return m, nil
+	case "/trust":
+		m.trustCommand(args)
 	case "/config":
 		m.appendLine(bannerStyle.Render(m.renderConfig()))
 	case "/agents":

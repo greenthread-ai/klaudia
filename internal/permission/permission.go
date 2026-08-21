@@ -1,5 +1,11 @@
-// Package permission implements Klaudia's 5-mode permission system and the
-// allow/deny rule evaluation that gates tool execution.
+// Package permission implements Klaudia's permission modes and the allow/deny
+// rule evaluation that gates tool execution.
+//
+// Most of what this package used to decide is now decided by zone, before this
+// package is consulted: agent.HostGate classifies each tool call and stops
+// changes to the machine Klaudia is running on. What is left here is narrower —
+// the user's stance (get on with it / look but do not touch / no checks) and
+// the rules a user wrote by hand.
 //
 // It is a leaf package (no project imports) so both the tools and agent
 // packages can depend on it without import cycles. The model mirrors the JS
@@ -9,11 +15,24 @@ package permission
 
 import "strings"
 
-// Mode is one of the five permission modes (fa in 04-react-ink.js).
+// Mode is the user's stance for the session.
 type Mode string
 
 const (
+	// ModeAutonomous lets Klaudia finish the task without per-action prompts.
+	//
+	// This is the mode the trust model is built for and the default for a fresh
+	// config. What used to be a per-command question is now answered by zone:
+	// project work runs, and changes to this machine are stopped by the host
+	// gate before this package is ever consulted. Selecting it without an
+	// enforcing gate would be indistinguishable from bypassPermissions, so the
+	// CLI only resolves to it when the gate is enforcing.
+	ModeAutonomous Mode = "autonomous"
 	// ModeDefault prompts for dangerous operations (interactive only).
+	//
+	// Superseded by ModeAutonomous. Still honoured: configs written before the
+	// trust model say "default", and those users keep asking-per-action until
+	// they run /trust upgrade.
 	ModeDefault Mode = "default"
 	// ModeAcceptEdits auto-accepts file edits; other dangerous ops still ask.
 	ModeAcceptEdits Mode = "acceptEdits"
@@ -28,7 +47,7 @@ const (
 // Valid reports whether m is a recognized mode.
 func (m Mode) Valid() bool {
 	switch m {
-	case ModeDefault, ModeAcceptEdits, ModeBypassPermissions, ModePlan, ModeDontAsk:
+	case ModeAutonomous, ModeDefault, ModeAcceptEdits, ModeBypassPermissions, ModePlan, ModeDontAsk:
 		return true
 	}
 	return false
@@ -38,8 +57,10 @@ func (m Mode) Valid() bool {
 // identifiers like "default").
 func (m Mode) Label() string {
 	switch m {
+	case ModeAutonomous:
+		return "Autonomous — finish the task; ask before changing this machine"
 	case ModeDefault:
-		return "Ask before risky operations"
+		return "Ask before risky operations (superseded by autonomous)"
 	case ModeAcceptEdits:
 		return "Auto-accept file edits (still ask for other risky ops)"
 	case ModeBypassPermissions:
@@ -53,11 +74,16 @@ func (m Mode) Label() string {
 	}
 }
 
-// SelectableModes are the modes a user may switch to interactively, in display
-// order, safest first. bypassPermissions is included (users ask for it) but its
-// label flags it as bypassing every check.
+// SelectableModes are the modes a user may switch to interactively.
+//
+// Three, not six. The old set asked the user to pick a stance on file edits
+// versus commands versus network, which is a question about tool categories —
+// the wrong axis. Zones answer it now, so what is left is genuinely different
+// intents: get the work done, look but do not touch, and no checks at all.
+// The legacy modes stay Valid so existing configs keep working; they are just
+// not offered as a choice any more.
 func SelectableModes() []Mode {
-	return []Mode{ModeDefault, ModeAcceptEdits, ModePlan, ModeDontAsk, ModeBypassPermissions}
+	return []Mode{ModeAutonomous, ModePlan, ModeBypassPermissions}
 }
 
 // Behavior is the outcome of a permission check ("allow" | "deny" | "ask"),

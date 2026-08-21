@@ -8,7 +8,7 @@ import "github.com/greenthread-ai/klaudia/internal/permission"
 // handled upstream by permission.Check.)
 func editClassDecision(pctx permission.Context) permission.Decision {
 	switch permission.CurrentMode(pctx) {
-	case permission.ModeAcceptEdits:
+	case permission.ModeAutonomous, permission.ModeAcceptEdits:
 		return permission.Decision{Behavior: permission.Allow}
 	case permission.ModePlan:
 		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; file modifications are not allowed"}
@@ -24,6 +24,10 @@ func editClassDecision(pctx permission.Context) permission.Decision {
 // denies, otherwise ask.
 func execClassDecision(pctx permission.Context) permission.Decision {
 	switch permission.CurrentMode(pctx) {
+	case permission.ModeAutonomous:
+		// Running commands is the job. What a command may reach is decided by
+		// the host gate before this is consulted, not by asking here.
+		return permission.Decision{Behavior: permission.Allow}
 	case permission.ModePlan:
 		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; command execution is not allowed"}
 	case permission.ModeDontAsk:
@@ -47,6 +51,9 @@ func allowAlways(permission.Context) permission.Decision {
 // edits). Users can pre-approve with an allow rule, e.g. /allow WebSearch.
 func networkClassDecision(pctx permission.Context) permission.Decision {
 	switch permission.CurrentMode(pctx) {
+	case permission.ModeAutonomous:
+		// Fetching things is ordinary work and changes nothing on this machine.
+		return permission.Decision{Behavior: permission.Allow}
 	case permission.ModePlan:
 		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; web/network access is not allowed"}
 	case permission.ModeDontAsk:
