@@ -116,7 +116,7 @@ func TestCopyTargets(t *testing.T) {
 	m := newTestModel()
 	m.resize(80, 24)
 	m.lastAssistantText = "Try this:\n\n```sh\nls -la\n```\n"
-	m.lastResult = "raw\ttool\toutput"
+	m.results.add(toolResult{tool: "Bash", content: "raw\ttool\toutput"})
 
 	for _, tc := range []struct {
 		args []string

@@ -299,7 +299,10 @@ type Model struct {
 	// rather than per render — compaction.EstimateTokens walks the whole
 	// history and isn't cheap on long sessions.
 	residentTokens int
-	lastResult     string // full content of the most recent tool result (for /last)
+	// results holds the full, untruncated content of recent tool results so
+	// /last can reach past the newest one. The event stream is not truncated
+	// upstream, so what's stored is exactly what the model saw.
+	results resultRing
 	// lastAssistantText is the raw Markdown of the most recent assistant
 	// message, kept so /copy can work from source rather than scraping it back
 	// out of rendered output. msgAccum collects it across progressive chunks.
@@ -588,6 +591,15 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setState(stateIdle)
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW)
+
+	case pagerDoneMsg:
+		if msg.path != "" {
+			os.Remove(msg.path)
+		}
+		if msg.err != nil {
+			m.appendLine(errStyle.Render("pager: " + msg.err.Error()))
+		}
+		return m, nil
 
 	case compactDoneMsg:
 		if msg.err != nil {
@@ -947,7 +959,7 @@ var commandList = []cmdInfo{
 	{"/diff", "[args]", "Show git diff of the working tree"},
 	{"/commit", "<msg>", "Stage all changes and commit (asks first)"},
 	{"/export", "", "Export the conversation to a Markdown file"},
-	{"/last", "", "Reprint the most recent tool output in full"},
+	{"/last", "[n|list]", "Show a tool output in full (no arg = latest; list = index)"},
 	{"/copy", "[target]", "Copy to the clipboard: answer (default) | code [N] | out | all"},
 	{"/clear", "", "Clear the screen and conversation history"},
 	{"/quit", "", "Exit Klaudia (alias /exit)"},
@@ -1338,6 +1350,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.transcript.Reset()
 		m.history = nil
 		m.pastes.reset()
+		m.results.reset()
 		// Erase the visible screen, but deliberately not the scrollback: ESC[3J
 		// would destroy whatever the user had in the terminal before Klaudia
 		// started, and in tmux it wipes the whole pane's history. Earlier output
@@ -1347,15 +1360,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	case "/copy":
 		m.appendLine(bannerStyle.Render(m.copyToClipboard(args)))
 	case "/last":
-		if strings.TrimSpace(m.lastResult) == "" {
-			m.appendLine(bannerStyle.Render("No tool output yet."))
-			break
-		}
-		if strings.Contains(m.lastResult, "```") {
-			m.appendLine(m.markdown(m.lastResult))
-		} else {
-			m.appendLine(toolStyle.Render(m.lastResult))
-		}
+		return m, m.showResult(args)
 	case "/model":
 		if len(args) == 0 {
 			cur := m.sess.Model
@@ -2122,7 +2127,10 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.activeToolStart = time.Now()
 	case "tool_result":
 		m.flushAssistant()
-		m.lastResult = ev.Content // keep the full result for /last (#3)
+		seq := m.results.add(toolResult{
+			id: ev.ToolUseID, tool: ev.ToolName, isError: ev.IsError,
+			at: time.Now(), content: ev.Content,
+		})
 		s := strings.TrimSpace(ev.Content)
 		if s == "" {
 			s = "completed"
@@ -2150,8 +2158,10 @@ func (m *Model) renderEvent(ev agent.Event) {
 		} else {
 			clipped, dropped := clipPreview(s, maxPreviewLines, maxPreviewRunes)
 			if dropped > 0 {
+				// Name the sequence number, so someone scrolling back through
+				// the session can see exactly which one to ask for.
 				clipped += fmt.Sprintf("\n…  %s", hintStyle.Render(
-					fmt.Sprintf("(%d more lines · /last for full output)", dropped)))
+					fmt.Sprintf("(%d more lines · /last %d for full output)", dropped, seq)))
 			}
 			m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(clipped, "\n", "\n  ")))
 		}

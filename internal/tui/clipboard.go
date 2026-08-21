@@ -103,10 +103,11 @@ func (m *Model) copyTarget(args []string) (string, string, error) {
 		return blocks[idx].body, label, nil
 
 	case "out", "output":
-		if strings.TrimSpace(m.lastResult) == "" {
+		res, ok := m.results.latest()
+		if !ok || strings.TrimSpace(res.content) == "" {
 			return "", "", fmt.Errorf("no tool output yet")
 		}
-		return m.lastResult, "last tool output", nil
+		return res.content, fmt.Sprintf("%s output #%d", res.tool, res.seq), nil
 
 	case "all":
 		return exportMarkdown(m.history), "whole conversation", nil
