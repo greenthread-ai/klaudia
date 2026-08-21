@@ -120,12 +120,27 @@ The result is one self-contained binary (Linux + macOS).
 ```
 
 A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
-type-ahead, `@path` file completion (Tab), input history (↑/↓), scrollback
-(PgUp/PgDn), and `Esc` to interrupt a turn. Type `/help` for the full list.
+type-ahead, fuzzy `@path` file completion (Tab, Tab again to cycle), input
+history (↑/↓), and `Esc` to interrupt a turn. Type `/help` for the full list.
+
+**Klaudia renders inline, not full-screen.** Finished output is printed into
+your terminal's real scrollback and only the input and status bar are redrawn in
+place, so scrolling, drag-to-select, your terminal's own search and tmux copy
+mode all keep working — and the conversation is still there after you quit.
+Copying is meant to be exact: rendered code blocks carry no margin, no padding
+and no expanded tabs, so a snippet pastes as the source it came from. `/copy`
+puts the last answer, a code block, or a tool result on the system clipboard via
+OSC 52, which works over SSH and inside tmux.
+
+`Ctrl+C` does the smallest useful thing first — interrupt a running turn, cancel
+a prompt, or clear the line — and only quits when pressed twice in a row.
 
 Tool calls show their key input (e.g. `⚙ Bash go test ./...`) and a `-`/`+`
-preview for edits; a status bar tracks model · mode · turns · tokens; and
-`/last` reprints the most recent tool output in full.
+preview for edits; a status bar tracks model · mode · turns · tokens. Long
+output is kept in full: the preview tells you its number and `/last <n>` opens
+it in `$PAGER`, where searching and copying are your pager's job. `/search`,
+`/outline` and `/errors` index the session, and `/open <path:line>` sends a
+reference copied from a stack trace straight to `$EDITOR`.
 
 You can **queue a follow-up while the model is working**: type and press Enter to
 queue it (it's sent when the current turn finishes); press Enter again to
@@ -133,7 +148,7 @@ interrupt and send it now, or `↑` to edit it.
 
 `/theme` switches the colour theme (Markdown + chrome) for the session; set a
 durable default with `theme = "nord"` in `.klaudia/config.toml` (dracula |
-gruvbox | tokyo-night | nord | catppuccin).
+gruvbox | tokyo-night | nord | light | catppuccin). `NO_COLOR` is honoured.
 
 Long-running commands can run detached: `Bash` with `run_in_background` returns a
 shell id, then `BashOutput` reads new output incrementally and `KillShell` stops

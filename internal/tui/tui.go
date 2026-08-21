@@ -984,11 +984,17 @@ var commandList = []cmdInfo{
 // keyHints documents the non-command key bindings shown in /help.
 const keyHints = `Keys:
   /                Type a slash to see matching commands
-  Tab              Complete a /command or an @<path> reference
+  Tab              Complete a /command or an @<path> reference (Tab again cycles)
   ↑ / ↓            Cycle through previous prompts
-  PgUp / PgDn      Scroll the conversation history
+  Ctrl+J           Newline without sending
+  Ctrl+U / Ctrl+K  Delete before / after the cursor
   Esc              Interrupt the model mid-turn
-  Ctrl+C           Interrupt, or clear the line — press twice to quit`
+  Ctrl+C           Interrupt, or clear the line — press twice to quit
+
+Scrolling, selecting and searching are your terminal's, not Klaudia's: output is
+printed into real scrollback, so PgUp, the mouse wheel, drag-to-select, tmux copy
+mode and your terminal's own find all work as they normally do. Klaudia adds
+/search, /outline and /errors on top, which report matches rather than scrolling.`
 
 // slashHelp renders the command reference from commandList + keyHints.
 func slashHelp() string {
@@ -2403,9 +2409,7 @@ func (m *Model) markdown(s string) string {
 	if err != nil {
 		return s
 	}
-	// Glamour pads every line to the wrap width; strip it so selecting a code
-	// block yields the source rather than the source plus forty spaces.
-	return trimRenderedPadding(strings.TrimRight(out, "\n"))
+	return strings.TrimRight(out, "\n")
 }
 
 // looksLineNumbered reports whether s is cat -n style output — the Read tool's
@@ -2514,7 +2518,14 @@ func (m *Model) appendLine(s string) {
 // commit records a block and queues it for printing. Once printed it is part of
 // the terminal's scrollback and can never be revised — every caller should be
 // sure the content is final.
+//
+// Trailing padding is stripped here, at the single choke point, because two
+// different things add it: glamour pads every line to the wrap width to paint
+// block backgrounds, and lipgloss pads a multi-line block out to its widest
+// line. Both are invisible on screen and both are trailing whitespace on every
+// line once the text is selected and pasted.
 func (m *Model) commit(b transcriptBlock) {
+	b.rendered = trimRenderedPadding(b.rendered)
 	m.transcript.add(b)
 	m.out.push(b.rendered)
 }
