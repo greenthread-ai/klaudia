@@ -32,7 +32,6 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/goal"
 	"github.com/greenthread-ai/klaudia/internal/memory"
-	"github.com/greenthread-ai/klaudia/internal/native/search"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
@@ -331,6 +330,12 @@ type Model struct {
 	// Verbatim payloads for pastes shown in the input as chips (see paste.go).
 	// Session-scoped, because history recall re-shows a chip.
 	pastes pasteStore
+	// File-reference completion state (see fileref.go).
+	paths       pathIndex
+	recentPaths []string
+	cycle       completeCycle
+	// nav indexes the conversation for /search, /errors and /outline.
+	nav []navEntry
 	// Elapsed-run stopwatch and per-turn cancel (Esc interrupts the model).
 	sw         stopwatch.Model
 	turnCancel context.CancelFunc
@@ -877,6 +882,11 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Any key other than Tab ends an in-progress completion cycle.
+	if msg.Type != tea.KeyTab {
+		m.cycle = completeCycle{}
+	}
+
 	// Tab completion on an idle line: slash command when the line is a "/token",
 	// otherwise an @<path> reference.
 	if m.state == stateIdle && msg.Type == tea.KeyTab {
@@ -913,6 +923,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.Reset()
 		m.pushHistory(display)
 		m.appendLine(userStyle.Render("› ") + display)
+		m.noteNav(navUser, display, prompt, 0)
 
 		// Slash commands are handled locally, not sent to the model.
 		if strings.HasPrefix(display, "/") {
@@ -961,6 +972,11 @@ var commandList = []cmdInfo{
 	{"/export", "", "Export the conversation to a Markdown file"},
 	{"/last", "[n|list]", "Show a tool output in full (no arg = latest; list = index)"},
 	{"/copy", "[target]", "Copy to the clipboard: answer (default) | code [N] | out | all"},
+	{"/search", "<query>", "Search the session (--mine, --answers, --tools, --errors; /regex/)"},
+	{"/outline", "", "Show a session outline of prompts, tool calls, and errors"},
+	{"/show", "<n>", "Show one entry from /search or /outline in full"},
+	{"/errors", "[n]", "List the most recent errors"},
+	{"/open", "<path:line>", "Open a file reference in $EDITOR (paths from stack traces work)"},
 	{"/clear", "", "Clear the screen and conversation history"},
 	{"/quit", "", "Exit Klaudia (alias /exit)"},
 }
@@ -1351,12 +1367,23 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.history = nil
 		m.pastes.reset()
 		m.results.reset()
+		m.nav = nil
 		// Erase the visible screen, but deliberately not the scrollback: ESC[3J
 		// would destroy whatever the user had in the terminal before Klaudia
 		// started, and in tmux it wipes the whole pane's history. Earlier output
 		// stays scrollable, which is the point of rendering inline.
 		m.appendLine(bannerStyle.Render("Cleared conversation. Earlier output remains in terminal scrollback."))
 		return m, tea.Sequence(tea.ClearScreen, m.out.drainCmd())
+	case "/search":
+		return m, m.searchConversation(args)
+	case "/outline":
+		return m, m.outline()
+	case "/show":
+		return m, m.showEntry(args)
+	case "/errors":
+		return m, m.listErrors(args)
+	case "/open":
+		return m, m.openInEditor(args)
 	case "/copy":
 		m.appendLine(bannerStyle.Render(m.copyToClipboard(args)))
 	case "/last":
@@ -1740,6 +1767,10 @@ func (m *Model) completeSlash() {
 // completeAtPath completes the trailing "@<partial>" token in the input against
 // files under the working directory. A unique match is filled in; multiple
 // matches fill the common prefix and list candidates as a banner.
+// completeAtPath completes an @<path> reference. Matching is fuzzy, so
+// "@session.ts" finds "src/auth/session.ts"; that makes commonPrefix
+// meaningless, so instead the first Tab inserts the best hit and further Tabs
+// cycle through the rest.
 func (m *Model) completeAtPath() {
 	value := m.input.Value()
 	at := strings.LastIndex(value, "@")
@@ -1750,55 +1781,108 @@ func (m *Model) completeAtPath() {
 	if strings.ContainsAny(partial, " \t") {
 		return // the @token has already been closed by whitespace
 	}
-	cands := matchPaths(m.sess.CWD, partial)
-	if len(cands) == 0 {
-		return
-	}
-	completion := cands[0]
-	if len(cands) > 1 {
-		completion = commonPrefix(cands)
-		// Show up to 12 candidates so the user can keep typing.
-		show := cands
-		if len(show) > 12 {
-			show = show[:12]
+
+	// Keep any :line[:col] suffix out of the match and put it back afterwards,
+	// so a reference pasted straight from a stack trace completes cleanly.
+	stem, line, col := splitLineSuffix(partial)
+	suffix := ""
+	if line > 0 {
+		suffix = ":" + strconv.Itoa(line)
+		if col > 0 {
+			suffix += ":" + strconv.Itoa(col)
 		}
-		m.appendLine(bannerStyle.Render("candidates: " + strings.Join(show, "  ")))
 	}
-	m.input.SetValue(value[:at+1] + completion)
+
+	if len(m.cycle.hits) > 0 && m.cycle.last == value {
+		m.cycle.idx = (m.cycle.idx + 1) % len(m.cycle.hits)
+	} else {
+		hits := m.matchPaths(stem)
+		if len(hits) == 0 {
+			return
+		}
+		m.cycle = completeCycle{base: stem, hits: hits}
+		if len(hits) > 1 {
+			show := hits
+			if len(show) > 12 {
+				show = show[:12]
+			}
+			m.appendLine(bannerStyle.Render("candidates: " + strings.Join(show, "  ")))
+		}
+	}
+
+	chosen := m.cycle.hits[m.cycle.idx]
+	completed := value[:at+1] + chosen + suffix
+	m.cycle.last = completed
+	m.input.SetValue(completed)
 	m.input.CursorEnd()
 }
 
 // matchPaths returns working-dir-relative file paths that start with partial
 // (case-insensitive), sorted, capped. A blank partial lists top entries.
-func matchPaths(cwd, partial string) []string {
-	root := cwd
-	if root == "" {
-		root = "."
+// matchPaths ranks working-dir-relative paths against partial. Ordering is
+// deliberate and was previously thrown away: search.Glob returns files
+// mtime-descending, and the old implementation immediately re-sorted them
+// alphabetically, so "the file I was just working on" ranked below "a_test.go".
+// Files Klaudia has actually read or written outrank everything.
+func (m *Model) matchPaths(partial string) []string {
+	root := m.rootDir()
+	files := m.paths.files(root, time.Now())
+
+	type scored struct {
+		path  string
+		score int
+		order int
 	}
-	files, err := search.Glob(search.GlobOptions{Root: root})
-	if err != nil {
-		return nil
+	recent := map[string]int{}
+	for i, p := range m.recentPaths {
+		recent[p] = i
 	}
-	lower := strings.ToLower(partial)
+
 	seen := map[string]bool{}
-	var out []string
-	for _, f := range files {
+	var out []scored
+	consider := func(rel string, order int) {
+		if rel == "" || seen[rel] {
+			return
+		}
+		score, ok := fuzzyScore(partial, rel)
+		if !ok {
+			return
+		}
+		seen[rel] = true
+		if i, isRecent := recent[rel]; isRecent {
+			score += 5000 - 50*i
+		}
+		out = append(out, scored{rel, score, order})
+	}
+	for i, p := range m.recentPaths {
+		consider(p, i)
+	}
+	for i, f := range files {
 		rel, err := filepath.Rel(root, f)
 		if err != nil {
 			rel = f
 		}
-		if partial == "" || strings.HasPrefix(strings.ToLower(rel), lower) {
-			if !seen[rel] {
-				seen[rel] = true
-				out = append(out, rel)
-			}
-		}
+		consider(rel, len(m.recentPaths)+i)
 	}
-	sort.Strings(out)
+
+	// Higher score first; ties broken by the incoming order, which is recency.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].score != out[j].score {
+			return out[i].score > out[j].score
+		}
+		return out[i].order < out[j].order
+	})
+	if len(out) == 0 {
+		return nil
+	}
 	if len(out) > 200 {
 		out = out[:200]
 	}
-	return out
+	paths := make([]string, len(out))
+	for i, s := range out {
+		paths[i] = s.path
+	}
+	return paths
 }
 
 // commonPrefix returns the longest shared leading substring of the inputs.
@@ -2119,6 +2203,10 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.flushAssistant() // the assistant message before a tool call is complete
 		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
 		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + toolSummary(ev.ToolName, ev.Input)))
+		// Remember files Klaudia touches so @-completion can rank them first.
+		for _, key := range []string{"file_path", "notebook_path"} {
+			m.noteRecentPath(toolFields(ev.Input)[key])
+		}
 		if diff := toolDiff(ev.ToolName, ev.Input); diff != "" {
 			m.appendLine(diff)
 		}
@@ -2165,6 +2253,11 @@ func (m *Model) renderEvent(ev agent.Event) {
 			}
 			m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(clipped, "\n", "\n  ")))
 		}
+		kind := navCommand
+		if ev.IsError {
+			kind = navError
+		}
+		m.noteNav(kind, ev.ToolName+toolSummary(ev.ToolName, ev.Input)+" → "+oneline(s, 60), "", seq)
 		m.activeToolName = ""
 		m.phase = "thinking"
 	case "compaction":
@@ -2293,6 +2386,7 @@ func (m *Model) flushAssistant() {
 	}
 	if m.msgAccum.Len() > 0 {
 		m.lastAssistantText = m.msgAccum.String()
+		m.noteNav(navAssistant, firstLine(strings.TrimSpace(m.lastAssistantText)), m.lastAssistantText, 0)
 		m.msgAccum.Reset()
 	}
 	m.scan.reset()

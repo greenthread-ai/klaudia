@@ -217,11 +217,13 @@ func TestMatchPaths(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	got := matchPaths(dir, "al")
+	m := newTestModel()
+	m.sess.CWD = dir
+	got := m.matchPaths("al")
 	if len(got) != 2 {
 		t.Fatalf("matchPaths(al) = %v, want alpha.go + alfred.txt", got)
 	}
-	if matchPaths(dir, "zzz") != nil {
+	if m.matchPaths("zzz") != nil {
 		t.Errorf("no-match should be nil")
 	}
 }

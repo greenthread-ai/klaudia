@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -103,4 +104,69 @@ func (m *Model) showLong(name, text string) tea.Cmd {
 		m.appendLine(toolStyle.Render(text))
 	}
 	return nil
+}
+
+// editorCommand builds the argv to open ref at its line. Editors disagree about
+// how to say "line N", so the common ones are special-cased and everything else
+// falls back to "$EDITOR <path>".
+func editorCommand(env func(string) string, root string, ref fileRef) (*exec.Cmd, bool) {
+	editor := strings.TrimSpace(env("VISUAL"))
+	if editor == "" {
+		editor = strings.TrimSpace(env("EDITOR"))
+	}
+	if editor == "" {
+		return nil, false
+	}
+	fields := strings.Fields(editor)
+	bin, err := exec.LookPath(fields[0])
+	if err != nil {
+		return nil, false
+	}
+	path := ref.Path
+	if !filepath.IsAbs(path) && root != "" {
+		path = filepath.Join(root, path)
+	}
+	args := append([]string{}, fields[1:]...)
+	switch base := filepath.Base(fields[0]); {
+	case ref.Line <= 0:
+		args = append(args, path)
+	case base == "vim" || base == "nvim" || base == "vi" || base == "emacs" || base == "nano":
+		args = append(args, "+"+strconv.Itoa(ref.Line), path)
+	case base == "code" || base == "cursor" || base == "codium":
+		args = append(args, "-g", ref.String())
+	case base == "hx" || base == "helix" || base == "subl" || base == "idea":
+		args = append(args, ref.String())
+	default:
+		args = append(args, path)
+	}
+	return exec.Command(bin, args...), true
+}
+
+// openInEditor backs /open. It resolves a path:line reference — the form every
+// compiler and stack trace prints — and hands it to $EDITOR.
+func (m *Model) openInEditor(args []string) tea.Cmd {
+	if len(args) == 0 {
+		m.appendLine(errStyle.Render("usage: /open <path[:line[:col]]>"))
+		return nil
+	}
+	root := m.rootDir()
+	var extra []string
+	if m.sess != nil {
+		extra = m.sess.ExtraDirs
+	}
+	ref, ok := parseFileRef(root, args[0], extra)
+	if !ok {
+		m.appendLine(errStyle.Render("open: no such file: " + args[0]))
+		return nil
+	}
+	cmd, ok := editorCommand(os.Getenv, root, ref)
+	if !ok {
+		m.appendLine(errStyle.Render("open: set $EDITOR (or $VISUAL) first"))
+		return nil
+	}
+	m.noteRecentPath(ref.Path)
+	m.appendLine(bannerStyle.Render("Opening " + ref.String() + "…"))
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return pagerDoneMsg{err: err}
+	})
 }
