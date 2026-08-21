@@ -1,12 +1,15 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/greenthread-ai/klaudia/internal/memory"
 )
 
 // drain empties the queue and returns the text it would have printed.
@@ -144,31 +147,35 @@ func TestTranscriptStillRecordsCommittedOutput(t *testing.T) {
 	}
 }
 
-// On a fresh launch the bar has to end up at the bottom of the window, not four
-// rows below the shell prompt with the rest of the screen blank beneath it.
-func TestFirstFrameAnchorsToTheBottom(t *testing.T) {
-	m := newTestModel()
+// Klaudia starts where the shell prompt left off — banner, then input — and
+// lets output push downward, the way any command-line program behaves. It
+// deliberately does NOT pad the window: a screenful of blank between your
+// prompt and the banner is a worse trade than the input sitting high on an
+// otherwise empty screen for the first few turns.
+func TestLaunchPrintsAtTheCursorWithoutPadding(t *testing.T) {
+	// Uses the real constructor, since queueing the banner is part of startup.
+	m := New(context.Background(), nil, nil, &Session{Memory: memory.Disabled()})
 	m.resize(80, 43)
 
 	printed, ok := m.out.drainText()
 	if !ok {
-		t.Fatal("the first resize should queue the banner")
-	}
-	rows := len(strings.Split(printed, "\n"))
-	live := len(strings.Split(m.View(), "\n"))
-	// Printed rows + live region + the shell's own prompt row fill the window.
-	if rows+live+1 != 43 {
-		t.Errorf("printed %d + live %d + 1 = %d rows, want 43 so the bar lands on the bottom row",
-			rows, live, rows+live+1)
+		t.Fatal("the banner should be queued at startup")
 	}
 	if !strings.Contains(printed, "Klaudia") {
-		t.Error("the banner should be part of the anchored output")
+		t.Error("expected the banner")
+	}
+	if strings.HasPrefix(printed, "\n\n") {
+		t.Errorf("launch should not pad the window with blank lines:\n%q", printed)
+	}
+	if n := len(strings.Split(printed, "\n")); n > 6 {
+		t.Errorf("startup printed %d lines; expected just the banner", n)
 	}
 }
 
-// The live region must stay small. Bubble Tea repositions with
-// CursorUp(linesRendered-1) from the previous frame, so a tall live region
-// desynchronises as soon as the terminal reflows on resize.
+// The live region must stay small at every window size. Bubble Tea repositions
+// with CursorUp(linesRendered-1) from the previous frame, so a tall live region
+// desynchronises the moment the terminal reflows on resize — the cursor lands
+// in the wrong place and EraseScreenBelow eats the scrollback.
 func TestLiveRegionStaysSmall(t *testing.T) {
 	for _, h := range []int{10, 24, 43, 80, 200} {
 		m := newTestModel()
@@ -181,8 +188,8 @@ func TestLiveRegionStaysSmall(t *testing.T) {
 	}
 }
 
-// Resizing repeatedly must not grow the live region or strand the bar. This is
-// the regression: padding the live region made each resize move the bar.
+// The regression that broke resizing: the live region must not change size with
+// the window, and resizing must not emit anything.
 func TestRepeatedResizeKeepsLiveRegionStable(t *testing.T) {
 	m := newTestModel()
 	m.resize(120, 60)
@@ -195,42 +202,25 @@ func TestRepeatedResizeKeepsLiveRegionStable(t *testing.T) {
 			t.Fatalf("after resizing to height %d the live region is %d lines, want %d",
 				h, got, baseline)
 		}
-		// A resize must not queue more output; only the first one anchors.
 		if m.out.pending() != 0 {
-			t.Fatalf("resize to height %d queued output; only the first resize should anchor", h)
+			t.Fatalf("resize to height %d queued output; resizing should print nothing", h)
 		}
 	}
 }
 
-// /clear blanks the screen, so the bar has to be re-anchored.
-func TestClearReanchorsToTheBottom(t *testing.T) {
+// Once output exceeds the window the input sits permanently at the bottom,
+// which is the terminal scrolling rather than anything Klaudia does.
+func TestInputEndsUpAtTheBottomOnceOutputFills(t *testing.T) {
 	m := newTestModel()
-	m.resize(80, 30)
-	m.out.drainText()
-
-	if _, cmd := m.handleSlash("/clear"); cmd != nil {
-		_ = cmd()
+	m.resize(80, 20)
+	for i := 0; i < 60; i++ {
+		m.appendLine(fmt.Sprintf("line %d", i))
 	}
-	printed, ok := m.out.drainText()
-	if !ok {
-		t.Fatal("/clear should queue the re-anchoring blank lines and its notice")
+	view := m.View()
+	if n := len(strings.Split(view, "\n")); n > 4 {
+		t.Errorf("live region is %d lines; it should stay just the input and status bar", n)
 	}
-	rows := len(strings.Split(printed, "\n"))
-	live := len(strings.Split(m.View(), "\n"))
-	if rows+live+1 != 30 {
-		t.Errorf("after /clear: printed %d + live %d + 1 = %d, want 30", rows, live, rows+live+1)
-	}
-}
-
-// A window too short to anchor into must not emit negative or stray padding.
-func TestTinyWindowDoesNotPad(t *testing.T) {
-	m := newTestModel()
-	m.resize(80, 4)
-	printed, _ := m.out.drainText()
-	if strings.HasPrefix(printed, "\n\n") {
-		t.Errorf("a 4-row window has no room to anchor; should not pad:\n%q", printed)
-	}
-	if n := len(strings.Split(m.View(), "\n")); n > 3 {
-		t.Errorf("live region is %d lines on a 4-row terminal", n)
+	if !strings.Contains(view, "turns") {
+		t.Error("status bar should be the last thing drawn")
 	}
 }
