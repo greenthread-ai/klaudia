@@ -233,6 +233,10 @@ type Model struct {
 	// out queues finished blocks for printing into the terminal's own
 	// scrollback (see scrollback.go). Drained once per Update cycle.
 	out printQueue
+	// printedRows counts the display rows committed to scrollback since launch
+	// (or since /clear). Used only to pin the bottom block to the bottom of the
+	// window while the screen is still mostly empty — see padToBottom.
+	printedRows int
 
 	transcript transcriptLog // in-memory record of what we printed
 	history    []anthropic.BetaMessageParam
@@ -1374,6 +1378,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.pastes.reset()
 		m.results.reset()
 		m.nav = nil
+		m.printedRows = 0 // the screen is about to be blank again
 		// Erase the visible screen, but deliberately not the scrollback: ESC[3J
 		// would destroy whatever the user had in the terminal before Klaudia
 		// started, and in tmux it wipes the whole pane's history. Earlier output
@@ -2527,6 +2532,7 @@ func (m *Model) appendLine(s string) {
 func (m *Model) commit(b transcriptBlock) {
 	b.rendered = trimRenderedPadding(b.rendered)
 	m.transcript.add(b)
+	m.printedRows += lipgloss.Height(b.rendered)
 	m.out.push(b.rendered)
 }
 
@@ -2550,11 +2556,34 @@ func (m *Model) View() string {
 	if !m.ready {
 		return ""
 	}
-	out := m.clampBottom(m.bottomView())
+	out := m.clampBottom(m.padToBottom(m.bottomView()))
 	if m.pendingOSC != "" {
 		out, m.pendingOSC = m.pendingOSC+out, ""
 	}
 	return out
+}
+
+// padToBottom keeps the input and status bar at the bottom of the window while
+// the screen is still mostly empty.
+//
+// Inline rendering draws the live region wherever the cursor happens to be, so
+// on a fresh launch the status bar sits four rows down with the rest of the
+// window blank below it — which reads as broken, because a status bar belongs at
+// the bottom. Padding above it puts it where it belongs, and the padding shrinks
+// as real output accumulates until it disappears entirely and the terminal's own
+// scrolling takes over.
+//
+// The padding is live-region only: it is never committed to scrollback, so it
+// leaves no blank lines behind and it doesn't scroll away whatever the user had
+// in the terminal before launching.
+func (m *Model) padToBottom(bottom string) string {
+	// -1 leaves room for the line the shell prompt sits on, so the first frame
+	// fits exactly and the terminal doesn't scroll for no reason.
+	n := m.height - lipgloss.Height(bottom) - m.printedRows - 1
+	if n <= 0 {
+		return bottom
+	}
+	return strings.Repeat("\n", n) + bottom
 }
 
 // clampBottom keeps the live region strictly shorter than the terminal. Bubble

@@ -143,3 +143,78 @@ func TestTranscriptStillRecordsCommittedOutput(t *testing.T) {
 		t.Error("Reset should empty the log")
 	}
 }
+
+// On a fresh launch the window is empty, so the input and status bar have to be
+// padded down to the bottom — otherwise they float a few rows below the shell
+// prompt with the rest of the window blank, which reads as broken.
+func TestStatusBarStartsAtTheBottomOfTheWindow(t *testing.T) {
+	m := newTestModel()
+	m.resize(80, 43)
+
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	if len(lines) != 42 { // height-1, leaving the shell's prompt row
+		t.Fatalf("first frame is %d lines, want 42 so the bar lands on the bottom row", len(lines))
+	}
+	if !strings.Contains(lines[len(lines)-1], "turns") {
+		t.Errorf("last line should be the status bar, got %q", lines[len(lines)-1])
+	}
+	// Everything above the input must be blank padding, not content.
+	for _, ln := range lines[:len(lines)-3] {
+		if strings.TrimSpace(visibleText(ln)) != "" {
+			t.Fatalf("expected blank padding above the input, got %q", ln)
+		}
+	}
+}
+
+// As output accumulates the padding gives way, one row at a time, so the bar
+// stays put rather than jumping.
+func TestPaddingShrinksAsOutputAccumulates(t *testing.T) {
+	m := newTestModel()
+	m.resize(80, 20)
+
+	before := len(strings.Split(m.View(), "\n"))
+	for i := 0; i < 5; i++ {
+		m.appendLine(fmt.Sprintf("line %d", i))
+	}
+	after := len(strings.Split(m.View(), "\n"))
+	if after != before-5 {
+		t.Errorf("live region went from %d to %d lines after 5 printed rows; want %d", before, after, before-5)
+	}
+}
+
+// Once the screen is full the padding is gone entirely and the terminal's own
+// scrolling takes over.
+func TestPaddingDisappearsOnceScreenIsFull(t *testing.T) {
+	m := newTestModel()
+	m.resize(80, 20)
+	for i := 0; i < 60; i++ {
+		m.appendLine(fmt.Sprintf("line %d", i))
+	}
+	view := m.View()
+	if n := len(strings.Split(view, "\n")); n > 4 {
+		t.Errorf("live region is %d lines once the screen is full; want just the input and status bar", n)
+	}
+	if !strings.Contains(view, "turns") {
+		t.Error("status bar should still be present")
+	}
+}
+
+// /clear blanks the screen, so the bar has to re-pin to the bottom.
+func TestClearRepinsTheStatusBar(t *testing.T) {
+	m := newTestModel()
+	m.resize(80, 30)
+	for i := 0; i < 50; i++ {
+		m.appendLine(fmt.Sprintf("line %d", i))
+	}
+	if n := len(strings.Split(m.View(), "\n")); n > 4 {
+		t.Fatalf("setup: expected padding to be gone, live region is %d lines", n)
+	}
+
+	if _, cmd := m.handleSlash("/clear"); cmd != nil {
+		_ = cmd()
+	}
+	if n := len(strings.Split(m.View(), "\n")); n < 20 {
+		t.Errorf("after /clear the bar should be re-pinned to the bottom, live region is only %d lines", n)
+	}
+}
