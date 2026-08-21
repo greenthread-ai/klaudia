@@ -5,6 +5,101 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+- **Klaudia works autonomously inside the project and asks before changing your
+  machine.** The old model asked per command, which produced prompt fatigue for
+  ordinary work and approvals that neither covered the operation you meant nor
+  stopped at its edges. Every tool call is now classified into a zone: project
+  work, network fetches and work on a remote host the task calls for all proceed
+  without asking — including the destructive parts, because `rm -rf ./dist` and
+  `git reset --hard` are ordinary. Changes to this machine, and local credential
+  material, stop.
+
+  A few consequences are deliberate and worth knowing. Build caches under `$HOME`
+  (`~/.cache`, `~/go/pkg/mod`, `~/.npm`, `~/.cargo`, `~/.m2`) are project zone,
+  or every build would prompt. The rest of `$HOME` is your data and is not
+  protected — this protects the machine, not the home directory — but `~/.zshrc`,
+  `~/.gitconfig` and `~/Library/LaunchAgents` are host, because they configure
+  your login session and persist. A project at `/opt/app` or `/usr/local/src` is
+  still the project. `sudo` is not itself the trigger: `sudo -u deploy
+  ./scripts/deploy.sh` in the project is project work.
+
+  `ssh staging sudo systemctl restart nginx` is the job you asked for; the same
+  line without the `ssh` is a change to the machine you are typing on. Using a
+  credential (`ssh -i ~/.ssh/key`, `curl --cert`) is ordinary; printing one
+  (`cat ~/.ssh/id_rsa`) is not.
+
+  **This is a guardrail against well-intentioned mistakes, not a security
+  boundary.** It reads command lines and tool inputs; it does not observe what
+  programs do, so a command that computes its own target or a package's
+  postinstall hook goes past it. For enforcement the kernel applies, set
+  `[sandbox] mode = "os"`. See [docs/trust.md](docs/trust.md).
+- **`RequestHostChange`: one approval covers a whole operation.** Klaudia
+  declares what it intends to change and why, in your terms — "install nginx and
+  configure it as a development proxy" rather than `sudo apt-get install -y
+  nginx`. Approving it covers the package install, the config directory, the
+  write, the validate and the restart. Anything outside the scope stops and says
+  "this wasn't part of what you approved"; declining fails that one tool call, so
+  work already done stands.
+
+  Approving one file inside a directory covers that directory, so the second step
+  of an approved change does not ask again — but approving `/etc/hosts` does not
+  hand over `/etc`, a request for a whole system directory is refused before it
+  reaches you, and an install grant does not authorise a removal. Approvals are
+  session-scoped and never written to disk. There is no always-allow for a host
+  change: a standing permission to reconfigure your machine is one you cannot see
+  and did not schedule the end of.
+- **`/trust`** shows the guardrail's state, the approvals live this session and
+  what they reach, what the classifier has found, and any allow/deny rules
+  carried over from the per-command model. `/trust revoke <id>`, `/trust revoke
+  all`, `/trust upgrade`, `/trust observe`, `/trust off`.
+- **`--allow-host-changes`** for unattended runs on a machine you are willing to
+  have reconfigured. Without it, headless runs still do project and remote work
+  and refuse host changes with a message naming the flag — rather than the old
+  behaviour of denying everything that would prompt, in silence.
+
+### Changed
+- **Permission modes collapse from six to three:** `autonomous` (the new
+  default), `plan`, `bypassPermissions`. The old set asked you to pick a stance
+  on file edits versus commands versus network, which is a question about tool
+  categories and never had a good answer; zones answer it now. `default`,
+  `acceptEdits` and `dontAsk` stay valid so existing configs keep working, and
+  are no longer offered as a choice. `autonomous` is refused unless the host
+  guardrail is enforcing — without it, it would be `bypassPermissions` under
+  another name.
+- **A config that already has `[permissions]` rules starts in observe mode**,
+  with a one-time notice: the classifier runs and `/trust` reports what it found,
+  but nothing is refused and your per-action prompts continue until you run
+  `/trust upgrade`. Existing allow/deny rules keep working; Klaudia no longer
+  creates new ones.
+- **`--loop` no longer requires `--dangerously-skip-permissions`.** It needed it
+  only because no mode would edit a file in the project without asking, so
+  running unattended meant turning off every check to get past prompts about
+  ordinary work. Use `--permission-mode autonomous`.
+- **`/commit` stages what Klaudia changed, not everything.** It ran `git add -A`,
+  which swept up the half-finished change you left open in another editor and the
+  scratch file you meant to delete, into a commit whose message described
+  something else. It now stages only the files this session edited, lists what it
+  is leaving out, and — if you staged something yourself — commits exactly that
+  and adds nothing on top.
+- **Sub-agents share the parent's guardrail and its approvals.** A sub-agent must
+  not be a way around the boundary, and an approval you gave the parent should
+  cover the child doing the work.
+
+### Fixed
+- **The Bash parser did not see output redirections**, so `echo x > /etc/hosts`
+  looked like a harmless `echo`. It also silently fabricated paths from partial
+  expansions — `> "$HOME/notes.txt"` was recorded as a write to `/notes.txt`, an
+  absolute path that looks real and is not — and dropped whole commands whose
+  program name came from a variable (`$SUDO apt-get install`). Words now carry
+  whether their text is the whole story, and anything deciding what a command
+  touches has to check.
+- **Tools ran in Klaudia's process directory, not the project.** `WorkingDir` was
+  declared and never set, so `cmd.Dir` was never assigned and Grep/Glob rooted
+  themselves wherever Klaudia happened to start.
+- **Sandbox roots were compared unresolved**, so on macOS a write to `/etc/foo`
+  never matched the policy prefix `/private/etc` and looked harmless.
+
 ### Changed
 - **The input is drawn in a box, and the status line is its caption.** A dim
   full-width "model · mode · turns · tokens" line reads as a status bar, and

@@ -256,7 +256,10 @@ type Model struct {
 	history    []anthropic.BetaMessageParam
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
-	sess       *Session
+	// touched is the set of repo-relative paths Klaudia has modified this
+	// session, so /commit can stage its own work and leave the user's alone.
+	touched map[string]bool
+	sess    *Session
 	// Session-scoped allow/deny rules added via "allow always" or /allow,/deny.
 	// Accessed only from the UI goroutine (Update) to avoid races.
 	sessionAllow []permission.Rule
@@ -1677,9 +1680,20 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			break
 		}
 		cwd := m.sess.CWD
+		plan := planCommit(status, m.touched)
+		if plan.empty() {
+			m.appendLine(bannerStyle.Render(plan.describe() +
+				"\nStage the changes you want with git add, then run /commit again."))
+			break
+		}
 		m.confirmAction = func() string {
-			if _, err := gitOutput(cwd, "add", "-A"); err != nil {
-				return "git add failed: " + err.Error()
+			// A user's own `git add` is a statement about what belongs in the
+			// commit; adding to it would be the same mistake as `git add -A`.
+			if !plan.Staged {
+				args := append([]string{"add", "--"}, plan.Add...)
+				if _, err := gitOutput(cwd, args...); err != nil {
+					return "git add failed: " + err.Error()
+				}
 			}
 			if out, err := gitOutput(cwd, "commit", "-m", message); err != nil {
 				return "git commit failed: " + strings.TrimSpace(out) + " " + err.Error()
@@ -1688,8 +1702,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		m.setState(stateAwaitingConfirm)
 		// The y/n lives in the persistent bottom view (stateAwaitingConfirm);
-		// scrollback just records the question and the diff being committed.
-		m.appendLine(askStyle.Render("Stage all changes and commit?\n" + strings.TrimRight(status, "\n")))
+		// scrollback just records the question and what is being committed.
+		m.appendLine(askStyle.Render(plan.describe()))
 	default:
 		// A /<skill> matching a user-defined skill renders its body and submits it
 		// as the turn prompt. Built-in commands above always win (a skill that
@@ -2275,9 +2289,15 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.flushAssistant() // the assistant message before a tool call is complete
 		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
 		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + toolSummary(ev.ToolName, ev.Input)))
-		// Remember files Klaudia touches so @-completion can rank them first.
+		// Remember files Klaudia touches so @-completion can rank them first,
+		// and so /commit can stage what Klaudia changed rather than everything.
 		for _, key := range []string{"file_path", "notebook_path"} {
-			m.noteRecentPath(toolFields(ev.Input)[key])
+			p := toolFields(ev.Input)[key]
+			m.noteRecentPath(p)
+			switch ev.ToolName {
+			case "Write", "Edit", "NotebookEdit":
+				m.noteTouched(p)
+			}
 		}
 		if diff := toolDiff(ev.ToolName, ev.Input); diff != "" {
 			m.appendLine(diff)

@@ -168,8 +168,8 @@ shells are terminated when the session ends.
 # Print the final result and exit
 ./klaudia -p "What files are in this directory?"
 
-# Full autonomy (skip permission prompts)
-./klaudia -p "Create hello.py" --dangerously-skip-permissions
+# Unattended, including changes to this machine
+./klaudia -p "Install and configure nginx" --allow-host-changes
 
 # Stream events as JSON (tool calls, results) as they happen
 ./klaudia -p "Explain the build" --output-format stream-json --verbose
@@ -207,20 +207,47 @@ transcripts from `~/.klaudia/projects/<encoded-cwd>/` during migration. When a
 session has a persisted compaction summary, resume seeds from it (token-saving)
 unless `--full`.
 
-## Permission modes
+## Autonomy and the host boundary
+
+Klaudia finishes the task without asking per action, and stops before changing
+the machine it runs on. Work in the project — editing, building, testing, git,
+dev servers, and the destructive parts like `rm -rf ./dist` — is autonomous, as
+is work on a remote host the task calls for. Changing *this* machine (packages,
+services, `/etc`, shell rc files, users, firewall) needs your agreement, and
+Klaudia asks for the whole operation at once rather than one command at a time:
+
+```
+This changes your machine
+  Install nginx and configure it as a development proxy
+  why: the task asks for the app to run behind a local proxy
+  paths: /etc/nginx    services: nginx    packages: nginx
+  approving covers every step inside that scope, for this session only
+```
+
+Approvals are session-scoped and never written to disk. `/trust` shows what is
+live and revokes it.
+
+**This is a guardrail against well-intentioned mistakes, not a security
+boundary.** It reads command lines and tool inputs; it does not watch what
+programs do, so a command that builds its own target or a package's install
+script can change things without being seen. For enforcement the kernel applies,
+set `[sandbox] mode = "os"`.
 
 | Flag | Mode | Behavior |
 |------|------|----------|
-| *(default)* | `default` | Ask before risky operations (interactive only) |
-| `--permission-mode acceptEdits` | `acceptEdits` | Auto-accept file edits |
-| `--dangerously-skip-permissions` | `bypassPermissions` | Allow everything |
+| *(default)* | `autonomous` | Finish the task; ask before changing this machine |
 | `--permission-mode plan` | `plan` | Read-only; mutations and network blocked |
-| `--permission-mode dontAsk` | `dontAsk` | Deny anything not pre-approved |
+| `--dangerously-skip-permissions` | `bypassPermissions` | Allow everything, including host changes |
 
-In the TUI, `/mode` switches modes interactively. Headless `-p` without
-`--dangerously-skip-permissions` denies anything that would prompt (no TTY).
-Session allow/deny rules: `--allowedTools 'Bash(go test:*)'`, `--disallowedTools …`,
-or `/allow` / `/deny` at runtime.
+`/mode` switches interactively; `/trust` shows and revokes approvals. Headless
+runs do project and remote work but refuse host changes unless you pass
+`--allow-host-changes`. Legacy modes (`default`, `acceptEdits`, `dontAsk`) and
+allow/deny rules (`--allowedTools 'Bash(go test:*)'`, `/allow`, `/deny`) still
+work; a config that already has permission rules starts in observe mode until
+you run `/trust upgrade`.
+
+Full detail, including the zone table and what is deliberately *not* protected:
+[docs/trust.md](docs/trust.md).
 
 ## Model & provider
 

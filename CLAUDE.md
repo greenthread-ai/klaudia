@@ -15,7 +15,8 @@ go test ./internal/...
 - **api** - Provider abstraction: Anthropic client + OpenAI-compatible shim
 - **tools** - Local tool implementations
 - **browser** - Lazy headless-Chrome engine + web search
-- **permission** - Permission/authorization checks (5 modes + allow/deny rules)
+- **permission** - Permission modes + allow/deny rules (a leaf package)
+- **trust** - Zones, command/tool classification, session-scoped grants
 - **session** - Transcripts, resume, persisted compaction summaries
 - **compaction** - Context/history compression (micro + auto)
 - **mcp** - Model Context Protocol support
