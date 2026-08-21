@@ -97,3 +97,97 @@ func TestNestedShellPayloadIsNotAutoParsed(t *testing.T) {
 		t.Errorf("re-parsing the payload should reveal the redirect, got %+v", inner.Redirects)
 	}
 }
+
+// The dangerous failure isn't a missing path — it's a *plausible wrong* one.
+// wordText keeps only literal fragments, so `"$HOME/notes.txt"` reads as the
+// absolute path "/notes.txt", and `"$PREFIX/etc/nginx.conf"` reads as a real
+// host path that was never in the command. Anything deciding what a command
+// touches has to see Literal=false before it trusts Text.
+func TestNonLiteralWordsAreFlaggedNotFabricated(t *testing.T) {
+	for _, tc := range []struct {
+		in      string
+		target  string
+		literal bool
+	}{
+		{`echo x > /etc/hosts`, "/etc/hosts", true},
+		{`echo x > "$HOME/notes.txt"`, "/notes.txt", false},
+		{`echo x > "/etc/$name.conf"`, "/etc/.conf", false},
+		{`echo x > $TARGET`, "", false},
+		{`echo x > "$(mktemp)"`, "", false},
+	} {
+		a, err := Parse(tc.in)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", tc.in, err)
+		}
+		if len(a.Redirects) != 1 {
+			t.Fatalf("Parse(%q) redirects = %+v, want exactly one", tc.in, a.Redirects)
+		}
+		got := a.Redirects[0]
+		if got.Target != tc.target || got.Literal != tc.literal {
+			t.Errorf("Parse(%q) = {%q, literal=%v}, want {%q, literal=%v}",
+				tc.in, got.Target, got.Literal, tc.target, tc.literal)
+		}
+	}
+}
+
+// A redirect whose target can't be resolved must still be reported. Dropping it
+// reported the command as writing nothing at all — a silent fail-open.
+func TestUnresolvableRedirectIsStillReported(t *testing.T) {
+	a, _ := Parse(`echo x > $TARGET`)
+	if len(a.Redirects) != 1 {
+		t.Fatalf("an unresolvable redirect must still be reported, got %+v", a.Redirects)
+	}
+	if a.Redirects[0].Literal {
+		t.Error("it must be marked non-literal")
+	}
+}
+
+// `$SUDO apt-get install nginx` used to produce no commands at all, because the
+// empty expanded name was filtered out — the entire invocation vanished.
+func TestCommandWithExpandedNameIsNotDropped(t *testing.T) {
+	a, err := Parse(`$SUDO apt-get install nginx`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a.Commands) != 1 {
+		t.Fatalf("got %d commands, want the invocation preserved: %+v", len(a.Commands), a.Commands)
+	}
+	c := a.Commands[0]
+	if c.NameWord.Literal {
+		t.Error("an expanded program name must be marked non-literal")
+	}
+	if len(c.Args) != 3 || c.Args[0] != "apt-get" {
+		t.Errorf("arguments should survive: %v", c.Args)
+	}
+}
+
+func TestHasExpansionFlagsUnreadableLines(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{
+		{`go build ./...`, false},
+		{`echo x > /etc/hosts`, false},
+		{`rm -rf "$DIR"`, true},
+		{`eval "$CMD"`, true},
+		{`cp a "$(mktemp)"`, true},
+	} {
+		a, _ := Parse(tc.in)
+		if a.HasExpansion != tc.want {
+			t.Errorf("Parse(%q).HasExpansion = %v, want %v", tc.in, a.HasExpansion, tc.want)
+		}
+	}
+}
+
+// >| and <> also write.
+func TestClobberAndReadWriteRedirects(t *testing.T) {
+	for _, in := range []string{`echo x >| /etc/hosts`, `exec 3<> /etc/hosts`} {
+		a, err := Parse(in)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", in, err)
+		}
+		if len(a.Redirects) != 1 || a.Redirects[0].Target != "/etc/hosts" {
+			t.Errorf("Parse(%q) redirects = %+v, want /etc/hosts", in, a.Redirects)
+		}
+	}
+}

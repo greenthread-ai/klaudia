@@ -10,18 +10,38 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
+// Word is one shell word plus whether its text is the whole story.
+//
+// Literal is false when the word contained something that cannot be resolved by
+// reading the source — a parameter expansion, command substitution, arithmetic
+// or an extended glob. Text then holds only the literal fragments, which is
+// useful as a hint and actively dangerous as a path: `"$HOME/notes.txt"` yields
+// the text "/notes.txt", an absolute path that appears to be at the filesystem
+// root and is not. Anything deciding what a command touches must branch on
+// Literal before trusting Text.
+type Word struct {
+	Text    string
+	Literal bool
+}
+
 // Command is a single simple command (a program invocation) within a line.
 type Command struct {
-	Name string   // the program, e.g. "git"
-	Args []string // arguments following the program name
+	Name string   // the program, e.g. "git"; empty when the name is an expansion
+	Args []string // literal text of the arguments following the program name
+
+	// NameWord and ArgWords carry the same values with their Literal flags, for
+	// callers that must not confuse a partial expansion for a real path.
+	NameWord Word
+	ArgWords []Word
 }
 
 // Redirect is an output redirection target. Only writing redirections are
 // collected — a reader deciding what a command *changes* cares about `>`,
 // `>>` and `&>`, not about where stdin came from.
 type Redirect struct {
-	Target string // the file the redirection writes to
-	Append bool   // >> rather than >
+	Target  string // the file the redirection writes to
+	Append  bool   // >> rather than >
+	Literal bool   // false when Target came from an expansion (see Word)
 }
 
 // Analysis is the parsed structure of a command line.
@@ -29,6 +49,9 @@ type Analysis struct {
 	Commands  []Command  // simple commands, in source order
 	Redirects []Redirect // writing redirections, in source order
 	HasPipe   bool       // whether the line contains a pipe
+	// HasExpansion reports whether any word in the line was non-literal. A
+	// cheap top-level "I could not read all of this" signal.
+	HasExpansion bool
 }
 
 // Parse parses a bash command line. On a parse error the returned Analysis is
@@ -59,26 +82,47 @@ func Parse(input string) (Analysis, error) {
 					continue
 				}
 				switch r.Op {
-				case syntax.RdrOut, syntax.AppOut, syntax.RdrAll, syntax.AppAll:
-					if t := wordText(r.Word); t != "" {
-						a.Redirects = append(a.Redirects, Redirect{
-							Target: t,
-							Append: r.Op == syntax.AppOut || r.Op == syntax.AppAll,
-						})
+				case syntax.RdrOut, syntax.AppOut, syntax.RdrAll, syntax.AppAll,
+					syntax.ClbOut, syntax.RdrInOut:
+					w := word(r.Word)
+					if !w.Literal {
+						a.HasExpansion = true
 					}
+					// Emitted even when the target is unresolvable: "writes
+					// somewhere I cannot determine" is a finding, and dropping
+					// it would silently report the command as writing nothing.
+					a.Redirects = append(a.Redirects, Redirect{
+						Target:  w.Text,
+						Append:  r.Op == syntax.AppOut || r.Op == syntax.AppAll,
+						Literal: w.Literal,
+					})
 				}
 			}
 		case *syntax.CallExpr:
 			if len(n.Args) == 0 {
 				return true
 			}
-			words := make([]string, 0, len(n.Args))
+			ws := make([]Word, 0, len(n.Args))
 			for _, w := range n.Args {
-				words = append(words, wordText(w))
+				expanded := word(w)
+				if !expanded.Literal {
+					a.HasExpansion = true
+				}
+				ws = append(ws, expanded)
 			}
-			if len(words) > 0 && words[0] != "" {
-				a.Commands = append(a.Commands, Command{Name: words[0], Args: words[1:]})
+			// The command is recorded even when its name is an expansion
+			// ("$SUDO apt-get install"). Dropping it, as this used to, made the
+			// whole invocation invisible to anything reading Commands.
+			args := make([]string, 0, len(ws)-1)
+			for _, w := range ws[1:] {
+				args = append(args, w.Text)
 			}
+			a.Commands = append(a.Commands, Command{
+				Name:     ws[0].Text,
+				Args:     args,
+				NameWord: ws[0],
+				ArgWords: ws[1:],
+			})
 		}
 		return true
 	})
@@ -143,11 +187,25 @@ func base(name string) string {
 	return name
 }
 
-// wordText extracts the literal text of a word, joining its literal parts. Word
-// parts that aren't plain literals (expansions, quotes contents) contribute
-// their literal value where available.
+// word extracts a word's literal text and reports whether that text is
+// complete.
+func word(w *syntax.Word) Word {
+	text, literal := wordParts(w)
+	return Word{Text: text, Literal: literal}
+}
+
+// wordText is the legacy literal-only accessor, kept for callers that already
+// tolerate partial text.
 func wordText(w *syntax.Word) string {
+	t, _ := wordParts(w)
+	return t
+}
+
+// wordParts joins a word's literal fragments and reports whether every part was
+// literal.
+func wordParts(w *syntax.Word) (string, bool) {
 	var b strings.Builder
+	literal := true
 	for _, part := range w.Parts {
 		switch p := part.(type) {
 		case *syntax.Lit:
@@ -158,9 +216,17 @@ func wordText(w *syntax.Word) string {
 			for _, dp := range p.Parts {
 				if lit, ok := dp.(*syntax.Lit); ok {
 					b.WriteString(lit.Value)
+					continue
 				}
+				// An expansion inside quotes: the surrounding literals are
+				// kept as a hint, but the word is no longer trustworthy.
+				literal = false
 			}
+		default:
+			// ParamExp, CmdSubst, ArithmExp, ProcSubst, ExtGlob — nothing
+			// readable, and the reader must know the text is incomplete.
+			literal = false
 		}
 	}
-	return b.String()
+	return b.String(), literal
 }
