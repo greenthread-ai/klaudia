@@ -16,9 +16,6 @@ import (
 // bashDefaultTimeout is applied when the model doesn't specify one.
 const bashDefaultTimeout = 2 * time.Minute
 
-// bashMaxOutput caps combined output length to protect the context window.
-const bashMaxOutput = 30000
-
 // BashInput is the Bash tool's input.
 type BashInput struct {
 	Command         string `json:"command" jsonschema:"description=The shell command to execute"`
@@ -128,7 +125,8 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 }
 
 // formatBashOutput combines stdout/stderr and annotates non-zero exit / timeout,
-// truncating to bashMaxOutput.
+// clamping to bashMaxOutput (see output.go for why it keeps a tail as well as a
+// head, and where the full text goes).
 func formatBashOutput(resp sandbox.Response) string {
 	var b strings.Builder
 	b.WriteString(resp.Stdout)
@@ -139,8 +137,11 @@ func formatBashOutput(resp sandbox.Response) string {
 		b.WriteString(resp.Stderr)
 	}
 	out := b.String()
-	if len(out) > bashMaxOutput {
-		out = out[:bashMaxOutput] + "\n... [output truncated]"
+	if clamped, elided := clampOutput(out); elided > 0 {
+		out = clamped
+		if path, ok := spillOutput(b.String()); ok {
+			out += "\n" + spillMarker + path + "]"
+		}
 	}
 	if resp.TimedOut {
 		out += fmt.Sprintf("\n[command timed out, exit code %d]", resp.ExitCode)

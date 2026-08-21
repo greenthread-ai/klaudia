@@ -2,11 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // The TUI shows a short preview of each tool result and used to keep only the
@@ -131,6 +134,16 @@ func (m *Model) showResult(args []string) tea.Cmd {
 	mark := "✓"
 	if res.isError {
 		mark = "✗"
+	}
+	// A clamped Bash result names a file holding the untruncated output; show
+	// that instead, so /last means "everything the command printed" rather than
+	// "everything the model was given".
+	if path, ok := tools.SpillPath(res.content); ok {
+		if full, err := os.ReadFile(path); err == nil {
+			m.appendLine(bannerStyle.Render(fmt.Sprintf("%s %s · #%d · %s (full output, untruncated)",
+				mark, res.tool, res.seq, humanBytes(len(full)))))
+			return m.showLong(res.tool, string(full))
+		}
 	}
 	m.appendLine(bannerStyle.Render(fmt.Sprintf("%s %s · #%d · %s",
 		mark, res.tool, res.seq, humanBytes(len(res.content)))))

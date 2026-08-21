@@ -63,6 +63,14 @@ port mirrors (see `internal/version`).
   listing instead of re-walking it on every Tab keystroke, and ranks files
   Klaudia recently read or wrote first — the previous code discarded
   `search.Glob`'s mtime ordering by re-sorting alphabetically.
+- **Bash output keeps its tail.** Output over 30 KB was truncated head-only, so
+  the part people actually want — the `FAIL` summary from `go test ./...`, the
+  error that stopped a build, the end of a stack trace — was thrown away, for
+  the model as well as the user. The same budget is now split head+tail, cut on
+  line boundaries, and the untruncated text is written to `~/.klaudia/outputs/`
+  and named in the notice, so `/last` shows the complete log and the model can
+  grep it. Spill files are pruned after 24 hours. The old truncation also
+  sliced bytes, which could cut a multi-byte character in half.
 - **`Ctrl+U` and `Ctrl+D` reach the input.** They were bound to viewport paging
   and matched before the textarea saw them, so readline's kill-line and
   delete-forward never worked.

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -175,4 +177,39 @@ func contains(ss []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// A clamped Bash result names a spill file; /last should show that, not the
+// truncated text the model was given.
+func TestLastPrefersTheUntruncatedSpillFile(t *testing.T) {
+	dir := t.TempDir()
+	spill := filepath.Join(dir, "bash-x.log")
+	full := "THE COMPLETE LOG\n" + strings.Repeat("middle\n", 100) + "THE VERY END\n"
+	if err := os.WriteFile(spill, []byte(full), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	m := newTestModel()
+	m.resize(80, 400) // tall, so showLong prints instead of paging
+	m.renderEvent(mkResult("Bash", "head only…\n[full output: "+spill+"]", false))
+
+	m.showResult(nil)
+	out := visibleText(m.transcript.String())
+	if !strings.Contains(out, "THE COMPLETE LOG") || !strings.Contains(out, "THE VERY END") {
+		t.Errorf("/last should show the untruncated spill file:\n%s", out)
+	}
+	if !strings.Contains(out, "untruncated") {
+		t.Error("the header should say this is the full output")
+	}
+}
+
+func TestLastFallsBackWhenSpillIsGone(t *testing.T) {
+	m := newTestModel()
+	m.resize(80, 400)
+	m.renderEvent(mkResult("Bash", "what the model saw\n[full output: /nonexistent/gone.log]", false))
+
+	m.showResult(nil)
+	if !strings.Contains(visibleText(m.transcript.String()), "what the model saw") {
+		t.Error("a missing spill file should fall back to the stored content, not fail")
+	}
 }
