@@ -47,10 +47,13 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 		return fmt.Errorf("no goal spec found — create PRD.md or .klaudia/GOAL.md first (run klaudia interactively and use /goal)")
 	}
 	// No human is present to approve tool use, so the loop can only do real work
-	// (edits + Bash) under bypassPermissions. Refuse otherwise rather than spin
-	// on denials.
-	if p.mode != permission.ModeBypassPermissions {
-		return fmt.Errorf("--loop runs autonomously with no approver; re-run with --dangerously-skip-permissions")
+	// in a mode that does not ask. Autonomous qualifies now that the host gate
+	// is what stops a host change: before it existed, the only way to run
+	// unattended was --dangerously-skip-permissions, which turned off every
+	// check to get past prompts about editing files in the project.
+	if p.mode != permission.ModeAutonomous && p.mode != permission.ModeBypassPermissions {
+		return fmt.Errorf("--loop runs unattended and cannot answer prompts; use --permission-mode autonomous "+
+			"(host changes still need --allow-host-changes) or --dangerously-skip-permissions. Current mode: %s", p.mode)
 	}
 
 	iters := goal.Iterations(p.iterations)

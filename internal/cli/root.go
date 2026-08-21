@@ -469,20 +469,21 @@ func createConfig(scope, cwd string) (string, error) {
 // options holds parsed CLI flags, mirroring the JS commander surface
 // (08-entry.js setupCommander). Only the Phase 0 subset is wired so far.
 type options struct {
-	print           bool
-	prompt          string
-	model           string
-	outputFormat    string
-	inputFormat     string
-	permissionMode  string
-	dangerouslySkip bool
-	verbose         bool
-	maxTurns        int
-	resume          string // --resume <session-id>
-	continueSession bool   // --continue
-	newSession      bool   // --new-session
-	forkSession     bool   // --fork-session
-	fullResume      bool   // --full (replay entire transcript, not the summary)
+	print            bool
+	prompt           string
+	model            string
+	outputFormat     string
+	inputFormat      string
+	permissionMode   string
+	allowHostChanges bool
+	dangerouslySkip  bool
+	verbose          bool
+	maxTurns         int
+	resume           string // --resume <session-id>
+	continueSession  bool   // --continue
+	newSession       bool   // --new-session
+	forkSession      bool   // --fork-session
+	fullResume       bool   // --full (replay entire transcript, not the summary)
 
 	allowedTools    []string
 	disallowedTools []string
@@ -549,6 +550,7 @@ func NewRootCommand() *cobra.Command {
 	f.StringVar(&opts.outputFormat, "output-format", "text", "Output format: text|json|stream-json")
 	f.StringVar(&opts.inputFormat, "input-format", "text", "Input format: text|stream-json (stream-json drives a persistent agent over stdin)")
 	f.StringVar(&opts.permissionMode, "permission-mode", "", "Permission mode: autonomous|plan|bypassPermissions (default: config [permissions] mode, else autonomous)")
+	f.BoolVar(&opts.allowHostChanges, "allow-host-changes", false, "Non-interactive runs: permit changes to this machine (packages, services, /etc, …) without a human to approve them")
 	f.BoolVar(&opts.dangerouslySkip, "dangerously-skip-permissions", false, "Skip all permission checks (sets bypassPermissions)")
 	f.BoolVar(&opts.verbose, "verbose", false, "Verbose output (required for stream-json)")
 	f.IntVar(&opts.maxTurns, "max-turns", 0, "Limit the number of agentic loop turns (0 = unlimited)")
@@ -801,8 +803,10 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	base = tools.NewRegistry(baseTools...)
 
-	// Headless has no interactive approver, so permission "ask" denies.
-	approver := agent.DenyAll
+	// Headless has no one to ask. Ordinary work still runs; host changes are
+	// refused with the flag that would permit them, so the output says what to
+	// do rather than only what failed.
+	approver := agent.HeadlessApprover(opts.allowHostChanges)
 	registry, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd, hostGate)
 	if err != nil {
 		return err
