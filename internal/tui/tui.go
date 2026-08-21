@@ -313,6 +313,9 @@ type Model struct {
 	inputHistory []string
 	histPos      int
 	histDraft    string // the in-progress line stashed when navigating up
+	// Verbatim payloads for pastes shown in the input as chips (see paste.go).
+	// Session-scoped, because history recall re-shows a chip.
+	pastes pasteStore
 	// Elapsed-run stopwatch and per-turn cancel (Esc interrupts the model).
 	sw         stopwatch.Model
 	turnCancel context.CancelFunc
@@ -566,7 +569,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pushHistory(q)
 			m.appendLine(userStyle.Render("› ") + q)
 			m.setState(stateRunning)
-			return m, tea.Batch(m.waitForEvent(), m.startTurn(q), stopSW)
+			// q is the chip form (kept short for the queued hint and ↑ recall);
+			// expand it only on the way to the model.
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(m.pastes.expand(q)), stopSW)
 		}
 		m.setState(stateIdle)
 		m.input.Focus()
@@ -671,6 +676,38 @@ func (m *Model) onCtrlC() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// onPaste inserts a bracketed paste. Small, tab-free pastes go in verbatim so
+// the common case is unchanged; anything larger or tab-bearing is parked in the
+// paste store and represented by a chip, which promptValue expands at submit.
+func (m *Model) onPaste(text string) (tea.Model, tea.Cmd) {
+	// Only the states that show an editable input accept a paste. Elsewhere
+	// (y/n prompts, numbered pickers) it would be interpreted as a keystroke.
+	if m.state != stateIdle && m.state != stateRunning {
+		return m, nil
+	}
+	text = normalizeNewlines(text)
+	if text == "" {
+		return m, nil
+	}
+	if chipWorthy(text) {
+		m.input.InsertString(m.pastes.add(text))
+	} else {
+		// Safe to hand to the widget: no tabs to mangle, and newline
+		// replacement is the identity now that CRLF is normalised.
+		m.input.InsertString(text)
+	}
+	m.syncInputHeight()
+	return m, nil
+}
+
+// promptValue is the text to actually send: what the user sees, with any paste
+// chips substituted back to their verbatim payloads. Deliberately used ONLY at
+// the submit sites — input sizing, type-ahead and history all keep working on
+// the chip form, which is the whole point of chipping.
+func (m *Model) promptValue() string {
+	return m.pastes.expand(m.input.Value())
+}
+
 func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Any key other than Ctrl+C disarms a pending "press again to quit".
 	if msg.Type != tea.KeyCtrlC {
@@ -688,6 +725,14 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.interruptTurn()
 			return m, nil
 		}
+	}
+
+	// A bracketed paste arrives as one KeyMsg carrying the whole payload. It is
+	// handled before any state dispatch so that pasting into a y/n prompt can't
+	// be read as an answer, and before the textarea so the widget's sanitizer
+	// never sees it (see paste.go).
+	if msg.Paste {
+		return m.onPaste(string(msg.Runes))
 	}
 
 	// Scrollback works in any state and never reaches the text input. (Up/Down
@@ -715,11 +760,12 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			text := strings.TrimSpace(m.input.Value())
 			if strings.HasPrefix(text, "/") {
+				expanded := strings.TrimSpace(m.promptValue())
 				m.input.Reset()
 				m.pushHistory(text)
 				m.appendLine(userStyle.Render("› ") + text)
 				m.syncInputHeight()
-				return m.handleSlash(text)
+				return m.handleSlash(expanded)
 			}
 			if text != "" {
 				m.queued = text
@@ -855,16 +901,21 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if msg.Type == tea.KeyEnter && m.state == stateIdle {
-		prompt := strings.TrimSpace(m.input.Value())
-		if prompt == "" {
+		// display is the chip form (what's echoed and remembered); prompt is
+		// the expanded payload (what the model receives). Echoing the chip
+		// keeps a thousand-line paste out of the scrollback, and remembering
+		// the chip keeps ↑ recall usable.
+		display := strings.TrimSpace(m.input.Value())
+		prompt := strings.TrimSpace(m.promptValue())
+		if display == "" {
 			return m, nil
 		}
 		m.input.Reset()
-		m.pushHistory(prompt)
-		m.appendLine(userStyle.Render("› ") + prompt)
+		m.pushHistory(display)
+		m.appendLine(userStyle.Render("› ") + display)
 
 		// Slash commands are handled locally, not sent to the model.
-		if strings.HasPrefix(prompt, "/") {
+		if strings.HasPrefix(display, "/") {
 			return m.handleSlash(prompt)
 		}
 
@@ -1298,6 +1349,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.transcript.Reset()
 		m.rawBlocks = nil
 		m.history = nil
+		m.pastes.reset()
 		m.appendLine(bannerStyle.Render("Cleared conversation and screen."))
 	case "/last":
 		if strings.TrimSpace(m.lastResult) == "" {
