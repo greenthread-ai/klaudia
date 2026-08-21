@@ -144,77 +144,93 @@ func TestTranscriptStillRecordsCommittedOutput(t *testing.T) {
 	}
 }
 
-// On a fresh launch the window is empty, so the input and status bar have to be
-// padded down to the bottom — otherwise they float a few rows below the shell
-// prompt with the rest of the window blank, which reads as broken.
-func TestStatusBarStartsAtTheBottomOfTheWindow(t *testing.T) {
+// On a fresh launch the bar has to end up at the bottom of the window, not four
+// rows below the shell prompt with the rest of the screen blank beneath it.
+func TestFirstFrameAnchorsToTheBottom(t *testing.T) {
 	m := newTestModel()
 	m.resize(80, 43)
 
-	view := m.View()
-	lines := strings.Split(view, "\n")
-	if len(lines) != 42 { // height-1, leaving the shell's prompt row
-		t.Fatalf("first frame is %d lines, want 42 so the bar lands on the bottom row", len(lines))
+	printed, ok := m.out.drainText()
+	if !ok {
+		t.Fatal("the first resize should queue the banner")
 	}
-	if !strings.Contains(lines[len(lines)-1], "turns") {
-		t.Errorf("last line should be the status bar, got %q", lines[len(lines)-1])
+	rows := len(strings.Split(printed, "\n"))
+	live := len(strings.Split(m.View(), "\n"))
+	// Printed rows + live region + the shell's own prompt row fill the window.
+	if rows+live+1 != 43 {
+		t.Errorf("printed %d + live %d + 1 = %d rows, want 43 so the bar lands on the bottom row",
+			rows, live, rows+live+1)
 	}
-	// Everything above the input must be blank padding, not content.
-	for _, ln := range lines[:len(lines)-3] {
-		if strings.TrimSpace(visibleText(ln)) != "" {
-			t.Fatalf("expected blank padding above the input, got %q", ln)
+	if !strings.Contains(printed, "Klaudia") {
+		t.Error("the banner should be part of the anchored output")
+	}
+}
+
+// The live region must stay small. Bubble Tea repositions with
+// CursorUp(linesRendered-1) from the previous frame, so a tall live region
+// desynchronises as soon as the terminal reflows on resize.
+func TestLiveRegionStaysSmall(t *testing.T) {
+	for _, h := range []int{10, 24, 43, 80, 200} {
+		m := newTestModel()
+		m.resize(120, h)
+		m.out.drainText()
+		if n := len(strings.Split(m.View(), "\n")); n > 6 {
+			t.Errorf("height %d: live region is %d lines; it must stay small for the "+
+				"renderer's cursor arithmetic to survive a resize", h, n)
 		}
 	}
 }
 
-// As output accumulates the padding gives way, one row at a time, so the bar
-// stays put rather than jumping.
-func TestPaddingShrinksAsOutputAccumulates(t *testing.T) {
+// Resizing repeatedly must not grow the live region or strand the bar. This is
+// the regression: padding the live region made each resize move the bar.
+func TestRepeatedResizeKeepsLiveRegionStable(t *testing.T) {
 	m := newTestModel()
-	m.resize(80, 20)
+	m.resize(120, 60)
+	m.out.drainText()
+	baseline := len(strings.Split(m.View(), "\n"))
 
-	before := len(strings.Split(m.View(), "\n"))
-	for i := 0; i < 5; i++ {
-		m.appendLine(fmt.Sprintf("line %d", i))
-	}
-	after := len(strings.Split(m.View(), "\n"))
-	if after != before-5 {
-		t.Errorf("live region went from %d to %d lines after 5 printed rows; want %d", before, after, before-5)
+	for _, h := range []int{20, 80, 15, 100, 39, 60} {
+		m.resize(120, h)
+		if got := len(strings.Split(m.View(), "\n")); got != baseline {
+			t.Fatalf("after resizing to height %d the live region is %d lines, want %d",
+				h, got, baseline)
+		}
+		// A resize must not queue more output; only the first one anchors.
+		if m.out.pending() != 0 {
+			t.Fatalf("resize to height %d queued output; only the first resize should anchor", h)
+		}
 	}
 }
 
-// Once the screen is full the padding is gone entirely and the terminal's own
-// scrolling takes over.
-func TestPaddingDisappearsOnceScreenIsFull(t *testing.T) {
-	m := newTestModel()
-	m.resize(80, 20)
-	for i := 0; i < 60; i++ {
-		m.appendLine(fmt.Sprintf("line %d", i))
-	}
-	view := m.View()
-	if n := len(strings.Split(view, "\n")); n > 4 {
-		t.Errorf("live region is %d lines once the screen is full; want just the input and status bar", n)
-	}
-	if !strings.Contains(view, "turns") {
-		t.Error("status bar should still be present")
-	}
-}
-
-// /clear blanks the screen, so the bar has to re-pin to the bottom.
-func TestClearRepinsTheStatusBar(t *testing.T) {
+// /clear blanks the screen, so the bar has to be re-anchored.
+func TestClearReanchorsToTheBottom(t *testing.T) {
 	m := newTestModel()
 	m.resize(80, 30)
-	for i := 0; i < 50; i++ {
-		m.appendLine(fmt.Sprintf("line %d", i))
-	}
-	if n := len(strings.Split(m.View(), "\n")); n > 4 {
-		t.Fatalf("setup: expected padding to be gone, live region is %d lines", n)
-	}
+	m.out.drainText()
 
 	if _, cmd := m.handleSlash("/clear"); cmd != nil {
 		_ = cmd()
 	}
-	if n := len(strings.Split(m.View(), "\n")); n < 20 {
-		t.Errorf("after /clear the bar should be re-pinned to the bottom, live region is only %d lines", n)
+	printed, ok := m.out.drainText()
+	if !ok {
+		t.Fatal("/clear should queue the re-anchoring blank lines and its notice")
+	}
+	rows := len(strings.Split(printed, "\n"))
+	live := len(strings.Split(m.View(), "\n"))
+	if rows+live+1 != 30 {
+		t.Errorf("after /clear: printed %d + live %d + 1 = %d, want 30", rows, live, rows+live+1)
+	}
+}
+
+// A window too short to anchor into must not emit negative or stray padding.
+func TestTinyWindowDoesNotPad(t *testing.T) {
+	m := newTestModel()
+	m.resize(80, 4)
+	printed, _ := m.out.drainText()
+	if strings.HasPrefix(printed, "\n\n") {
+		t.Errorf("a 4-row window has no room to anchor; should not pad:\n%q", printed)
+	}
+	if n := len(strings.Split(m.View(), "\n")); n > 3 {
+		t.Errorf("live region is %d lines on a 4-row terminal", n)
 	}
 }

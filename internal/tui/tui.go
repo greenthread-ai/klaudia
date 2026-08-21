@@ -233,10 +233,6 @@ type Model struct {
 	// out queues finished blocks for printing into the terminal's own
 	// scrollback (see scrollback.go). Drained once per Update cycle.
 	out printQueue
-	// printedRows counts the display rows committed to scrollback since launch
-	// (or since /clear). Used only to pin the bottom block to the bottom of the
-	// window while the screen is still mostly empty — see padToBottom.
-	printedRows int
 
 	transcript transcriptLog // in-memory record of what we printed
 	history    []anthropic.BetaMessageParam
@@ -389,7 +385,9 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	}
 	m.introModel, m.introBranch = model, branch
 	m.introTagline, m.hasIntro = randomTagline(), true
-	m.appendLine(intro(model, branch, m.introTagline))
+	// The banner is deliberately not committed yet: resize anchors it to the
+	// bottom of the window, and we don't know the height until the first
+	// WindowSizeMsg arrives.
 	return m
 }
 
@@ -1378,12 +1376,14 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.pastes.reset()
 		m.results.reset()
 		m.nav = nil
-		m.printedRows = 0 // the screen is about to be blank again
 		// Erase the visible screen, but deliberately not the scrollback: ESC[3J
 		// would destroy whatever the user had in the terminal before Klaudia
 		// started, and in tmux it wipes the whole pane's history. Earlier output
 		// stays scrollable, which is the point of rendering inline.
-		m.appendLine(bannerStyle.Render("Cleared conversation. Earlier output remains in terminal scrollback."))
+		// The screen is about to be blank, so re-anchor to the bottom.
+		note := bannerStyle.Render("Cleared conversation. Earlier output remains in terminal scrollback.")
+		m.anchorToBottom(lipgloss.Height(note))
+		m.appendLine(note)
 		return m, tea.Sequence(tea.ClearScreen, m.out.drainCmd())
 	case "/search":
 		return m, m.searchConversation(args)
@@ -2532,7 +2532,6 @@ func (m *Model) appendLine(s string) {
 func (m *Model) commit(b transcriptBlock) {
 	b.rendered = trimRenderedPadding(b.rendered)
 	m.transcript.add(b)
-	m.printedRows += lipgloss.Height(b.rendered)
 	m.out.push(b.rendered)
 }
 
@@ -2541,6 +2540,7 @@ func (m *Model) commit(b transcriptBlock) {
 // on resize is the terminal's business (iTerm2 does, tmux does not — both are
 // correct). Only subsequent output picks up the new width.
 func (m *Model) resize(w, h int) {
+	first := !m.ready
 	m.width, m.height = w, h
 	m.ready = true
 	m.input.SetWidth(w - 4)
@@ -2548,6 +2548,38 @@ func (m *Model) resize(w, h int) {
 		m.buildGlamour(w)
 	}
 	m.syncInputHeight()
+	if first {
+		// Now that the height is known, start the session at the bottom of the
+		// window rather than four rows below the shell prompt.
+		m.anchorToBottom(lipgloss.Height(m.introText()))
+		m.appendLine(m.introText())
+	}
+}
+
+func (m *Model) introText() string {
+	return intro(m.introModel, m.introBranch, m.introTagline)
+}
+
+// anchorToBottom queues blank lines so that the next `reserve` rows of output,
+// plus the live region, land against the bottom of the window.
+//
+// The blank lines are *printed*, not held in the live region. That matters more
+// than it looks: Bubble Tea's inline renderer repositions itself with
+// CursorUp(linesRendered-1) using the previous frame's line count, so a tall
+// live region desynchronises the moment the terminal reflows on resize — the
+// cursor lands in the wrong place and EraseScreenBelow takes the scrollback
+// with it. Keeping the live region to a few rows keeps that arithmetic safe,
+// which is the regime the whole inline design depends on.
+//
+// The cost is that launching scrolls the terminal down by a screenful. Nothing
+// is destroyed — it stays in scrollback and survives quitting, which is still
+// what alt-screen could never offer.
+func (m *Model) anchorToBottom(reserve int) {
+	n := m.height - reserve - lipgloss.Height(m.bottomView()) - 1
+	if n < 1 {
+		return
+	}
+	m.out.push(strings.Repeat("\n", n-1)) // n-1 newlines split into n blank lines
 }
 
 // View draws only the live region. Everything finished has already been printed
@@ -2556,34 +2588,11 @@ func (m *Model) View() string {
 	if !m.ready {
 		return ""
 	}
-	out := m.clampBottom(m.padToBottom(m.bottomView()))
+	out := m.clampBottom(m.bottomView())
 	if m.pendingOSC != "" {
 		out, m.pendingOSC = m.pendingOSC+out, ""
 	}
 	return out
-}
-
-// padToBottom keeps the input and status bar at the bottom of the window while
-// the screen is still mostly empty.
-//
-// Inline rendering draws the live region wherever the cursor happens to be, so
-// on a fresh launch the status bar sits four rows down with the rest of the
-// window blank below it — which reads as broken, because a status bar belongs at
-// the bottom. Padding above it puts it where it belongs, and the padding shrinks
-// as real output accumulates until it disappears entirely and the terminal's own
-// scrolling takes over.
-//
-// The padding is live-region only: it is never committed to scrollback, so it
-// leaves no blank lines behind and it doesn't scroll away whatever the user had
-// in the terminal before launching.
-func (m *Model) padToBottom(bottom string) string {
-	// -1 leaves room for the line the shell prompt sits on, so the first frame
-	// fits exactly and the terminal doesn't scroll for no reason.
-	n := m.height - lipgloss.Height(bottom) - m.printedRows - 1
-	if n <= 0 {
-		return bottom
-	}
-	return strings.Repeat("\n", n) + bottom
 }
 
 // clampBottom keeps the live region strictly shorter than the terminal. Bubble
