@@ -41,5 +41,5 @@ func (b *Bwrap) writeRoots(req Request) []string {
 		roots = append(roots, req.WorkingDir)
 	}
 	roots = append(roots, b.WriteRoots...)
-	return roots
+	return resolveRoots(roots)
 }

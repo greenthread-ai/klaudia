@@ -22,6 +22,15 @@ type Spawner struct {
 	approver      Approver
 	maxTurns      int
 	deferredTools map[string]bool
+	workingDir    string
+}
+
+// WithWorkingDir sets the project root sub-agents inherit. Without it a
+// sub-agent's tools would run in the process cwd while the parent's run in the
+// project — the kind of split that makes path-based policy meaningless.
+func (s *Spawner) WithWorkingDir(dir string) *Spawner {
+	s.workingDir = dir
+	return s
 }
 
 // NewSpawner builds a Spawner. base is the registry sub-agents draw tools from
@@ -57,6 +66,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string) (strin
 		System:        t.SystemPrompt,
 		MaxTurns:      s.maxTurns,
 		Permission:    s.permission,
+		WorkingDir:    s.workingDir,
 		Approver:      s.approver,
 		ContextWindow: 0,
 		DeferredTools: filterDeferred(s.deferredTools, childTools),

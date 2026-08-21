@@ -78,6 +78,7 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 	// state, per the Ralph principle (bounded context over long runs).
 	runTurn := func(prompt string) (agent.Result, error) {
 		return p.loop.Run(ctx, agent.Options{
+			WorkingDir:    p.cwd,
 			Prompt:        prompt,
 			Model:         p.model,
 			System:        p.system,

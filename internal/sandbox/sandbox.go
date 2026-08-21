@@ -14,6 +14,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -224,4 +225,39 @@ func StartBackground(parent context.Context, e Executor, req Request) (*Backgrou
 		cancel()
 	}()
 	return p, nil
+}
+
+// resolveRoots canonicalises write roots for a sandbox profile.
+//
+// Both seatbelt and bubblewrap match on the real path, so an unresolved
+// symlink silently denies writes to the very directory being allowed. On macOS
+// this is not an edge case: /tmp is a symlink to /private/tmp and /var to
+// /private/var, so a project under either — or any user whose home or checkout
+// sits behind a symlink — would find the sandbox refusing writes to its own
+// project. Verified: an unresolved /tmp root produces "Operation not permitted"
+// on a write inside it, while the resolved form succeeds.
+//
+// Paths that don't resolve (not yet created, permission denied on a parent) are
+// kept as given: an allow-rule for a path that doesn't exist is harmless, and
+// dropping it would silently narrow the sandbox instead.
+func resolveRoots(roots []string) []string {
+	out := make([]string, 0, len(roots))
+	seen := make(map[string]bool, len(roots))
+	for _, r := range roots {
+		if r == "" {
+			continue
+		}
+		resolved := r
+		if abs, err := filepath.Abs(r); err == nil {
+			resolved = abs
+		}
+		if real, err := filepath.EvalSymlinks(resolved); err == nil {
+			resolved = real
+		}
+		if !seen[resolved] {
+			seen[resolved] = true
+			out = append(out, resolved)
+		}
+	}
+	return out
 }

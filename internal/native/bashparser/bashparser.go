@@ -16,10 +16,19 @@ type Command struct {
 	Args []string // arguments following the program name
 }
 
+// Redirect is an output redirection target. Only writing redirections are
+// collected — a reader deciding what a command *changes* cares about `>`,
+// `>>` and `&>`, not about where stdin came from.
+type Redirect struct {
+	Target string // the file the redirection writes to
+	Append bool   // >> rather than >
+}
+
 // Analysis is the parsed structure of a command line.
 type Analysis struct {
-	Commands []Command // simple commands, in source order
-	HasPipe  bool      // whether the line contains a pipe
+	Commands  []Command  // simple commands, in source order
+	Redirects []Redirect // writing redirections, in source order
+	HasPipe   bool       // whether the line contains a pipe
 }
 
 // Parse parses a bash command line. On a parse error the returned Analysis is
@@ -41,6 +50,23 @@ func Parse(input string) (Analysis, error) {
 		case *syntax.BinaryCmd:
 			if n.Op == syntax.Pipe || n.Op == syntax.PipeAll {
 				a.HasPipe = true
+			}
+		case *syntax.Stmt:
+			// Redirections hang off the statement, not the call — without this
+			// `echo x > /etc/hosts` looks like a harmless `echo`.
+			for _, r := range n.Redirs {
+				if r.Word == nil {
+					continue
+				}
+				switch r.Op {
+				case syntax.RdrOut, syntax.AppOut, syntax.RdrAll, syntax.AppAll:
+					if t := wordText(r.Word); t != "" {
+						a.Redirects = append(a.Redirects, Redirect{
+							Target: t,
+							Append: r.Op == syntax.AppOut || r.Op == syntax.AppAll,
+						})
+					}
+				}
 			}
 		case *syntax.CallExpr:
 			if len(n.Args) == 0 {
@@ -77,6 +103,44 @@ func (a Analysis) Prefix() string {
 		}
 	}
 	return c.Name
+}
+
+// ShellPayloads returns the script text passed to an inline shell — the
+// argument after -c for sh/bash/zsh/dash/ksh, and the argument to eval.
+//
+// The parser records that script as a single opaque word, so a caller
+// reasoning about what a command line does has to re-Parse these to see
+// inside. Returning them separately keeps that recursion the caller's explicit
+// decision rather than something Parse does invisibly (and unboundedly).
+func (a Analysis) ShellPayloads() []string {
+	var out []string
+	for _, c := range a.Commands {
+		switch base(c.Name) {
+		case "sh", "bash", "zsh", "dash", "ksh":
+			for i, arg := range c.Args {
+				// -c, and combined forms like -lc / -ec that end in c.
+				if strings.HasPrefix(arg, "-") && strings.HasSuffix(arg, "c") && i+1 < len(c.Args) {
+					out = append(out, c.Args[i+1])
+					break
+				}
+			}
+		case "eval":
+			// eval concatenates its arguments into one script.
+			if len(c.Args) > 0 {
+				out = append(out, strings.Join(c.Args, " "))
+			}
+		}
+	}
+	return out
+}
+
+// base strips any directory from a program name, so /usr/bin/sudo and sudo
+// are recognised alike.
+func base(name string) string {
+	if i := strings.LastIndexByte(name, '/'); i >= 0 {
+		return name[i+1:]
+	}
+	return name
 }
 
 // wordText extracts the literal text of a word, joining its literal parts. Word

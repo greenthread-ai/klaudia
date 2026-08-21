@@ -68,6 +68,10 @@ type Options struct {
 	MaxTurns   int   // 0 = unlimited
 	MaxTokens  int64 // 0 = defaultMaxTokens
 	Permission permission.Context
+	// WorkingDir is the project root every tool operates relative to — the
+	// directory Bash runs in and the default root for Grep/Glob. Empty means
+	// the process cwd, which is only correct for callers that already chdir'd.
+	WorkingDir string
 	// Approver resolves permission "ask" decisions. Supplied by the frontend
 	// (headless/TUI/editor/SDK). If nil, DenyAll is used.
 	Approver Approver
@@ -567,7 +571,12 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		return errResult(msg)
 	}
 
-	results, err := tool.Execute(ctx, tools.Context{Ask: opts.Asker, Plan: opts.Planner, Reveal: reveal}, raw)
+	results, err := tool.Execute(ctx, tools.Context{
+		WorkingDir: opts.WorkingDir,
+		Ask:        opts.Asker,
+		Plan:       opts.Planner,
+		Reveal:     reveal,
+	}, raw)
 	if err != nil {
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))
 	}

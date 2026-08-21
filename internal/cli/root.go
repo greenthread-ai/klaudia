@@ -46,8 +46,8 @@ func compactAndPersist(ctx context.Context, history []anthropic.BetaMessageParam
 
 // withAgentTool returns a registry that is the base tools plus the Agent tool,
 // wired to a sub-agent spawner that draws from the base tools.
-func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool) (*tools.Registry, error) {
-	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred)
+func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string) (*tools.Registry, error) {
+	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).WithWorkingDir(workingDir)
 
 	infos := make([]tools.AgentTypeInfo, 0)
 	for _, t := range subagent.Builtin() {
@@ -763,7 +763,7 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Headless has no interactive approver, so permission "ask" denies.
 	approver := agent.DenyAll
-	registry, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools)
+	registry, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd)
 	if err != nil {
 		return err
 	}
@@ -838,6 +838,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				Deny:  denyRules,
 			}
 			return loop.Run(ctx, agent.Options{
+				WorkingDir:      cwd,
 				Prompt:          prompt,
 				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
 				System:          withExtraDirs(sysPrompt, sess.ExtraDirs),
@@ -864,6 +865,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		driver := streamjson.NewDriver(cmd.OutOrStdout())
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
 			return loop.Run(ctx, agent.Options{
+				WorkingDir:      cwd,
 				Prompt:          prompt,
 				Model:           model,
 				System:          sysPrompt,
@@ -917,6 +919,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 	}
 	res, err := loop.Run(ctx, agent.Options{
+		WorkingDir:      cwd,
 		Prompt:          opts.prompt,
 		Model:           model,
 		System:          sysPrompt,

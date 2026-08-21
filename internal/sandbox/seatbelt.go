@@ -52,5 +52,5 @@ func (s *Seatbelt) writeRoots(req Request) []string {
 	}
 	roots = append(roots, os.TempDir(), "/private/tmp", "/private/var/folders")
 	roots = append(roots, s.WriteRoots...)
-	return roots
+	return resolveRoots(roots)
 }

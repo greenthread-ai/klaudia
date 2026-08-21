@@ -74,8 +74,6 @@ type Planner interface {
 type Context struct {
 	// WorkingDir is the resolved cwd the tool operates relative to.
 	WorkingDir string
-	// AbortCh is closed when the turn is aborted; tools should stop promptly.
-	AbortCh <-chan struct{}
 	// Ask, if non-nil, lets interactive tools (AskUserQuestion) prompt the user.
 	Ask Asker
 	// Plan, if non-nil, handles ExitPlanMode approval.
