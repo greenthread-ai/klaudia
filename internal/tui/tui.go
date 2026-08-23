@@ -32,6 +32,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/goal"
 	"github.com/greenthread-ai/klaudia/internal/memory"
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
@@ -2629,6 +2630,10 @@ func (m *Model) commit(b transcriptBlock) {
 func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
 	m.ready = true
+	// Children have no terminal of their own, so COLUMNS/LINES is the only way
+	// a command's output wraps to the width the user is actually looking at
+	// rather than the 80 columns a pipe implies.
+	sandbox.SetTerminalSize(w, h)
 	m.input.SetWidth(m.inputWidth())
 	if m.glam == nil || m.glamWidth != w {
 		m.buildGlamour(w)

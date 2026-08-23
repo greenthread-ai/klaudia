@@ -1034,8 +1034,13 @@ func run(cmd *cobra.Command, opts *options) error {
 var errRendered = fmt.Errorf("run failed")
 
 // Execute runs the root command, returning the process exit code.
-func Execute() int {
-	if err := NewRootCommand().Execute(); err != nil {
+func Execute() int { return ExecuteContext(context.Background()) }
+
+// ExecuteContext runs the root command against ctx. Cancelling ctx (SIGINT /
+// SIGTERM from main) unwinds the run, which tears down background jobs,
+// browsers, MCP servers and the transcript through the existing defers.
+func ExecuteContext(ctx context.Context) int {
+	if err := NewRootCommand().ExecuteContext(ctx); err != nil {
 		if !errors.Is(err, errRendered) {
 			fmt.Fprintln(os.Stderr, "Error:", err)
 		}

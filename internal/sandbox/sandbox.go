@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -32,7 +31,7 @@ type Request struct {
 	Command    string        // the shell command line
 	WorkingDir string        // cwd; empty means inherit
 	Timeout    time.Duration // 0 means no explicit timeout
-	Env        []string      // extra environment; empty means inherit os.Environ
+	Env        []string      // extra environment, layered over the user's (see env.go)
 }
 
 // Response is the result of executing a Request.
@@ -42,6 +41,11 @@ type Response struct {
 	ExitCode int
 	TimedOut bool
 }
+
+// TTYRequired reports whether a command needs a terminal this executor cannot
+// provide, along with the non-interactive alternative to suggest. Exported so
+// the Bash tool can refuse before launching rather than hang until the timeout.
+func TTYRequired(command string) (reason string, blocked bool) { return ttyRequired(command) }
 
 // Executor runs a command and returns its captured output.
 type Executor interface {
@@ -97,9 +101,11 @@ func runArgv(ctx context.Context, req Request, name string, args []string) (Resp
 	if req.WorkingDir != "" {
 		cmd.Dir = req.WorkingDir
 	}
-	if len(req.Env) > 0 {
-		cmd.Env = append(os.Environ(), req.Env...)
-	}
+	cmd.Env = childEnv(req)
+	// Own process group, cancelled as a group. See procgroup_unix.go: without
+	// it, cancelling `sh -c "…"` reaps the shell and leaves whatever it started
+	// running.
+	applyProcGroup(cmd)
 	// Bound how long cmd.Run keeps waiting for stdout/stderr pipes after the
 	// parent process exits or ctx is cancelled. Without this, a command like
 	// `npm run dev & sleep 1` returns instantly from bash (because sleep 1
@@ -208,10 +214,13 @@ func StartBackground(parent context.Context, e Executor, req Request) (*Backgrou
 	if req.WorkingDir != "" {
 		cmd.Dir = req.WorkingDir
 	}
-	if len(req.Env) > 0 {
-		cmd.Env = append(os.Environ(), req.Env...)
-	}
-	cmd.WaitDelay = postCancelWait // same I/O drain guard as runArgv
+	cmd.Env = childEnv(req)
+	applyProcGroup(cmd)
+	// WaitDelay bounds the I/O drain, but it must outlast the group's
+	// SIGTERM→SIGKILL escalation: expiring first would abandon the pipes while
+	// the process is still being asked to leave, losing the last lines of a log
+	// exactly when they matter.
+	cmd.WaitDelay = postCancelWait + killGrace
 	p := &BackgroundProcess{cancel: cancel}
 	cmd.Stdout = p
 	cmd.Stderr = p // same writer ⇒ exec serializes both streams into one pipe

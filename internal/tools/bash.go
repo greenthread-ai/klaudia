@@ -95,6 +95,13 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 		return nil, err
 	}
 
+	// Refuse a command that needs a terminal before launching it. Without this
+	// the child sits waiting for a keypress that cannot arrive and the turn
+	// stalls until the timeout, reporting nothing useful about why.
+	if reason, blocked := sandbox.TTYRequired(in.Command); blocked {
+		return []Result{{Content: reason, IsError: true}}, nil
+	}
+
 	// Background: launch detached, return a shell id immediately.
 	if in.RunInBackground {
 		if b.shells == nil {
