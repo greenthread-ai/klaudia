@@ -885,7 +885,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Executor:   executor,
 		}
 		extraDirs = func() []string { return sess.ExtraDirs }
-		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, interject func() agent.Interjection) (agent.Result, error) {
+		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, interject func() agent.Interjection, beforeEdit func(string, []string)) (agent.Result, error) {
 			// Permission mode reads live from the session every check, so a
 			// /mode bypass (or ExitPlanMode flipping out of plan) takes effect
 			// on the very next tool dispatch inside the agent loop — not just
@@ -907,6 +907,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				Permission:      turnPerm,
 				Host:            hostGate,
 				Interject:       interject,
+				BeforeEdit:      beforeEdit,
 				DeferredTools:   deferredTools,
 				Approver:        ap,
 				Asker:           asker,

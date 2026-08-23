@@ -72,7 +72,7 @@ func TestEnterSubmitsMultilinePrompt(t *testing.T) {
 	m.ctx = context.Background()
 	m.events = make(chan tea.Msg, 1)
 	promptCh := make(chan string, 1)
-	m.run = func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, _ func() agent.Interjection) (agent.Result, error) {
+	m.run = func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, _ func() agent.Interjection, _ func(string, []string)) (agent.Result, error) {
 		promptCh <- prompt
 		return agent.Result{}, nil
 	}

@@ -76,6 +76,15 @@ type Options struct {
 	// directory Bash runs in and the default root for Grep/Glob. Empty means
 	// the process cwd, which is only correct for callers that already chdir'd.
 	WorkingDir string
+	// BeforeEdit is called with the paths a mutating tool is about to change,
+	// synchronously, immediately before the tool runs. The frontend uses it to
+	// checkpoint the current contents for undo.
+	//
+	// It has to be synchronous and it has to be here rather than in the event
+	// stream: a tool_use event reaches a frontend on a channel, so a snapshot
+	// taken when the event arrives can race the write it was meant to precede
+	// and capture the new contents.
+	BeforeEdit func(tool string, paths []string)
 	// Interject is polled between turns and after each tool batch. It returns
 	// anything the user has typed since the last poll, and whether they asked
 	// Klaudia to stop once the current step finishes. Nil means nothing can
@@ -535,6 +544,30 @@ func envFailureMsg(tool string, n int, sig string) string {
 	)
 }
 
+// editedPaths returns the files a mutating tool is about to change, or nil if
+// it is not one. Kept next to dispatch because the list of mutating tools is a
+// property of the loop, not of any one tool.
+func editedPaths(name string, raw []byte) []string {
+	switch name {
+	case "Write", "Edit", "NotebookEdit":
+	default:
+		return nil
+	}
+	var in struct {
+		FilePath     string `json:"file_path"`
+		NotebookPath string `json:"notebook_path"`
+	}
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil
+	}
+	for _, p := range []string{in.FilePath, in.NotebookPath} {
+		if p != "" {
+			return []string{p}
+		}
+	}
+	return nil
+}
+
 // shortCircuit returns a tool_result without touching the failure counters
 // (the loop-breaker is refusing the call, not registering another attempt).
 // Used by loop-breaker B; A reuses errResult since it bumps state intentionally.
@@ -645,6 +678,12 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 			msg += fmt.Sprintf(" — %s accepts: %s.", tu.Name, fields)
 		}
 		return errResult(msg)
+	}
+
+	if opts.BeforeEdit != nil {
+		if paths := editedPaths(tu.Name, raw); len(paths) > 0 {
+			opts.BeforeEdit(tu.Name, paths)
+		}
 	}
 
 	results, err := tool.Execute(ctx, tools.Context{

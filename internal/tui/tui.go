@@ -38,7 +38,7 @@ import (
 
 // RunFunc drives one user turn against the agent core, threading conversation
 // history and using the supplied approver, asker, and emitter.
-type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, interject func() agent.Interjection) (agent.Result, error)
+type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, interject func() agent.Interjection, beforeEdit func(string, []string)) (agent.Result, error)
 
 // Session is mutable state shared between the TUI and the RunFunc closure, so
 // slash commands like /model can change settings for subsequent turns. The
@@ -273,6 +273,12 @@ type Model struct {
 	// region, which is why scrolling up during follow cannot be snapped back
 	// down — there is nothing to snap.
 	following string
+	// checkpoints is the undo stack: the contents of files, as git blobs, from
+	// just before Klaudia changed them.
+	checkpoints checkpointStack
+	// turnLabel names the operation being undone, so /undo says "Undo: fix the
+	// refresh-token race" rather than "undo 2 files".
+	turnLabel string
 	// base is the working tree as it was when the session started, plus stamps
 	// of what Klaudia has written since. It is what makes "your changes" and
 	// "Klaudia's changes" distinguishable at all.
@@ -291,6 +297,9 @@ type Model struct {
 	// Reset at startTurn so the summary describes the turn rather than the
 	// session.
 	turnTouched map[string]bool
+	// pendingPaths maps an in-flight tool_use id to the file it will write, so
+	// ownership is claimed after the write rather than before it.
+	pendingPaths map[string]string
 	// pendingCommands maps an in-flight tool_use id to its Bash command line,
 	// so a result can be attributed to the command that produced it.
 	pendingCommands map[string]string
@@ -1121,6 +1130,7 @@ var commandList = []cmdInfo{
 	{"!<command>", "", "Run a shell command directly; its output becomes context for Klaudia"},
 	{"/stop", "", "Ask Klaudia to finish the current step and stop, keeping what it has done"},
 	{"/changes", "", "Show the working tree split into your changes and Klaudia's"},
+	{"/undo", "", "Undo Klaudia's last change, leaving anything you also touched alone"},
 	{"/jobs", "", "List background jobs: what's running, on what port, and where"},
 	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation"},
 	{"/restart", "<job>", "Restart a background job in place, keeping its name and log"},
@@ -1733,6 +1743,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			"Will stop after the current step and report what's done. Esc to interrupt immediately instead."))
 	case "/changes":
 		m.changesCommand()
+	case "/undo":
+		m.undoCommand()
 	case "/jobs":
 		m.jobsCommand()
 	case "/logs":
@@ -2440,6 +2452,7 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	}
 	// The completion block describes this turn, not the session.
 	m.turnTouched = map[string]bool{}
+	m.turnLabel = oneline(prompt, 60)
 	m.turnResultsFrom = m.results.seq
 
 	approver := &uiApprover{events: m.events}
@@ -2449,7 +2462,7 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.turnCancel = cancel
 	go func() {
-		res, err := m.run(ctx, prompt, m.history, approver, asker, planner, emit, m.steer.drain)
+		res, err := m.run(ctx, prompt, m.history, approver, asker, planner, emit, m.steer.drain, m.beforeEdit)
 		m.events <- doneMsg{res: res, err: err}
 	}()
 	return tea.Batch(m.spin.Tick, m.sw.Reset(), m.sw.Start())
@@ -2467,14 +2480,23 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.flushAssistant() // the assistant message before a tool call is complete
 		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
 		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + toolSummary(ev.ToolName, ev.Input)))
-		// Remember files Klaudia touches so @-completion can rank them first,
-		// and so /commit can stage what Klaudia changed rather than everything.
+		// Remember files Klaudia touches so @-completion can rank them first.
+		// Ownership is NOT recorded here: this event is emitted before the tool
+		// runs, so stamping the file now would capture its pre-write state and
+		// every edit Klaudia made would then look like an edit made by the user.
+		// The path is parked until tool_result, when the write has happened —
+		// which also means a failed Write never claims the file.
 		for _, key := range []string{"file_path", "notebook_path"} {
 			p := toolFields(ev.Input)[key]
 			m.noteRecentPath(p)
 			switch ev.ToolName {
 			case "Write", "Edit", "NotebookEdit":
-				m.noteTouched(p)
+				if p != "" {
+					if m.pendingPaths == nil {
+						m.pendingPaths = map[string]string{}
+					}
+					m.pendingPaths[ev.ToolUseID] = p
+				}
 			}
 		}
 		if ev.ToolName == "Bash" {
@@ -2503,6 +2525,13 @@ func (m *Model) renderEvent(ev agent.Event) {
 			at:      time.Now(), content: stored, clamped: ev.FullContent != "",
 		})
 		delete(m.pendingCommands, ev.ToolUseID)
+		// Claim the file now the write has actually happened.
+		if p := m.pendingPaths[ev.ToolUseID]; p != "" {
+			if !ev.IsError {
+				m.noteTouched(p)
+			}
+			delete(m.pendingPaths, ev.ToolUseID)
+		}
 		s := strings.TrimSpace(ev.Content)
 		if s == "" {
 			s = "completed"
