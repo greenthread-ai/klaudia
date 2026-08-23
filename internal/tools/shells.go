@@ -5,127 +5,25 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/internal/schema"
 )
-
-// bgShell is one background shell tracked by the store.
-type bgShell struct {
-	id      string
-	command string
-	proc    *sandbox.BackgroundProcess
-	offset  int // bytes of output already returned by BashOutput
-	started time.Time
-}
-
-// ShellStore holds the background shells started by the Bash tool, shared with
-// the BashOutput and KillShell tools. Shells are session-scoped: they persist
-// across turns until killed or the session ends. Safe for concurrent use.
-type ShellStore struct {
-	parent context.Context
-	mu     sync.Mutex
-	shells map[string]*bgShell
-	seq    int
-}
-
-// NewShellStore creates a store whose shells are parented to ctx (cancelling it,
-// or calling KillAll, terminates them).
-func NewShellStore(ctx context.Context) *ShellStore {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return &ShellStore{parent: ctx, shells: map[string]*bgShell{}}
-}
-
-// Start launches req as a detached background shell and returns its id.
-func (s *ShellStore) Start(e sandbox.Executor, req sandbox.Request) (string, error) {
-	req.Timeout = 0 // background shells run until they exit or are killed
-	proc, err := sandbox.StartBackground(s.parent, e, req)
-	if err != nil {
-		return "", err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.seq++
-	id := fmt.Sprintf("bash_%d", s.seq)
-	s.shells[id] = &bgShell{id: id, command: req.Command, proc: proc, started: time.Now()}
-	return id, nil
-}
-
-// ShellOutput is the incremental read of a background shell.
-type ShellOutput struct {
-	ID       string
-	Command  string
-	Output   string
-	Running  bool
-	ExitCode int
-}
-
-// Read returns output produced since the last read, advancing the read offset.
-func (s *ShellStore) Read(id string) (ShellOutput, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sh, ok := s.shells[id]
-	if !ok {
-		return ShellOutput{}, false
-	}
-	data, newOffset, done, code := sh.proc.Read(sh.offset)
-	sh.offset = newOffset
-	return ShellOutput{ID: id, Command: sh.command, Output: data, Running: !done, ExitCode: code}, true
-}
-
-// Kill terminates a shell. Returns false if there is no such shell.
-func (s *ShellStore) Kill(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sh, ok := s.shells[id]
-	if !ok {
-		return false
-	}
-	sh.proc.Kill()
-	return true
-}
-
-// List returns the tracked shells, newest first, for descriptions/diagnostics.
-func (s *ShellStore) List() []ShellOutput {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]ShellOutput, 0, len(s.shells))
-	for _, sh := range s.shells {
-		out = append(out, ShellOutput{ID: sh.id, Command: sh.command, Running: sh.proc.Running()})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
-	return out
-}
-
-// KillAll terminates every shell (session teardown).
-func (s *ShellStore) KillAll() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, sh := range s.shells {
-		sh.proc.Kill()
-	}
-}
 
 // --- BashOutput tool ---
 
 type BashOutputInput struct {
-	BashID string `json:"bash_id" jsonschema:"description=The background shell id returned by Bash (run_in_background)"`
+	BashID string `json:"bash_id" jsonschema:"description=The background job's id (e.g. bash_1) or name (e.g. dev)"`
 	Filter string `json:"filter,omitempty" jsonschema:"description=Optional regex; only matching output lines are returned"`
 }
 
 type BashOutput struct {
 	schema *schema.Schema
-	shells *ShellStore
+	shells *JobStore
 }
 
-func NewBashOutput(shells *ShellStore) (*BashOutput, error) {
+func NewBashOutput(shells *JobStore) (*BashOutput, error) {
 	s, err := schema.For[BashOutputInput]()
 	if err != nil {
 		return nil, fmt.Errorf("bashoutput: build schema: %w", err)
@@ -136,8 +34,9 @@ func NewBashOutput(shells *ShellStore) (*BashOutput, error) {
 func (t *BashOutput) Name() string { return "BashOutput" }
 
 func (t *BashOutput) Description(context.Context) (string, error) {
-	return "Read new output from a background shell started by Bash with run_in_background. " +
-		"Returns only output produced since the last read, plus whether the shell is still running.", nil
+	return "Read new output from a background job started by Bash with run_in_background. " +
+		"Accepts the job's id (bash_1) or its name (dev, api). Returns only output produced " +
+		"since the last read, plus whether the job is still running.", nil
 }
 
 func (t *BashOutput) InputSchema() json.RawMessage { return t.schema.Raw }
@@ -175,11 +74,11 @@ func (t *BashOutput) Execute(_ context.Context, _ Context, raw json.RawMessage) 
 		return nil, err
 	}
 	if t.shells == nil {
-		return []Result{{Content: "background shells are not available", IsError: true}}, nil
+		return []Result{{Content: "background jobs are not available", IsError: true}}, nil
 	}
 	out, ok := t.shells.Read(in.BashID)
 	if !ok {
-		return []Result{{Content: fmt.Sprintf("No such background shell %q.", in.BashID), IsError: true}}, nil
+		return []Result{{Content: t.shells.unknownJobMsg(in.BashID), IsError: true}}, nil
 	}
 	body := out.Output
 	if in.Filter != "" {
@@ -192,9 +91,9 @@ func (t *BashOutput) Execute(_ context.Context, _ Context, raw json.RawMessage) 
 		b.WriteString(body)
 	}
 	if out.Running {
-		b.WriteString("\n[shell running]")
+		fmt.Fprintf(&b, "\n[job %s running]", out.Name)
 	} else {
-		fmt.Fprintf(&b, "\n[shell exited, code %d]", out.ExitCode)
+		fmt.Fprintf(&b, "\n[job %s exited, code %d]", out.Name, out.ExitCode)
 	}
 	return []Result{{Content: b.String()}}, nil
 }
@@ -217,15 +116,15 @@ func filterLines(s, pattern string) string {
 // --- KillShell tool ---
 
 type KillShellInput struct {
-	ShellID string `json:"shell_id" jsonschema:"description=The background shell id to terminate"`
+	ShellID string `json:"shell_id" jsonschema:"description=The background job's id (e.g. bash_1) or name (e.g. dev) to stop"`
 }
 
 type KillShell struct {
 	schema *schema.Schema
-	shells *ShellStore
+	shells *JobStore
 }
 
-func NewKillShell(shells *ShellStore) (*KillShell, error) {
+func NewKillShell(shells *JobStore) (*KillShell, error) {
 	s, err := schema.For[KillShellInput]()
 	if err != nil {
 		return nil, fmt.Errorf("killshell: build schema: %w", err)
@@ -236,7 +135,8 @@ func NewKillShell(shells *ShellStore) (*KillShell, error) {
 func (t *KillShell) Name() string { return "KillShell" }
 
 func (t *KillShell) Description(context.Context) (string, error) {
-	return "Terminate a background shell started by Bash with run_in_background, by its id.", nil
+	return "Stop a background job started by Bash with run_in_background, by id or name. " +
+		"Stops the whole process group, so a wrapper script's children go too.", nil
 }
 
 func (t *KillShell) InputSchema() json.RawMessage { return t.schema.Raw }
@@ -268,8 +168,11 @@ func (t *KillShell) Execute(_ context.Context, _ Context, raw json.RawMessage) (
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
-	if t.shells == nil || !t.shells.Kill(in.ShellID) {
-		return []Result{{Content: fmt.Sprintf("No such background shell %q.", in.ShellID), IsError: true}}, nil
+	if t.shells == nil {
+		return []Result{{Content: "background jobs are not available", IsError: true}}, nil
 	}
-	return []Result{{Content: fmt.Sprintf("Killed background shell %s.", in.ShellID)}}, nil
+	if !t.shells.Kill(in.ShellID) {
+		return []Result{{Content: t.shells.unknownJobMsg(in.ShellID), IsError: true}}, nil
+	}
+	return []Result{{Content: fmt.Sprintf("Stopped job %s.", in.ShellID)}}, nil
 }

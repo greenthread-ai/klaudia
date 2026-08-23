@@ -14,7 +14,7 @@ import (
 // tools share. The caller is responsible for their lifecycle (Close/KillAll).
 type regOptions struct {
 	browser *browser.Engine
-	shells  *ShellStore
+	shells  *JobStore
 	lsp     *lsp.Pool
 }
 
@@ -25,9 +25,9 @@ type RegOption func(*regOptions)
 // caller Close()s it at session end so any launched Chrome is terminated.
 func WithBrowserEngine(e *browser.Engine) RegOption { return func(o *regOptions) { o.browser = e } }
 
-// WithShellStore supplies the background-shell store backing run_in_background +
-// BashOutput/KillShell. The caller KillAll()s it at session end.
-func WithShellStore(s *ShellStore) RegOption { return func(o *regOptions) { o.shells = s } }
+// WithJobStore supplies the managed-job store backing run_in_background,
+// BashOutput/KillShell/Jobs/RestartJob. The caller KillAll()s it at session end.
+func WithJobStore(s *JobStore) RegOption { return func(o *regOptions) { o.shells = s } }
 
 // WithLSP supplies the language-server pool backing Diagnostics/Definition/
 // References. The caller Close()s it at session end. When omitted, the LSP tools
@@ -37,7 +37,7 @@ func WithLSP(p *lsp.Pool) RegOption { return func(o *regOptions) { o.lsp = p } }
 // DefaultRegistry builds the registry of all implemented local tools, with the
 // Bash tool wired to the given executor (local host, or a container sandbox).
 // New tools are added here as they are ported. Pass WithBrowserEngine /
-// WithShellStore to share caller-owned, session-scoped resources; sensible
+// WithJobStore to share caller-owned, session-scoped resources; sensible
 // defaults are built when omitted (e.g. in tests) and launch nothing until used.
 func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, error) {
 	if executor == nil {
@@ -61,7 +61,7 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 	// Background-shell store for run_in_background / BashOutput / KillShell.
 	shells := cfg.shells
 	if shells == nil {
-		shells = NewShellStore(context.Background())
+		shells = NewJobStore(context.Background(), "")
 	}
 
 	type ctor struct {
@@ -77,6 +77,8 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 		{"Bash", func() (Tool, error) { return NewBash(executor, shells) }},
 		{"BashOutput", func() (Tool, error) { return NewBashOutput(shells) }},
 		{"KillShell", func() (Tool, error) { return NewKillShell(shells) }},
+		{"Jobs", func() (Tool, error) { return NewJobs(shells) }},
+		{"RestartJob", func() (Tool, error) { return NewRestartJob(shells) }},
 		{"TodoWrite", func() (Tool, error) { return NewTodoWrite(todos) }},
 		{"TaskCreate", func() (Tool, error) { return NewTaskCreate(taskStore) }},
 		{"TaskList", func() (Tool, error) { return NewTaskList(taskStore) }},

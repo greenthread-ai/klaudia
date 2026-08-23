@@ -94,7 +94,7 @@ func TestSpillWritesFullOutputAndFormatNamesIt(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 
 	full := strings.Repeat("build output line\n", 5000)
-	out, fullOut := formatBashOutput(sandbox.Response{Stdout: full})
+	out, fullOut := formatBashOutput(sandbox.Response{Stdout: full}, "make build")
 
 	if !strings.Contains(out, "full output:") {
 		t.Fatalf("truncated output should name the spill file:\n%s", oneLineOf(out))
@@ -123,7 +123,7 @@ func TestNoSpillForShortOutput(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("KLAUDIA_CONFIG_DIR", dir)
 
-	out, _ := formatBashOutput(sandbox.Response{Stdout: "all good\n"})
+	out, _ := formatBashOutput(sandbox.Response{Stdout: "all good\n"}, "echo hi")
 	if strings.Contains(out, "full output:") {
 		t.Error("short output needs no spill file")
 	}
@@ -168,7 +168,7 @@ func TestExitAnnotationSurvivesClamping(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	out, fullOut := formatBashOutput(sandbox.Response{
 		Stdout: strings.Repeat("noise\n", 20000), ExitCode: 1,
-	})
+	}, "go test ./...")
 	if !strings.Contains(out, "[exit code 1]") {
 		t.Errorf("exit annotation lost:\n%s", oneLineOf(out))
 	}

@@ -21,9 +21,10 @@ func waitUntil(d time.Duration, fn func() bool) bool {
 	return fn()
 }
 
-func TestShellStoreRunsAndReportsExit(t *testing.T) {
-	store := NewShellStore(context.Background())
-	id, err := store.Start(sandbox.NewLocal(), sandbox.Request{Command: "printf 'hello\\nworld\\n'"})
+func TestJobStoreRunsAndReportsExit(t *testing.T) {
+	store := newTestJobStore(t)
+	res, err := store.Start(sandbox.NewLocal(), sandbox.Request{Command: "printf 'hello\\nworld\\n'"})
+	id := res.Job.ID
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,9 +50,10 @@ func TestShellStoreRunsAndReportsExit(t *testing.T) {
 	}
 }
 
-func TestShellStoreKillStopsLongRunning(t *testing.T) {
-	store := NewShellStore(context.Background())
-	id, err := store.Start(sandbox.NewLocal(), sandbox.Request{Command: "sleep 30"})
+func TestJobStoreKillStopsLongRunning(t *testing.T) {
+	store := newTestJobStore(t)
+	res, err := store.Start(sandbox.NewLocal(), sandbox.Request{Command: "sleep 30"})
+	id := res.Job.ID
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,8 +72,8 @@ func TestShellStoreKillStopsLongRunning(t *testing.T) {
 	}
 }
 
-func TestShellStoreUnknownID(t *testing.T) {
-	store := NewShellStore(context.Background())
+func TestJobStoreUnknownID(t *testing.T) {
+	store := newTestJobStore(t)
 	if _, ok := store.Read("bash_999"); ok {
 		t.Error("Read of unknown id should report not-ok")
 	}
@@ -81,31 +83,42 @@ func TestShellStoreUnknownID(t *testing.T) {
 }
 
 func TestBashOutputToolFilter(t *testing.T) {
-	store := NewShellStore(context.Background())
-	id, _ := store.Start(sandbox.NewLocal(), sandbox.Request{Command: "printf 'keep me\\ndrop this\\nkeep too\\n'"})
+	store := newTestJobStore(t)
+	res, _ := store.Start(sandbox.NewLocal(), sandbox.Request{Command: "printf 'keep me\\ndrop this\\nkeep too\\n'"})
+	id := res.Job.ID
 	// Wait for exit via the non-consuming List (so the tool reads from offset 0).
 	waitUntil(3*time.Second, func() bool { return !peekRunning(store, id) })
 
 	tool, _ := NewBashOutput(store)
-	res, err := tool.Execute(context.Background(), Context{}, []byte(`{"bash_id":"`+id+`","filter":"keep"}`))
+	out, err := tool.Execute(context.Background(), Context{}, []byte(`{"bash_id":"`+id+`","filter":"keep"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := res[0].Content
+	got := out[0].Content
 	if !strings.Contains(got, "keep me") || !strings.Contains(got, "keep too") || strings.Contains(got, "drop this") {
 		t.Errorf("filtered output = %q", got)
 	}
-	if !strings.Contains(got, "shell exited") {
+	if !strings.Contains(got, "exited") {
 		t.Errorf("expected exit annotation, got %q", got)
 	}
 }
 
 // peekRunning reports a shell's running state without consuming its output.
-func peekRunning(s *ShellStore, id string) bool {
+func peekRunning(s *JobStore, id string) bool {
 	for _, sh := range s.List() {
 		if sh.ID == id {
 			return sh.Running
 		}
 	}
 	return false
+}
+
+// newTestJobStore builds a store whose logs land in a temp dir, so tests never
+// touch the developer's ~/.klaudia.
+func newTestJobStore(t *testing.T) *JobStore {
+	t.Helper()
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	s := NewJobStore(context.Background(), "test")
+	t.Cleanup(s.KillAll)
+	return s
 }

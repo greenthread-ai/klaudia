@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -148,19 +149,48 @@ func runArgv(ctx context.Context, req Request, name string, args []string) (Resp
 type BackgroundProcess struct {
 	mu       sync.Mutex
 	buf      []byte
+	sink     io.Writer // when set, output goes here instead of buf
 	done     bool
 	exitCode int
 	runErr   error
 	cancel   context.CancelFunc
+	pid      int
+}
+
+// BackgroundOptions configures a detached launch.
+type BackgroundOptions struct {
+	// Sink receives the combined output instead of an in-memory buffer. A
+	// long-lived dev server produces more output than a process should hold in
+	// memory, and a log that only exists in RAM cannot be paged or searched.
+	Sink io.Writer
+	// OnExit is called once when the process finishes, however it finished.
+	// Without it, nothing learns that a job died until something reads it —
+	// so a crashed dev server stays "running" until the model happens to poll.
+	OnExit func(exitCode int)
 }
 
 // Write appends process output to the buffer (cmd.Stdout/Stderr both target it,
 // so output is combined in arrival order).
 func (p *BackgroundProcess) Write(b []byte) (int, error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.buf = append(p.buf, b...)
+	sink := p.sink
+	if sink == nil {
+		p.buf = append(p.buf, b...)
+	}
+	p.mu.Unlock()
+	if sink != nil {
+		return sink.Write(b)
+	}
 	return len(b), nil
+}
+
+// Pid is the process id of the launched command, or 0 once it has exited.
+// Used to prove a restart actually replaced the process rather than adopting
+// the old one.
+func (p *BackgroundProcess) Pid() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.pid
 }
 
 // Read returns buffered output from offset onward, the new offset, whether the
@@ -192,6 +222,7 @@ func (p *BackgroundProcess) finish(err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.done = true
+	p.pid = 0
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
@@ -208,6 +239,12 @@ func (p *BackgroundProcess) finish(err error) {
 // cancelled or BackgroundProcess.Kill is called. A non-nil error means the
 // command could not be started.
 func StartBackground(parent context.Context, e Executor, req Request) (*BackgroundProcess, error) {
+	return StartBackgroundWith(parent, e, req, BackgroundOptions{})
+}
+
+// StartBackgroundWith is StartBackground with an output sink and an exit
+// callback.
+func StartBackgroundWith(parent context.Context, e Executor, req Request, opts BackgroundOptions) (*BackgroundProcess, error) {
 	ctx, cancel := context.WithCancel(parent)
 	name, args := e.Argv(req)
 	cmd := exec.CommandContext(ctx, name, args...)
@@ -221,19 +258,32 @@ func StartBackground(parent context.Context, e Executor, req Request) (*Backgrou
 	// the process is still being asked to leave, losing the last lines of a log
 	// exactly when they matter.
 	cmd.WaitDelay = postCancelWait + killGrace
-	p := &BackgroundProcess{cancel: cancel}
+	p := &BackgroundProcess{cancel: cancel, sink: opts.Sink}
 	cmd.Stdout = p
 	cmd.Stderr = p // same writer ⇒ exec serializes both streams into one pipe
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return nil, err
 	}
+	p.mu.Lock()
+	p.pid = cmd.Process.Pid
+	p.mu.Unlock()
 	go func() {
 		err := cmd.Wait()
 		p.finish(err)
 		cancel()
+		if opts.OnExit != nil {
+			opts.OnExit(p.ExitCode())
+		}
 	}()
 	return p, nil
+}
+
+// ExitCode reports the process's exit status once it has finished.
+func (p *BackgroundProcess) ExitCode() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.exitCode
 }
 
 // resolveRoots canonicalises write roots for a sandbox profile.

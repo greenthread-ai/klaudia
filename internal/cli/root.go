@@ -737,10 +737,12 @@ func run(cmd *cobra.Command, opts *options) error {
 	// nothing until a web tool actually runs).
 	browserEngine := browser.NewEngine(ctx, buildBrowserOptions(cfg.Browser))
 	defer browserEngine.Close()
-	// Background shells (Bash run_in_background) are session-scoped and tied to
-	// the run context; KillAll terminates any still running at session end.
-	shellStore := tools.NewShellStore(ctx)
-	defer shellStore.KillAll()
+	// Managed jobs (Bash run_in_background) are session-scoped and tied to the
+	// run context; KillAll stops them — and now their whole process groups — at
+	// session end. The session id names their log directory so /logs can find
+	// them and so a resumed session lands on its own logs.
+	jobStore := tools.NewJobStore(ctx, sessionID)
+	defer jobStore.KillAll()
 	// Lazy language-server pool for code-intel tools (Diagnostics/Definition/
 	// References). Servers are detected on PATH + toolchain dirs, spawned on
 	// first use, and shut down at session end. Not downloaded.
@@ -748,7 +750,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	defer lspPool.Close()
 	base, err := tools.DefaultRegistry(executor,
 		tools.WithBrowserEngine(browserEngine),
-		tools.WithShellStore(shellStore),
+		tools.WithJobStore(jobStore),
 		tools.WithLSP(lspPool),
 	)
 	if err != nil {

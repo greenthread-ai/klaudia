@@ -25,16 +25,16 @@ type BashInput struct {
 }
 
 // Bash executes shell commands via a sandbox.Executor. When run_in_background is
-// set, it launches a detached shell tracked by the (optional) ShellStore.
+// set, it launches a managed job tracked by the (optional) JobStore.
 type Bash struct {
 	schema   *schema.Schema
 	executor sandbox.Executor
-	shells   *ShellStore
+	shells   *JobStore
 }
 
 // NewBash constructs the Bash tool with the given executor. The optional
-// ShellStore backs run_in_background (omit it to disable background shells).
-func NewBash(executor sandbox.Executor, shells ...*ShellStore) (*Bash, error) {
+// JobStore backs run_in_background (omit it to disable background jobs).
+func NewBash(executor sandbox.Executor, shells ...*JobStore) (*Bash, error) {
 	s, err := schema.For[BashInput]()
 	if err != nil {
 		return nil, fmt.Errorf("bash: build schema: %w", err)
@@ -107,11 +107,25 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 		if b.shells == nil {
 			return []Result{{Content: "background execution is not available", IsError: true}}, nil
 		}
-		id, err := b.shells.Start(b.executor, sandbox.Request{Command: in.Command, WorkingDir: tctx.WorkingDir})
+		res, err := b.shells.Start(b.executor, sandbox.Request{Command: in.Command, WorkingDir: tctx.WorkingDir})
 		if err != nil {
 			return []Result{{Content: fmt.Sprintf("Failed to start background command: %v", err), IsError: true}}, nil
 		}
-		return []Result{{Content: fmt.Sprintf("Started background shell %s. Read its output with BashOutput(bash_id=%q) and stop it with KillShell(shell_id=%q).", id, id, id)}}, nil
+		j := res.Job
+		if res.Duplicate {
+			// Two dev servers fighting over one port is a confusing failure, and
+			// the loser usually looks like broken code. Hand back the one that
+			// is already up instead.
+			return []Result{{Content: fmt.Sprintf(
+				"That command is already running as job %s (%s), started %s ago. "+
+					"Reusing it rather than starting a second copy — read its output with "+
+					"BashOutput(bash_id=%q), or restart it with RestartJob(job=%q).",
+				j.Name, j.ID, fmtShortDuration(time.Since(j.Started)), j.Name, j.Name)}}, nil
+		}
+		return []Result{{Content: fmt.Sprintf(
+			"Started job %s (%s). Read its output with BashOutput(bash_id=%q), restart it with "+
+				"RestartJob(job=%q), stop it with KillShell(shell_id=%q).",
+			j.Name, j.ID, j.Name, j.Name, j.Name)}}, nil
 	}
 
 	timeout := bashDefaultTimeout
@@ -128,15 +142,43 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 		return []Result{{Content: fmt.Sprintf("Failed to run command: %v", err), IsError: true}}, nil
 	}
 
-	model, full := formatBashOutput(resp)
+	model, full := formatBashOutput(resp, in.Command)
 	return []Result{{Content: model, Full: full, IsError: resp.ExitCode != 0}}, nil
+}
+
+// serviceHints are the shapes of a command that does not intend to finish.
+// Matched loosely and only used to add a suggestion to a timeout, so a false
+// positive costs one unhelpful sentence rather than a wrong decision.
+var serviceHints = []string{
+	"run dev", "run start", "run serve", "run watch", "start:dev",
+	"npm start", "yarn start", "pnpm start", "bun run dev",
+	"compose up", "docker run", "serve", "http.server", "runserver",
+	"tail -f", "watch ", "nodemon", "vite", "webpack-dev-server",
+	"rails s", "flask run", "uvicorn", "gunicorn", "air", "reflex",
+	"ng serve", "next dev", "nuxt dev", "remix dev", "astro dev",
+	"make dev", "make run", "make serve", "cargo watch", "mvn spring-boot:run",
+}
+
+func looksLikeService(command string) bool {
+	c := strings.ToLower(command)
+	// A pipeline that ends somewhere is not a service, even if it starts with
+	// one: `tail -f log | head -20` terminates.
+	if strings.Contains(c, "|") {
+		return false
+	}
+	for _, h := range serviceHints {
+		if strings.Contains(c, h) {
+			return true
+		}
+	}
+	return false
 }
 
 // formatBashOutput combines stdout/stderr and annotates non-zero exit / timeout.
 // It returns two strings: the model-facing text, clamped to bashMaxOutput (see
 // output.go for why it keeps a tail as well as a head), and the untruncated
 // text for local display. full is empty when nothing was clamped.
-func formatBashOutput(resp sandbox.Response) (model, full string) {
+func formatBashOutput(resp sandbox.Response, command string) (model, full string) {
 	var b strings.Builder
 	b.WriteString(resp.Stdout)
 	if resp.Stderr != "" {
@@ -163,6 +205,16 @@ func formatBashOutput(resp sandbox.Response) (model, full string) {
 	var status string
 	if resp.TimedOut {
 		status = fmt.Sprintf("\n[command timed out, exit code %d]", resp.ExitCode)
+		// A bare exit 124 reads as "the command is broken". Usually it means the
+		// command has no natural end, and the right move is to make it a job —
+		// which keeps it running, gives it a name and a log, and lets the turn
+		// continue. Saying so here is the difference between the model
+		// retrying with a longer timeout and it doing the right thing.
+		if looksLikeService(command) {
+			status += "\n[this looks like a long-running service. Start it with Bash run_in_background " +
+				"to make it a managed job: it keeps running, gets a name and a log, and you can carry on. " +
+				"Check Jobs first — it may already be up.]"
+		}
 	} else if resp.ExitCode != 0 {
 		status = fmt.Sprintf("\n[exit code %d]", resp.ExitCode)
 	}
