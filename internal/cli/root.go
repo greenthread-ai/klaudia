@@ -882,6 +882,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			ListModels: modelLister(provider),
 			Trust:      tui.NewTrustController(hostGate),
 			Jobs:       jobStore,
+			Executor:   executor,
 		}
 		extraDirs = func() []string { return sess.ExtraDirs }
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, interject func() agent.Interjection) (agent.Result, error) {

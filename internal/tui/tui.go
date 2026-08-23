@@ -77,6 +77,10 @@ type Session struct {
 	ListModels func(context.Context) ([]api.ModelInfo, error)
 	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
 	MCP MCPController
+	// Executor runs `!` commands, shared with the Bash tool so a direct command
+	// behaves the same as one Klaudia runs. Nil falls back to an unconfined
+	// local process.
+	Executor sandbox.Executor
 	// Jobs, if set, backs /jobs, /logs, /restart and /stopjob: the session's
 	// managed background processes. Nil when there is no job store.
 	Jobs JobController
@@ -189,14 +193,17 @@ func baseStyle() lipgloss.Style {
 }
 
 var (
-	userStyle    = baseStyle()
-	toolStyle    = baseStyle()
-	errStyle     = baseStyle().Foreground(lipgloss.Color("9"))
-	askStyle     = baseStyle()
-	bannerStyle  = baseStyle().Faint(true)
-	logoStyle    = baseStyle()
-	hintStyle    = baseStyle().Faint(true).Italic(true)
-	suggestStyle = baseStyle()
+	userStyle = baseStyle()
+	toolStyle = baseStyle()
+	errStyle  = baseStyle().Foreground(lipgloss.Color("9"))
+	// bangEchoStyle marks a command the user ran directly, so the transcript
+	// distinguishes "I did this" from "Klaudia did this".
+	bangEchoStyle = baseStyle()
+	askStyle      = baseStyle()
+	bannerStyle   = baseStyle().Faint(true)
+	logoStyle     = baseStyle()
+	hintStyle     = baseStyle().Faint(true).Italic(true)
+	suggestStyle  = baseStyle()
 )
 
 func init() { applyChromeTheme(defaultChromePalette) }
@@ -212,6 +219,7 @@ func applyChromeTheme(p themePalette) {
 	askStyle = baseStyle().Bold(true).Foreground(accent)
 	suggestStyle = baseStyle().Foreground(accent2)
 	userStyle = baseStyle().Bold(true).Foreground(accent2)
+	bangEchoStyle = baseStyle().Bold(true).Foreground(accent)
 	toolStyle = baseStyle().Foreground(muted)
 	hintStyle = baseStyle().Faint(true).Italic(true).Foreground(muted)
 	promptBoxStyle = lipgloss.NewStyle().
@@ -265,6 +273,16 @@ type Model struct {
 	// region, which is why scrolling up during follow cannot be snapped back
 	// down — there is nothing to snap.
 	following string
+	// promptIsBang tracks whether the input marker is currently "$", so the
+	// prompt function is only rebuilt when the answer changes.
+	promptIsBang bool
+	// executor runs `!` commands. Shared with the Bash tool so a direct command
+	// behaves exactly like one Klaudia runs — same sandbox mode, same process
+	// group, same environment.
+	executor sandbox.Executor
+	// pendingShellContext holds `!` commands and their output, folded into the
+	// next prompt so "revert that" has a referent.
+	pendingShellContext []string
 	// turnTouched is this turn's slice of touched, for the completion block.
 	// Reset at startTurn so the summary describes the turn rather than the
 	// session.
@@ -420,6 +438,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		history: history,
 		sess:    sess,
 	}
+	m.executor = sess.Executor
 	// A job dying at 14:02 and being noticed at 14:40 costs the half hour in
 	// between, so the store reports exits straight into the event loop.
 	if sess.Jobs != nil {
@@ -477,6 +496,32 @@ func (m *Model) syncInputHeight() {
 		return
 	}
 	m.input.SetHeight(m.inputHeight())
+	m.syncPromptMarker()
+}
+
+// syncPromptMarker swaps the input's leading marker between "›" and "$" as the
+// user types.
+//
+// §14's first checkbox is "interpretation vs execution is obvious". A `!` at
+// the start of the line is easy to lose track of mid-sentence, and the cost of
+// losing track is running something you meant to say. The marker changes the
+// moment the line does, so what will happen on Enter is visible before Enter.
+func (m *Model) syncPromptMarker() {
+	bang := isBang(m.input.Value())
+	if bang == m.promptIsBang {
+		return
+	}
+	m.promptIsBang = bang
+	marker := "› "
+	if bang {
+		marker = "$ "
+	}
+	m.input.SetPromptFunc(promptGutter, func(line int) string {
+		if line == 0 {
+			return marker
+		}
+		return "  "
+	})
 }
 
 // displayModel returns the model name to show in the intro/status.
@@ -535,6 +580,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case followTickMsg:
 		return m, m.onFollowTick(msg.ref)
+
+	case bangResultMsg:
+		return m, m.onBangResult(msg)
 
 	case permissionMsg:
 		// Session rules are about tools, and a host change is not a question
@@ -1004,6 +1052,15 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if msg.Type == tea.KeyEnter && m.state == stateIdle && isBang(m.input.Value()) {
+		line := strings.TrimSpace(m.input.Value())
+		m.input.Reset()
+		m.pushHistory(line)
+		m.syncInputHeight()
+		m.setState(stateRunning)
+		return m.runBang(line)
+	}
+
 	if msg.Type == tea.KeyEnter && m.state == stateIdle {
 		// display is the chip form (what's echoed and remembered); prompt is
 		// the expanded payload (what the model receives). Echoing the chip
@@ -1047,6 +1104,7 @@ var commandList = []cmdInfo{
 	{"/model", "[name]", "Pick a model from the provider (no arg), or set one by alias/ID"},
 	{"/theme", "[name]", "Change Markdown render theme (no arg = picker)"},
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
+	{"!<command>", "", "Run a shell command directly; its output becomes context for Klaudia"},
 	{"/stop", "", "Ask Klaudia to finish the current step and stop, keeping what it has done"},
 	{"/jobs", "", "List background jobs: what's running, on what port, and where"},
 	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation"},
@@ -2336,6 +2394,13 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	// Frame the turn. Goal-setting interviews the user and drafts the spec; an
 	// active loop's prompt is already goal.IterationPrompt (built by the caller),
 	// so leave it untouched; otherwise re-state any standing /goal (drift guard).
+	// A `!` command the user ran since the last turn is context for this one:
+	// "revert that" needs a referent. Prepended rather than sent separately so
+	// it arrives attached to the instruction that refers to it.
+	if shell := m.takeShellContext(); shell != "" {
+		prompt = shell + "\n\n" + prompt
+	}
+
 	switch {
 	case m.goalSetting && m.sess != nil:
 		existing, specPath, _ := goal.Read(m.sess.CWD)
