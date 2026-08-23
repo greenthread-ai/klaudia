@@ -265,6 +265,15 @@ type Model struct {
 	// region, which is why scrolling up during follow cannot be snapped back
 	// down — there is nothing to snap.
 	following string
+	// turnTouched is this turn's slice of touched, for the completion block.
+	// Reset at startTurn so the summary describes the turn rather than the
+	// session.
+	turnTouched map[string]bool
+	// pendingCommands maps an in-flight tool_use id to its Bash command line,
+	// so a result can be attributed to the command that produced it.
+	pendingCommands map[string]string
+	// turnResultsFrom is the result-ring sequence at the start of this turn.
+	turnResultsFrom int
 	// touched is the set of repo-relative paths Klaudia has modified this
 	// session, so /commit can stage its own work and leave the user's alone.
 	touched map[string]bool
@@ -597,6 +606,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendLine(errStyle.Render("error: " + api.FriendlyError(msg.err)))
 		default:
 			m.appendLine(bannerStyle.Render("  ✓ done in " + fmtDuration(elapsed) + throughput(msg.res.OutputTokens, elapsed)))
+		}
+		// Results before accounting: what changed and what was verified, if
+		// anything was. A turn that only read files prints nothing here rather
+		// than an empty ceremony.
+		if s := m.turnSummaryBlock(); s != "" {
+			m.appendLine(s)
 		}
 		if msg.res.Messages != nil {
 			m.history = msg.res.Messages
@@ -2330,6 +2345,10 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	case m.sess != nil && m.sess.Goal != "":
 		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
 	}
+	// The completion block describes this turn, not the session.
+	m.turnTouched = map[string]bool{}
+	m.turnResultsFrom = m.results.seq
+
 	approver := &uiApprover{events: m.events}
 	asker := &uiAsker{events: m.events}
 	planner := &uiPlanner{events: m.events}
@@ -2365,6 +2384,12 @@ func (m *Model) renderEvent(ev agent.Event) {
 				m.noteTouched(p)
 			}
 		}
+		if ev.ToolName == "Bash" {
+			if m.pendingCommands == nil {
+				m.pendingCommands = map[string]string{}
+			}
+			m.pendingCommands[ev.ToolUseID] = toolFields(ev.Input)["command"]
+		}
 		if diff := toolDiff(ev.ToolName, ev.Input); diff != "" {
 			m.appendLine(diff)
 		}
@@ -2381,8 +2406,10 @@ func (m *Model) renderEvent(ev agent.Event) {
 		}
 		seq := m.results.add(toolResult{
 			id: ev.ToolUseID, tool: ev.ToolName, isError: ev.IsError,
-			at: time.Now(), content: stored, clamped: ev.FullContent != "",
+			command: m.pendingCommands[ev.ToolUseID],
+			at:      time.Now(), content: stored, clamped: ev.FullContent != "",
 		})
+		delete(m.pendingCommands, ev.ToolUseID)
 		s := strings.TrimSpace(ev.Content)
 		if s == "" {
 			s = "completed"

@@ -27,7 +27,12 @@ func (m *Model) noteTouched(path string) {
 	if m.touched == nil {
 		m.touched = map[string]bool{}
 	}
-	m.touched[m.relToRepo(path)] = true
+	if m.turnTouched == nil {
+		m.turnTouched = map[string]bool{}
+	}
+	rel := m.relToRepo(path)
+	m.touched[rel] = true
+	m.turnTouched[rel] = true
 }
 
 // relToRepo normalises a path to the form `git status --short` reports, so the

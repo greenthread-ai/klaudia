@@ -21,9 +21,12 @@ const (
 )
 
 type toolResult struct {
-	seq     int // 1-based, monotonic for the session; what /last takes
-	id      string
-	tool    string
+	seq  int // 1-based, monotonic for the session; what /last takes
+	id   string
+	tool string
+	// command is the Bash command line this result came from, when it was one.
+	// The end-of-turn summary needs it to tell a test run from a build.
+	command string
 	isError bool
 	at      time.Time
 	content string // untruncated when the tool kept a fuller copy
@@ -34,6 +37,19 @@ type resultRing struct {
 	items []toolResult
 	bytes int
 	seq   int
+}
+
+// since returns the results recorded after sequence number n, for the
+// end-of-turn summary. The ring may have evicted some; what remains is what
+// the summary can honestly describe.
+func (r *resultRing) since(n int) []toolResult {
+	var out []toolResult
+	for _, it := range r.items {
+		if it.seq > n {
+			out = append(out, it)
+		}
+	}
+	return out
 }
 
 // add stores a result and returns the sequence number the UI should advertise.
