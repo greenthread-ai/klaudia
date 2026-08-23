@@ -76,6 +76,11 @@ type Options struct {
 	// directory Bash runs in and the default root for Grep/Glob. Empty means
 	// the process cwd, which is only correct for callers that already chdir'd.
 	WorkingDir string
+	// Interject is polled between turns and after each tool batch. It returns
+	// anything the user has typed since the last poll, and whether they asked
+	// Klaudia to stop once the current step finishes. Nil means nothing can
+	// interrupt, which is the right answer for headless.
+	Interject func() Interjection
 	// Approver resolves permission "ask" decisions. Supplied by the frontend
 	// (headless/TUI/editor/SDK). If nil, DenyAll is used.
 	Approver Approver
@@ -172,8 +177,23 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	}
 
 	var res Result
+	halted := false
 	for {
 		res.NumTurns++
+
+		// A correction the user typed mid-turn goes in before the request is
+		// built, so the model sees it while deciding what to do next rather
+		// than after it has done it. See steer.go.
+		if in := pollInterjection(opts); !in.Empty() {
+			if msg, ok := steerMessage(in); ok {
+				messages = append(messages, msg)
+				record(opts.Recorder, "user", msg)
+				if emit != nil {
+					emit(Event{Type: "steer", Content: in.Text})
+				}
+			}
+			halted = halted || in.Halt
+		}
 
 		// Compaction runs at the top of every turn (docs/compaction.md):
 		// microcompact first (cheap, local), then autocompact (model-based) if
@@ -248,6 +268,18 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			// Final (tool-less) answer: structurally fine on its own, record now.
 			record(opts.Recorder, "assistant", assistant)
 			res.Messages = messages
+			if halted {
+				res.StopReason = "user_halt"
+			}
+			return res, nil
+		}
+		if halted {
+			// The wrap-up request came back wanting to do more work. The user
+			// asked it to stop; honour that rather than let it carry on with a
+			// polite acknowledgement.
+			record(opts.Recorder, "assistant", assistant)
+			res.StopReason = "user_halt"
+			res.Messages = messages
 			return res, nil
 		}
 
@@ -272,6 +304,27 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// used to land in the transcript.
 		record(opts.Recorder, "assistant", assistant)
 		record(opts.Recorder, "user", toolResultMsg)
+
+		// The second poll point. Between the tool results and the next request
+		// is the other place a user message can be appended without splitting a
+		// tool_use/tool_result pair — and it is the one that matters, because a
+		// long turn is mostly tool batches, not turn boundaries.
+		if in := pollInterjection(opts); !in.Empty() {
+			if msg, ok := steerMessage(in); ok {
+				messages = append(messages, msg)
+				record(opts.Recorder, "user", msg)
+				if emit != nil {
+					emit(Event{Type: "steer", Content: in.Text})
+				}
+			}
+			halted = halted || in.Halt
+		}
+		if halted {
+			// One more request so the model can report what it finished, then
+			// stop. Ending here instead would leave the user to work out what
+			// was completed from the tool results.
+			res.StopReason = "user_halt"
+		}
 
 		if opts.MaxTurns > 0 && res.NumTurns >= opts.MaxTurns {
 			res.StopReason = "max_turns"

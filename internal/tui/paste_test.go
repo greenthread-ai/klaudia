@@ -137,7 +137,7 @@ func TestSubmitEchoesChipButSendsPayload(t *testing.T) {
 	m.ctx = context.Background()
 	m.events = make(chan tea.Msg, 8)
 	m.run = func(_ context.Context, prompt string, _ []anthropic.BetaMessageParam,
-		_ agent.Approver, _ tools.Asker, _ tools.Planner, _ agent.Emitter) (agent.Result, error) {
+		_ agent.Approver, _ tools.Asker, _ tools.Planner, _ agent.Emitter, _ func() agent.Interjection) (agent.Result, error) {
 		sent <- prompt
 		return agent.Result{}, nil
 	}

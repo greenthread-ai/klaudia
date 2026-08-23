@@ -38,7 +38,7 @@ import (
 
 // RunFunc drives one user turn against the agent core, threading conversation
 // history and using the supplied approver, asker, and emitter.
-type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error)
+type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, interject func() agent.Interjection) (agent.Result, error)
 
 // Session is mutable state shared between the TUI and the RunFunc closure, so
 // slash commands like /model can change settings for subsequent turns. The
@@ -340,7 +340,11 @@ type Model struct {
 	// pendingOSC holds a clipboard escape sequence to emit on the next frame.
 	// Writing it through View keeps it ordered with respect to the renderer.
 	pendingOSC string
-	queued     string // a message typed while the model is working (sent on completion)
+	// steer holds what the user typed while Klaudia was working. The agent loop
+	// drains it at its next safe point, so a correction lands before the next
+	// consequential action rather than after the turn. Anything still pending
+	// when the turn ends becomes the next turn instead.
+	steer steerBox
 	// Pending AskUserQuestion.
 	askReply    chan string
 	askOptions  []tools.AskOption
@@ -629,9 +633,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
 			}
 		}
-		// A message queued while this turn ran is sent now as the next turn.
-		if q := strings.TrimSpace(m.queued); q != "" {
-			m.queued = ""
+		// Anything the agent did not get to before the turn ended becomes the
+		// next turn. The common case is that it was already consumed mid-turn,
+		// which is the whole point — drain() is what stops it being sent twice.
+		if q := strings.TrimSpace(m.steer.drain().Text); q != "" {
 			m.pushHistory(q)
 			m.appendLine(userStyle.Render("› ") + q)
 			m.setState(stateRunning)
@@ -834,12 +839,14 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m.handleSlash(expanded)
 			}
 			if text != "" {
-				m.queued = text
+				m.steer.add(text)
 				m.input.Reset()
 				m.syncInputHeight()
+				m.appendLine(hintStyle.Render(
+					"  ⏎ Klaudia will read this before its next step — Enter again to interrupt now"))
 				return m, nil
 			}
-			if m.queued != "" && m.turnCancel != nil {
+			if m.steer.pending() && m.turnCancel != nil {
 				m.turnCancel()
 				m.turnCancel = nil
 				m.cancelling = true // bottom view swaps to "cancelling…" so user sees the cancel registered
@@ -847,9 +854,8 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case tea.KeyUp:
-			if m.queued != "" { // recall the queued message to edit it
-				m.input.SetValue(m.queued)
-				m.queued = ""
+			if t := m.steer.takeBack(); t != "" { // recall the queued message to edit it
+				m.input.SetValue(t)
 				m.input.CursorEnd()
 				m.syncInputHeight()
 			}
@@ -1026,6 +1032,7 @@ var commandList = []cmdInfo{
 	{"/model", "[name]", "Pick a model from the provider (no arg), or set one by alias/ID"},
 	{"/theme", "[name]", "Change Markdown render theme (no arg = picker)"},
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
+	{"/stop", "", "Ask Klaudia to finish the current step and stop, keeping what it has done"},
 	{"/jobs", "", "List background jobs: what's running, on what port, and where"},
 	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation"},
 	{"/restart", "<job>", "Restart a background job in place, keeping its name and log"},
@@ -1628,6 +1635,14 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		m.startChoice("Permission mode — choose how Klaudia asks before acting:", m.modeChoices())
 		return m, nil
+	case "/stop":
+		if m.state != stateRunning {
+			m.appendLine(bannerStyle.Render("Klaudia isn't working on anything."))
+			break
+		}
+		m.steer.requestHalt()
+		m.appendLine(bannerStyle.Render(
+			"Will stop after the current step and report what's done. Esc to interrupt immediately instead."))
 	case "/jobs":
 		m.jobsCommand()
 	case "/logs":
@@ -2322,7 +2337,7 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.turnCancel = cancel
 	go func() {
-		res, err := m.run(ctx, prompt, m.history, approver, asker, planner, emit)
+		res, err := m.run(ctx, prompt, m.history, approver, asker, planner, emit, m.steer.drain)
 		m.events <- doneMsg{res: res, err: err}
 	}()
 	return tea.Batch(m.spin.Tick, m.sw.Reset(), m.sw.Start())
@@ -2591,12 +2606,19 @@ func looksLineNumbered(s string) bool {
 // the cost. Wrapper text (label, key hints, line count) stays in hint
 // style so the visual weight goes to the queued content itself.
 func (m *Model) renderQueuedHint() string {
-	snippet := oneline(m.queued, 60)
+	text, halt := m.steer.peek()
+	if text == "" && halt {
+		return hintStyle.Render("⏎ stopping after the current step…")
+	}
+	snippet := oneline(text, 60)
 	label := hintStyle.Render("⏎ queued: ")
 	body := userStyle.Render(snippet)
-	tail := "  " + hintStyle.Render("(Enter sends · ↑ edits)")
-	if lines := strings.Count(m.queued, "\n") + 1; lines > 1 {
-		tail = "  " + hintStyle.Render(fmt.Sprintf("(%d lines · Enter sends · ↑ edits)", lines))
+	tail := "  " + hintStyle.Render("(Enter interrupts now · ↑ edits)")
+	if lines := strings.Count(text, "\n") + 1; lines > 1 {
+		tail = "  " + hintStyle.Render(fmt.Sprintf("(%d lines · Enter interrupts now · ↑ edits)", lines))
+	}
+	if halt {
+		tail += "  " + hintStyle.Render("· stopping after this step")
 	}
 	return label + body + tail
 }
@@ -2756,7 +2778,7 @@ func (m *Model) bottomView() string {
 		if tail := m.streamTail(); tail != "" {
 			bottom = tail + "\n" + bottom
 		}
-		if m.queued != "" {
+		if m.steer.pending() {
 			bottom += "\n" + caption(m.renderQueuedHint())
 		}
 	case stateAwaitingPermission:

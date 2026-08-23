@@ -72,7 +72,7 @@ func TestEnterSubmitsMultilinePrompt(t *testing.T) {
 	m.ctx = context.Background()
 	m.events = make(chan tea.Msg, 1)
 	promptCh := make(chan string, 1)
-	m.run = func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter) (agent.Result, error) {
+	m.run = func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, _ func() agent.Interjection) (agent.Result, error) {
 		promptCh <- prompt
 		return agent.Result{}, nil
 	}
@@ -262,8 +262,8 @@ func TestSlashCommandsDuringProcessing(t *testing.T) {
 	// Plain (non-slash) text still queues as a follow-up rather than dispatching.
 	m.input.SetValue("do the thing")
 	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.queued != "do the thing" {
-		t.Fatalf("queued = %q, want the plain text queued", m.queued)
+	if peekSteer(m) != "do the thing" {
+		t.Fatalf("queued = %q, want the plain text queued", peekSteer(m))
 	}
 }
 
@@ -603,12 +603,14 @@ func TestRenderQueuedHintSurfacesMessage(t *testing.T) {
 	// (real session: a "ive setup caddy…" message got lost when a Bash tool
 	// stuck the goroutine and the hint visually blended with the spinner).
 	m := newTestModel()
-	m.queued = "deploy to staging when this is done"
+	m.steer.add("deploy to staging when this is done")
 	out := m.renderQueuedHint()
 	if !strings.Contains(out, "deploy to staging") {
 		t.Errorf("queued message body must be visible; got %q", out)
 	}
-	if !strings.Contains(out, "queued:") || !strings.Contains(out, "Enter sends") {
+	// Enter no longer "sends" it — the agent reads it mid-turn at its next
+	// step, so Enter's remaining job is the immediate escalation.
+	if !strings.Contains(out, "queued:") || !strings.Contains(out, "Enter interrupts now") {
 		t.Errorf("queued hint should keep the label and key hints; got %q", out)
 	}
 }
@@ -617,13 +619,16 @@ func TestRenderQueuedHintLineCountForMultiline(t *testing.T) {
 	// Multi-line queued messages get a "(N lines · …)" annotation so the
 	// user knows they're not seeing the whole thing.
 	m := newTestModel()
-	m.queued = "line one\nline two\nline three"
+	m.steer.add("line one\nline two\nline three")
 	out := m.renderQueuedHint()
 	if !strings.Contains(out, "3 lines") {
 		t.Errorf("multi-line queued message should show line count; got %q", out)
 	}
-	// Single-line: no line-count prefix.
-	m.queued = "just one"
+	// Single-line: no line-count prefix. Drained first because a second
+	// interjection appends to the first rather than replacing it — two
+	// corrections typed before Klaudia looks must both survive.
+	m.steer.drain()
+	m.steer.add("just one")
 	out = m.renderQueuedHint()
 	if strings.Contains(out, "lines") {
 		t.Errorf("single-line queued message must not show line count; got %q", out)
