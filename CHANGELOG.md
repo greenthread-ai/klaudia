@@ -6,6 +6,79 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Long-running commands become managed jobs.** `npm run dev` used to either
+  hold the agent until the timeout or vanish into an untracked process owning
+  port 3000 for the afternoon. A job now has an id and a name you can say out
+  loud (`npm run dev` → `dev`, derived rather than mapped from a table guessing
+  at your vocabulary), a log file under `~/.klaudia/jobs/`, a port when it
+  announces one, and a location — `local`, or the host it started on over ssh.
+  `/jobs`, `/logs`, `/restart`, `/stopjob`, and the same reach for the model
+  through `Jobs`, `BashOutput`, `RestartJob` and `KillShell`.
+
+  **A crash is reported when it happens.** Nothing used to notice a job dying
+  until something read it, so "why is the site down" got the answer "it's
+  running fine".
+
+  **Restart replaces the process in place** — same id, same name, same log, with
+  a marker where the restart happened — and starting an already-running command
+  hands back the existing job. Two dev servers fighting over one port is a
+  confusing failure, and the loser looks like broken code.
+- **`/logs` uses your pager, and follow mode cannot fight you.** `/logs <job>`
+  hands `less` the real file (so `F` follows from there); `/logs -f` prints into
+  the terminal's own scrollback, where scrolling up cannot be undone by new
+  output arriving — there is no viewport to snap. `/logs --errors` pulls just
+  the failure lines, stack traces intact, into the conversation, so a crash can
+  reach the model without four thousand lines of request logging.
+- **You can steer Klaudia while it works.** Typing "don't modify the API"
+  mid-turn used to hold the text until the turn ended and send it afterwards, by
+  which point the API had been modified. The correction now lands in the request
+  that decides the next action. `/stop` asks Klaudia to finish the current step
+  and report what it did — "stop after this test run" should not throw away the
+  test run.
+- **`!command` runs the shell without leaving the conversation**, and its output
+  becomes context, so "revert that" has a referent. The input marker switches
+  from `›` to `$` as soon as the line starts with `!`, so what Enter will do is
+  visible before you press it.
+- **A turn ends with what changed and what was verified**, kept apart on
+  purpose: conflating them is how "I fixed it" comes to mean "it compiles". Only
+  test runners, typecheckers, linters and vet count as verification — a passing
+  `go build` is not evidence the behaviour is right. Failures stay visible with
+  their count. A turn that changed nothing prints nothing.
+
+### Changed
+- **Commands run in their own process group**, and stopping one signals the
+  whole group. See Fixed.
+- **Children are told there is no terminal**: `GIT_TERMINAL_PROMPT=0`,
+  `GIT_PAGER=cat`, `PAGER=cat`, and the real `COLUMNS`/`LINES`. Credential
+  helpers are untouched. Your own `$PAGER` still drives Klaudia's long-output
+  view, which has a real terminal.
+- **Programs needing a terminal are refused before launch**, naming the flag
+  that would have worked: `git rebase --onto`, `git add --`, `-m`,
+  `ssh <host> '<command>'`. Klaudia does not allocate a PTY — one would make
+  `vim` "work" in a surface the model cannot drive and you cannot see, so the
+  turn would look successful while sitting in an editor forever. **Known
+  limitation:** terminal resize does not reach child processes.
+- **A timed-out service says so.** A bare `exit 124` reads as "the command is
+  broken" and invites a retry with a longer timeout; when the command looks like
+  a service, the result names `run_in_background` instead.
+- **Klaudia handles SIGINT.** It had no signal handling at all, which was
+  survivable only because children shared its process group. Now that they do
+  not, Ctrl+C cancels the run and tears jobs down properly.
+
+### Fixed
+- **Stopping a background command left its children running.** Nothing set
+  `Setpgid`, so `exec.CommandContext` signalled only the shell, not what the
+  shell started — verified with a probe: a `sleep 60` grandchild survived cancel
+  and Wait. That single gap is why stopping a job did not stop it, why Esc
+  during a command did not end it, and why the next `npm run dev` became a
+  second copy. Kill now signals the group, SIGTERM then SIGKILL after two
+  seconds so a server releases its port and flushes its log rather than being
+  truncated mid-sentence.
+- **Background output was never written down.** It lived in a slice that only
+  grew, so an afternoon's dev server held every line it ever printed in
+  Klaudia's heap, none of it pageable, searchable or readable after the session.
+
+### Added
 - **Klaudia works autonomously inside the project and asks before changing your
   machine.** The old model asked per command, which produced prompt fatigue for
   ordinary work and approvals that neither covered the operation you meant nor

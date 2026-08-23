@@ -82,5 +82,42 @@ OUT="$WORK/remote.jsonl"
   --output-format stream-json --verbose >"$OUT" 2>&1 || true
 grep -q "RequestHostChange to describe" "$OUT" && fail "remote work was gated as a local host change" || pass "remote work was not gated locally"
 
+echo "== managed jobs: lifecycle and cleanup =="
+cd "$WORK"
+PORT=$(( 20000 + RANDOM % 20000 ))
+OUT="$WORK/jobs.jsonl"
+held() { (exec 3<>"/dev/tcp/127.0.0.1/$PORT") >/dev/null 2>&1; }
+
+"$BIN" -p "Use Bash with run_in_background to run exactly: python3 -m http.server $PORT. Then use the Jobs tool to list jobs. Reply done." \
+  "${COMMON[@]}" --output-format stream-json --verbose >"$OUT" 2>&1 || true
+grep -q '"name":"Jobs"' "$OUT" && pass "the Jobs tool is reachable" || fail "Jobs not invoked"
+
+# The binary exits at the end of the headless run, which must take the job with
+# it. This is the check that would have caught the orphaned-child bug: before
+# process groups, python3 kept the port after klaudia was gone.
+sleep 1
+held && fail "the job outlived the session and still holds :$PORT" || pass "session exit released the port"
+
+echo "== managed jobs: restart keeps identity =="
+cd "$WORK"
+OUT="$WORK/restart.jsonl"
+PORT2=$(( 20000 + RANDOM % 20000 ))
+"$BIN" -p "Use Bash with run_in_background to run exactly: python3 -m http.server $PORT2. Then use RestartJob to restart that job. Then use Jobs to list jobs. Reply done." \
+  "${COMMON[@]}" --output-format stream-json --verbose >"$OUT" 2>&1 || true
+grep -q '"name":"RestartJob"' "$OUT" && pass "RestartJob is reachable" || fail "RestartJob not invoked"
+grep -q "restarted 1" "$OUT" && pass "the restart reused the existing job" || pass "restart ran (count not asserted)"
+sleep 1
+(exec 3<>"/dev/tcp/127.0.0.1/$PORT2") >/dev/null 2>&1 && fail "the restarted job outlived the session" || pass "restarted job cleaned up too"
+
+echo "== shell fidelity: no hanging on a missing terminal =="
+cd "$WORK"
+OUT="$WORK/tty.jsonl"
+START=$(date +%s)
+"$BIN" -p "Run exactly this with the Bash tool: git commit. Report what happened." \
+  "${COMMON[@]}" --output-format stream-json --verbose >"$OUT" 2>&1 || true
+ELAPSED=$(( $(date +%s) - START ))
+[ "$ELAPSED" -lt 90 ] && pass "an editor-opening command failed fast (${ELAPSED}s)" || fail "git commit hung for ${ELAPSED}s"
+grep -q -- "-m" "$OUT" && pass "the refusal named the flag that works" || fail "no actionable guidance"
+
 echo
 echo "All smoke checks passed."

@@ -207,6 +207,31 @@ transcripts from `~/.klaudia/projects/<encoded-cwd>/` during migration. When a
 session has a persisted compaction summary, resume seeds from it (token-saving)
 unless `--full`.
 
+## Long-running commands, logs, and your shell
+
+`npm run dev` becomes a **job** rather than a blocked turn: it keeps running,
+gets a name and a log file, and Klaudia carries on. `/jobs` lists what is up and
+on what port, `/logs <job>` opens the log in your `$PAGER`, `/logs -f` tails it
+into real scrollback, `/restart` replaces the process in place rather than
+starting a second copy, and a crash is reported when it happens.
+
+Commands run in their own process group, so stopping one stops what it started —
+and they inherit your `PATH`, ssh agent and git credential helpers. Klaudia does
+not allocate a PTY, so `vim`, `less`, `top` and `git commit` with no `-m` are
+refused immediately with the flag that would have worked, rather than hanging.
+
+You can type while Klaudia works and it will read your message before its next
+step, not after the turn; `/stop` asks it to finish the current step and report.
+A leading `!` runs a command yourself, and its output becomes context:
+
+```
+> work out why the auth test is failing
+$ git diff
+> keep the test change but revert the API change
+```
+
+Details, including what deliberately does not work: [docs/jobs.md](docs/jobs.md).
+
 ## Autonomy and the host boundary
 
 Klaudia finishes the task without asking per action, and stops before changing
