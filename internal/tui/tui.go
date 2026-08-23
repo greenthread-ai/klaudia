@@ -77,6 +77,9 @@ type Session struct {
 	ListModels func(context.Context) ([]api.ModelInfo, error)
 	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
 	MCP MCPController
+	// Jobs, if set, backs /jobs, /logs, /restart and /stopjob: the session's
+	// managed background processes. Nil when there is no job store.
+	Jobs JobController
 	// Trust, if set, backs /trust: the session's host guardrail, its approvals
 	// and what the classifier has found. Nil when there is no gate, which
 	// /trust reports rather than hiding.
@@ -257,6 +260,11 @@ type Model struct {
 	history    []anthropic.BetaMessageParam
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
+	// following is the job whose log is being tailed into scrollback, or "".
+	// Follow prints into the terminal's own scrollback rather than a managed
+	// region, which is why scrolling up during follow cannot be snapped back
+	// down — there is nothing to snap.
+	following string
 	// touched is the set of repo-relative paths Klaudia has modified this
 	// session, so /commit can stage its own work and leave the user's alone.
 	touched map[string]bool
@@ -399,6 +407,17 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		history: history,
 		sess:    sess,
 	}
+	// A job dying at 14:02 and being noticed at 14:40 costs the half hour in
+	// between, so the store reports exits straight into the event loop.
+	if sess.Jobs != nil {
+		events := m.events
+		sess.Jobs.OnExit(func(st tools.JobStatus) {
+			select {
+			case events <- jobExitMsg{status: st}:
+			default: // a full queue must never block the job's own goroutine
+			}
+		})
+	}
 	// Colour the chrome for the session's theme before drawing the banner.
 	applyChromeTheme(chromePaletteFor(m.currentThemeID()))
 	model, branch := "", ""
@@ -496,6 +515,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case eventMsg:
 		m.renderEvent(msg.ev)
 		return m, m.waitForEvent()
+
+	case jobExitMsg:
+		m.onJobExit(msg.status)
+		return m, m.waitForEvent()
+
+	case followTickMsg:
+		return m, m.onFollowTick(msg.ref)
 
 	case permissionMsg:
 		// Session rules are about tools, and a host change is not a question
@@ -762,6 +788,12 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyCtrlC:
 		return m.onCtrlC()
 	case tea.KeyEsc:
+		// Leaving follow mode comes first: Esc while watching a log means "stop
+		// watching", not "kill the turn that started an hour ago". The job keeps
+		// running either way — following is a view, not a lifecycle.
+		if m.stopFollow() {
+			return m, nil
+		}
 		// Interrupt the in-flight turn (and any pending approval/question it is
 		// blocked on). The cancelled context unblocks the agent goroutine, which
 		// then sends doneMsg.
@@ -994,6 +1026,10 @@ var commandList = []cmdInfo{
 	{"/model", "[name]", "Pick a model from the provider (no arg), or set one by alias/ID"},
 	{"/theme", "[name]", "Change Markdown render theme (no arg = picker)"},
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
+	{"/jobs", "", "List background jobs: what's running, on what port, and where"},
+	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation"},
+	{"/restart", "<job>", "Restart a background job in place, keeping its name and log"},
+	{"/stopjob", "<job|all>", "Stop a background job and its whole process group"},
 	{"/trust", "[upgrade|observe|off|revoke <id>]", "Show what Klaudia may change on this machine, and what it already may"},
 	{"/allow", "<rule>", "Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)"},
 	{"/deny", "<rule>", "Auto-deny a tool rule this session"},
@@ -1592,6 +1628,20 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		m.startChoice("Permission mode — choose how Klaudia asks before acting:", m.modeChoices())
 		return m, nil
+	case "/jobs":
+		m.jobsCommand()
+	case "/logs":
+		if len(args) > 0 && strings.EqualFold(args[0], "stop") {
+			if !m.stopFollow() {
+				m.appendLine(bannerStyle.Render("not following anything"))
+			}
+			break
+		}
+		return m.logsCommand(args)
+	case "/restart":
+		m.restartCommand(args)
+	case "/stopjob":
+		m.stopJobCommand(args)
 	case "/trust":
 		m.trustCommand(args)
 	case "/config":
