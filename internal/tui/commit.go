@@ -33,6 +33,12 @@ func (m *Model) noteTouched(path string) {
 	rel := m.relToRepo(path)
 	m.touched[rel] = true
 	m.turnTouched[rel] = true
+	// Stamp it so a later hand-edit to the same file is detectable. Without
+	// this, "Klaudia's change" would silently include whatever the user did to
+	// the file afterwards, and undo would eat it.
+	if m.base != nil && m.sess != nil {
+		m.base.stamp(m.sess.CWD, rel)
+	}
 }
 
 // relToRepo normalises a path to the form `git status --short` reports, so the

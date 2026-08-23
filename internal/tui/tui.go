@@ -273,6 +273,10 @@ type Model struct {
 	// region, which is why scrolling up during follow cannot be snapped back
 	// down — there is nothing to snap.
 	following string
+	// base is the working tree as it was when the session started, plus stamps
+	// of what Klaudia has written since. It is what makes "your changes" and
+	// "Klaudia's changes" distinguishable at all.
+	base *baseline
 	// promptIsBang tracks whether the input marker is currently "$", so the
 	// prompt function is only rebuilt when the answer changes.
 	promptIsBang bool
@@ -439,6 +443,15 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		sess:    sess,
 	}
 	m.executor = sess.Executor
+	// Capture the working tree before Klaudia touches anything. A file that is
+	// dirty now and dirty later looks the same either way; only this tells them
+	// apart.
+	m.base = newBaseline()
+	if sess.CWD != "" {
+		if status, err := gitOutput(sess.CWD, "status", "--porcelain"); err == nil {
+			m.base.capture(status)
+		}
+	}
 	// A job dying at 14:02 and being noticed at 14:40 costs the half hour in
 	// between, so the store reports exits straight into the event loop.
 	if sess.Jobs != nil {
@@ -459,6 +472,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	m.introModel, m.introBranch = model, branch
 	m.introTagline, m.hasIntro = randomTagline(), true
 	m.appendLine(m.introText())
+	m.warnIfDirtyAtStart()
 	return m
 }
 
@@ -1106,6 +1120,7 @@ var commandList = []cmdInfo{
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
 	{"!<command>", "", "Run a shell command directly; its output becomes context for Klaudia"},
 	{"/stop", "", "Ask Klaudia to finish the current step and stop, keeping what it has done"},
+	{"/changes", "", "Show the working tree split into your changes and Klaudia's"},
 	{"/jobs", "", "List background jobs: what's running, on what port, and where"},
 	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation"},
 	{"/restart", "<job>", "Restart a background job in place, keeping its name and log"},
@@ -1716,6 +1731,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.steer.requestHalt()
 		m.appendLine(bannerStyle.Render(
 			"Will stop after the current step and report what's done. Esc to interrupt immediately instead."))
+	case "/changes":
+		m.changesCommand()
 	case "/jobs":
 		m.jobsCommand()
 	case "/logs":
@@ -1819,7 +1836,18 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			break
 		}
 		cwd := m.sess.CWD
-		plan := planCommit(status, m.touched)
+		// Only Klaudia's own files are stageable. A file it wrote that the user
+		// then edited by hand is deliberately left out: the two changes cannot
+		// be separated without hunk-level surgery, and sweeping the user's edit
+		// into a commit describing Klaudia's work is the bug /commit already
+		// stopped doing once. It is listed rather than silently dropped.
+		safe := map[string]bool{}
+		for _, f := range m.classify(status) {
+			if f.Owner == ownerKlaudia {
+				safe[f.Path] = true
+			}
+		}
+		plan := planCommit(status, safe)
 		if plan.empty() {
 			m.appendLine(bannerStyle.Render(plan.describe() +
 				"\nStage the changes you want with git add, then run /commit again."))
