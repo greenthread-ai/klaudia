@@ -48,6 +48,15 @@ port mirrors (see `internal/version`).
   work is the bug `/commit` already stopped doing once.
 
 ### Fixed
+- **A dev server backgrounded with `&` bypassed the job system entirely.** Found
+  by running the spec's agent-loop torture test: the model shell-backgrounded
+  the server eleven times and then managed the processes by hand with `pkill`
+  and `kill -9 $(lsof -ti:PORT)` — no name, no managed log, no crash detection,
+  no restart. A model that already knows `&` will use `&`, and the timeout nudge
+  cannot help because a self-backgrounded command returns immediately. Bash now
+  refuses to detach something long-running and names `run_in_background`; the
+  refusal fires only when the command both backgrounds *and* looks long-running,
+  so `sleep 1 &` is nobody's business.
 - **Ownership was recorded before the write, not after.** The stamp used to be
   taken from the `tool_use` event, which fires before the tool runs — so every
   file Klaudia edited looked like it had changed underneath, i.e. like *you* had

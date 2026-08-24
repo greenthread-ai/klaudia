@@ -386,3 +386,67 @@ func countMarker(t *testing.T, marker string) int {
 	n, _ := strconv.Atoi(strings.TrimSpace(string(out)))
 	return n
 }
+
+// Found by the agent-loop torture test: the model never used run_in_background.
+// It shell-backgrounded a dev server eleven times and then managed the
+// processes by hand with pkill and `kill -9 $(lsof -ti:PORT)` — bypassing the
+// name, the log, the crash detection and the restart, which is precisely the
+// work the job system exists to remove. The timeout nudge cannot catch it: a
+// self-backgrounded command returns immediately.
+func TestSelfBackgroundedServiceIsRedirectedToAJob(t *testing.T) {
+	for _, cmd := range []string{
+		"go run ./cmd/api &",
+		"(go run ./cmd/api > api.log 2>&1 &) ; sleep 1; curl -s localhost:8477/healthz",
+		"npm run dev &",
+		"nohup make dev",
+		"cd /srv && python3 -m http.server 8000 > out.log 2>&1 &",
+	} {
+		reason, blocked := selfBackgrounded(cmd)
+		if !blocked {
+			t.Errorf("%q was allowed to detach an untracked service", cmd)
+			continue
+		}
+		if !strings.Contains(reason, "run_in_background") {
+			t.Errorf("%q: the refusal does not name the alternative: %s", cmd, reason)
+		}
+	}
+}
+
+// The far more important half. Backgrounding is a normal shell thing and most
+// of it is nobody's business.
+func TestOrdinaryBackgroundingIsLeftAlone(t *testing.T) {
+	for _, cmd := range []string{
+		"sleep 1 &",                   // not a service
+		"go test ./... && echo done",  // && is not backgrounding
+		"go run ./cmd/api",            // foreground: the timeout nudge handles it
+		"make dev 2>&1 | tee out.log", // 2>&1 is a redirection
+		"echo hi > /dev/null 2>&1",    //
+		"grep -r 'a && b' .",          // && inside quotes
+		"printf '%s' 'run dev &'",     // & inside quotes
+		"docker compose up -d",        // detaches, but docker manages it
+		"git log --oneline",           //
+	} {
+		if reason, blocked := selfBackgrounded(cmd); blocked {
+			t.Errorf("%q was refused: %s", cmd, reason)
+		}
+	}
+}
+
+func TestHasBackgroundOperator(t *testing.T) {
+	for cmd, want := range map[string]bool{
+		"a &":          true,
+		"a & b":        true,
+		"(a &) ; b":    true,
+		"nohup a":      true,
+		"a && b":       false,
+		"a 2>&1":       false,
+		"a >&2":        false,
+		"echo 'x & y'": false,
+		`echo "x & y"`: false,
+		"a | b":        false,
+	} {
+		if got := hasBackgroundOperator(cmd); got != want {
+			t.Errorf("hasBackgroundOperator(%q) = %v, want %v", cmd, got, want)
+		}
+	}
+}

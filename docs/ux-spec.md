@@ -110,6 +110,50 @@ Not features — things that were already broken and would have stayed broken.
 - **The status bar's context percentage overstated pressure ~5×** — the model
   table said 200K for a lineup that is now 1M.
 
+## The agent-loop torture test
+
+`scripts/torture.sh` is the spec's own torture test, run for real. It builds a
+27-file Go service with a deliberate concurrency bug, seeds the working tree
+with uncommitted work belonging to the user, stands up a real sshd in a
+container as "staging", and gives Klaudia one task that requires the whole arc.
+
+The bug is two-layered on purpose, so the *obvious* fix is wrong. Rotation
+deletes the old token immediately, so tabs get signed out — the reported
+symptom, which the loadtest catches. The obvious fix is a grace map; it stops
+the sign-outs and the unit tests stay green, but each concurrent refresh still
+mints its own successor, so one user ends up with six live sessions. Nothing
+catches that except the running server's log. All three states were verified by
+hand before the agent ever saw it.
+
+**Result:** every measurable item passed. 21 file inspections, 5 edits, 4 test
+runs, 4 managed jobs, 15 log reads, 2 ssh commands, 7 loadtest runs, one
+declared host change refused and reported rather than forced. Independently
+verified afterwards: 1200 refreshes at 12 concurrent tabs with zero sign-outs
+and zero drift, race detector clean, the user's uncommitted edit and scratch
+file untouched, `/etc/hosts` unmodified, no job outliving the session.
+
+Two items are marked unjudgeable rather than passed: "did the conversation
+remain readable" needs a human, and "could the user redirect Klaudia" is not
+reachable headlessly (steering has its own tests in `internal/agent`).
+
+### What it found
+
+**The model never used the job system.** In the first run it shell-backgrounded
+the dev server with `(go run ./cmd/api &)` eleven times and then managed the
+processes by hand with `pkill` and `kill -9 $(lsof -ti:8477)` — no name, no
+managed log, no crash detection, no restart. Everything §11 built, bypassed,
+because a model that already knows `&` will use `&`.
+
+The timeout nudge could not catch it: a self-backgrounded command returns
+immediately, so there is no timeout to nudge on. It had to be caught on the way
+in. Bash now refuses to shell-background something that looks long-running and
+names the alternative. In the second run the model hit that refusal once and
+used `run_in_background` for every server start afterwards.
+
+This is the clearest argument for running the test rather than reasoning about
+it: the job system was complete, tested, and documented, and in practice it was
+invisible.
+
 ## Verification
 
 `scripts/smoke.sh` runs the whole thing against a live model: tools, resume,
@@ -123,9 +167,8 @@ and exit codes.
 - **Manual terminal verification.** Drag-select, tmux copy mode, VS Code's
   terminal, a light background, and resize while scrolled up. These need a
   human at a terminal.
-- **§9's narration collapsing**, per the deviation above.
-- **The agent-loop torture test** from the spec — 20+ inspections, a dev server,
-  a failed approach, SSH, and a corrected implementation — end to end.
+- **§9's narration collapsing**, per the deviation above. The torture test's
+  67 tool lines for one task is the number to judge it against.
 - **Subagents**: parallel dispatch restricted to read-only types, child
   observability, per-type models, user-defined `.klaudia/agents/*.md`, and the
   adversarial-review idea. Deliberately parked.

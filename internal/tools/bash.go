@@ -102,6 +102,21 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 		return []Result{{Content: reason, IsError: true}}, nil
 	}
 
+	// A service the model backgrounds with `&` itself skips the whole job
+	// system: no name, no managed log, no crash detection, no restart. Observed
+	// in the agent-loop torture test — the model shell-backgrounded a dev
+	// server eleven times and then managed the processes by hand with pkill and
+	// `kill -9 $(lsof -ti:PORT)`, which is exactly the work managed jobs exist
+	// to remove.
+	//
+	// The timeout nudge cannot catch this: a self-backgrounded command returns
+	// immediately, so there is no timeout. It has to be caught on the way in.
+	if !in.RunInBackground {
+		if reason, blocked := selfBackgrounded(in.Command); blocked {
+			return []Result{{Content: reason, IsError: true}}, nil
+		}
+	}
+
 	// Background: launch detached, return a shell id immediately.
 	if in.RunInBackground {
 		if b.shells == nil {
@@ -144,6 +159,80 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 
 	model, full := formatBashOutput(resp, in.Command)
 	return []Result{{Content: model, Full: full, IsError: resp.ExitCode != 0}}, nil
+}
+
+// selfBackgrounded reports whether a command detaches a long-running service
+// with the shell rather than asking for a job, and what to do instead.
+//
+// Deliberately narrow: it fires only when the command *both* backgrounds
+// something *and* looks like a service. `sleep 1 &` in a test script is nobody's
+// business; `go run ./cmd/api &` is a dev server that should have a name, a log
+// and a way to be restarted.
+func selfBackgrounded(command string) (reason string, blocked bool) {
+	if !looksLongRunning(command) || !hasBackgroundOperator(command) {
+		return "", false
+	}
+	return "This backgrounds a long-running process with the shell, which leaves it untracked: " +
+		"no name, no log Klaudia can page, no notice when it dies, and no way to restart it — " +
+		"you would have to hunt it down with ps and kill.\n\n" +
+		"Start it as a managed job instead: run the server on its own with Bash's " +
+		"run_in_background parameter, then run your checks as a separate command. " +
+		"Read its output with BashOutput, restart it with RestartJob, stop it with KillShell, " +
+		"and check Jobs first in case it is already up.\n\n" +
+		"If this really is short-lived, just run it in the foreground.", true
+}
+
+// looksLongRunning is looksLikeService plus the shapes that are only ever
+// backgrounded because they do not return.
+//
+// Broader than the timeout nudge on purpose. There, a false positive adds an
+// unhelpful sentence to a failure; here it costs one retry, and the guidance
+// says exactly what to do — so erring toward catching `go run ./cmd/api &` is
+// worth the occasional `go run ./cmd/oneshot &` being told to pick a lane.
+func looksLongRunning(command string) bool {
+	if looksLikeService(command) {
+		return true
+	}
+	c := strings.ToLower(command)
+	for _, h := range []string{
+		"go run ", "cargo run", "dotnet run", "bootrun",
+		"rails s", "flask ", "php -s", "caddy run", "nginx",
+	} {
+		if strings.Contains(c, h) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasBackgroundOperator finds a shell `&` that detaches, ignoring `&&`, `>&`
+// and `2>&1`.
+func hasBackgroundOperator(command string) bool {
+	if strings.Contains(command, "nohup ") || strings.Contains(command, "setsid ") {
+		return true
+	}
+	inSingle, inDouble := false, false
+	for i := 0; i < len(command); i++ {
+		c := command[i]
+		switch {
+		case c == '\'' && !inDouble:
+			inSingle = !inSingle
+		case c == '"' && !inSingle:
+			inDouble = !inDouble
+		case c == '&' && !inSingle && !inDouble:
+			if i+1 < len(command) && command[i+1] == '&' {
+				i++ // logical AND
+				continue
+			}
+			if i > 0 && (command[i-1] == '&' || command[i-1] == '>' || command[i-1] == '<') {
+				continue // the tail of &&, or a >& / <& redirection
+			}
+			// A digit before it is a fd redirection like 2>&1, already covered
+			// by the '>' case above. Anything else detaches.
+			return true
+		}
+	}
+	return false
 }
 
 // serviceHints are the shapes of a command that does not intend to finish.
