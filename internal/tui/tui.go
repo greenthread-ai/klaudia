@@ -273,6 +273,10 @@ type Model struct {
 	// region, which is why scrolling up during follow cannot be snapped back
 	// down — there is nothing to snap.
 	following string
+	// pinned are paths the user asked to keep in context. Re-stated every turn
+	// so they survive compaction, which is the only way "keep this in mind"
+	// still means something forty turns later.
+	pinned []string
 	// checkpoints is the undo stack: the contents of files, as git blobs, from
 	// just before Klaudia changed them.
 	checkpoints checkpointStack
@@ -1145,7 +1149,10 @@ var commandList = []cmdInfo{
 	{"/status", "", "Show the current session settings"},
 	{"/config", "", "Show resolved provider/model/sandbox settings"},
 	{"/agents", "", "List available sub-agent types"},
-	{"/context", "", "Show working directory, git branch, and message count"},
+	{"/context", "", "Show what Klaudia has in context: pinned, changed, active, recently inspected"},
+	{"/pin", "[path]", "Keep a file in context every turn (survives compaction)"},
+	{"/unpin", "<path>", "Stop pinning a file"},
+	{"/forget", "<path>", "Drop a file from the tracked context"},
 	{"/compact", "", "Summarize and compact the conversation history now"},
 	{"/add-dir", "<path>", "Add a directory to the prompt context"},
 	{"/plan", "[off]", "Enter (or leave) read-only plan mode"},
@@ -1767,6 +1774,12 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.appendLine(bannerStyle.Render(m.renderAgents()))
 	case "/context":
 		m.appendLine(bannerStyle.Render(m.renderContext()))
+	case "/pin":
+		m.pinCommand(args, true)
+	case "/unpin":
+		m.pinCommand(args, false)
+	case "/forget":
+		m.forgetCommand(args)
 	case "/add-dir":
 		if len(args) == 0 {
 			if len(m.sess.ExtraDirs) == 0 {
@@ -1936,21 +1949,6 @@ func (m *Model) renderAgents() string {
 }
 
 // renderContext shows the working directory, git branch, and model.
-func (m *Model) renderContext() string {
-	cwd := m.sess.CWD
-	if cwd == "" {
-		cwd = "(unknown)"
-	}
-	branch := m.sess.GitBranch
-	if branch == "" {
-		branch = "(none)"
-	}
-	sessionID := m.sess.SessionID
-	if sessionID == "" {
-		sessionID = "(unknown)"
-	}
-	return fmt.Sprintf("Context:\n  cwd=%s\n  git-branch=%s\n  session-id=%s\n  messages=%d", cwd, branch, sessionID, len(m.history))
-}
 
 // gitOutput runs `git <args>` in dir and returns combined output. A non-zero
 // exit returns the output plus the error so callers can surface git's message.
@@ -2434,6 +2432,13 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	// Frame the turn. Goal-setting interviews the user and drafts the spec; an
 	// active loop's prompt is already goal.IterationPrompt (built by the caller),
 	// so leave it untouched; otherwise re-state any standing /goal (drift guard).
+	// Pinned files are re-stated every turn. Mentioned once forty turns ago is,
+	// for practical purposes, not in context at all — and compaction is allowed
+	// to elide it.
+	if pins := m.pinnedBlock(); pins != "" {
+		prompt = pins + "\n\n" + prompt
+	}
+
 	// A `!` command the user ran since the last turn is context for this one:
 	// "revert that" needs a referent. Prepended rather than sent separately so
 	// it arrives attached to the instruction that refers to it.
