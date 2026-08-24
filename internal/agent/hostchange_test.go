@@ -267,3 +267,51 @@ func TestDeclarationToolCannotActOnItsOwn(t *testing.T) {
 			req.Specifier)
 	}
 }
+
+// A declared change that was refused has to leave a trace. Without it the
+// ledger only knows about changes it caught — and a model that did the right
+// thing, declared its intent and was told no, would be invisible to /trust and
+// to an automation deciding what exit code to use.
+func TestDeclinedDeclarationIsRecorded(t *testing.T) {
+	g, _ := gateFixture(t)
+	h := hostChangeApprover{
+		gate: g,
+		approver: ApproverFunc(func(context.Context, ApprovalRequest) permission.Decision {
+			return permission.Decision{Behavior: permission.Deny}
+		}),
+	}
+	if _, err := h.RequestHostChange(context.Background(), tools.HostChangeRequest{
+		Summary: "Install nginx", Reason: "proxy", Packages: []string{"nginx"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reports := g.Reports()
+	if len(reports) != 1 {
+		t.Fatalf("%d reports, want 1", len(reports))
+	}
+	if !reports[0].Enforced {
+		t.Error("the declined declaration was not recorded as enforced")
+	}
+	if !strings.Contains(reports[0].Summary, "Install nginx") {
+		t.Errorf("report summary = %q", reports[0].Summary)
+	}
+}
+
+// An approved one leaves no "blocked" trace.
+func TestApprovedDeclarationIsNotRecordedAsBlocked(t *testing.T) {
+	g, _ := gateFixture(t)
+	h := hostChangeApprover{
+		gate: g,
+		approver: ApproverFunc(func(context.Context, ApprovalRequest) permission.Decision {
+			return permission.Decision{Behavior: permission.Allow}
+		}),
+	}
+	h.RequestHostChange(context.Background(), tools.HostChangeRequest{
+		Summary: "Install nginx", Reason: "proxy", Packages: []string{"nginx"},
+	})
+	for _, r := range g.Reports() {
+		if r.Enforced {
+			t.Errorf("an approved change was recorded as blocked: %+v", r)
+		}
+	}
+}

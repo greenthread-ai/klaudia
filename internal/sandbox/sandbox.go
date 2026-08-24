@@ -204,6 +204,25 @@ func (p *BackgroundProcess) Read(offset int) (data string, newOffset int, done b
 	return string(p.buf[offset:]), len(p.buf), p.done, p.exitCode
 }
 
+// WaitExit blocks until the process has exited or d elapses, reporting whether
+// it exited. Used at session teardown, where returning before the process is
+// actually gone would abandon it: the SIGTERM→SIGKILL escalation runs in a
+// goroutine, and a goroutine does not outlive os.Exit.
+func (p *BackgroundProcess) WaitExit(d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if !p.Running() {
+			return true
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return !p.Running()
+}
+
+// KillGrace is how long a process group gets between SIGTERM and SIGKILL.
+// Exported so callers that must wait for teardown know how long that is.
+func KillGrace() time.Duration { return killGrace }
+
 // Running reports whether the process is still executing.
 func (p *BackgroundProcess) Running() bool {
 	p.mu.Lock()

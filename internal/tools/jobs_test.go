@@ -2,7 +2,10 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -346,4 +349,40 @@ func TestLooksLikeService(t *testing.T) {
 			t.Errorf("%q should not look like a service", cmd)
 		}
 	}
+}
+
+// A process that ignores SIGTERM must still be gone when the session ends.
+//
+// This is the case KillAll used to leak: it sent the signal and returned, the
+// binary exited, and the goroutine that would have sent SIGKILL two seconds
+// later went with it — so the server kept its port forever.
+func TestKillAllWaitsOutAStubbornProcess(t *testing.T) {
+	store := newTestJobStore(t)
+	marker := "klaudia-stubborn-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	// trap '' TERM ignores SIGTERM entirely; only SIGKILL will end this.
+	_, err := store.Start(sandbox.NewLocal(), sandbox.Request{
+		Command: fmt.Sprintf("trap '' TERM; sh -c 'sleep 60 # %s' & wait", marker),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitJob(t, func() bool { return countMarker(t, marker) > 0 }, "the process never started")
+
+	store.KillAll()
+	// KillAll has returned, so by its own contract the process is gone. No
+	// polling here on purpose: the whole bug was returning too early.
+	if n := countMarker(t, marker); n != 0 {
+		t.Fatalf("%d process(es) survived KillAll — a session exiting now would leak them", n)
+	}
+}
+
+func countMarker(t *testing.T, marker string) int {
+	t.Helper()
+	out, err := exec.Command("sh", "-c",
+		"ps -A -o command= | grep -F "+marker+" | grep -v grep | wc -l").Output()
+	if err != nil {
+		t.Fatalf("ps: %v", err)
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(string(out)))
+	return n
 }

@@ -129,3 +129,20 @@ as well as the screen, which is why the third line above works.
 `!` commands are yours: the host boundary does not apply, because you typed
 them. Klaudia still says what a command touches before running it, so a line
 pasted from a README announces itself.
+
+## Exit codes
+
+Headless runs exit with a code an automation can branch on:
+
+| Code | Meaning |
+|---|---|
+| 0 | completed |
+| 1 | failed — the reason is in the result payload |
+| 2 | invoked wrongly (bad flag, invalid mode); nothing ran |
+| 3 | hit `--max-turns` with work outstanding |
+| 4 | needed a host change and had no way to ask — see `--allow-host-changes` |
+| 130 | interrupted (SIGINT/SIGTERM) |
+
+4 is the one worth wiring up: it distinguishes "the task needed a package
+installed and nobody said it could" from "the model got it wrong", and those
+want completely different responses.

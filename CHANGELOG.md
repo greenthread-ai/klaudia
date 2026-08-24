@@ -6,6 +6,69 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Klaudia tells your working-tree changes apart from its own.** `/changes`
+  splits them three ways: yours, Klaudia's, and *both* — a file it wrote that
+  was already dirty or that you edited afterwards. Klaudia cannot merge those
+  two changes, but it can refuse to pretend they are not there, which is what
+  keeps undo and `/commit` honest. Startup says once how many files were already
+  modified, for the case where you had forgotten.
+- **`/undo`, and it cannot destroy work you did.** Before a turn writes a file,
+  its contents are stored as a git blob with `git hash-object -w` — a plain
+  object write that leaves your index, HEAD and `git status` untouched. A stash
+  would have been simpler and is wrong: it moves the whole working tree
+  including your unrelated edits. Undo shows the plan first, including the
+  equivalent `git cat-file -p <sha> > path` for each file, because "undo 2
+  files?" is a promise rather than an inspection. Files you also touched are
+  skipped and named.
+- **The completion block says what was *not* verified.** "auth tests 83/83
+  passing" reads as proof until you notice the full suite was never run. A
+  targeted run now names its subset and reports the gap, and files changed with
+  nothing run at all says so outright.
+- **`/context`, `/pin`, `/unpin`, `/forget`.** What Klaudia has read, changed
+  and been working in, instead of a token percentage — with a closing line
+  saying that list is what it looked at, not what the task needed. A pinned file
+  is re-stated every turn, which is how it survives compaction; a file mentioned
+  once forty turns ago is not really in context at all.
+- **Resume reconciles the work, not just the chat.** The working tree is
+  re-read, ownership is recovered from the transcript's own Write/Edit calls,
+  and jobs are reported as stopped — they were children of a process that has
+  exited, and the conversation you are resuming implies they are still up.
+  Approvals are deliberately not restored: session-scoped means session-scoped,
+  and resurrecting them would be the flaky remembered permissions the trust
+  model replaced.
+- **Meaningful exit codes** for headless runs: 0 done, 1 failed, 2 invoked
+  wrongly, 3 hit `--max-turns`, 4 needed a host change with no way to ask, 130
+  interrupted. 4 is the one worth wiring up — it distinguishes "the task needed
+  a package installed" from "the model got it wrong".
+
+### Changed
+- **`/commit` stages only Klaudia-owned files.** A file it wrote that you also
+  edited is left out and listed: the two changes cannot be separated without
+  hunk-level surgery, and sweeping your edit into a commit describing Klaudia's
+  work is the bug `/commit` already stopped doing once.
+
+### Fixed
+- **Ownership was recorded before the write, not after.** The stamp used to be
+  taken from the `tool_use` event, which fires before the tool runs — so every
+  file Klaudia edited looked like it had changed underneath, i.e. like *you* had
+  edited it, and undo would have refused to restore its own work. A failed Write
+  no longer claims a file it never wrote either.
+- **Session teardown abandoned processes that were slow to stop.** KillAll sent
+  SIGTERM and returned; the binary then exited, taking with it the goroutine
+  that would have escalated to SIGKILL two seconds later. A server that ignores
+  SIGTERM therefore kept its port forever — the exact symptom process groups
+  were introduced to fix. Teardown now waits for each job to actually go. Found
+  by the smoke test, which was itself checking too early.
+- **A declared host change that was refused left no trace.** The guardrail only
+  logged changes it *caught*, so a model that did the right thing — declared its
+  intent up front and was told no — was invisible to /trust and to the exit
+  code. It is recorded now, which is what makes exit 4 reliable.
+- **The undo snapshot could race the write it was meant to precede.** A frontend
+  learns about a tool from an event on a channel; a snapshot taken when that
+  event arrives can happen after the write and capture the new contents as the
+  "before". It now runs through a synchronous hook immediately before execution.
+
+### Added
 - **Long-running commands become managed jobs.** `npm run dev` used to either
   hold the agent until the timeout or vanish into an untracked process owning
   port 3000 for the afternoon. A job now has an id and a name you can say out

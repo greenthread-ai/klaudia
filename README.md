@@ -232,6 +232,24 @@ $ git diff
 
 Details, including what deliberately does not work: [docs/jobs.md](docs/jobs.md).
 
+## Your changes and Klaudia's
+
+Klaudia knows which working-tree changes are yours, which are its own, and which
+are both. `/changes` shows the split, `/commit` stages only its own work and
+lists what it left out, and `/undo` restores its last change — never touching a
+file you also edited.
+
+Undo stores prior contents as git blobs (`git hash-object -w`). It does not
+touch your index, does not create a stash, and shows the exact `git cat-file`
+commands it would run before doing anything. Full detail:
+[docs/working-tree.md](docs/working-tree.md).
+
+`/context` shows what Klaudia has actually read rather than a token percentage,
+and `/pin <path>` keeps a file in context every turn so it survives compaction.
+
+Headless runs exit with codes an automation can branch on — notably **4** for
+"needed a host change and had no way to ask".
+
 ## Autonomy and the host boundary
 
 Klaudia finishes the task without asking per action, and stops before changing

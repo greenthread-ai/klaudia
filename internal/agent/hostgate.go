@@ -95,6 +95,23 @@ func (g *HostGate) record(r HostReport) {
 	}
 }
 
+// noteDeclined records a declared host change that was refused.
+//
+// Without this the ledger only knows about changes it *caught* — a model that
+// did the right thing, declared its intent up front and was told no, left no
+// trace at all. That is the common path now, and it is the one an automation
+// needs to see: /trust should show it, and a headless run should be able to
+// exit differently because of it.
+func (g *HostGate) noteDeclined(summary string) {
+	if g == nil {
+		return
+	}
+	g.record(HostReport{
+		Tool: "RequestHostChange", Zone: trust.ZoneHost,
+		Summary: summary, Enforced: true,
+	})
+}
+
 // Reports returns what the classifier has found this session, oldest first.
 func (g *HostGate) Reports() []HostReport {
 	if g == nil {

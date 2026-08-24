@@ -73,6 +73,7 @@ func (h hostChangeApprover) RequestHostChange(ctx context.Context, req tools.Hos
 		},
 	})
 	if ad.Behavior != permission.Allow {
+		h.gate.noteDeclined(req.Summary)
 		msg := strings.TrimSpace(ad.Message)
 		if msg == "" {
 			return tools.HostChangeOutcome{}, nil // tool supplies the default wording

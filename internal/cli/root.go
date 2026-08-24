@@ -544,6 +544,11 @@ func NewRootCommand() *cobra.Command {
 	// Match commander's `--version` output: "<version> (Klaudia)" with no prefix.
 	cmd.SetVersionTemplate("{{.Version}}\n")
 
+	// A malformed command line is a usage error, not a run failure: nothing
+	// happened, and the caller should fix the invocation rather than retry it.
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return usageErrorf("%s", err)
+	})
 	f := cmd.Flags()
 	f.BoolVarP(&opts.print, "print", "p", false, "Non-interactive mode: print result to stdout and exit")
 	f.StringVar(&opts.model, "model", "", "Model alias (haiku|sonnet|opus) or full model ID")
@@ -593,17 +598,17 @@ func run(cmd *cobra.Command, opts *options) error {
 	interactive := !opts.print && !opts.loop && opts.inputFormat != "stream-json"
 	if opts.loop {
 		if opts.inputFormat == "stream-json" {
-			return fmt.Errorf("--loop cannot be combined with --input-format stream-json")
+			return usageErrorf("--loop cannot be combined with --input-format stream-json")
 		}
 		if format != FormatText {
-			return fmt.Errorf("--loop only supports --output-format text")
+			return usageErrorf("--loop only supports --output-format text")
 		}
 	}
 	if opts.print && format == FormatStreamJSON && !opts.verbose {
-		return fmt.Errorf("--output-format stream-json requires --verbose")
+		return usageErrorf("--output-format stream-json requires --verbose")
 	}
 	if opts.partialMessages && (!opts.print || format != FormatStreamJSON) {
-		return fmt.Errorf("--include-partial-messages only works with --print and --output-format=stream-json")
+		return usageErrorf("--include-partial-messages only works with --print and --output-format=stream-json")
 	}
 
 	start := time.Now()
@@ -661,11 +666,11 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Build allow/deny rules from config (.klaudia) + CLI flags.
 	allowRules, err := permission.ParseRules(append(append([]string{}, cfg.Permissions.Allow...), opts.allowedTools...))
 	if err != nil {
-		return fmt.Errorf("--allowedTools/permissions.allow: %w", err)
+		return usageErrorf("--allowedTools/permissions.allow: %v", err)
 	}
 	denyRules, err := permission.ParseRules(append(append([]string{}, cfg.Permissions.Deny...), opts.disallowedTools...))
 	if err != nil {
-		return fmt.Errorf("--disallowedTools/permissions.deny: %w", err)
+		return usageErrorf("--disallowedTools/permissions.deny: %v", err)
 	}
 	// The host gate. extraDirs is read at check time rather than captured, so a
 	// directory added mid-session with /add-dir counts as project work on the
@@ -692,10 +697,10 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	mode := permission.Mode(modeStr)
 	if !mode.Valid() {
-		return fmt.Errorf("invalid permission mode %q (autonomous|plan|bypassPermissions, or legacy default|acceptEdits|dontAsk)", modeStr)
+		return usageErrorf("invalid permission mode %q (autonomous|plan|bypassPermissions, or legacy default|acceptEdits|dontAsk)", modeStr)
 	}
 	if mode == permission.ModeAutonomous && hostPolicy != agent.HostEnforce {
-		return fmt.Errorf("permission mode %q needs the host guardrail enforcing, but [trust] mode is %q — "+
+		return usageErrorf("permission mode %q needs the host guardrail enforcing, but [trust] mode is %q — "+
 			"autonomous without it would allow everything, which is what bypassPermissions is for",
 			mode, hostPolicy)
 	}
@@ -1027,12 +1032,29 @@ func run(cmd *cobra.Command, opts *options) error {
 	if rerr := r.Result(out); rerr != nil {
 		return rerr
 	}
-	if err != nil {
-		// The error is already rendered into the result payload; signal a
-		// non-zero exit without printing it again to stderr.
-		return errRendered
+	// Exit codes an automation can branch on. The reason is already in the
+	// result payload, so nothing more is printed — only the code differs.
+	switch {
+	case errors.Is(err, context.Canceled):
+		return exitError{ExitInterrupted}
+	case err != nil:
+		return exitError{ExitError}
+	case hostChangeWasBlocked(hostGate):
+		// The task needed something on this machine and had no way to ask.
+		// A caller can turn that into `--allow-host-changes` by itself; making
+		// it indistinguishable from a model failure would leave them guessing.
+		return exitError{ExitHostChangeBlocked}
+	case res.StopReason == "max_turns":
+		return exitError{ExitMaxTurns}
 	}
 	return nil
+}
+
+// usageErrorf reports an invocation mistake: a bad flag combination, an
+// invalid mode, an unparseable rule. Nothing ran, and the caller should fix the
+// command line rather than retry it.
+func usageErrorf(format string, args ...any) error {
+	return fmt.Errorf("%w%s", exitError{ExitUsage}, fmt.Sprintf(format, args...))
 }
 
 // errRendered marks a run error that has already been emitted in the result
@@ -1040,17 +1062,32 @@ func run(cmd *cobra.Command, opts *options) error {
 var errRendered = fmt.Errorf("run failed")
 
 // Execute runs the root command, returning the process exit code.
+// hostChangeWasBlocked reports whether the guardrail stopped anything this run.
+func hostChangeWasBlocked(g *agent.HostGate) bool {
+	for _, r := range g.Reports() {
+		if r.Enforced {
+			return true
+		}
+	}
+	return false
+}
+
 func Execute() int { return ExecuteContext(context.Background()) }
 
 // ExecuteContext runs the root command against ctx. Cancelling ctx (SIGINT /
 // SIGTERM from main) unwinds the run, which tears down background jobs,
 // browsers, MCP servers and the transcript through the existing defers.
 func ExecuteContext(ctx context.Context) int {
-	if err := NewRootCommand().ExecuteContext(ctx); err != nil {
-		if !errors.Is(err, errRendered) {
-			fmt.Fprintln(os.Stderr, "Error:", err)
-		}
-		return 1
+	err := NewRootCommand().ExecuteContext(ctx)
+	if err == nil {
+		return ExitOK
 	}
-	return 0
+	// A bare exitError carries a code and no text, because the reason is
+	// already in the result payload; errRendered likewise. A usage error wraps
+	// an exitError *and* a message, and that message has not been seen yet —
+	// so the test is whether there is anything to say, not what type it is.
+	if msg := strings.TrimSpace(err.Error()); msg != "" && !errors.Is(err, errRendered) {
+		fmt.Fprintln(os.Stderr, "Error:", msg)
+	}
+	return exitCodeFor(err)
 }

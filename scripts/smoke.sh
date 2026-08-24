@@ -94,8 +94,9 @@ grep -q '"name":"Jobs"' "$OUT" && pass "the Jobs tool is reachable" || fail "Job
 
 # The binary exits at the end of the headless run, which must take the job with
 # it. This is the check that would have caught the orphaned-child bug: before
-# process groups, python3 kept the port after klaudia was gone.
-sleep 1
+# process groups, python3 kept the port after klaudia was gone. No sleep: the
+# session is required to have waited for teardown before exiting, so the port
+# must already be free the moment the command returns.
 held && fail "the job outlived the session and still holds :$PORT" || pass "session exit released the port"
 
 echo "== managed jobs: restart keeps identity =="
@@ -106,7 +107,6 @@ PORT2=$(( 20000 + RANDOM % 20000 ))
   "${COMMON[@]}" --output-format stream-json --verbose >"$OUT" 2>&1 || true
 grep -q '"name":"RestartJob"' "$OUT" && pass "RestartJob is reachable" || fail "RestartJob not invoked"
 grep -q "restarted 1" "$OUT" && pass "the restart reused the existing job" || pass "restart ran (count not asserted)"
-sleep 1
 (exec 3<>"/dev/tcp/127.0.0.1/$PORT2") >/dev/null 2>&1 && fail "the restarted job outlived the session" || pass "restarted job cleaned up too"
 
 echo "== shell fidelity: no hanging on a missing terminal =="
@@ -118,6 +118,20 @@ START=$(date +%s)
 ELAPSED=$(( $(date +%s) - START ))
 [ "$ELAPSED" -lt 90 ] && pass "an editor-opening command failed fast (${ELAPSED}s)" || fail "git commit hung for ${ELAPSED}s"
 grep -q -- "-m" "$OUT" && pass "the refusal named the flag that works" || fail "no actionable guidance"
+
+echo "== exit codes are meaningful =="
+code=0; "$BIN" --permission-mode nonsense -p x >/dev/null 2>&1 || code=$?
+[ "$code" -eq 2 ] && pass "an invalid mode exits 2 (usage)" || fail "invalid mode exited $code, want 2"
+code=0; "$BIN" --definitely-not-a-flag >/dev/null 2>&1 || code=$?
+[ "$code" -eq 2 ] && pass "an unknown flag exits 2 (usage)" || fail "unknown flag exited $code, want 2"
+
+echo "== a blocked host change is distinguishable from a failure =="
+cd "$WORK"
+code=0
+"$BIN" -p "Use the Bash tool to run exactly: sudo tee /etc/klaudia-exit-$$ <<< marker" \
+  --permission-mode autonomous --max-turns 4 --model haiku >/dev/null 2>&1 || code=$?
+[ ! -f "/etc/klaudia-exit-$$" ] && pass "the host write still did not happen" || fail "a host write got through"
+[ "$code" -eq 4 ] && pass "a blocked host change exits 4" || fail "blocked host change exited $code, want 4"
 
 echo
 echo "All smoke checks passed."

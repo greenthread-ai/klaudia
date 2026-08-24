@@ -299,7 +299,14 @@ func (s *JobStore) List() []JobStatus {
 	return out
 }
 
-// KillAll terminates every job (session teardown).
+// KillAll terminates every job and waits for them to actually go.
+//
+// The waiting is the point. Kill sends SIGTERM and escalates to SIGKILL from a
+// goroutine after a grace period — and a goroutine does not survive os.Exit.
+// Returning as soon as the signal was sent means a server that is slow to
+// honour SIGTERM outlives the session holding its port, which is the exact
+// symptom process groups were meant to fix. Session teardown is the one place
+// that has to block.
 func (s *JobStore) KillAll() {
 	s.mu.Lock()
 	jobs := make([]*Job, 0, len(s.jobs))
@@ -307,8 +314,14 @@ func (s *JobStore) KillAll() {
 		jobs = append(jobs, j)
 	}
 	s.mu.Unlock()
+
 	for _, j := range jobs {
 		j.proc.Kill()
+	}
+	// A little past the escalation, so the SIGKILL has fired and been reaped.
+	deadline := sandbox.KillGrace() + 2*time.Second
+	for _, j := range jobs {
+		j.proc.WaitExit(deadline)
 		j.log.Close()
 	}
 }
