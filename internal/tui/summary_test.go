@@ -182,3 +182,87 @@ func TestResultRingSince(t *testing.T) {
 		t.Error("since(0) should return everything")
 	}
 }
+
+// §15: "passing a targeted test isn't presented as universal proof". This is
+// the half that keeps the other half honest.
+func TestTargetedRunSaysTheFullSuiteWasNotRun(t *testing.T) {
+	s := buildSummary(
+		map[string]bool{"src/auth/session.ts": true},
+		[]toolResult{bashResult("go test ./internal/auth", "ok", false)},
+		nil,
+	)
+	out := s.Render()
+	if !strings.Contains(out, "Not verified") {
+		t.Fatalf("a targeted run claimed universal proof:\n%s", out)
+	}
+	if !strings.Contains(out, "full tests") || !strings.Contains(out, "./internal/auth") {
+		t.Errorf("the gap does not say what was and was not run:\n%s", out)
+	}
+	// And the check line itself names the subset.
+	if !strings.Contains(out, "tests (./internal/auth)") {
+		t.Errorf("the check line does not show its scope:\n%s", out)
+	}
+}
+
+// A full run says nothing extra — there is no gap to report.
+func TestFullRunHasNoGap(t *testing.T) {
+	for _, cmd := range []string{"go test ./...", "npm test", "pytest", "go test ."} {
+		s := buildSummary(map[string]bool{"a.go": true}, []toolResult{bashResult(cmd, "ok", false)}, nil)
+		if len(s.Gaps) != 0 {
+			t.Errorf("%q reported a gap: %v", cmd, s.Gaps)
+		}
+	}
+}
+
+// A targeted run followed by a full one has no gap either.
+func TestFullRunClearsTheGap(t *testing.T) {
+	s := buildSummary(map[string]bool{"a.go": true}, []toolResult{
+		bashResult("go test ./internal/auth", "ok", false),
+		bashResult("go test ./...", "ok", false),
+	}, nil)
+	if len(s.Gaps) != 0 {
+		t.Errorf("a later full run did not clear the gap: %v", s.Gaps)
+	}
+}
+
+// The case a completion message is most tempted to gloss over.
+func TestChangesWithNoChecksSaysSo(t *testing.T) {
+	s := buildSummary(map[string]bool{"a.go": true, "b.go": true}, nil, nil)
+	out := s.Render()
+	if !strings.Contains(out, "unverified") {
+		t.Errorf("changes with no verification did not say so:\n%s", out)
+	}
+}
+
+func TestVerifyScope(t *testing.T) {
+	for cmd, want := range map[string]string{
+		"go test ./internal/auth":  "./internal/auth",
+		"pytest tests/auth":        "tests/auth",
+		"npx vitest run test/auth": "test/auth",
+		"go test -run TestX ./pkg": "./pkg",
+		"go test ./...":            "",
+		"go test .":                "",
+		"npm test":                 "",
+		"pytest":                   "",
+		"go test -v ./...":         "",
+	} {
+		got, scoped := verifyScope(cmd)
+		if got != want || scoped != (want != "") {
+			t.Errorf("verifyScope(%q) = %q,%v want %q", cmd, got, scoped, want)
+		}
+	}
+}
+
+// A green run after a red one must not erase the red one.
+func TestFailureOutranksALaterPass(t *testing.T) {
+	s := buildSummary(map[string]bool{"a.go": true}, []toolResult{
+		bashResult("go test ./...", "--- FAIL: TestA", true),
+		bashResult("go test ./...", "ok", false),
+	}, nil)
+	if len(s.Checks) != 1 {
+		t.Fatalf("%d checks, want 1", len(s.Checks))
+	}
+	if s.Checks[0].OK {
+		t.Error("a later passing run hid an earlier failure")
+	}
+}

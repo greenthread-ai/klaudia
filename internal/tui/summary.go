@@ -26,14 +26,22 @@ type turnSummary struct {
 	Added    int           // lines added, from git
 	Removed  int           // lines removed
 	Checks   []verifyCheck // commands that constitute verification
+	Gaps     []string      // what was NOT verified, stated rather than implied
 	HasStats bool          // git could be asked
 }
 
 // verifyCheck is one command that verifies something, and how it went.
 type verifyCheck struct {
-	Label  string // "auth tests", "typecheck"
-	Detail string // "83 / 83 passing", "exit 1"
+	Label  string // "tests", "typecheck"
+	Detail string // "83 / 83 passing", "2 failing"
 	OK     bool
+	// Scoped is true when the command named a subset — `go test ./internal/tui`
+	// rather than `go test ./...`. A targeted run passing is evidence about
+	// that subset and nothing else, and presenting it as "tests pass" is the
+	// single most common way a completion message overstates itself.
+	Scoped bool
+	// Target is the subset that was run, for the not-verified note.
+	Target string
 }
 
 // Empty reports whether there is nothing worth printing.
@@ -58,7 +66,27 @@ func (s turnSummary) Render() string {
 			if !c.OK {
 				mark = "✗"
 			}
-			fmt.Fprintf(&b, "%s %-*s  %s\n", mark, width, c.Label, c.Detail)
+			label := c.Label
+			if c.Scoped && c.Target != "" {
+				label = c.Label + " (" + c.Target + ")"
+				if len(label) > width {
+					width = len(label)
+				}
+			}
+			fmt.Fprintf(&b, "%s %-*s  %s\n", mark, width, label, c.Detail)
+		}
+	}
+
+	// What was not checked. §15 asks for this explicitly, and it is the half
+	// that keeps the other half honest: "auth tests 83/83" reads as proof the
+	// change is good until you see "the full suite was not run" beside it.
+	if len(s.Gaps) > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("Not verified\n")
+		for _, g := range s.Gaps {
+			b.WriteString("– " + g + "\n")
 		}
 	}
 
@@ -93,7 +121,37 @@ func buildSummary(touched map[string]bool, results []toolResult, gitStat func() 
 		s.Added, s.Removed, s.HasStats = gitStat()
 	}
 	s.Checks = verificationChecks(results)
+	s.Gaps = verificationGaps(s)
 	return s
+}
+
+// verificationGaps says what was not checked.
+//
+// Only things that are actually knowable. "The full suite was not run" is a
+// fact when a targeted run happened; "the integration tests would fail" is a
+// guess, and a summary that guesses is worse than one that stays quiet.
+func verificationGaps(s turnSummary) []string {
+	var gaps []string
+
+	// Files changed and nothing was run. The most valuable case, and the one a
+	// completion message is most tempted to gloss over.
+	if len(s.Files) > 0 && len(s.Checks) == 0 {
+		return []string{"nothing was run — these changes are unverified"}
+	}
+
+	seenFull := map[string]bool{}
+	for _, c := range s.Checks {
+		if !c.Scoped {
+			seenFull[c.Label] = true
+		}
+	}
+	for _, c := range s.Checks {
+		if c.Scoped && !seenFull[c.Label] {
+			gaps = append(gaps, "the full "+c.Label+" — only "+c.Target+" was run")
+			seenFull[c.Label] = true // one note per kind
+		}
+	}
+	return gaps
 }
 
 // verificationChecks picks the commands that verify something out of the turn's
@@ -104,21 +162,41 @@ func buildSummary(touched map[string]bool, results []toolResult, gitStat func() 
 // turn the block into exactly the narration it replaces.
 func verificationChecks(results []toolResult) []verifyCheck {
 	var out []verifyCheck
-	seen := map[string]bool{}
+	at := map[string]int{}
 	for _, r := range results {
 		if r.tool != "Bash" {
 			continue
 		}
 		label, ok := verifyLabel(r.command)
-		if !ok || seen[label] {
+		if !ok {
 			continue
 		}
-		seen[label] = true
-		out = append(out, verifyCheck{
+		target, scoped := verifyScope(r.command)
+		c := verifyCheck{
 			Label:  label,
 			Detail: verifyDetail(r.content, !r.isError),
 			OK:     !r.isError,
-		})
+			Scoped: scoped,
+			Target: target,
+		}
+		i, exists := at[label]
+		if !exists {
+			at[label] = len(out)
+			out = append(out, c)
+			continue
+		}
+		// The same kind run twice is one line. Which one it shows matters: a
+		// failure outranks a pass (a later green run does not unbreak the red
+		// one), and among equals the broader run wins — otherwise running the
+		// targeted suite first and the full one after would still be reported
+		// as "only the subset was run".
+		prev := out[i]
+		switch {
+		case prev.OK && !c.OK:
+			out[i] = c
+		case prev.OK == c.OK && prev.Scoped && !c.Scoped:
+			out[i] = c
+		}
 	}
 	return out
 }
@@ -165,6 +243,72 @@ func verifyLabel(command string) (string, bool) {
 		}
 	}
 	return best, best != ""
+}
+
+// everythingOperands are the ways of saying "all of it".
+var everythingOperands = map[string]bool{
+	"./...": true, ".": true, "...": true, "all": true, "./": true,
+}
+
+// notTargets are words that appear before the thing being tested: wrappers,
+// runner names, and subcommands. Without them `npx vitest run test/auth` reads
+// "vitest" as the target.
+var notTargets = map[string]bool{
+	// wrappers and package managers
+	"npx": true, "pnpm": true, "yarn": true, "npm": true, "bunx": true, "bun": true,
+	"poetry": true, "uv": true, "uvx": true, "pipenv": true, "bundle": true,
+	"go": true, "cargo": true, "python": true, "python3": true, "node": true,
+	"mvn": true, "gradle": true, "./gradlew": true, "make": true, "just": true,
+	// runners and checkers
+	"vitest": true, "jest": true, "pytest": true, "rspec": true, "eslint": true,
+	"tsc": true, "mypy": true, "pyright": true, "ruff": true, "golangci-lint": true,
+	"shellcheck": true, "phpunit": true,
+	// subcommands
+	"test": true, "run": true, "vet": true, "check": true, "lint": true,
+	"typecheck": true, "exec": true, "watch": true, "run-script": true,
+}
+
+// flagsTakingValues are options whose next word is a value, not a target.
+// `go test -run TestX ./pkg` would otherwise report TestX as the subset.
+var flagsTakingValues = map[string]bool{
+	"-run": true, "-bench": true, "-timeout": true, "-tags": true, "-count": true,
+	"-parallel": true, "-cpu": true, "-coverprofile": true, "-o": true,
+	"-k": true, "-m": true, "-n": true, "--grep": true, "-t": true,
+	"--testNamePattern": true, "--reporter": true, "--config": true, "-c": true,
+	"--max-warnings": true, "--ext": true, "-p": true, "--project": true,
+}
+
+// verifyScope reports whether a check named a subset, and which.
+//
+// A run with no operands is the whole thing: `go test`, `npm test`, `pytest`
+// all mean everything by default. An operand that is not a flag, not a flag's
+// value, and not one of the "all" spellings narrows it.
+func verifyScope(command string) (target string, scoped bool) {
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return "", false
+	}
+	for i := 1; i < len(fields); i++ {
+		f := fields[i]
+		if strings.HasPrefix(f, "-") {
+			if flagsTakingValues[f] {
+				i++ // skip its value
+			}
+			continue
+		}
+		low := strings.ToLower(f)
+		if i := strings.LastIndexByte(low, '/'); i >= 0 && notTargets[low[i+1:]] && !strings.Contains(low, ".") {
+			continue // /usr/local/bin/pytest and friends
+		}
+		if notTargets[low] {
+			continue
+		}
+		if everythingOperands[low] {
+			return "", false
+		}
+		return f, true
+	}
+	return "", false
 }
 
 // testCountRe pulls a pass/total out of the usual runner formats.
