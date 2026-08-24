@@ -33,6 +33,13 @@ go test ./internal/...
 - **schema** - Type/schema definitions
 - **version** - Version info
 
+## Design record
+
+`docs/ux-spec.md` is the authoritative record of the two terminal-UX specs and
+where the implementation deliberately differs from them — read it before
+"fixing" something that looks unimplemented. `docs/trust.md`, `docs/jobs.md` and
+`docs/working-tree.md` cover the three subsystems in detail.
+
 ## Rules
 
 - Pure Go: builds must stay `CGO_ENABLED=0`-clean (no cgo, no system libs).

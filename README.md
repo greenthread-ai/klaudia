@@ -250,6 +250,10 @@ and `/pin <path>` keeps a file in context every turn so it survives compaction.
 Headless runs exit with codes an automation can branch on — notably **4** for
 "needed a host change and had no way to ask".
 
+The terminal-UX specs this was built against, and the places the implementation
+deliberately went a different way, are recorded in
+[docs/ux-spec.md](docs/ux-spec.md).
+
 ## Autonomy and the host boundary
 
 Klaudia finishes the task without asking per action, and stops before changing
