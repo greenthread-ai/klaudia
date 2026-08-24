@@ -34,11 +34,40 @@ CGO_ENABLED=0 go build -o "$BIN" "$ROOT/cmd/klaudia" || exit 1
 pass "klaudia built"
 
 # The staging box is a real sshd in a container, so the remote leg is real ssh
-# rather than a simulation.
+# rather than a simulation. Built here so the rig is self-contained.
+if ! docker image inspect klaudia-staging >/dev/null 2>&1; then
+  [ -f "$RIG/staging_key" ] || ssh-keygen -q -t ed25519 -N '' -f "$RIG/staging_key" -C klaudia-torture
+  cp "$RIG/staging_key.pub" "$RIG/authorized_keys"
+  chmod 600 "$RIG/staging_key"
+  cat > "$RIG/Dockerfile.staging" <<'DOCKER'
+FROM alpine:latest
+RUN apk add --no-cache openssh-server && ssh-keygen -A &&     adduser -D -s /bin/sh deploy && passwd -u deploy &&     mkdir -p /home/deploy/.ssh && chmod 700 /home/deploy/.ssh
+COPY authorized_keys /home/deploy/.ssh/authorized_keys
+RUN chown -R deploy:deploy /home/deploy/.ssh && chmod 600 /home/deploy/.ssh/authorized_keys
+# Deliberately behind the checkout, so "is staging on the same version?" has a
+# real answer the agent has to go and find.
+RUN echo "sessions-api v0.9.2" > /etc/staging-version
+EXPOSE 22
+CMD ["/usr/sbin/sshd","-D","-e"]
+DOCKER
+  docker build -q -t klaudia-staging -f "$RIG/Dockerfile.staging" "$RIG" >/dev/null \
+    || { fail "could not build the staging image"; exit 1; }
+fi
+cat > "$RIG/ssh_config" <<EOF
+Host staging
+  HostName 127.0.0.1
+  Port 2222
+  User deploy
+  IdentityFile $RIG/staging_key
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  LogLevel ERROR
+  BatchMode yes
+EOF
 if ! docker ps --format '{{.Names}}' | grep -qx klaudia-staging; then
   docker rm -f klaudia-staging >/dev/null 2>&1
   docker run -d --name klaudia-staging -p 2222:22 klaudia-staging >/dev/null 2>&1 \
-    || { fail "staging container failed to start (build it first, see docs)"; exit 1; }
+    || { fail "staging container failed to start"; exit 1; }
   sleep 3
 fi
 ssh -F "$RIG/ssh_config" staging 'cat /etc/staging-version' >/dev/null 2>&1 \
