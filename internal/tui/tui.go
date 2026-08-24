@@ -485,7 +485,13 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	m.introModel, m.introBranch = model, branch
 	m.introTagline, m.hasIntro = randomTagline(), true
 	m.appendLine(m.introText())
-	m.warnIfDirtyAtStart()
+	// A resumed session gets the operational picture instead of the
+	// dirty-tree note: it subsumes it, and adds what did not survive.
+	if st := m.buildResumeState(); len(history) > 0 && st.hasContent() {
+		m.appendLine(bannerStyle.Render(st.render()))
+	} else {
+		m.warnIfDirtyAtStart()
+	}
 	return m
 }
 

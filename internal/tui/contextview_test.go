@@ -12,6 +12,7 @@ func ctxModel(t *testing.T) *Model {
 	return &Model{
 		sess:    &Session{CWD: t.TempDir(), GitBranch: "main", SessionID: "s1"},
 		touched: map[string]bool{},
+		base:    newBaseline(),
 	}
 }
 
