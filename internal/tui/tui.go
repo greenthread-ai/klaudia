@@ -24,6 +24,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/api"
@@ -287,9 +288,15 @@ type Model struct {
 	// of what Klaudia has written since. It is what makes "your changes" and
 	// "Klaudia's changes" distinguishable at all.
 	base *baseline
-	// resyncing blanks the live region for exactly one frame after a resize.
-	// See resizeResync in prompt.go for why that is the only lever available.
-	resyncing bool
+	// lastFrame is the visual width of each line of the previously rendered live
+	// region, and the terminal width it was rendered at. Both are needed to work
+	// out how many physical rows that frame occupies after the terminal reflows
+	// it — see reflowDeficit.
+	lastFrame      []int
+	lastFrameWidth int
+	// pendingReflow is cursor motion prefixed to the next frame to undo a
+	// resize's reflow desync.
+	pendingReflow string
 	// promptIsBang tracks whether the input marker is currently "$", so the
 	// prompt function is only rebuilt when the answer changes.
 	promptIsBang bool
@@ -600,19 +607,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		changed := msg.Width != m.width || msg.Height != m.height
-		m.resize(msg.Width, msg.Height)
-		if !changed {
-			return m, nil
+		// Work out the reflow deficit against the *previous* frame before
+		// resize() overwrites the width it was drawn at.
+		if d := reflowDeficit(m.lastFrame, msg.Width); d > 0 {
+			m.pendingReflow = "\r" + ansi.CursorUp(d) + ansi.EraseScreenBelow
 		}
-		// Blank the live region for one frame, then draw it again. This is the
-		// only way to resync Bubble Tea's cursor arithmetic from outside the
-		// renderer — see resizeResync.
-		m.resyncing = true
-		return m, func() tea.Msg { return resyncMsg{} }
-
-	case resyncMsg:
-		m.resyncing = false
+		m.resize(msg.Width, msg.Height)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -2898,14 +2898,28 @@ func (m *Model) View() string {
 	if !m.ready {
 		return ""
 	}
-	if m.resyncing {
-		return ""
-	}
+
 	out := m.clampBottom(m.bottomView())
+	// Record what this frame measures, so the next resize can work out how far
+	// the terminal will have reflowed it.
+	m.noteFrame(out)
+	if m.pendingReflow != "" {
+		out, m.pendingReflow = m.pendingReflow+out, ""
+	}
 	if m.pendingOSC != "" {
 		out, m.pendingOSC = m.pendingOSC+out, ""
 	}
 	return out
+}
+
+// noteFrame records each line's visual width and the width it was drawn at.
+func (m *Model) noteFrame(frame string) {
+	lines := strings.Split(frame, "\n")
+	widths := make([]int, len(lines))
+	for i, ln := range lines {
+		widths[i] = ansi.StringWidth(ln)
+	}
+	m.lastFrame, m.lastFrameWidth = widths, m.width
 }
 
 // clampBottom keeps the live region strictly shorter than the terminal. Bubble

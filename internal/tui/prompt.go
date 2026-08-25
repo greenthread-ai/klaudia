@@ -100,31 +100,49 @@ func newPromptInput() textarea.Model {
 	return in
 }
 
-// resizeResync: why the live region blanks for one frame after a resize.
+// Why a resize needs the cursor steering by hand.
 //
 // Bubble Tea's inline renderer returns to the top of the live region with
-// CursorUp(linesRendered-1), where linesRendered is the *logical* line count of
-// the previous frame (standard_renderer.go). On a resize it updates its width
-// and height and calls repaint(), but it does not reset that count — and the
+// CursorUp(linesRendered-1), where that count is the *logical* line count of the
+// previous frame (standard_renderer.go). On a WindowSizeMsg it updates its width
+// and height and calls repaint(), but it does not reset the count — and the
 // terminal has meanwhile reflowed the rows already on screen. A four-line region
-// drawn at 144 columns occupies seven or eight rows at 100, so the cursor lands
-// inside the old frame, the new frame is painted from there, and the rows above
-// it are orphaned. Drag a window and every intermediate size leaves another
-// stripe: the stair-stepped border fragments in the bug report.
+// drawn at 120 columns occupies seven rows at 90, so the renderer moves up three
+// when it needed to move up six. The cursor lands three rows into the old frame,
+// EraseScreenBelow clears from there, and the three rows above it survive. Drag a
+// window and every intermediate size deposits another band: the stack of orphaned
+// prompt boxes in the bug report.
 //
-// Nothing in the public API resets that counter. What does reset it is a frame
-// exactly one line tall: the renderer sets linesRendered to the new frame's
-// length, and — because the previous frame was taller — also emits
-// EraseScreenBelow, wiping the mispositioned remains. The frame after it starts
-// from linesRendered == 1, so no CursorUp is emitted at all and it paints
-// cleanly wherever the cursor now is.
+// The deficit is not a mystery, though — it is arithmetic we can do. We rendered
+// the previous frame, so we know each line's visual width; the terminal wraps a
+// line of width w into ceil(w/newWidth) rows. The difference between that total
+// and the logical line count is exactly how many extra rows the renderer failed
+// to account for, and prefixing the next frame with that many CursorUp plus an
+// EraseScreenBelow puts it back on the true top of the old frame.
 //
-// So a resize renders "" once and the real frame immediately after. The cost is
-// one blank frame, which at a follow-up of well under a millisecond is not
-// visible; the benefit is that the damage stops accumulating across a drag.
+// The escapes go inside the frame rather than straight to stdout because the
+// renderer owns the output stream and writing behind its back would race it.
+// ansi.Truncate keeps CSI sequences and counts them as zero width (verified), so
+// riding along on line 0 is safe.
 //
-// The other half of the fix is geometric and lives in promptBox and
-// statusLine: no line in the live region occupies the terminal's last column,
-// so every line gets an EraseLineRight and the cursor never sits in the
-// pending-wrap state.
-type resyncMsg struct{}
+// The other half is geometric, in promptBox and statusLine: no line in the live
+// region occupies the terminal's last column, so every line gets an
+// EraseLineRight and the cursor never sits in the pending-wrap state.
+
+// reflowDeficit returns how many extra physical rows the previous frame occupies
+// once the terminal reflows it to newWidth — the rows Bubble Tea's cursor
+// arithmetic will fail to account for.
+func reflowDeficit(lastFrameWidths []int, newWidth int) int {
+	if newWidth <= 0 || len(lastFrameWidths) == 0 {
+		return 0
+	}
+	physical := 0
+	for _, w := range lastFrameWidths {
+		rows := 1
+		if w > newWidth {
+			rows = (w + newWidth - 1) / newWidth
+		}
+		physical += rows
+	}
+	return physical - len(lastFrameWidths)
+}
