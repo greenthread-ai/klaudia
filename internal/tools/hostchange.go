@@ -146,8 +146,9 @@ func (r *RequestHostChange) Execute(ctx context.Context, tctx Context, raw json.
 	}
 
 	out, err := tctx.HostChange.RequestHostChange(ctx, HostChangeRequest{
-		Summary:  strings.TrimSpace(in.Summary),
-		Reason:   strings.TrimSpace(in.Reason),
+		// Short display strings, same double-escaping risk as a question.
+		Summary:  unescapeDisplayText(strings.TrimSpace(in.Summary)),
+		Reason:   unescapeDisplayText(strings.TrimSpace(in.Reason)),
 		Paths:    in.Paths,
 		Services: in.Services,
 		Packages: in.Packages,

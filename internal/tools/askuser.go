@@ -69,6 +69,13 @@ func (a *AskUserQuestion) Execute(ctx context.Context, tctx Context, raw json.Ra
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	// A model that escaped its JSON twice would otherwise be shown to the user
+	// verbatim, backslashes and all. See unescapeDisplayText.
+	in.Question = unescapeDisplayText(in.Question)
+	for i := range in.Options {
+		in.Options[i].Label = unescapeDisplayText(in.Options[i].Label)
+		in.Options[i].Description = unescapeDisplayText(in.Options[i].Description)
+	}
 	if tctx.Ask == nil {
 		return []Result{{Content: "No interactive user is available to answer (headless mode). " +
 			"Proceed using your best judgment.", IsError: true}}, nil

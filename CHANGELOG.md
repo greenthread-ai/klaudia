@@ -71,6 +71,16 @@ port mirrors (see `internal/version`).
   than the terminal, so a full-width line never erased what was to its right, and
   writing the last column parks the cursor in the pending-wrap state. The live
   region now stops one column short at every width, with a test asserting it.
+- **A question could be shown with its escapes intact.** Seen in a real
+  session: `On \"ask whether they want to change…\" \u2014 which did you mean?`.
+  The transcript shows the model escaped its JSON twice, so one round of
+  decoding — which is all that is correct — leaves backslashes as literal
+  characters. Nothing was decoding it wrongly; it genuinely contained them. Short
+  human-facing strings (a question, its option labels, a host-change summary) are
+  now repaired on the way out, and only when the result parses cleanly as a
+  quoted literal. Plans, diffs and anything multi-line or long are deliberately
+  untouched: they legitimately contain backslashes, and rewriting real content
+  would be worse than the bug.
 - **A stale prompt box could be stranded in the middle of the conversation.**
   Seen mid-turn: box borders, "› Ask Klaudia…" and the status line sitting in
   scrollback with later tool output written across them. When `tea.Println`
