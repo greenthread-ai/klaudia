@@ -269,6 +269,11 @@ type Model struct {
 	history    []anthropic.BetaMessageParam
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
+	// hostRedirect marks the pending answer as "no, do it differently" rather
+	// than a plain refusal, so the echoed line invites the instruction the user
+	// is about to type instead of announcing that Klaudia will carry on without
+	// it. Cleared as it is read.
+	hostRedirect bool
 	// following is the job whose log is being tailed into scrollback, or "".
 	// Follow prints into the terminal's own scrollback rather than a managed
 	// region, which is why scrolling up during follow cannot be snapped back
@@ -319,6 +324,10 @@ type Model struct {
 	pendingCommands map[string]string
 	// turnResultsFrom is the result-ring sequence at the start of this turn.
 	turnResultsFrom int
+	// turnReportsFrom is how many host-gate reports existed at the start of this
+	// turn, so the completion block can describe this turn's blocks rather than
+	// the session's.
+	turnReportsFrom int
 	// touched is the set of repo-relative paths Klaudia has modified this
 	// session, so /commit can stage its own work and leave the user's alone.
 	touched map[string]bool
@@ -1068,6 +1077,23 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				msg = "the user declined this change to their machine"
 			}
 			m.answer(permission.Decision{Behavior: permission.Deny, Message: msg})
+		case "s":
+			// "Something else" is not "no". Someone declining a host change
+			// usually wants the task done differently, not abandoned — and the
+			// plain refusal tells the model to stop looking, which is right for
+			// "no" and wrong here. The turn stays alive and whatever they type
+			// next lands before Klaudia's next action, through the same steering
+			// path a mid-turn correction uses.
+			if !host {
+				return m, nil
+			}
+			m.hostRedirect = true
+			m.answer(permission.Decision{
+				Behavior: permission.Deny,
+				Message: "The user declined this change to their machine and is redirecting. " +
+					"Do not look for another way to make it. They are about to say what they want " +
+					"instead — wait for that instruction and follow it.",
+			})
 		}
 		return m, nil
 	}
@@ -2426,10 +2452,20 @@ func (m *Model) answer(d permission.Decision) {
 	// For a host change, say what the answer reached rather than just that one
 	// was given. "allowed" tells the user nothing about how far it went.
 	if hc := m.pendingReq.HostChange; hc != nil {
-		verb = hostAnswerLine(hc, d.Behavior == permission.Allow)
+		verb = hostAnswerLine(hc, d.Behavior == permission.Allow, m.hostRedirect)
 	}
+	m.hostRedirect = false
 	m.appendLine(toolStyle.Render("  → " + verb))
 	m.setState(stateRunning)
+}
+
+// hostReportCount is the session's host-gate report count, or 0 when no gate is
+// wired up. Used as the completion block's per-turn watermark.
+func (m *Model) hostReportCount() int {
+	if m.sess == nil || m.sess.Trust == nil {
+		return 0
+	}
+	return len(m.sess.Trust.Reports())
 }
 
 // startTurn runs the agent in a goroutine, delivering events via the channel,
@@ -2478,6 +2514,7 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	m.turnTouched = map[string]bool{}
 	m.turnLabel = oneline(prompt, 60)
 	m.turnResultsFrom = m.results.seq
+	m.turnReportsFrom = m.hostReportCount()
 
 	approver := &uiApprover{events: m.events}
 	asker := &uiAsker{events: m.events}
@@ -2562,7 +2599,17 @@ func (m *Model) renderEvent(ev agent.Event) {
 		}
 		style := toolStyle
 		prefix := "✓ " + ev.ToolName
-		if ev.IsError {
+		switch {
+		case ev.HostBlocked:
+			// Not a failure. The call was not allowed and the model will take
+			// another route, which is the intended behaviour for the common
+			// case — an incidental 2>/dev/null, a scratch file in /tmp. Drawing
+			// that in red with a paragraph of policy made Klaudia look broken
+			// while it was working exactly as designed.
+			style = hintStyle
+			prefix = "⊘ " + ev.ToolName
+			s = hostBlockedLine(s)
+		case ev.IsError:
 			style = errStyle
 			prefix = "✗ " + ev.ToolName
 		}
@@ -2591,7 +2638,7 @@ func (m *Model) renderEvent(ev agent.Event) {
 			m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(clipped, "\n", "\n  ")))
 		}
 		kind := navCommand
-		if ev.IsError {
+		if ev.IsError && !ev.HostBlocked {
 			kind = navError
 		}
 		m.noteNav(kind, ev.ToolName+toolSummary(ev.ToolName, ev.Input)+" → "+oneline(s, 60), "", seq)
@@ -2865,7 +2912,40 @@ func (m *Model) appendLine(s string) {
 func (m *Model) commit(b transcriptBlock) {
 	b.rendered = trimRenderedPadding(b.rendered)
 	m.transcript.add(b)
-	m.out.push(b.rendered)
+	m.out.push(m.fitScrollback(b.rendered))
+}
+
+// fitScrollback hard-wraps a block so no line reaches the terminal's last
+// column.
+//
+// Bubble Tea appends EraseLineRight to a queued scrollback line only when it is
+// *narrower* than the terminal (standard_renderer.go). A longer line gets none —
+// the terminal wraps it, and the short final row keeps whatever was on that row
+// before. Seen in a real session: a 160-character prompt echoed at 149 columns
+// left "0k tokens" from the status line hanging off the end of its second row,
+// and the tail of an earlier prompt off another.
+//
+// Wrapping it ourselves turns every physical row into its own logical line, so
+// each one gets erased. The terminal would have wrapped at the same points
+// anyway; the difference is that these rows are now ours to clean up. The
+// transcript keeps the unwrapped text, so /copy and /export are unaffected.
+func (m *Model) fitScrollback(s string) string {
+	limit := m.width - 1
+	if limit < 20 || s == "" {
+		return s
+	}
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		if ansi.StringWidth(line) < limit {
+			out = append(out, line)
+			continue
+		}
+		// Hardwrap rather than word-wrap: this is about physical rows, and a
+		// word-aware break would reflow code and diffs that were laid out
+		// deliberately.
+		out = append(out, strings.Split(ansi.Hardwrap(line, limit, true), "\n")...)
+	}
+	return strings.Join(out, "\n")
 }
 
 // resize re-measures the live region. It deliberately does not reflow anything

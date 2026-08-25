@@ -71,6 +71,47 @@ port mirrors (see `internal/version`).
   than the terminal, so a full-width line never erased what was to its right, and
   writing the last column parks the cursor in the pending-wrap state. The live
   region now stops one column short at every width, with a test asserting it.
+- **Scrollback lines longer than the terminal left residue on their last row.**
+  Spotted in a screenshot of a real session: a 160-character prompt echoed at 149
+  columns wrapped, and the short second row still showed "0k tokens" from the
+  status line that had been there before. Bubble Tea appends EraseLineRight to a
+  queued line only when it is *narrower* than the terminal, so an over-wide line
+  gets none and the terminal's own wrap leaves a partial final row. Klaudia now
+  wraps its own output to one column short of the terminal, making every physical
+  row a line the renderer will clean up. The transcript keeps the unwrapped text,
+  so /copy and /export are unchanged.
+- **The status bar showed "ask" while the session was autonomous.** shortMode had
+  no case for the mode added in the six-to-three collapse, so it fell through to
+  the default. Of everything on that line, the mode is the one field that must
+  not be wrong — it was telling the user Klaudia would stop and check while it
+  was working straight through. There is now a test that every mode has its own
+  label and no two share one.
+- **The host gate told the model off and never told the user.** Reported from a
+  live session: a blocked call printed a paragraph of policy as a red `✗`
+  failure, the model quietly took another route, and the user — who might well
+  have said yes — was never asked. The message instructed the model to call
+  `RequestHostChange`, and the model, being a volunteer, generally didn't.
+
+  The first instinct was to make the gate ask every time. That was wrong, and
+  the sessions that prompted it prove why: both blocks were an incidental
+  `2>/dev/null` and a scratch file in `/tmp`, where routing around is not a
+  workaround but the correct answer. Asking would have been pure interruption,
+  which is the prompt fatigue the design already avoids on purpose.
+
+  So the split is by whether Klaudia can proceed. A block it can route around is
+  a non-event: the refusal to the model is now three short sentences that prefer
+  another route and mention the declaration tool second, and it draws as a muted
+  `⊘ changes this machine: writes /dev/null — trying another way` rather than as
+  a failure. A block it cannot route around still reaches the user, and the
+  prompt grew a third answer — **(s)omething else** — because declining a host
+  change usually means "not like that" rather than "give up"; it keeps the turn
+  alive and the redirect lands before Klaudia's next action.
+
+  The residual risk is the quiet one: giving up without saying so. A host change
+  stopped and never approved is now named in the completion block under `Not
+  done — needs your agreement`, judged at end of turn so the good path — gate
+  stops it, model declares it properly, user agrees — is not misreported as
+  undone.
 - **`2>/dev/null` was gated as a host change.** Reported from a live session.
   Writing to a pseudo-device changes nothing about the machine, and discarding
   output is one of the commonest things a command does — a false prompt on it

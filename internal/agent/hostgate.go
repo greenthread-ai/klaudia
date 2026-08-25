@@ -212,22 +212,32 @@ func (g *HostGate) Check(tool string, input []byte, cwd string) HostDecision {
 // refusal is written to the model, so it says what was found, why it stopped,
 // and exactly what to do next. A refusal the model cannot act on turns into a
 // retry loop.
+//
+// It is deliberately short. Most gate hits are not the model insisting on a
+// host change; they are an incidental `2>/dev/null` or a scratch file in /tmp,
+// where taking another route is both trivial and correct. A paragraph of policy
+// for that non-event trains the model to treat the gate as a wall of text, and
+// it renders in the UI as a failure when nothing failed.
+//
+// So: name what was found, say that another route is preferred, and mention the
+// declaration tool as the second option rather than the first. The model should
+// only spend the user's attention when the task genuinely cannot proceed
+// without changing this machine.
 func (g *HostGate) refusal(as trust.Assessment, drift []trust.Effect, hadGrants bool) string {
 	var b strings.Builder
 	if as.Unparsed {
 		b.WriteString("Klaudia could not read this command line, so it cannot tell whether it changes this machine. ")
 	} else {
-		b.WriteString("This would change the machine Klaudia is running on: ")
+		b.WriteString("Changes this machine: ")
 		b.WriteString(describeAll(drift))
 		b.WriteString(". ")
 	}
 	if hadGrants {
-		b.WriteString("That is outside the scope the user already approved. ")
+		b.WriteString("That is outside the scope the user approved. ")
 	}
-	b.WriteString("Work inside the project is autonomous, but host changes need the user's agreement first. ")
+	b.WriteString("Take another route if one exists. ")
 	b.WriteString(fmt.Sprintf(
-		"Call %s to describe the whole operation — everything you intend to change and why — then carry it out. "+
-			"Describe it once, at the level the user cares about, rather than one command at a time.",
+		"If it has to be done this way, call %s to describe the whole operation and why.",
 		g.DeclareTool))
 	return b.String()
 }

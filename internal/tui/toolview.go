@@ -148,6 +148,13 @@ func addedSummary(content string) string {
 // shortMode is a compact permission-mode label for the status bar.
 func shortMode(m permission.Mode) string {
 	switch m {
+	case permission.ModeAutonomous:
+		// Must be listed explicitly. Falling through to the default meant an
+		// autonomous session displayed "ask" — the status bar claiming Klaudia
+		// would stop and check, while it was in fact working straight through.
+		// Of everything on this line, the mode is the one thing that must not
+		// be wrong.
+		return "autonomous"
 	case permission.ModeAcceptEdits:
 		return "auto-edit"
 	case permission.ModeBypassPermissions:

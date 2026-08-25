@@ -100,6 +100,46 @@ does not ask again. The widening stops well short of anything dangerous:
 approving `/etc/hosts` does not hand over `/etc`, and a request for a whole
 system directory is refused before it reaches you.
 
+## Most blocks are not worth your attention
+
+The gate stops far more than it asks about, and that is deliberate. The
+overwhelming majority of hits are incidental — a `2>/dev/null`, a scratch file
+under `/tmp` — where taking another route is trivial and obviously correct.
+Klaudia is told to do exactly that, and the attempt is drawn quietly:
+
+```
+⊘ Bash  changes this machine: writes /dev/null — trying another way
+```
+
+That is not a failure and is not styled as one. Asking about it would be the
+prompt fatigue this design exists to avoid; a question you answer without
+thinking is not consent.
+
+You are asked only when the work genuinely cannot proceed otherwise, and then
+you get three answers rather than two:
+
+```
+Change this machine? (y)es / (n)o / (s)omething else
+```
+
+**Something else** is the one that is easy to leave out and shouldn't be.
+Declining a host change usually means "not like that", not "abandon the task" —
+so it keeps the turn alive and lets you redirect, and what you type lands before
+Klaudia's next action instead of after the turn ends.
+
+The remaining risk is the quiet one: Klaudia hits a gate, decides it cannot
+continue, and simply moves on without telling you. So a host change that was
+stopped and never approved is named in the completion block:
+
+```
+Not done — needs your agreement
+– installs ripgrep
+```
+
+A blocked call Klaudia routed around is a non-event and stays inline. A blocked
+call it gave up on looks, from the outside, exactly like a thing that was never
+attempted — which is why it is stated rather than left for you to infer.
+
 Approvals are **session-scoped and never written to disk**. There is no
 always-allow: a standing permission to reconfigure your machine is one you
 cannot see and did not schedule the end of. `/trust revoke <id>` withdraws one

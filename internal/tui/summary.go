@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
 // §9's other half: results should dominate narration.
@@ -27,6 +30,7 @@ type turnSummary struct {
 	Removed  int           // lines removed
 	Checks   []verifyCheck // commands that constitute verification
 	Gaps     []string      // what was NOT verified, stated rather than implied
+	Blocked  []string      // host changes stopped and never approved
 	HasStats bool          // git could be asked
 }
 
@@ -45,7 +49,9 @@ type verifyCheck struct {
 }
 
 // Empty reports whether there is nothing worth printing.
-func (s turnSummary) Empty() bool { return len(s.Files) == 0 && len(s.Checks) == 0 }
+func (s turnSummary) Empty() bool {
+	return len(s.Files) == 0 && len(s.Checks) == 0 && len(s.Blocked) == 0
+}
 
 // Render lays the summary out with the results first and the accounting last.
 func (s turnSummary) Render() string {
@@ -90,6 +96,22 @@ func (s turnSummary) Render() string {
 		}
 	}
 
+	// Host changes that were stopped and never approved. This is the one thing
+	// in the block that the user cannot find out any other way: a blocked call
+	// that Klaudia routed around is a non-event and is drawn quietly inline,
+	// but a blocked call it simply gave up on looks, from the outside, exactly
+	// like a thing that was never attempted. Saying so is the difference
+	// between "Klaudia could not do that" and silence.
+	if len(s.Blocked) > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("Not done — needs your agreement\n")
+		for _, x := range s.Blocked {
+			b.WriteString("– " + x + "\n")
+		}
+	}
+
 	if len(s.Files) > 0 {
 		if b.Len() > 0 {
 			b.WriteString("\n")
@@ -123,6 +145,32 @@ func buildSummary(touched map[string]bool, results []toolResult, gitStat func() 
 	s.Checks = verificationChecks(results)
 	s.Gaps = verificationGaps(s)
 	return s
+}
+
+// blockedHostChanges names host changes stopped this turn and still unapproved.
+//
+// "Still unapproved" is judged at the end of the turn rather than when the block
+// happened, because the common good path is: the gate stops a command, the model
+// declares the operation properly, the user says yes, and the work proceeds.
+// Reporting that as "not done" would be false — so a report is only listed if
+// nothing in the session's grants covers it by the time the turn ends.
+func blockedHostChanges(reports []agent.HostReport, covered func([]trust.Effect) bool) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, r := range reports {
+		if !r.Enforced || r.Summary == "" {
+			continue
+		}
+		if covered != nil && len(r.Effects) > 0 && covered(r.Effects) {
+			continue
+		}
+		if seen[r.Summary] {
+			continue
+		}
+		seen[r.Summary] = true
+		out = append(out, r.Summary)
+	}
+	return out
 }
 
 // verificationGaps says what was not checked.
@@ -394,6 +442,11 @@ func numstat(out string) (added, removed int) {
 // turnSummaryBlock renders the completion block for the turn that just ended.
 func (m *Model) turnSummaryBlock() string {
 	s := buildSummary(m.turnTouched, m.results.since(m.turnResultsFrom), m.gitNumstat)
+	if tc := m.sess.Trust; tc != nil {
+		if reports := tc.Reports(); m.turnReportsFrom < len(reports) {
+			s.Blocked = blockedHostChanges(reports[m.turnReportsFrom:], tc.Covers)
+		}
+	}
 	if s.Empty() {
 		return ""
 	}

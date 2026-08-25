@@ -86,23 +86,51 @@ func hostScopeLines(hc *agent.HostChange) []string {
 	return out
 }
 
+// hostBlockedLine turns the gate's message to the model into the one line the
+// user needs.
+//
+// The model is told what was found, that another route is preferred, and how to
+// declare the change if it has to happen. The user needs none of that: they
+// need to know Klaudia tried something, was not allowed, and is moving on. The
+// rest is instruction addressed to somebody else, and printing it was what made
+// a routine redirect read as a wall of policy.
+func hostBlockedLine(msg string) string {
+	what := strings.TrimSpace(msg)
+	if i := strings.Index(what, ". "); i > 0 {
+		what = what[:i]
+	}
+	what = strings.TrimSuffix(strings.TrimSpace(what), ".")
+	if what == "" {
+		return "not allowed — trying another way"
+	}
+	return strings.ToLower(what[:1]) + what[1:] + " — trying another way"
+}
+
 // hostPrompt is the actionable line in the persistent bottom view.
 //
 // There is no "always" here, deliberately. An always-allow on a host change
 // would be a permission the user cannot see and did not schedule the end of;
 // approving an operation is the durable answer this model offers, and it lasts
 // for the session.
+//
+// There is a third answer, though, and it is not a refusal. "No" ends the
+// attempt; "something else" keeps the turn alive and lets the user redirect —
+// which is usually what someone means when they decline a host change. They
+// rarely want the task abandoned, they want it done differently.
 func hostPrompt(hc *agent.HostChange) string {
 	verb := "Change this machine?"
 	if hc != nil && hc.Drift {
 		verb = "Approve this too?"
 	}
-	return verb + " (y)es / (n)o"
+	return verb + " (y)es / (n)o / (s)omething else"
 }
 
 // hostAnswerLine echoes the decision with its reach, so the scrollback records
 // what was agreed to and not merely that something was.
-func hostAnswerLine(hc *agent.HostChange, allowed bool) string {
+func hostAnswerLine(hc *agent.HostChange, allowed, redirect bool) string {
+	if redirect {
+		return "declined — say what you'd like instead, and it lands before Klaudia's next step"
+	}
 	if !allowed {
 		return "declined — Klaudia will carry on without it"
 	}

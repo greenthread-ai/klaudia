@@ -25,6 +25,10 @@ type TrustController interface {
 	SetPolicy(agent.HostPolicy)
 	Grants() []*trust.Grant
 	Reports() []agent.HostReport
+	// Covers reports whether live grants already authorise these effects. The
+	// completion block uses it to avoid calling a change "not done" when the
+	// model declared it properly a moment later and the user said yes.
+	Covers([]trust.Effect) bool
 	Revoke(id string) bool
 	RevokeAll() int
 }
@@ -45,8 +49,15 @@ func (c gateController) Policy() agent.HostPolicy     { return c.gate.Policy }
 func (c gateController) SetPolicy(p agent.HostPolicy) { c.gate.Policy = p }
 func (c gateController) Grants() []*trust.Grant       { return c.gate.Grants() }
 func (c gateController) Reports() []agent.HostReport  { return c.gate.Reports() }
-func (c gateController) Revoke(id string) bool        { return c.gate.Ledger.Revoke(id) }
-func (c gateController) RevokeAll() int               { return c.gate.Ledger.RevokeAll() }
+func (c gateController) Covers(e []trust.Effect) bool {
+	if c.gate == nil || c.gate.Ledger == nil || len(e) == 0 {
+		return false
+	}
+	_, drift := c.gate.Ledger.Cover(e)
+	return len(drift) == 0
+}
+func (c gateController) Revoke(id string) bool { return c.gate.Ledger.Revoke(id) }
+func (c gateController) RevokeAll() int        { return c.gate.Ledger.RevokeAll() }
 
 // renderTrust is the /trust view.
 func (m *Model) renderTrust() string {

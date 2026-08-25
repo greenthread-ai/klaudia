@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"sync"
 	"testing"
@@ -222,5 +223,72 @@ func TestInputEndsUpAtTheBottomOnceOutputFills(t *testing.T) {
 	}
 	if !strings.Contains(view, "turns") {
 		t.Error("status bar should be the last thing drawn")
+	}
+}
+
+// Seen in a real session: a long prompt echoed at 149 columns wrapped, and the
+// short second row kept "0k tokens" from the status line that had been there
+// before. Bubble Tea only erases the rest of a queued line when the line is
+// narrower than the terminal, so an over-wide line leaves residue on its final
+// wrapped row.
+func TestScrollbackLinesNeverReachTheLastColumn(t *testing.T) {
+	m := newTestModel()
+	m.resize(149, 40)
+
+	long := "› " + strings.Repeat("word ", 40) // ~200 columns
+	for _, line := range strings.Split(m.fitScrollback(long), "\n") {
+		if w := ansi.StringWidth(line); w >= 149 {
+			t.Errorf("wrapped row is %d columns wide, want < 149: %q", w, line)
+		}
+	}
+}
+
+// A line that already fits is passed through untouched — wrapping it would be
+// a needless copy, and re-joining could disturb trailing styling.
+func TestShortScrollbackLinesAreUntouched(t *testing.T) {
+	m := newTestModel()
+	m.resize(149, 40)
+	for _, s := range []string{"", "hello", strings.Repeat("x", 148)} {
+		if got := m.fitScrollback(s); got != s {
+			t.Errorf("fitScrollback(%d chars) changed it: %q", len(s), got)
+		}
+	}
+}
+
+// Existing line structure survives: a block of several lines stays several
+// lines, with only the over-wide ones split.
+func TestScrollbackKeepsBlockStructure(t *testing.T) {
+	m := newTestModel()
+	m.resize(60, 40)
+	in := "short\n" + strings.Repeat("y", 130) + "\nalso short"
+	out := strings.Split(m.fitScrollback(in), "\n")
+	if out[0] != "short" || out[len(out)-1] != "also short" {
+		t.Errorf("surrounding lines were disturbed: %q", out)
+	}
+	if len(out) != 5 { // short + 3 wrapped rows + also short
+		t.Errorf("got %d lines, want 5: %q", len(out), out)
+	}
+}
+
+// On a terminal too narrow to wrap sensibly, leave it alone rather than
+// producing one column of text.
+func TestVeryNarrowTerminalIsLeftAlone(t *testing.T) {
+	m := newTestModel()
+	m.resize(10, 20)
+	in := strings.Repeat("z", 50)
+	if got := m.fitScrollback(in); got != in {
+		t.Errorf("a 10-column terminal was wrapped: %q", got)
+	}
+}
+
+// The transcript keeps the unwrapped text, so /copy and /export are unaffected
+// by a wrap that exists only to satisfy the renderer.
+func TestWrappingDoesNotAffectTheTranscript(t *testing.T) {
+	m := newTestModel()
+	m.resize(60, 40)
+	long := strings.Repeat("w", 200)
+	m.commit(transcriptBlock{rendered: long})
+	if !strings.Contains(m.transcript.String(), long) {
+		t.Error("the transcript stored the wrapped copy; /copy would return broken text")
 	}
 }

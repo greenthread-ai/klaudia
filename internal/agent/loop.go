@@ -39,6 +39,13 @@ type Event struct {
 	Input     any    `json:"input,omitempty"`       // tool_use input
 	Content   string `json:"content,omitempty"`     // tool_result content (what the model sees)
 	IsError   bool   `json:"is_error,omitempty"`    // tool_result error flag
+	// HostBlocked marks a tool_result that the host gate stopped, as distinct
+	// from a tool that failed. The two look identical to the model — both are
+	// error results it must respond to — but they are not the same event for the
+	// user. A blocked `2>/dev/null` that the model simply routes around is a
+	// non-event, and rendering it as a red failure was reported as Klaudia
+	// looking broken while it was in fact working correctly.
+	HostBlocked bool `json:"host_blocked,omitempty"`
 	// FullContent is the untruncated tool output when the tool clamped Content
 	// to protect the context window. Local frontends show this; it never goes
 	// back to the model. Empty means Content is already complete.
@@ -586,13 +593,19 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 
 	key := tu.Name + "\x00" + string(raw)
 	rawStr := string(raw)
-	errResult := func(msg string) anthropic.BetaContentBlockParamUnion {
+	errResultTagged := func(msg string, hostBlocked bool) anthropic.BetaContentBlockParamUnion {
 		failures[key]++
 		bumpErrStreak(errStreaks, tu.Name, msg, rawStr)
 		if emit != nil {
-			emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
+			emit(Event{
+				Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID,
+				Content: msg, IsError: true, HostBlocked: hostBlocked,
+			})
 		}
 		return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
+	}
+	errResult := func(msg string) anthropic.BetaContentBlockParamUnion {
+		return errResultTagged(msg, false)
 	}
 
 	// Loop-breaker A: this exact call has already failed repeatedly. Don't run
@@ -630,10 +643,10 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		hd := opts.Host.Check(tu.Name, raw, opts.WorkingDir)
 		switch {
 		case hd.Refuse != "":
-			return errResult(hd.Refuse)
+			return errResultTagged(hd.Refuse, true)
 		case len(hd.Ask) > 0:
 			if !l.approveHostChange(ctx, tu, raw, opts, hd) {
-				return errResult(hostDeclinedMsg(hd))
+				return errResultTagged(hostDeclinedMsg(hd), true)
 			}
 		}
 	}

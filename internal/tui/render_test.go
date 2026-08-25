@@ -275,3 +275,29 @@ func TestRenderContext(t *testing.T) {
 		}
 	}
 }
+
+// The status bar must name the mode it is actually in. Autonomous displaying
+// "ask" told the user Klaudia would stop and check while it was working
+// straight through — the one field on that line that must never be wrong.
+func TestShortModeNamesEveryMode(t *testing.T) {
+	want := map[permission.Mode]string{
+		permission.ModeAutonomous:        "autonomous",
+		permission.ModePlan:              "plan",
+		permission.ModeBypassPermissions: "bypass",
+		permission.ModeAcceptEdits:       "auto-edit",
+		permission.ModeDontAsk:           "deny",
+		permission.ModeDefault:           "ask",
+	}
+	seen := map[string]permission.Mode{}
+	for mode, label := range want {
+		got := shortMode(mode)
+		if got != label {
+			t.Errorf("shortMode(%s) = %q, want %q", mode, got, label)
+		}
+		if prev, dup := seen[got]; dup {
+			t.Errorf("%s and %s both display as %q — the status bar cannot tell them apart",
+				prev, mode, got)
+		}
+		seen[got] = mode
+	}
+}

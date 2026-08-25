@@ -14,12 +14,16 @@ type fakeTrust struct {
 	grants  []*trust.Grant
 	reports []agent.HostReport
 	revoked []string
+	covers  bool
 }
 
 func (f *fakeTrust) Policy() agent.HostPolicy     { return f.policy }
 func (f *fakeTrust) SetPolicy(p agent.HostPolicy) { f.policy = p }
 func (f *fakeTrust) Grants() []*trust.Grant       { return f.grants }
 func (f *fakeTrust) Reports() []agent.HostReport  { return f.reports }
+
+// covers is what the fake ledger authorises; nil means nothing is covered.
+func (f *fakeTrust) Covers(e []trust.Effect) bool { return f.covers && len(e) > 0 }
 func (f *fakeTrust) Revoke(id string) bool {
 	f.revoked = append(f.revoked, id)
 	return true

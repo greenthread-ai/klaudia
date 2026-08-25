@@ -3,6 +3,9 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
 func bashResult(cmd, output string, failed bool) toolResult {
@@ -264,5 +267,35 @@ func TestFailureOutranksALaterPass(t *testing.T) {
 	}
 	if s.Checks[0].OK {
 		t.Error("a later passing run hid an earlier failure")
+	}
+}
+
+// The completion block reports a host change only if it was still unapproved
+// when the turn ended. The good path — gate stops a command, model declares the
+// operation properly, user agrees, work proceeds — must not be reported as "not
+// done", or the block lies about the most common successful outcome.
+func TestBlockedHostChangesIgnoresWhatWasLaterApproved(t *testing.T) {
+	reports := []agent.HostReport{
+		{Enforced: true, Summary: "installs nginx", Effects: []trust.Effect{{Kind: trust.KindPackageInstall}}},
+	}
+	if got := blockedHostChanges(reports, func([]trust.Effect) bool { return true }); len(got) != 0 {
+		t.Errorf("reported an approved change as not done: %v", got)
+	}
+	if got := blockedHostChanges(reports, func([]trust.Effect) bool { return false }); len(got) != 1 {
+		t.Errorf("dropped a change that was never approved: %v", got)
+	}
+}
+
+// Observe-mode reports are recorded but nothing was stopped, so nothing was
+// left undone.
+func TestBlockedHostChangesOnlyCountsEnforcedStops(t *testing.T) {
+	reports := []agent.HostReport{
+		{Enforced: false, Summary: "would have installed nginx"},
+		{Enforced: true, Summary: "writes /etc/hosts"},
+		{Enforced: true, Summary: "writes /etc/hosts"}, // same thing twice, said once
+	}
+	got := blockedHostChanges(reports, nil)
+	if len(got) != 1 || got[0] != "writes /etc/hosts" {
+		t.Errorf("got %v, want just the one enforced stop", got)
 	}
 }

@@ -282,6 +282,16 @@ This changes your machine
 Approvals are session-scoped and never written to disk. `/trust` shows what is
 live and revokes it.
 
+Most gate hits never reach you. An incidental `2>/dev/null` or a scratch file in
+`/tmp` is stopped, Klaudia takes another route, and the attempt is drawn quietly
+as `⊘ changes this machine: writes /dev/null — trying another way` rather than as
+a failure. You are asked only when the work genuinely cannot proceed otherwise,
+and then **(s)omething else** sits beside yes and no — declining usually means
+"not like that" rather than "give up", so it keeps the turn alive and lets you
+redirect. Anything blocked and never approved is named in the completion block
+under `Not done — needs your agreement`, so giving up quietly is not an option
+available to it.
+
 **This is a guardrail against well-intentioned mistakes, not a security
 boundary.** It reads command lines and tool inputs; it does not watch what
 programs do, so a command that builds its own target or a package's install
