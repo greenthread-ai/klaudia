@@ -250,6 +250,39 @@ func TestJobNames(t *testing.T) {
 	}
 }
 
+// A backgrounded command is rarely a bare program, and taking the first word of
+// the line named a real job "cd". The case that exposed it is the first entry:
+// jobName already had a python3 -m branch that would have called it
+// "http.server", and the `cd … &&` prefix meant that branch was never reached.
+func TestJobNamesSeeThroughPrefixes(t *testing.T) {
+	for cmd, want := range map[string]string{
+		// The command that actually produced a job called "cd".
+		"cd /Users/nick/Projects/klaudia && python3 -m http.server 8901": "http.server",
+
+		// The last command is the one still running, which is what a job is.
+		"npm install && npm run dev": "dev",
+		"go build ./... && ./server": "server",
+		"cd api && make watch":       "watch",
+
+		// Wrappers hold the real program in their arguments, not in a command
+		// of their own.
+		"sudo nginx -g daemon off":         "nginx",
+		"env FOO=1 python3 -m http.server": "http.server",
+		"nohup ./scripts/start.sh":         "start.sh",
+
+		// Assignments must not mask the command.
+		"PORT=8080 npm run dev": "dev",
+
+		// A line that is only setup has no name worth taking, and the generic
+		// fallback is more honest than calling the job "cd".
+		"cd /tmp": "job",
+	} {
+		if got := jobName(cmd); got != want {
+			t.Errorf("jobName(%q) = %q, want %q", cmd, got, want)
+		}
+	}
+}
+
 func TestJobNamesAreUnique(t *testing.T) {
 	store := newTestJobStore(t)
 	a, _ := store.Start(sandbox.NewLocal(), sandbox.Request{Command: "sleep 30"})

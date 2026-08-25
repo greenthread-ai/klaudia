@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/greenthread-ai/klaudia/internal/native/bashparser"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/internal/trust"
 )
@@ -420,18 +421,82 @@ func detectPort(output string) string {
 	return ""
 }
 
+// jobSetup prepare the ground and exit. A job is never the thing they did.
+var jobSetup = map[string]bool{
+	"cd": true, "export": true, "source": true, ".": true,
+	"set": true, "true": true, ":": true, "mkdir": true,
+}
+
+// jobWrappers run another program, so the interesting name is in their
+// arguments rather than in a separate command.
+var jobWrappers = map[string]bool{
+	"env": true, "nohup": true, "exec": true, "sudo": true,
+	"time": true, "stdbuf": true, "setsid": true, "command": true,
+}
+
+// jobProgram picks the command a background job is actually running.
+//
+// A backgrounded command is rarely a bare program. It is `cd repo && npm run
+// dev`, or `FOO=1 python3 -m http.server`. Taking the first word of the line
+// named such a job "cd", which is useless on its own and worse than useless
+// below: it bypassed every case in jobName, including the python3 branch that
+// would have called that exact job "http.server".
+//
+// The *last* command is the one that keeps running, and a job is by definition
+// the thing still running — `npm install && npm run dev` is the dev server, not
+// the install. Setup commands are skipped so a trailing `cd` cannot win, and
+// wrappers are unwrapped because `sudo nginx` is a job called nginx.
+func jobProgram(command string) (string, []string) {
+	a, err := bashparser.Parse(command)
+	if err != nil || len(a.Commands) == 0 {
+		// An unreadable line still deserves a name; the old first-word rule is
+		// a fine fallback when there is no structure to do better with.
+		f := strings.Fields(command)
+		if len(f) == 0 {
+			return "", nil
+		}
+		return filepath.Base(f[0]), f[1:]
+	}
+	for i := len(a.Commands) - 1; i >= 0; i-- {
+		c := a.Commands[i]
+		if c.Name == "" {
+			continue // an expansion; nothing sayable to take from it
+		}
+		name, args := unwrapJob(filepath.Base(c.Name), c.Args)
+		if jobSetup[name] {
+			continue
+		}
+		return name, args
+	}
+	return "", nil
+}
+
+// unwrapJob steps through wrapper programs to the one being wrapped.
+func unwrapJob(name string, args []string) (string, []string) {
+	for jobWrappers[name] {
+		i := 0
+		// Skip the wrapper's own flags and any VAR=value it is setting.
+		for i < len(args) && (strings.HasPrefix(args[i], "-") || strings.Contains(args[i], "=")) {
+			i++
+		}
+		if i >= len(args) {
+			return name, args
+		}
+		name, args = filepath.Base(args[i]), args[i+1:]
+	}
+	return name, args
+}
+
 // jobName derives a short, sayable name from a command line.
 //
 // Derived rather than mapped: `npm run dev` becomes "dev" and `make dev-api`
 // becomes "dev-api", which is what the user already calls them. A lookup table
 // turning "npm run dev" into "web" would be guessing at their vocabulary.
 func jobName(command string) string {
-	fields := strings.Fields(command)
-	if len(fields) == 0 {
+	prog, rest := jobProgram(command)
+	if prog == "" {
 		return "job"
 	}
-	prog := filepath.Base(fields[0])
-	rest := fields[1:]
 
 	next := func(i int) string {
 		if i < len(rest) {

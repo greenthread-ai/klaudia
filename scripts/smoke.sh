@@ -42,8 +42,28 @@ grep -q '"type":"result".*"is_error":false' "$OUT" && pass "well-formed result e
 echo "== resume round-trip =="
 cd "$WORK"
 "$BIN" -p "Remember this secret word for later: PINEAPPLE. Reply ok." "${COMMON[@]}" >/dev/null 2>&1
-ANSWER="$("$BIN" -p "What was the secret word? Reply with ONLY that word." --continue "${COMMON[@]}" 2>/dev/null | tr -d '[:space:]')"
-[ "$ANSWER" = "PINEAPPLE" ] && pass "--continue recalled prior context" || fail "resume lost context (got: $ANSWER)"
+ANSWER="$("$BIN" -p "What was the secret word? Reply with ONLY that word." --continue "${COMMON[@]}" 2>/dev/null)"
+# Containment, not equality. The property under test is whether resume carried
+# the transcript, and an exact match tests something else: whether the model
+# obeyed "reply with ONLY that word". haiku has been observed recalling
+# PINEAPPLE correctly inside a paragraph about not having persistent memory,
+# which is a pass for resume and was reported as a failure.
+case "$ANSWER" in
+  *PINEAPPLE*) pass "--continue recalled prior context" ;;
+  *) fail "resume lost context (got: $ANSWER)" ;;
+esac
+
+# The flag has to be what did it. Without --continue a headless run starts a new
+# transcript, so the check above cannot be passed by an accident of session
+# reuse. Transcripts live in a directory named for the cwd with every
+# non-alphanumeric replaced by "-", per session.EncodePath. (That function also
+# truncates past 200 chars and appends a hash; a mktemp path never gets there.)
+SESSION_DIR="$HOME/.klaudia/sessions/$(printf '%s' "$WORK" | tr -c 'a-zA-Z0-9' '-')"
+BEFORE=$(ls -1 "$SESSION_DIR"/*.jsonl 2>/dev/null | wc -l | tr -d ' ')
+"$BIN" -p "Reply with just: SECOND" "${COMMON[@]}" >/dev/null 2>&1
+AFTER=$(ls -1 "$SESSION_DIR"/*.jsonl 2>/dev/null | wc -l | tr -d ' ')
+[ "$AFTER" -gt "$BEFORE" ] && pass "a headless run without --continue starts fresh" \
+  || fail "expected a new transcript without --continue (was $BEFORE, now $AFTER)"
 
 echo "== plan mode is read-only =="
 cd "$WORK"
