@@ -42,6 +42,32 @@ func NewRoots(home string, projectRoots ...string) Roots {
 	return r
 }
 
+// fdAliases name a file descriptor rather than a file: they resolve to whatever
+// that descriptor currently points at.
+//
+// Resolving them is worse than useless. The descriptors they would resolve
+// against belong to Klaudia's own process, but a /dev/fd/3 written on a command
+// line means fd 3 of the command being classified — a process that does not
+// exist yet. The answer is therefore not merely wrong, it is arbitrary: on Linux
+// /dev/fd is a symlink to /proc/self/fd, and EvalSymlinks("/dev/fd/3") returned
+// whatever the test binary happened to have open, which on CI was a cgroup file
+// under /sys. That classified as host and failed the build, on a machine-shaped
+// accident rather than anything about the path.
+//
+// Left unresolved they match their entries in hostExceptions, which is the
+// intended answer. `diff <(a) <(b)` is process substitution over pipes and is
+// exactly the everyday idiom that list exists to keep quiet.
+var fdAliases = []string{"/dev/fd", "/dev/stdin", "/dev/stdout", "/dev/stderr"}
+
+func isFDAlias(p string) bool {
+	for _, a := range fdAliases {
+		if p == a || strings.HasPrefix(p, a+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // canonical makes a path absolute and resolves symlinks as far as the
 // filesystem allows.
 //
@@ -57,6 +83,9 @@ func canonical(p string) string {
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		return filepath.Clean(p)
+	}
+	if isFDAlias(abs) {
+		return abs
 	}
 	if real, err := filepath.EvalSymlinks(abs); err == nil {
 		return real

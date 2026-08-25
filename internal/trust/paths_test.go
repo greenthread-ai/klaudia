@@ -3,6 +3,7 @@ package trust
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -160,6 +161,39 @@ func TestPseudoDevicesAreNotHostChanges(t *testing.T) {
 		if z := r.ClassifyPath(canonical(p)); z.Protected() {
 			t.Errorf("%s classified as %s; writing to it changes nothing", p, z)
 		}
+	}
+}
+
+// A file descriptor alias must not be resolved against Klaudia's own open
+// files. fd 3 of *this* process is not fd 3 of the command being classified,
+// which has not been started yet, so resolving it answers a question nobody
+// asked — and answers it differently on every run.
+//
+// This is the deterministic form of the CI failure. The original test used
+// /dev/fd/3 and only failed when fd 3 happened to point somewhere under a host
+// prefix, which on the CI image was a cgroup file under /sys. Here the
+// descriptor is aimed at a host file deliberately, so the failure is reproduced
+// on purpose rather than by luck.
+//
+// Measured, not assumed: this only ever failed on Linux, where /dev/fd is a
+// symlink to /proc/self/fd. On macOS /dev/fd is a real devfs directory and
+// EvalSymlinks returns it unchanged, so the test passes there with or without
+// the fix. It is kept running on both because the invariant is the same on both
+// and only the filesystem's willingness to expose the bug differs.
+func TestFDAliasesAreNotResolvedAgainstOurOwnDescriptors(t *testing.T) {
+	r, _, _ := testRoots(t)
+	f, err := os.Open("/etc/hosts") // present, and inside a host prefix, on both platforms
+	if err != nil {
+		t.Skipf("no /etc/hosts to point a descriptor at: %v", err)
+	}
+	defer f.Close()
+
+	alias := filepath.Join("/dev/fd", strconv.Itoa(int(f.Fd())))
+	if got := canonical(alias); got != alias {
+		t.Errorf("canonical(%s) = %q, want it left alone — resolving it reaches our fd table", alias, got)
+	}
+	if z := r.ClassifyPath(canonical(alias)); z.Protected() {
+		t.Errorf("%s classified as %s; it is a descriptor, not /etc/hosts", alias, z)
 	}
 }
 
