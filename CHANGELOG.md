@@ -303,6 +303,12 @@ port mirrors (see `internal/version`).
   behaviour of denying everything that would prompt, in silence.
 
 ### Changed
+- **The status line no longer announces the mode when nothing is unusual.** Once
+  autonomous became the default it was on the line in almost every session, and
+  a segment that never changes stops being read — while still outranking the
+  context percentage, which is the one number there anyone acts on. `plan`,
+  `bypass` and the legacy modes still appear, and still survive first when a
+  narrow terminal starts dropping segments; "working normally" does not.
 - **Permission modes collapse from six to three:** `autonomous` (the new
   default), `plan`, `bypassPermissions`. The old set asked you to pick a stance
   on file edits versus commands versus network, which is a question about tool

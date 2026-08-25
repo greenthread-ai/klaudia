@@ -95,3 +95,70 @@ func TestLooksLineNumbered(t *testing.T) {
 		}
 	}
 }
+
+// The mode is on the status line only when it deviates from working normally.
+//
+// Once autonomous became the default it appeared in almost every session, and a
+// segment that never changes stops being read — while still outranking the
+// context percentage, which is the one number here anyone acts on.
+func TestStatusLineShowsOnlyDeviatingModes(t *testing.T) {
+	for mode, want := range map[permission.Mode]string{
+		permission.ModeAutonomous:        "", // the default: silent
+		permission.ModeDefault:           "", // the pre-collapse default: also silent
+		permission.ModePlan:              "plan",
+		permission.ModeBypassPermissions: "bypass",
+		permission.ModeAcceptEdits:       "auto-edit",
+		permission.ModeDontAsk:           "deny",
+	} {
+		if got := deviatingMode(mode); got != want {
+			t.Errorf("deviatingMode(%s) = %q, want %q", mode, got, want)
+		}
+	}
+}
+
+// Working normally, the line leads with the model and then the numbers.
+func TestStatusLineOmitsTheSteadyState(t *testing.T) {
+	m := newTestModel()
+	m.resize(120, 40)
+	m.sess.Model = "claude-opus-5"
+	m.sess.PermissionMode = string(permission.ModeAutonomous)
+
+	got := stripANSI(m.statusLine())
+	for _, unwanted := range []string{"autonomous", "ask"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("status line still carries %q: %q", unwanted, got)
+		}
+	}
+	if !strings.Contains(got, "claude-opus-5") {
+		t.Errorf("the model went missing: %q", got)
+	}
+	if !strings.Contains(got, "turns") {
+		t.Errorf("the turn count went missing: %q", got)
+	}
+}
+
+// Bypass and plan still announce themselves, and outrank the counters when the
+// terminal is narrow — they are the states you must not forget you are in.
+func TestDeviatingModeSurvivesANarrowTerminal(t *testing.T) {
+	for _, mode := range []permission.Mode{permission.ModePlan, permission.ModeBypassPermissions} {
+		m := newTestModel()
+		m.resize(120, 40)
+		m.sess.Model = "claude-opus-5"
+		m.sess.PermissionMode = string(mode)
+		got := stripANSI(m.statusLineAt(30))
+		if !strings.Contains(got, shortMode(mode)) {
+			t.Errorf("%s was dropped from a narrow status line: %q", mode, got)
+		}
+	}
+}
+
+// A goal loop still reports its progress; that was the point of keeping it.
+func TestGoalProgressStillShows(t *testing.T) {
+	m := newTestModel()
+	m.resize(120, 40)
+	m.sess.PermissionMode = string(permission.ModeAutonomous)
+	m.loopRemaining, m.loopTotal = 7, 10
+	if got := stripANSI(m.statusLine()); !strings.Contains(got, "goal 4/10") {
+		t.Errorf("goal progress missing: %q", got)
+	}
+}

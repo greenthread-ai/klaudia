@@ -168,6 +168,20 @@ func shortMode(m permission.Mode) string {
 	}
 }
 
+// deviatingMode returns the mode label to show, or "" when the session is
+// simply working normally.
+//
+// Both defaults are silent: autonomous for a current config, and ask for one
+// written before the mode collapse. Each is the steady state for whoever is
+// running it, and neither tells them anything they do not already assume.
+func deviatingMode(m permission.Mode) string {
+	switch m {
+	case permission.ModeAutonomous, permission.ModeDefault:
+		return ""
+	}
+	return shortMode(m)
+}
+
 // statusLine renders the context caption under the input box.
 //
 // A pending "press Ctrl+C again to quit" takes over the whole line — it is a
@@ -176,8 +190,13 @@ func shortMode(m permission.Mode) string {
 //
 // Otherwise the line is assembled from segments in priority order and truncated
 // by dropping whole segments, not characters: on a narrow terminal "opus-5 ·
-// ask" is useful where "opus-5 · ask · 0 tur" is just broken. Which model and
-// which permission mode matter most; token counts matter least.
+// ctx 5%" is useful where "opus-5 · ctx 5% · 0 tur" is just broken.
+//
+// The permission mode appears only when it deviates from the ordinary. Once
+// autonomous became the default it was on the line in almost every session, and
+// a segment that never changes stops being read — while still outranking the
+// context percentage, which is the one number here anyone acts on. Plan and
+// bypass are worth interrupting for; "working normally" is not.
 func (m *Model) statusLine() string {
 	if m.quitArmed {
 		return askStyle.Render("Press Ctrl+C again to quit") +
@@ -190,7 +209,10 @@ func (m *Model) statusLine() string {
 			model = dm
 		}
 	}
-	segments := []string{model, shortMode(m.currentMode())}
+	segments := []string{model}
+	if mode := deviatingMode(m.currentMode()); mode != "" {
+		segments = append(segments, mode)
+	}
 
 	// Goal state outranks the counters: it says the session is doing something
 	// unattended, which is the thing you would most want to notice.
