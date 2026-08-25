@@ -1200,12 +1200,7 @@ const keyHints = `Keys:
   Ctrl+J           Newline without sending
   Ctrl+U / Ctrl+K  Delete before / after the cursor
   Esc              Interrupt the model mid-turn
-  Ctrl+C           Interrupt, or clear the line — press twice to quit
-
-Scrolling, selecting and searching are your terminal's, not Klaudia's: output is
-printed into real scrollback, so PgUp, the mouse wheel, drag-to-select, tmux copy
-mode and your terminal's own find all work as they normally do. Klaudia adds
-/search, /outline and /errors on top, which report matches rather than scrolling.`
+  Ctrl+C           Interrupt, or clear the line — press twice to quit`
 
 // slashHelp renders the command reference from commandList + keyHints.
 func slashHelp() string {
