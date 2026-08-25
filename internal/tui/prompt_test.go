@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestInputIsFramed(t *testing.T) {
@@ -13,12 +15,34 @@ func TestInputIsFramed(t *testing.T) {
 	if !strings.Contains(view, "╭") || !strings.Contains(view, "╰") {
 		t.Fatalf("expected the input to be boxed:\n%s", view)
 	}
-	// The box should span the terminal, so it reads as a widget rather than a
-	// fragment floating in the middle of the row.
+	// The box spans the terminal bar one column, so it still reads as a widget
+	// rather than a fragment — but never occupies the last cell. See
+	// resizeResync: Bubble Tea only erases the rest of a row for lines
+	// *narrower* than the terminal, and writing the final column parks the
+	// cursor in the pending-wrap state. Both matter on resize.
 	for _, ln := range strings.Split(view, "\n") {
 		if strings.HasPrefix(ln, "╭") || strings.HasPrefix(ln, "╰") {
-			if w := len([]rune(ln)); w != 72 {
-				t.Errorf("border row is %d cells wide, want the full 72: %q", w, ln)
+			if w := len([]rune(ln)); w != 71 {
+				t.Errorf("border row is %d cells wide, want 71 (width-1): %q", w, ln)
+			}
+		}
+	}
+}
+
+// The invariant the resize bug came down to: nothing in the live region may
+// occupy the terminal's last column, at any width.
+//
+// A full-width line gets no EraseLineRight from the renderer, so stale content
+// to its right survives; and it leaves the cursor in the terminal's
+// pending-wrap state. Three of the four live-region lines used to be exactly
+// the terminal width.
+func TestLiveRegionNeverFillsTheLastColumn(t *testing.T) {
+	for _, w := range []int{160, 144, 120, 100, 80, 72, 60, 40, 30} {
+		m := newTestModel()
+		m.resize(w, 40)
+		for i, ln := range strings.Split(visibleText(m.View()), "\n") {
+			if got := len([]rune(ln)); got >= w {
+				t.Errorf("at width %d, live-region line %d is %d cells: %q", w, i, got, ln)
 			}
 		}
 	}
@@ -161,5 +185,52 @@ func TestStatusCaptionKeepsEverythingAtUnknownWidth(t *testing.T) {
 	m.sess.ResolvedModel = "claude-opus-5"
 	if got := visibleText(m.statusLine()); !strings.Contains(got, "tokens") {
 		t.Errorf("unknown width should not truncate: %q", got)
+	}
+}
+
+// A resize must blank the live region for exactly one frame, then draw it
+// again. That single-line frame is what makes Bubble Tea reset its
+// linesRendered counter and emit EraseScreenBelow; without it the cursor
+// arithmetic stays desynced and every further resize orphans another stripe.
+func TestResizeBlanksForOneFrameThenRedraws(t *testing.T) {
+	m := newTestModel()
+	m.resize(120, 40)
+	if m.View() == "" {
+		t.Fatal("the live region is empty before any resize")
+	}
+
+	_, cmd := m.update(tea.WindowSizeMsg{Width: 90, Height: 40})
+	if cmd == nil {
+		t.Fatal("a resize scheduled no follow-up, so the region would stay blank")
+	}
+	if got := m.View(); got != "" {
+		t.Errorf("the resize frame should be blank, got %q", got)
+	}
+
+	// The follow-up restores it.
+	if _, ok := cmd().(resyncMsg); !ok {
+		t.Fatalf("the follow-up is not a resyncMsg: %T", cmd())
+	}
+	m.update(resyncMsg{})
+	if m.View() == "" {
+		t.Error("the live region did not come back after the resync")
+	}
+	if m.width != 90 {
+		t.Errorf("width = %d, want 90", m.width)
+	}
+}
+
+// A WindowSizeMsg that changes nothing must not blank anything — terminals
+// re-send the current size on focus, and flickering the prompt for that would
+// be a new bug.
+func TestNoOpResizeDoesNotBlank(t *testing.T) {
+	m := newTestModel()
+	m.resize(120, 40)
+	_, cmd := m.update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	if cmd != nil {
+		t.Error("a no-op resize scheduled a resync")
+	}
+	if m.View() == "" {
+		t.Error("a no-op resize blanked the live region")
 	}
 }

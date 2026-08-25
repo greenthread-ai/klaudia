@@ -287,6 +287,9 @@ type Model struct {
 	// of what Klaudia has written since. It is what makes "your changes" and
 	// "Klaudia's changes" distinguishable at all.
 	base *baseline
+	// resyncing blanks the live region for exactly one frame after a resize.
+	// See resizeResync in prompt.go for why that is the only lever available.
+	resyncing bool
 	// promptIsBang tracks whether the input marker is currently "$", so the
 	// prompt function is only rebuilt when the answer changes.
 	promptIsBang bool
@@ -597,7 +600,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		changed := msg.Width != m.width || msg.Height != m.height
 		m.resize(msg.Width, msg.Height)
+		if !changed {
+			return m, nil
+		}
+		// Blank the live region for one frame, then draw it again. This is the
+		// only way to resync Bubble Tea's cursor arithmetic from outside the
+		// renderer — see resizeResync.
+		m.resyncing = true
+		return m, func() tea.Msg { return resyncMsg{} }
+
+	case resyncMsg:
+		m.resyncing = false
 		return m, nil
 
 	case tea.KeyMsg:
@@ -2881,6 +2896,9 @@ func (m *Model) introText() string {
 // into the terminal's scrollback by the print queue.
 func (m *Model) View() string {
 	if !m.ready {
+		return ""
+	}
+	if m.resyncing {
 		return ""
 	}
 	out := m.clampBottom(m.bottomView())

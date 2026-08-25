@@ -48,6 +48,25 @@ port mirrors (see `internal/version`).
   work is the bug `/commit` already stopped doing once.
 
 ### Fixed
+- **Resizing the terminal left a trail of border fragments up the screen.**
+  Reported from a live drag-resize. Bubble Tea's inline renderer returns to the
+  top of the live region with `CursorUp(linesRendered-1)`, where the count is
+  the *logical* line count of the previous frame. On a resize it updates its
+  width and calls repaint but does not reset that count — and the terminal has
+  meanwhile reflowed the rows already on screen. A four-line region drawn at 144
+  columns occupies seven or eight rows at 100, so the cursor lands inside the
+  old frame and the rows above it are orphaned; a drag orphans another stripe at
+  every intermediate size.
+
+  Two causes, both fixed. Three of the four live-region lines were *exactly* the
+  terminal width — measured — and the renderer only appends `EraseLineRight` to
+  lines narrower than the terminal, so a full-width line never erased what was
+  to its right, and writing the last column parked the cursor in the pending-wrap
+  state. The live region now stops one column short at every width, with a test
+  asserting it. And a resize renders one blank frame before the real one: a
+  single-line frame is the only thing that resets the renderer's counter from
+  outside, and it makes the renderer emit `EraseScreenBelow` over the
+  mispositioned remains, so the damage stops accumulating across a drag.
 - **A dev server backgrounded with `&` bypassed the job system entirely.** Found
   by running the spec's agent-loop torture test: the model shell-backgrounded
   the server eleven times and then managed the processes by hand with `pkill`

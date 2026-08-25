@@ -205,7 +205,9 @@ func (m *Model) statusLine() string {
 		fmt.Sprintf("%d turns", m.statTurns),
 		fmt.Sprintf("%s tokens", humanTokens(m.statIn+m.statOut)))
 
-	return hintStyle.Render(fitSegments(segments, m.width-2))
+	// width-3: two columns for the caption indent, and one for the reserved
+	// last column the live region never writes to (see promptBox).
+	return hintStyle.Render(fitSegments(segments, m.width-3))
 }
 
 // statusLineAt renders the caption as if the terminal were width cells wide.
