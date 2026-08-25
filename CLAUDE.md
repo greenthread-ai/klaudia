@@ -5,9 +5,16 @@ CLI agent that helps users with software engineering tasks.
 ## Build & Test
 
 ```bash
-CGO_ENABLED=0 go build ./cmd/klaudia
+CGO_ENABLED=0 go install ./cmd/klaudia   # updates the `klaudia` on your PATH
+CGO_ENABLED=0 go build ./...             # compile check only — writes no binary
 go test ./internal/...
 ```
+
+`go build ./...` with multiple packages compiles and *discards* the results: it
+is a build check, not an install. `go build ./cmd/klaudia` does write a binary,
+but into the working directory, not onto `$PATH`. Running `klaudia` after either
+one runs whatever was installed last — a two-month-old binary in one real case.
+Use `go install` when you mean to try the change.
 
 ## Internal Package Layout
 

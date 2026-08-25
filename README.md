@@ -105,7 +105,7 @@ Once the TUI starts, type `/doctor` to verify auth and environment status.
 Pure Go, no CGO, no system libraries:
 
 ```bash
-CGO_ENABLED=0 go build -o klaudia ./cmd/klaudia
+CGO_ENABLED=0 go install ./cmd/klaudia   # or: go build -o klaudia ./cmd/klaudia
 go test ./internal/...
 ```
 

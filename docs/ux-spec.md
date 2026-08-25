@@ -165,8 +165,14 @@ and exit codes.
 ## Still outstanding
 
 - **Manual terminal verification.** Drag-select, tmux copy mode, VS Code's
-  terminal, a light background, and resize while scrolled up. These need a
-  human at a terminal.
+  terminal, and a light background. These need a human at a terminal.
+
+  Resize *is* confirmed: a live drag-resize was reported broken, fixed, and
+  re-tested by hand in Terminal.app. It took three attempts, and the two that
+  failed are the interesting part — the first treated a symptom, and the second
+  was verified against `View()` rather than against what the renderer emits.
+  `internal/tui/renderer_test.go` now drives the real renderer and asserts on
+  the bytes, which is the only automated coverage of that layer.
 - **§9's narration collapsing**, per the deviation above. The torture test's
   67 tool lines for one task is the number to judge it against.
 - **Subagents**: parallel dispatch restricted to read-only types, child
