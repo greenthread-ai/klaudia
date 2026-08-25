@@ -71,6 +71,20 @@ port mirrors (see `internal/version`).
   than the terminal, so a full-width line never erased what was to its right, and
   writing the last column parks the cursor in the pending-wrap state. The live
   region now stops one column short at every width, with a test asserting it.
+- **A stale prompt box could be stranded in the middle of the conversation.**
+  Seen mid-turn: box borders, "› Ask Klaudia…" and the status line sitting in
+  scrollback with later tool output written across them. When `tea.Println`
+  flushes new output, the renderer returns to the top of the live region with
+  `CursorUp(linesRendered-1)` — a *logical* line count. Any live-region line
+  that fills the terminal width is two physical rows, so the cursor lands inside
+  the region and everything above it is stranded for good.
+
+  The earlier fix stopped the input box and status line reaching the last
+  column, but its test built an *idle* model — so it never rendered the two
+  components that were still doing it: the streaming preview (truncated to
+  exactly the width, off by one) and the approval prompts (not truncated at all;
+  326 columns for a long path). The clamp now lives at one choke point covering
+  the whole live region, and the test drives every state that renders something.
 - **Scrollback lines longer than the terminal left residue on their last row.**
   Spotted in a screenshot of a real session: a 160-character prompt echoed at 149
   columns wrapped, and the short second row still showed "0k tokens" from the

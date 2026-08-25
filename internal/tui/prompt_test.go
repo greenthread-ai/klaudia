@@ -6,6 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/greenthread-ai/klaudia/internal/agent"
 )
 
 func TestInputIsFramed(t *testing.T) {
@@ -38,12 +40,52 @@ func TestInputIsFramed(t *testing.T) {
 // pending-wrap state. Three of the four live-region lines used to be exactly
 // the terminal width.
 func TestLiveRegionNeverFillsTheLastColumn(t *testing.T) {
-	for _, w := range []int{160, 144, 120, 100, 80, 72, 60, 40, 30} {
-		m := newTestModel()
-		m.resize(w, 40)
-		for i, ln := range strings.Split(visibleText(m.View()), "\n") {
-			if got := len([]rune(ln)); got >= w {
-				t.Errorf("at width %d, live-region line %d is %d cells: %q", w, i, got, ln)
+	// Every state that renders something, not just the idle one. The first
+	// version of this test built an idle model, so it never exercised the
+	// streaming preview or the approval prompts — which were exactly the two
+	// components still reaching the last column, and the bug survived it.
+	states := map[string]func(*Model){
+		"idle": func(*Model) {},
+		"streaming": func(m *Model) {
+			m.setState(stateRunning)
+			m.streamBuf.WriteString(strings.Repeat("assistant prose ", 40))
+		},
+		"streaming with a queued steer": func(m *Model) {
+			m.setState(stateRunning)
+			m.streamBuf.WriteString(strings.Repeat("prose ", 60))
+			m.steer.add(strings.Repeat("a correction ", 20))
+		},
+		"awaiting permission": func(m *Model) {
+			m.setState(stateAwaitingPermission)
+			m.pendingReq.ToolName = "Bash"
+			m.pendingReq.Specifier = strings.Repeat("/very/long/path/segment", 12)
+		},
+		"awaiting a host change": func(m *Model) {
+			m.setState(stateAwaitingPermission)
+			m.pendingReq.ToolName = "RequestHostChange"
+			m.pendingReq.HostChange = &agent.HostChange{
+				Summary: strings.Repeat("install and configure something ", 8),
+				Reason:  strings.Repeat("because the task needs it ", 8),
+			}
+		},
+		"awaiting a choice": func(m *Model) {
+			m.setState(stateAwaitingChoice)
+			m.choicePrompt = strings.Repeat("pick one of these ", 15)
+			m.choiceItems = []choiceItem{{label: strings.Repeat("option ", 30)}}
+		},
+		"awaiting confirmation": func(m *Model) { m.setState(stateAwaitingConfirm) },
+		"quit armed":            func(m *Model) { m.quitArmed = true },
+	}
+
+	for _, w := range []int{160, 149, 144, 120, 100, 80, 72, 60, 40, 30} {
+		for name, setup := range states {
+			m := newTestModel()
+			m.resize(w, 40)
+			setup(m)
+			for i, ln := range strings.Split(visibleText(m.View()), "\n") {
+				if got := len([]rune(ln)); got >= w {
+					t.Errorf("%s at width %d: line %d is %d cells: %q", name, w, i, got, ln)
+				}
 			}
 		}
 	}

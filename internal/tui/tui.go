@@ -2756,7 +2756,9 @@ func (m *Model) streamTail() string {
 		lines = lines[len(lines)-streamTailLines:]
 	}
 	for i, ln := range lines {
-		lines[i] = truncateToWidth(ln, m.width)
+		// width-1, not width: a preview line that fills the last column is the
+		// case that strands the live region in scrollback (see fitLiveRegion).
+		lines[i] = truncateToWidth(ln, m.width-1)
 	}
 	return toolStyle.Render(strings.Join(lines, "\n"))
 }
@@ -2977,7 +2979,7 @@ func (m *Model) View() string {
 		return ""
 	}
 
-	out := m.clampBottom(m.bottomView())
+	out := m.clampBottom(m.fitLiveRegion(m.bottomView()))
 	// Record what this frame measures, so the next resize can work out how far
 	// the terminal will have reflowed it.
 	m.noteFrame(out)
@@ -2998,6 +3000,40 @@ func (m *Model) noteFrame(frame string) {
 		widths[i] = ansi.StringWidth(ln)
 	}
 	m.lastFrame, m.lastFrameWidth = widths, m.width
+}
+
+// fitLiveRegion wraps the live region so no line reaches the terminal's last
+// column.
+//
+// This is the invariant the whole inline renderer rests on, and it has now been
+// broken twice by different components, so it is enforced in one place rather
+// than by each of them remembering.
+//
+// Why it matters: Bubble Tea returns to the top of the live region with
+// CursorUp(linesRendered-1), counting *logical* lines. A line that fills the
+// width is two physical rows, so the cursor lands inside the region; the next
+// tea.Println then writes over the middle of it and strands the rows above in
+// scrollback for good. That is the stray "› Ask Klaudia…" and status line seen
+// in a real session. The renderer also only appends EraseLineRight to lines
+// narrower than the terminal, so a full-width line never cleans up after
+// itself.
+//
+// Wrapping rather than truncating: a long path in an approval prompt is worth
+// reading, and the extra rows are handled by clampBottom, which runs after.
+func (m *Model) fitLiveRegion(s string) string {
+	limit := m.width - 1
+	if limit < 20 || s == "" {
+		return s
+	}
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		if ansi.StringWidth(line) < limit {
+			out = append(out, line)
+			continue
+		}
+		out = append(out, strings.Split(ansi.Hardwrap(line, limit, true), "\n")...)
+	}
+	return strings.Join(out, "\n")
 }
 
 // clampBottom keeps the live region strictly shorter than the terminal. Bubble
