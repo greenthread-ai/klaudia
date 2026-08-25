@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 func TestToolSummary(t *testing.T) {
@@ -160,5 +161,68 @@ func TestGoalProgressStillShows(t *testing.T) {
 	m.loopRemaining, m.loopTotal = 7, 10
 	if got := stripANSI(m.statusLine()); !strings.Contains(got, "goal 4/10") {
 		t.Errorf("goal progress missing: %q", got)
+	}
+}
+
+// Bypass must not look like the token count. Asserted on the style rather than
+// on rendered output, because lipgloss strips colour under a non-TTY and a test
+// of the bytes would pass no matter what style was chosen.
+func TestBypassIsStyledAsAWarning(t *testing.T) {
+	warn := modeSegmentStyle(permission.ModeBypassPermissions)
+	if !warn.GetBold() {
+		t.Error("bypass is not bold; it reads as ordinary chrome")
+	}
+	if warn.GetForeground() == modeSegmentStyle(permission.ModePlan).GetForeground() {
+		t.Error("bypass has the same colour as plan; nothing distinguishes the mode " +
+			"where nothing is being checked")
+	}
+	// Everything else stays quiet.
+	for _, mode := range []permission.Mode{
+		permission.ModePlan, permission.ModeAutonomous, permission.ModeAcceptEdits,
+	} {
+		if modeSegmentStyle(mode).GetBold() {
+			t.Errorf("%s is styled as a warning; only bypass should be", mode)
+		}
+	}
+}
+
+// A running job is a fact you forget until the next start collides with it.
+func TestStatusLineCountsRunningJobs(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		jobs []tools.JobStatus
+		want string
+	}{
+		{"none", nil, ""},
+		{"one", []tools.JobStatus{{Name: "dev", Running: true}}, "1 job"},
+		{"two", []tools.JobStatus{
+			{Name: "dev", Running: true}, {Name: "api", Running: true}}, "2 jobs"},
+		{"exited ones do not count", []tools.JobStatus{
+			{Name: "dev", Running: true}, {Name: "old", Running: false}}, "1 job"},
+		{"all exited", []tools.JobStatus{{Name: "old", Running: false}}, ""},
+	} {
+		m := newTestModel()
+		m.resize(120, 40)
+		m.sess.Jobs = &fakeJobs{jobs: tc.jobs}
+		got := stripANSI(m.statusLine())
+		if tc.want == "" {
+			if strings.Contains(got, "job") {
+				t.Errorf("%s: line mentions jobs when none are running: %q", tc.name, got)
+			}
+			continue
+		}
+		if !strings.Contains(got, tc.want) {
+			t.Errorf("%s: want %q in %q", tc.name, tc.want, got)
+		}
+	}
+}
+
+// No job store at all (headless, or a session without one) must not panic or
+// invent a segment.
+func TestStatusLineWithoutAJobStore(t *testing.T) {
+	m := newTestModel()
+	m.resize(120, 40)
+	if got := stripANSI(m.statusLine()); strings.Contains(got, "job") {
+		t.Errorf("a session with no job store reported jobs: %q", got)
 	}
 }

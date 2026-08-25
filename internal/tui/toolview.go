@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"strconv"
 	"strings"
 
@@ -182,6 +183,33 @@ func deviatingMode(m permission.Mode) string {
 	return shortMode(m)
 }
 
+// modeSegmentStyle picks the styling for the mode segment.
+//
+// Bypass is the one mode where nothing is checking anything, and in the same
+// dim grey as the token count it read as ordinary chrome. Everything else on
+// this line is information; that one is a warning.
+func modeSegmentStyle(m permission.Mode) lipgloss.Style {
+	if m == permission.ModeBypassPermissions {
+		return warnStyle
+	}
+	return hintStyle
+}
+
+// runningJobCount is how many managed jobs are up, or 0 when jobs are not
+// available in this session.
+func (m *Model) runningJobCount() int {
+	if m.sess == nil || m.sess.Jobs == nil {
+		return 0
+	}
+	n := 0
+	for _, j := range m.sess.Jobs.List() {
+		if j.Running {
+			n++
+		}
+	}
+	return n
+}
+
 // statusLine renders the context caption under the input box.
 //
 // A pending "press Ctrl+C again to quit" takes over the whole line — it is a
@@ -209,34 +237,46 @@ func (m *Model) statusLine() string {
 			model = dm
 		}
 	}
-	segments := []string{model}
+	segments := []string{hintStyle.Render(model)}
 	if mode := deviatingMode(m.currentMode()); mode != "" {
-		segments = append(segments, mode)
+		segments = append(segments, modeSegmentStyle(m.currentMode()).Render(mode))
+	}
+	// Something running is a fact you forget until the next start collides with
+	// it. Shown only when there is one, so it costs nothing the rest of the time.
+	if n := m.runningJobCount(); n > 0 {
+		noun := "jobs"
+		if n == 1 {
+			noun = "job"
+		}
+		segments = append(segments, hintStyle.Render(fmt.Sprintf("%d %s", n, noun)))
 	}
 
 	// Goal state outranks the counters: it says the session is doing something
 	// unattended, which is the thing you would most want to notice.
 	switch {
 	case m.loopRemaining > 0:
-		segments = append(segments, fmt.Sprintf("goal %d/%d", m.loopTotal-m.loopRemaining+1, m.loopTotal))
+		segments = append(segments, hintStyle.Render(fmt.Sprintf("goal %d/%d", m.loopTotal-m.loopRemaining+1, m.loopTotal)))
 	case m.loopWrapUp:
-		segments = append(segments, "goal summary")
+		segments = append(segments, hintStyle.Render("goal summary"))
 	case m.goalSetting:
-		segments = append(segments, "goal-setting")
+		segments = append(segments, hintStyle.Render("goal-setting"))
 	}
 	// Context pressure is actionable (it tells you when to /compact); raw turn
 	// and token counts are just information.
 	if m.sess != nil && m.sess.ContextWindow > 0 && m.residentTokens > 0 {
 		pct := float64(m.residentTokens) / float64(m.sess.ContextWindow) * 100
-		segments = append(segments, fmt.Sprintf("ctx %.0f%%", pct))
+		segments = append(segments, hintStyle.Render(fmt.Sprintf("ctx %.0f%%", pct)))
 	}
 	segments = append(segments,
-		fmt.Sprintf("%d turns", m.statTurns),
-		fmt.Sprintf("%s tokens", humanTokens(m.statIn+m.statOut)))
+		hintStyle.Render(fmt.Sprintf("%d turns", m.statTurns)),
+		hintStyle.Render(fmt.Sprintf("%s tokens", humanTokens(m.statIn+m.statOut))))
 
 	// width-3: two columns for the caption indent, and one for the reserved
 	// last column the live region never writes to (see promptBox).
-	return hintStyle.Render(fitSegments(segments, m.width-3))
+	// Segments carry their own styling now, so the line is assembled rather
+	// than wrapped: wrapping a pre-styled run in hintStyle would reset the
+	// colour the bypass warning depends on.
+	return fitSegments(segments, m.width-3, hintStyle.Render(" · "))
 }
 
 // statusLineAt renders the caption as if the terminal were width cells wide.
@@ -254,12 +294,15 @@ func (m *Model) statusLineAt(width int) string {
 // means the terminal size isn't known yet (no WindowSizeMsg has arrived), which
 // is not the same as "no room": keep everything rather than collapsing to one
 // segment on the strength of a value we haven't been told.
-func fitSegments(segments []string, width int) string {
+func fitSegments(segments []string, width int, sep string) string {
 	if width <= 0 {
-		return strings.Join(segments, " · ")
+		return strings.Join(segments, sep)
 	}
 	for n := len(segments); n > 1; n-- {
-		if line := strings.Join(segments[:n], " · "); len([]rune(line)) <= width {
+		// ansi.StringWidth, not len([]rune): a segment may carry its own colour
+		// (bypass does), and counting escape bytes as columns would drop
+		// segments that fit. It is also simply more correct for wide runes.
+		if line := strings.Join(segments[:n], sep); ansi.StringWidth(line) <= width {
 			return line
 		}
 	}

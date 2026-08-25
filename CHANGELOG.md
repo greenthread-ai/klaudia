@@ -303,6 +303,12 @@ port mirrors (see `internal/version`).
   behaviour of denying everything that would prompt, in silence.
 
 ### Changed
+- **The status line counts running jobs.** A dev server holding a port was
+  invisible until the next start collided with it. Shown only when something is
+  up, so it costs nothing the rest of the time — and it fills the slot the mode
+  segment vacated.
+- **`bypass` is styled as a warning.** In the same dim grey as the token count,
+  the one mode where nothing is checking anything read as ordinary chrome.
 - **The status line no longer announces the mode when nothing is unusual.** Once
   autonomous became the default it was on the line in almost every session, and
   a segment that never changes stops being read — while still outranking the

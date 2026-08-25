@@ -204,7 +204,10 @@ var (
 	bannerStyle   = baseStyle().Faint(true)
 	logoStyle     = baseStyle()
 	hintStyle     = baseStyle().Faint(true).Italic(true)
-	suggestStyle  = baseStyle()
+	// warnStyle marks the one status segment that must not read as ordinary
+	// chrome: a mode where nothing is being checked.
+	warnStyle    = baseStyle().Bold(true).Foreground(lipgloss.Color("9"))
+	suggestStyle = baseStyle()
 )
 
 func init() { applyChromeTheme(defaultChromePalette) }

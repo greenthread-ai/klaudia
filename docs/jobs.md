@@ -31,7 +31,9 @@ gets:
 /stopjob <job|all>      stop it and its whole process group
 ```
 
-With exactly one job running, the name is optional.
+With exactly one job running, the name is optional. The status line under the
+input counts what is up (`2 jobs`), so a server you forgot about is visible
+without asking.
 
 The model has the same reach through `Jobs`, `BashOutput`, `RestartJob` and
 `KillShell`.
