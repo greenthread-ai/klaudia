@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1241" height="1144" viewBox="0 0 1241 1144" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="15">
+<rect width="100%" height="100%" rx="10" fill="#2e3440"/>
+<text x="22" y="37" textLength="360.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#88c0d0" font-weight="700">✦ Klaudia</tspan><tspan fill="#d8dee9" opacity="0.62"> your overqualified rubber duck</tspan></text>
+<text x="22" y="57" textLength="279.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9" opacity="0.62">  model: claude-opus-5</tspan><tspan fill="#d8dee9" opacity="0.62">   ⎇ main</tspan></text>
+<text x="22" y="77" textLength="1026.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#6c7086" font-style="italic" opacity="0.62">  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C twice to quit</tspan></text>
+<text x="22" y="117" textLength="63.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#81a1c1" font-weight="700">› /help</tspan></text>
+<text x="22" y="137" textLength="171.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">Available commands:</tspan></text>
+<text x="22" y="157" textLength="297.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /help            Show this help</tspan></text>
+<text x="22" y="177" textLength="738.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /model [name]    Pick a model from the provider (no arg), or set one by alias/ID</tspan></text>
+<text x="22" y="197" textLength="585.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /theme [name]    Change Markdown render theme (no arg = picker)</tspan></text>
+<text x="22" y="217" textLength="639.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /mode [name]     Change how Klaudia asks permission (no arg = picker)</tspan></text>
+<text x="22" y="237" textLength="783.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  !&lt;command&gt;       Run a shell command directly; its output becomes context for Klaudia</tspan></text>
+<text x="22" y="257" textLength="828.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /stop            Ask Klaudia to finish the current step and stop, keeping what it has done</tspan></text>
+<text x="22" y="277" textLength="702.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /changes         Show the working tree split into your changes and Klaudia&#39;s</tspan></text>
+<text x="22" y="297" textLength="774.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /undo            Undo Klaudia&#39;s last change, leaving anything you also touched alone</tspan></text>
+<text x="22" y="317" textLength="720.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /jobs            List background jobs: what&#39;s running, on what port, and where</tspan></text>
+<text x="22" y="337" textLength="1026.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /logs [-f|--errors] &lt;job&gt; Page a job&#39;s log ($PAGER), tail it (-f), or pull just its errors into the conversation</tspan></text>
+<text x="22" y="357" textLength="702.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /restart &lt;job&gt;   Restart a background job in place, keeping its name and log</tspan></text>
+<text x="22" y="377" textLength="630.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /stopjob &lt;job|all&gt; Stop a background job and its whole process group</tspan></text>
+<text x="22" y="397" textLength="1008.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /trust [upgrade|observe|off|revoke &lt;id&gt;] Show what Klaudia may change on this machine, and what it already may</tspan></text>
+<text x="22" y="417" textLength="1197.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /goal [run N|stop|text] No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder</tspan></text>
+<text x="22" y="437" textLength="936.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /memory [add|recent|stale|tag|promote|supersede] Show / audit / curate memory; no args views the index</tspan></text>
+<text x="22" y="457" textLength="585.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /mcp             List MCP servers; reconnect or disconnect them</tspan></text>
+<text x="22" y="477" textLength="477.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /stats           Show session stats (turns, tokens)</tspan></text>
+<text x="22" y="497" textLength="468.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /status          Show the current session settings</tspan></text>
+<text x="22" y="517" textLength="576.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /config          Show resolved provider/model/sandbox settings</tspan></text>
+<text x="22" y="537" textLength="441.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /agents          List available sub-agent types</tspan></text>
+<text x="22" y="557" textLength="864.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /context         Show what Klaudia has in context: pinned, changed, active, recently inspected</tspan></text>
+<text x="22" y="577" textLength="666.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /pin [path]      Keep a file in context every turn (survives compaction)</tspan></text>
+<text x="22" y="597" textLength="342.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /unpin &lt;path&gt;    Stop pinning a file</tspan></text>
+<text x="22" y="617" textLength="495.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /forget &lt;path&gt;   Drop a file from the tracked context</tspan></text>
+<text x="22" y="637" textLength="621.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /compact         Summarize and compact the conversation history now</tspan></text>
+<text x="22" y="657" textLength="504.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /add-dir &lt;path&gt;  Add a directory to the prompt context</tspan></text>
+<text x="22" y="677" textLength="495.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /plan [off]      Enter (or leave) read-only plan mode</tspan></text>
+<text x="22" y="697" textLength="414.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /doctor          Run environment diagnostics</tspan></text>
+<text x="22" y="717" textLength="468.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /diff [args]     Show git diff of the working tree</tspan></text>
+<text x="22" y="737" textLength="540.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /commit &lt;msg&gt;    Stage all changes and commit (asks first)</tspan></text>
+<text x="22" y="757" textLength="549.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /export          Export the conversation to a Markdown file</tspan></text>
+<text x="22" y="777" textLength="693.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /last [n|list]   Show a tool output in full (no arg = latest; list = index)</tspan></text>
+<text x="22" y="797" textLength="729.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /copy [target]   Copy to the clipboard: answer (default) | code [N] | out | all</tspan></text>
+<text x="22" y="817" textLength="765.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /search &lt;query&gt;  Search the session (--mine, --answers, --tools, --errors; /regex/)</tspan></text>
+<text x="22" y="837" textLength="684.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /outline         Show a session outline of prompts, tool calls, and errors</tspan></text>
+<text x="22" y="857" textLength="594.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /show &lt;n&gt;        Show one entry from /search or /outline in full</tspan></text>
+<text x="22" y="877" textLength="414.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /errors [n]      List the most recent errors</tspan></text>
+<text x="22" y="897" textLength="747.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /open &lt;path:line&gt; Open a file reference in $EDITOR (paths from stack traces work)</tspan></text>
+<text x="22" y="917" textLength="540.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /clear           Clear the screen and conversation history</tspan></text>
+<text x="22" y="937" textLength="405.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /quit            Exit Klaudia (alias /exit)</tspan></text>
+<text x="22" y="977" textLength="45.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">Keys:</tspan></text>
+<text x="22" y="997" textLength="504.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /                Type a slash to see matching commands</tspan></text>
+<text x="22" y="1017" textLength="729.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  Tab              Complete a /command or an @&lt;path&gt; reference (Tab again cycles)</tspan></text>
+<text x="22" y="1037" textLength="441.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  ↑ / ↓            Cycle through previous prompts</tspan></text>
+<text x="22" y="1057" textLength="378.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  Ctrl+J           Newline without sending</tspan></text>
+<text x="22" y="1077" textLength="459.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  Ctrl+U / Ctrl+K  Delete before / after the cursor</tspan></text>
+<text x="22" y="1097" textLength="423.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  Esc              Interrupt the model mid-turn</tspan></text>
+<text x="22" y="1117" textLength="621.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  Ctrl+C           Interrupt, or clear the line — press twice to quit</tspan></text>
+</svg>

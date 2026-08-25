@@ -6,7 +6,7 @@ macOS), no runtime dependencies. Klaudia began as a cleanroom of Claude Code
 the `js-reference` branch). See [Background](#background) for the story and
 [docs/parity.md](docs/parity.md) for the feature map.
 
-![Klaudia's terminal UI](docs/screenshot.png)
+![Klaudia's terminal UI](docs/screenshot.svg)
 
 Klaudia keeps full parity with the reference and then builds past it — the
 extras we lean on day to day:
