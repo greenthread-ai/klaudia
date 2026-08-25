@@ -71,6 +71,17 @@ port mirrors (see `internal/version`).
   than the terminal, so a full-width line never erased what was to its right, and
   writing the last column parks the cursor in the pending-wrap state. The live
   region now stops one column short at every width, with a test asserting it.
+- **`2>/dev/null` was gated as a host change.** Reported from a live session.
+  Writing to a pseudo-device changes nothing about the machine, and discarding
+  output is one of the commonest things a command does — a false prompt on it
+  costs more than the guardrail is worth. `/dev/null`, `/dev/stdout`,
+  `/dev/stderr`, `/dev/tty`, `/dev/fd/*`, `/dev/pts/*` and the random/zero
+  sources are all ordinary now. Block devices deliberately are not: `dd
+  of=/dev/disk2` still asks, which is the reason `/dev` is watched at all.
+- **`/tmp` was a host change on macOS and not on Linux.** Found while fixing the
+  above. macOS resolves `/tmp` to `/private/tmp`, and the resolved form was being
+  added to the host prefixes — so writing a scratch file asked for permission on
+  one machine and not the other. `/tmp` is scratch space everywhere now.
 - **A dev server backgrounded with `&` bypassed the job system entirely.** Found
   by running the spec's agent-loop torture test: the model shell-backgrounded
   the server eleven times and then managed the processes by hand with `pkill`

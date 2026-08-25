@@ -69,6 +69,10 @@ Some consequences worth being explicit about:
 - **Using a credential is not disclosing one.** `ssh -i ~/.ssh/deploy_key host`
   and `curl --cert client.pem` are ordinary. `cat ~/.ssh/id_rsa` and
   `Read(~/.aws/credentials)` put the secret into the model's context.
+- **Scratch space and pseudo-devices are free.** `/tmp`, `/var/tmp`, `/dev/null`,
+  `/dev/stdout`, `/dev/tty` and friends change nothing, so `2>/dev/null` and
+  `> /tmp/out` never ask. Block devices are the exception — `dd of=/dev/disk2`
+  destroys a disk and asks.
 - **`sudo` is not itself the trigger.** `sudo -u deploy ./scripts/deploy.sh`
   inside the project is project work. Treating every `sudo` as a host change is
   how a protection gets switched off.

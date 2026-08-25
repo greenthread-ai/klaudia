@@ -247,3 +247,36 @@ func TestUnparsedAsks(t *testing.T) {
 		t.Fatalf("an unreadable command line should ask")
 	}
 }
+
+// The command lines that produced the false prompts, end to end.
+func TestCommonIdiomsAreNotHostChanges(t *testing.T) {
+	roots, _, proj := corpusRoots(t)
+	for _, cmd := range []string{
+		"go build ./... 2>/dev/null",
+		"command -v rg >/dev/null 2>&1",
+		"grep -q TODO ./src 2>/dev/null && echo found",
+		"go test ./... > /tmp/test.out 2>&1",
+		"cp ./dist/app /tmp/app",
+		"mkdir -p /tmp/klaudia-build",
+		"tar cf - ./src | gzip > /tmp/src.tgz",
+	} {
+		as := ClassifyCommandIn(cmd, proj, roots)
+		if _, ask := as.NeedsAgreement(); ask {
+			t.Errorf("%q would prompt: %s\n%s", cmd, as.Summary(), dumpEffects(as))
+		}
+	}
+}
+
+// …but the block-device case that /dev exists for still stops.
+func TestWritingABlockDeviceStillAsks(t *testing.T) {
+	roots, _, proj := corpusRoots(t)
+	for _, cmd := range []string{
+		"sudo dd if=./img.iso of=/dev/disk2",
+		"sudo dd if=/dev/zero of=/dev/rdisk3 bs=1m",
+	} {
+		as := ClassifyCommandIn(cmd, proj, roots)
+		if _, ask := as.NeedsAgreement(); !ask {
+			t.Errorf("%q was allowed; writing a block device destroys a disk", cmd)
+		}
+	}
+}

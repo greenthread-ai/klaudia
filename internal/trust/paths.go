@@ -100,9 +100,25 @@ var hostPrefixes = []string{
 	"/dev", "/proc", "/sys", "/lib", "/lib64", "/run", "/root",
 }
 
-// hostExceptions are inside a host prefix but are scratch space, not the OS.
+// hostExceptions are inside a host prefix but are not the operating system.
+//
+// Two groups, both of which produced false prompts on ordinary commands:
+//
+// Scratch space. /tmp is where everyone puts scratch files, and on macOS it
+// resolves to /private/tmp — which used to land inside a host prefix, so
+// `echo x > /tmp/out` asked for permission on a Mac and did not on Linux.
+//
+// The pseudo-devices under /dev. Writing to /dev/null changes nothing about the
+// machine, and `2>/dev/null` is one of the most common idioms there is; it was
+// being reported as "writes /dev/null" and gated. The block devices are
+// deliberately NOT here: `dd of=/dev/disk2` really does destroy a disk, and
+// catching that is why /dev is a host prefix at all.
 var hostExceptions = []string{
+	"/tmp", "/private/tmp",
 	"/var/tmp", "/var/folders", "/private/var/tmp", "/private/var/folders",
+	"/dev/null", "/dev/zero", "/dev/full", "/dev/random", "/dev/urandom",
+	"/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty",
+	"/dev/fd", "/dev/pts", "/dev/ptmx",
 }
 
 // toolCaches are per-user directories that build tooling writes to as a matter
@@ -151,10 +167,14 @@ var credentialExceptions = []string{
 var credentialSuffixes = []string{".pem", ".p12", ".pfx", ".key", ".keystore", ".jks"}
 
 func init() {
-	// macOS puts the real /etc, /var and /tmp under /private. Policy prefixes
-	// must be in the same shape as the paths they are compared against, which
+	// macOS puts the real /etc and /var under /private. Policy prefixes must be
+	// in the same shape as the paths they are compared against, which
 	// canonical() has already resolved.
-	for _, p := range []string{"/etc", "/var", "/tmp"} {
+	//
+	// /tmp is deliberately absent: it is not a host prefix in the first place,
+	// and resolving it to /private/tmp is what used to make scratch files under
+	// /tmp a host change on macOS and not on Linux.
+	for _, p := range []string{"/etc", "/var"} {
 		if real, err := filepath.EvalSymlinks(p); err == nil && real != p {
 			hostPrefixes = append(hostPrefixes, real)
 		}

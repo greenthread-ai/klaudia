@@ -111,6 +111,13 @@ go test ./internal/...
 
 The result is one self-contained binary (Linux + macOS).
 
+Two end-to-end rigs go beyond the unit tests (both need a working credential):
+`scripts/smoke.sh` drives the real agent loop across modes, the client-side
+tools and the resume path on `haiku`; `scripts/torture.sh` runs the spec's
+agent-loop torture test — one task needing 20+ file inspections, edits, a dev
+server, log inspection, SSH to a container, a wrong turn and a recovery — and
+scores the transcript against the spec's checklist.
+
 ## Usage
 
 ### Interactive (TUI)
@@ -157,10 +164,11 @@ which is what the status bar's `ctx N%` measures against.
 durable default with `theme = "nord"` in `.klaudia/config.toml` (dracula |
 gruvbox | tokyo-night | nord | light | catppuccin). `NO_COLOR` is honoured.
 
-Long-running commands can run detached: `Bash` with `run_in_background` returns a
-shell id, then `BashOutput` reads new output incrementally and `KillShell` stops
-it — so the agent can launch a dev server or watcher and keep working. Background
-shells are terminated when the session ends.
+Long-running commands run detached as **managed jobs**: `Bash` with
+`run_in_background` returns a shell id, `BashOutput` reads new output
+incrementally and `KillShell` stops it — so the agent can launch a dev server or
+watcher and keep working. Jobs get a name, a port and a log file; see
+[Long-running commands, logs, and your shell](#long-running-commands-logs-and-your-shell).
 
 ### Headless (one-shot)
 
@@ -500,13 +508,15 @@ Two complementary modes for working toward an objective:
 | `tools` | local tool implementations |
 | `browser` | lazy headless-Chrome engine + web search |
 | `lsp` | language-server client for code intelligence (Diagnostics/Definition/References) |
-| `permission` | the 5-mode permission system + allow/deny rules |
+| `permission` | the three permission modes + allow/deny rules (a leaf package) |
+| `trust` | zones, command/tool classification, session-scoped grants |
 | `session` | JSONL transcripts, resume, persisted summaries |
 | `compaction` | micro + auto context compaction |
 | `mcp` | Model Context Protocol client |
 | `subagent` | built-in sub-agent types |
 | `skill` | user-defined skills |
 | `memory` | auto-memory store |
+| `goal` | standing goals, goal specs, and the Ralph loop |
 | `doctor` | `/doctor` environment diagnostics |
 | `sandbox` | local / OS-confined / container Bash execution |
 | `streamjson` | bidirectional stream-json frontend |
@@ -517,8 +527,15 @@ Two complementary modes for working toward an objective:
 
 ## Documentation
 
+- [CHANGELOG.md](CHANGELOG.md) — what changed, and why it was done that way
+- [docs/ux-spec.md](docs/ux-spec.md) — the terminal-UX specs, and where the
+  implementation deliberately departs from them
+- [docs/trust.md](docs/trust.md) — the host boundary, zones, and what is *not* protected
+- [docs/jobs.md](docs/jobs.md) — the job model, logs, and its limits
+- [docs/working-tree.md](docs/working-tree.md) — change ownership, `/commit`, `/undo`
 - [docs/parity.md](docs/parity.md) — JS→Go feature map and divergences
 - [docs/compaction.md](docs/compaction.md) — context-window management
+- [docs/memory-architecture.md](docs/memory-architecture.md) — index→detail memory store
 - [docs/server-side-tools.md](docs/server-side-tools.md) — Anthropic server-side tool schemas (reference)
 
 ## Background
@@ -551,7 +568,9 @@ tools.
 - New capabilities with no reference analogue: language-server code intelligence
   (Diagnostics/Definition/References), OS/container Bash sandboxing, persisted
   resume summaries, project `KNOWLEDGE.md`, an index→detail memory store,
-  standing goals (`/goal`), chrome-wide themes, and background shells.
+  standing goals (`/goal`), chrome-wide themes, managed background jobs with
+  logs, working-tree change ownership (`/changes`, `/undo`), and an autonomy
+  model that stops at the host boundary rather than at each action.
 
 ## Roadmap
 

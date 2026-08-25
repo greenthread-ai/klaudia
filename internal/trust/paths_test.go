@@ -144,3 +144,47 @@ func TestUnderMatchesOnComponentBoundaries(t *testing.T) {
 		t.Error("a directory is under itself")
 	}
 }
+
+// Reported from a live session: `2>/dev/null` was gated as "writes /dev/null".
+//
+// Writing to a pseudo-device changes nothing about the machine, and discarding
+// output is one of the most common things a command does. A false prompt on it
+// costs more than the whole guardrail is worth.
+func TestPseudoDevicesAreNotHostChanges(t *testing.T) {
+	r, _, _ := testRoots(t)
+	for _, p := range []string{
+		"/dev/null", "/dev/zero", "/dev/full", "/dev/random", "/dev/urandom",
+		"/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty",
+		"/dev/fd/3", "/dev/pts/2", "/dev/ptmx",
+	} {
+		if z := r.ClassifyPath(canonical(p)); z.Protected() {
+			t.Errorf("%s classified as %s; writing to it changes nothing", p, z)
+		}
+	}
+}
+
+// The reason /dev is a host prefix at all: a block device is the one thing
+// under it that a stray write really does destroy.
+func TestBlockDevicesAreStillHostChanges(t *testing.T) {
+	r, _, _ := testRoots(t)
+	for _, p := range []string{
+		"/dev/disk2", "/dev/rdisk0", "/dev/sda", "/dev/nvme0n1", "/dev/mem",
+	} {
+		if z := r.ClassifyPath(canonical(p)); z != ZoneHost {
+			t.Errorf("%s classified as %s, want host — dd to it destroys a disk", p, z)
+		}
+	}
+}
+
+// /tmp is scratch space on every unix. It used to be a host change on macOS
+// only, because /tmp resolves to /private/tmp and the resolved form was being
+// added to the host prefixes — so the same command asked for permission on one
+// machine and not the other.
+func TestTmpIsScratchSpaceEverywhere(t *testing.T) {
+	r, _, _ := testRoots(t)
+	for _, p := range []string{"/tmp", "/tmp/scratch.txt", "/tmp/build/out.o"} {
+		if z := r.ClassifyPath(canonical(p)); z.Protected() {
+			t.Errorf("%s classified as %s, want scratch space", p, z)
+		}
+	}
+}
