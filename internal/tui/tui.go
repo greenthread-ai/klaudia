@@ -1161,8 +1161,6 @@ var commandList = []cmdInfo{
 	{"/restart", "<job>", "Restart a background job in place, keeping its name and log"},
 	{"/stopjob", "<job|all>", "Stop a background job and its whole process group"},
 	{"/trust", "[upgrade|observe|off|revoke <id>]", "Show what Klaudia may change on this machine, and what it already may"},
-	{"/allow", "<rule>", "Auto-allow a tool rule this session, e.g. /allow Bash(go test:*)"},
-	{"/deny", "<rule>", "Auto-deny a tool rule this session"},
 	{"/goal", "[run N|stop|text]", "No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder"},
 	{"/memory", "[add|recent|stale|tag|promote|supersede]", "Show / audit / curate memory; no args views the index"},
 	{"/mcp", "", "List MCP servers; reconnect or disconnect them"},
@@ -1714,6 +1712,10 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		resident := compaction.EstimateTokens(m.history)
 		m.appendLine(bannerStyle.Render(formatStats(m.statTurns, m.statIn, m.statOut, resident, m.sess.ContextWindow, m.sess.ContextWindowSource)))
 	case "/allow", "/deny":
+		// Deprecated in favour of /trust: no longer listed in /help or offered
+		// by type-ahead, but still honoured so muscle memory and existing
+		// configs keep working. The hint is how anyone still typing it finds
+		// out where the pattern went.
 		if len(args) == 0 {
 			m.appendLine(errStyle.Render("usage: " + cmd + " <rule>  e.g. " + cmd + " Bash(go test:*)"))
 			break
@@ -1728,6 +1730,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		} else {
 			m.rememberPermission("deny", rule)
 		}
+		m.appendLine(hintStyle.Render(cmd + " is deprecated — /trust grants by what an operation does, not by matching command text"))
 	case "/status":
 		model := m.sess.Model
 		if model == "" {

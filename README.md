@@ -296,10 +296,16 @@ set `[sandbox] mode = "os"`.
 
 `/mode` switches interactively; `/trust` shows and revokes approvals. Headless
 runs do project and remote work but refuse host changes unless you pass
-`--allow-host-changes`. Legacy modes (`default`, `acceptEdits`, `dontAsk`) and
-allow/deny rules (`--allowedTools 'Bash(go test:*)'`, `/allow`, `/deny`) still
-work; a config that already has permission rules starts in observe mode until
-you run `/trust upgrade`.
+`--allow-host-changes`.
+
+The per-command model it replaced is **deprecated, not removed**: legacy modes
+(`default`, `acceptEdits`, `dontAsk`), `--allowedTools 'Bash(go test:*)'` and
+the `/allow` and `/deny` commands are still honoured so existing setups keep
+working, but they create nothing new and `/allow`/`/deny` are no longer listed
+in `/help`. `/trust` grants by what an operation *does* rather than by matching
+command text, and shows any surviving rules alongside its own. A config that
+already has permission rules starts in observe mode until you run
+`/trust upgrade`.
 
 Full detail, including the zone table and what is deliberately *not* protected:
 [docs/trust.md](docs/trust.md).
@@ -508,7 +514,7 @@ Two complementary modes for working toward an objective:
 | `tools` | local tool implementations |
 | `browser` | lazy headless-Chrome engine + web search |
 | `lsp` | language-server client for code intelligence (Diagnostics/Definition/References) |
-| `permission` | the three permission modes + allow/deny rules (a leaf package) |
+| `permission` | the three permission modes + the deprecated allow/deny rules (a leaf package) |
 | `trust` | zones, command/tool classification, session-scoped grants |
 | `session` | JSONL transcripts, resume, persisted summaries |
 | `compaction` | micro + auto context compaction |
