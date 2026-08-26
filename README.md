@@ -419,6 +419,20 @@ overrides). A server is **stdio** (`command` + `args`) or **HTTP** (`url`, with
 Their tools appear as `mcp__<server>__<tool>`, auto-deferred behind `ToolSearch`.
 In the TUI, `/mcp` lists servers and reconnects/disconnects them.
 
+The **read-only sub-agents get read-only MCP tools**. Fanning out across a wiki,
+an issue tracker and a chat archive is what `Explore` and `Plan` are for, and it
+is also the work whose bulk should never reach the main thread — a sub-agent
+spends its own context and hands back a summary. A tool qualifies by declaring
+the protocol's `readOnlyHint`; a tool that says nothing is treated as a write, so
+`delete_branch` never arrives via this route. For a server that annotates
+nothing — including one you launched in its own read-only mode — say so:
+
+```jsonc
+{ "mcpServers": {
+  "gitea": { "command": "gitea-mcp", "args": ["-t","stdio","-r"], "readOnly": true }
+} }
+```
+
 ## Code intelligence (LSP)
 
 Klaudia talks to **language servers you already have installed** to give the

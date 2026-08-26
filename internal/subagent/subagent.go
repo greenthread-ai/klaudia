@@ -12,7 +12,25 @@ type Type struct {
 	Description  string   // shown to the model in the Agent tool prompt
 	SystemPrompt string   // the sub-agent's system prompt
 	Tools        []string // tool names the sub-agent may use; ["*"] = all
+	// ReadOnlyMCP additionally grants every connected MCP tool that declares
+	// itself read-only.
+	//
+	// The read-only agents are the ones that most want MCP. Fanning out across
+	// a wiki, an issue tracker and a chat archive is exactly the work they
+	// exist for, and it is also the work whose bulk should never reach the main
+	// thread — a sub-agent spends its own context and returns a summary. Naming
+	// those tools in Tools is not an option: they are discovered at connect
+	// time and differ per project.
+	//
+	// Read-only is enforced from what the tool declares, not from the agent's
+	// system prompt. An instruction not to write is a request; this is the
+	// registry the sub-agent is handed.
+	ReadOnlyMCP bool
 }
+
+// readOnlyTool is implemented by tools that can state they only read. MCP tools
+// do, from the protocol's readOnlyHint annotation or from .mcp.json.
+type readOnlyTool interface{ ReadOnly() bool }
 
 // Builtin returns the built-in sub-agent types.
 func Builtin() []Type {
@@ -29,9 +47,10 @@ func Builtin() []Type {
 		},
 		{
 			Name: "Explore",
-			Description: "Read-only search agent for broad fan-out searches across many files. " +
-				"It locates code and answers questions but does not modify anything.",
-			Tools: []string{"Read", "Glob", "Grep"},
+			Description: "Read-only search agent for broad fan-out searches across many files and " +
+				"read-only MCP sources. It locates code and answers questions but does not modify anything.",
+			Tools:       []string{"Read", "Glob", "Grep"},
+			ReadOnlyMCP: true,
 			SystemPrompt: "You are a read-only exploration agent for Klaudia. You may ONLY read and search; " +
 				"never modify files or run mutating commands. Thoroughly investigate and return a concise, " +
 				"well-organized summary of your findings with file paths and line references.",
@@ -40,7 +59,8 @@ func Builtin() []Type {
 			Name: "Plan",
 			Description: "Read-only architect agent that designs an implementation plan and returns it. " +
 				"Use to plan a change before implementing.",
-			Tools: []string{"Read", "Glob", "Grep"},
+			Tools:       []string{"Read", "Glob", "Grep"},
+			ReadOnlyMCP: true,
 			SystemPrompt: "You are a software architect agent for Klaudia. Explore the codebase (read-only) and " +
 				"produce a concrete, step-by-step implementation plan. Identify the critical files and trade-offs. " +
 				"Return the plan as your final message; do not modify anything.",
@@ -71,9 +91,25 @@ func (t Type) Filter(base *tools.Registry) *tools.Registry {
 		return tools.NewRegistry(all...)
 	}
 	var allowed []tools.Tool
+	seen := make(map[string]bool, len(t.Tools))
 	for _, name := range t.Tools {
 		if tool, ok := base.Lookup(name); ok {
 			allowed = append(allowed, tool)
+			seen[name] = true
+		}
+	}
+	if t.ReadOnlyMCP {
+		for _, name := range base.Names() {
+			if seen[name] {
+				continue
+			}
+			tool, ok := base.Lookup(name)
+			if !ok {
+				continue
+			}
+			if ro, isRO := tool.(readOnlyTool); isRO && ro.ReadOnly() {
+				allowed = append(allowed, tool)
+			}
 		}
 	}
 	return tools.NewRegistry(allowed...)

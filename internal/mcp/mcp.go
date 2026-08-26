@@ -30,6 +30,16 @@ type ServerConfig struct {
 	// HTTP transport
 	Type string `json:"type,omitempty"` // "http" (default when URL set) | "sse"
 	URL  string `json:"url,omitempty"`
+	// ReadOnly declares that every tool this server exposes is read-only,
+	// for servers that do not set the readOnlyHint annotation themselves.
+	//
+	// Read-only sub-agents (Explore, Plan) are given a server's read-only tools
+	// and nothing else, and a tool that says nothing about itself is treated as
+	// a write. That is the safe default, but it makes the feature inert against
+	// a server that simply never annotates — including one launched in its own
+	// read-only mode, where the operator knows something the protocol was not
+	// told. This is how they say it.
+	ReadOnly bool `json:"readOnly,omitempty"`
 }
 
 // Config is the .mcp.json shape: a map of server name → launch config.

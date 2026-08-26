@@ -186,3 +186,82 @@ func names(ts []tools.Tool) []string {
 	}
 	return out
 }
+
+// A read-only sub-agent is given MCP tools based on what they declare, so the
+// declaration has to survive the wrapping. gitea-mcp annotates all 54 of its
+// tools, 33 of them read-only, which is what makes this worth reading at all.
+func TestToolsCarryTheReadOnlyHint(t *testing.T) {
+	ctx := context.Background()
+	srv := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "annotated", Version: "0.0.1"}, nil)
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name: "look", Description: "read something",
+		Annotations: &mcpsdk.ToolAnnotations{ReadOnlyHint: true},
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, _ echoIn) (*mcpsdk.CallToolResult, any, error) {
+		return &mcpsdk.CallToolResult{}, nil, nil
+	})
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name: "touch", Description: "change something",
+		Annotations: &mcpsdk.ToolAnnotations{ReadOnlyHint: false},
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, _ echoIn) (*mcpsdk.CallToolResult, any, error) {
+		return &mcpsdk.CallToolResult{}, nil, nil
+	})
+	// No annotation at all. Silence must not be read as "safe".
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{Name: "unsaid", Description: "says nothing"},
+		func(_ context.Context, _ *mcpsdk.CallToolRequest, _ echoIn) (*mcpsdk.CallToolResult, any, error) {
+			return &mcpsdk.CallToolResult{}, nil, nil
+		})
+
+	clientT, serverT := mcpsdk.NewInMemoryTransports()
+	ss, err := srv.Connect(ctx, serverT, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client, err := ConnectTransport(ctx, "annotated", clientT)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	m := &Manager{}
+	m.Add(client)
+	defer func() { m.Close(); _ = ss.Wait() }()
+
+	want := map[string]bool{
+		"mcp__annotated__look":   true,
+		"mcp__annotated__touch":  false,
+		"mcp__annotated__unsaid": false,
+	}
+	got := map[string]bool{}
+	for _, tool := range m.Tools(ctx) {
+		ro, ok := tool.(interface{ ReadOnly() bool })
+		if !ok {
+			t.Fatalf("%s does not report read-only status", tool.Name())
+		}
+		got[tool.Name()] = ro.ReadOnly()
+	}
+	for name, w := range want {
+		if got[name] != w {
+			t.Errorf("%s: ReadOnly() = %v, want %v", name, got[name], w)
+		}
+	}
+}
+
+// Marking the server read-only in .mcp.json covers a server that never
+// annotates — including one launched in its own read-only mode, where the
+// operator knows something the protocol was not told.
+func TestServerLevelReadOnlyCoversUnannotatedTools(t *testing.T) {
+	ctx := context.Background()
+	m, stop := startTestServer(t)
+	defer stop()
+
+	for _, tool := range m.Tools(ctx) {
+		if ro := tool.(interface{ ReadOnly() bool }); ro.ReadOnly() {
+			t.Fatalf("%s is read-only before the config says so", tool.Name())
+		}
+	}
+
+	m.cfg = Config{MCPServers: map[string]ServerConfig{"testsrv": {ReadOnly: true}}}
+	for _, tool := range m.Tools(ctx) {
+		if ro := tool.(interface{ ReadOnly() bool }); !ro.ReadOnly() {
+			t.Errorf("%s ignored the server-level readOnly flag", tool.Name())
+		}
+	}
+}

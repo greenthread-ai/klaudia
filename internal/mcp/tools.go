@@ -34,11 +34,22 @@ type mcpTool struct {
 	description   string
 	inputSchema   json.RawMessage
 	server        *Server
+	readOnly      bool
 }
 
 func (t *mcpTool) Name() string                                { return t.qualifiedName }
 func (t *mcpTool) Description(context.Context) (string, error) { return t.description, nil }
 func (t *mcpTool) InputSchema() json.RawMessage                { return t.inputSchema }
+
+// ReadOnly reports that this tool only reads, as declared by the server's
+// readOnlyHint annotation or by the operator marking the whole server read-only
+// in .mcp.json.
+//
+// It exists so the read-only sub-agents can be given MCP tools without being
+// given the ability to write. A tool that says nothing is not read-only: the
+// annotation is optional in the protocol, and the safe reading of silence is
+// that the author never thought about it.
+func (t *mcpTool) ReadOnly() bool { return t.readOnly }
 
 // ValidateInput is a no-op beyond JSON well-formedness; the server validates
 // against its own schema.
@@ -84,6 +95,7 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 		if err != nil {
 			continue
 		}
+		serverReadOnly := m.cfg.MCPServers[srv.Name].ReadOnly
 		for _, rt := range res.Tools {
 			schema, _ := json.Marshal(rt.InputSchema)
 			if len(schema) == 0 || string(schema) == "null" {
@@ -95,6 +107,7 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 				description:   rt.Description,
 				inputSchema:   schema,
 				server:        srv,
+				readOnly:      serverReadOnly || (rt.Annotations != nil && rt.Annotations.ReadOnlyHint),
 			})
 		}
 	}

@@ -6,6 +6,29 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **The read-only sub-agents can reach read-only MCP tools.** `Explore` and
+  `Plan` were limited to `Read`, `Glob` and `Grep`, so the two agents whose whole
+  purpose is read-only fan-out research could not touch a wiki, an issue tracker
+  or a chat archive. Naming MCP tools in their whitelist was never an option:
+  they are discovered at connect time and differ per project.
+
+  This is also where the context argument points. Searching four sources to
+  answer one question is exactly the work that should not run in the main
+  thread — a sub-agent spends its own window and hands back a summary.
+
+  Eligibility is read from what a tool declares, not from what its agent is
+  asked to do. A tool qualifies by setting the protocol's `readOnlyHint`, and a
+  tool that says nothing is treated as a write, because the annotation is
+  optional and the safe reading of silence is that nobody considered it. That
+  matters: `mcp__gitea__delete_branch` is one connected server away from an
+  agent whose only previous guarantee was a system prompt asking it not to
+  write, and there is a test that fails if it ever arrives.
+
+  For a server that annotates nothing — including one launched in its own
+  read-only mode, where the operator knows something the protocol was not told —
+  `"readOnly": true` on the server in `.mcp.json` says so. Measured against the
+  case that prompted this: gitea-mcp annotates all 54 of its tools, 33 of them
+  read-only, matching exactly what its own `-r` flag exposes.
 - **Klaudia tells your working-tree changes apart from its own.** `/changes`
   splits them three ways: yours, Klaudia's, and *both* — a file it wrote that
   was already dirty or that you edited afterwards. Klaudia cannot merge those
