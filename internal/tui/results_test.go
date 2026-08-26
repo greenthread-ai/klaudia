@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -132,8 +133,13 @@ func TestPagerAddsColourFlagForLess(t *testing.T) {
 		return "" // $LESS unset
 	}
 	cmd, ok := pagerCommand(env, "/tmp/x.txt")
-	if !ok {
-		t.Skip("less not installed")
+	// pagerCommand falls through PAGER, less, more — ok only says *a* pager was
+	// found, not that it is less. On an image without less (the golang
+	// container, a slim CI runner) it returns /usr/bin/more, which makes the
+	// -R assertion fire against a pager that has no such flag, and makes the
+	// inverse assertion pass for the wrong reason.
+	if !ok || filepath.Base(cmd.Path) != "less" {
+		t.Skip("less not installed; pagerCommand fell back to another pager")
 	}
 	if !contains(cmd.Args, "-R") {
 		t.Errorf("less should get -R so ANSI survives, got %v", cmd.Args)
@@ -151,8 +157,13 @@ func TestPagerRespectsExistingLESS(t *testing.T) {
 		return ""
 	}
 	cmd, ok := pagerCommand(env, "/tmp/x.txt")
-	if !ok {
-		t.Skip("less not installed")
+	// pagerCommand falls through PAGER, less, more — ok only says *a* pager was
+	// found, not that it is less. On an image without less (the golang
+	// container, a slim CI runner) it returns /usr/bin/more, which makes the
+	// -R assertion fire against a pager that has no such flag, and makes the
+	// inverse assertion pass for the wrong reason.
+	if !ok || filepath.Base(cmd.Path) != "less" {
+		t.Skip("less not installed; pagerCommand fell back to another pager")
 	}
 	if contains(cmd.Args, "-R") {
 		t.Errorf("-R should not be added when $LESS already has it, got %v", cmd.Args)
