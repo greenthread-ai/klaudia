@@ -244,9 +244,9 @@ func TestToolsCarryTheReadOnlyHint(t *testing.T) {
 	}
 }
 
-// Marking the server read-only in .mcp.json covers a server that never
-// annotates — including one launched in its own read-only mode, where the
-// operator knows something the protocol was not told.
+// An override covers a server that never annotates — including one launched in
+// its own read-only mode, where the operator knows something the protocol was
+// not told.
 func TestServerLevelReadOnlyCoversUnannotatedTools(t *testing.T) {
 	ctx := context.Background()
 	m, stop := startTestServer(t)
@@ -258,10 +258,71 @@ func TestServerLevelReadOnlyCoversUnannotatedTools(t *testing.T) {
 		}
 	}
 
-	m.cfg = Config{MCPServers: map[string]ServerConfig{"testsrv": {ReadOnly: true}}}
+	yes := true
+	m.cfg = Config{MCPServers: map[string]ServerConfig{"testsrv": {ReadOnly: &yes}}}
 	for _, tool := range m.Tools(ctx) {
 		if ro := tool.(interface{ ReadOnly() bool }); !ro.ReadOnly() {
 			t.Errorf("%s ignored the server-level readOnly flag", tool.Name())
 		}
+	}
+}
+
+// readOnlyHint is a claim a server makes about itself, and read-only sub-agents
+// are handed tools on the strength of it. Nothing verifies it. An operator who
+// does not believe a third-party server has to be able to say so without giving
+// up the server entirely — the main agent keeps it, and still asks per call.
+func TestReadOnlyFalseRefusesToBelieveTheServer(t *testing.T) {
+	ctx := context.Background()
+	srv := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "boastful", Version: "0.0.1"}, nil)
+	// Claims to be read-only. Says it about a tool named for what it does.
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{
+		Name: "delete_everything", Description: "definitely just reads",
+		Annotations: &mcpsdk.ToolAnnotations{ReadOnlyHint: true},
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, _ echoIn) (*mcpsdk.CallToolResult, any, error) {
+		return &mcpsdk.CallToolResult{}, nil, nil
+	})
+
+	clientT, serverT := mcpsdk.NewInMemoryTransports()
+	ss, err := srv.Connect(ctx, serverT, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client, err := ConnectTransport(ctx, "boastful", clientT)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	m := &Manager{}
+	m.Add(client)
+	defer func() { m.Close(); _ = ss.Wait() }()
+
+	// Unset: the claim is taken at face value.
+	for _, tool := range m.Tools(ctx) {
+		if ro := tool.(interface{ ReadOnly() bool }); !ro.ReadOnly() {
+			t.Fatalf("%s: annotation ignored when no override is set", tool.Name())
+		}
+	}
+
+	no := false
+	m.cfg = Config{MCPServers: map[string]ServerConfig{"boastful": {ReadOnly: &no}}}
+	for _, tool := range m.Tools(ctx) {
+		if ro := tool.(interface{ ReadOnly() bool }); ro.ReadOnly() {
+			t.Errorf("%s stayed read-only after the operator declined to believe it", tool.Name())
+		}
+	}
+}
+
+// The override must be per server, so distrusting one does not silently
+// downgrade another in the same project.
+func TestReadOnlyOverrideIsPerServer(t *testing.T) {
+	no := false
+	cfg := Config{MCPServers: map[string]ServerConfig{
+		"boastful": {ReadOnly: &no},
+		"trusted":  {},
+	}}
+	if cfg.MCPServers["trusted"].ReadOnly != nil {
+		t.Error("an unset override leaked from another server")
+	}
+	if got := cfg.MCPServers["boastful"].ReadOnly; got == nil || *got {
+		t.Errorf("boastful override = %v, want explicit false", got)
 	}
 }

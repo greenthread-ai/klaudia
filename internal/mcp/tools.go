@@ -42,13 +42,16 @@ func (t *mcpTool) Description(context.Context) (string, error) { return t.descri
 func (t *mcpTool) InputSchema() json.RawMessage                { return t.inputSchema }
 
 // ReadOnly reports that this tool only reads, as declared by the server's
-// readOnlyHint annotation or by the operator marking the whole server read-only
-// in .mcp.json.
+// readOnlyHint annotation or as overridden per server in .mcp.json.
 //
 // It exists so the read-only sub-agents can be given MCP tools without being
 // given the ability to write. A tool that says nothing is not read-only: the
 // annotation is optional in the protocol, and the safe reading of silence is
 // that the author never thought about it.
+//
+// This governs which tools a read-only sub-agent is handed. It is not a claim
+// that calling the tool is safe — nothing here verifies what a server does, and
+// the main agent still asks before every MCP call regardless.
 func (t *mcpTool) ReadOnly() bool { return t.readOnly }
 
 // ValidateInput is a no-op beyond JSON well-formedness; the server validates
@@ -95,11 +98,17 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 		if err != nil {
 			continue
 		}
-		serverReadOnly := m.cfg.MCPServers[srv.Name].ReadOnly
+		// An override, when present, decides for every tool on the server and
+		// the annotations are not consulted at all — in either direction.
+		override := m.cfg.MCPServers[srv.Name].ReadOnly
 		for _, rt := range res.Tools {
 			schema, _ := json.Marshal(rt.InputSchema)
 			if len(schema) == 0 || string(schema) == "null" {
 				schema = json.RawMessage(`{"type":"object"}`)
+			}
+			readOnly := rt.Annotations != nil && rt.Annotations.ReadOnlyHint
+			if override != nil {
+				readOnly = *override
 			}
 			out = append(out, &mcpTool{
 				qualifiedName: fmt.Sprintf("mcp__%s__%s", srv.Name, rt.Name),
@@ -107,7 +116,7 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 				description:   rt.Description,
 				inputSchema:   schema,
 				server:        srv,
-				readOnly:      serverReadOnly || (rt.Annotations != nil && rt.Annotations.ReadOnlyHint),
+				readOnly:      readOnly,
 			})
 		}
 	}

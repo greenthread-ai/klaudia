@@ -26,9 +26,14 @@ port mirrors (see `internal/version`).
 
   For a server that annotates nothing — including one launched in its own
   read-only mode, where the operator knows something the protocol was not told —
-  `"readOnly": true` on the server in `.mcp.json` says so. Measured against the
-  case that prompted this: gitea-mcp annotates all 54 of its tools, 33 of them
-  read-only, matching exactly what its own `-r` flag exposes.
+  `"readOnly": true` on the server in `.mcp.json` says so. `"readOnly": false`
+  says the opposite: `readOnlyHint` is a claim a server makes about itself and
+  nothing verifies it, so an operator who does not believe a third-party server
+  can decline to take its word without giving up the server, which the main
+  agent keeps and still asks about before every call. Unset trusts the
+  annotations. Measured against the case that prompted this: gitea-mcp annotates
+  all 54 of its tools, 33 of them read-only, matching exactly what its own `-r`
+  flag exposes.
 - **Klaudia tells your working-tree changes apart from its own.** `/changes`
   splits them three ways: yours, Klaudia's, and *both* — a file it wrote that
   was already dirty or that you edited afterwards. Klaudia cannot merge those

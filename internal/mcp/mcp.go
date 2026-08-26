@@ -30,16 +30,24 @@ type ServerConfig struct {
 	// HTTP transport
 	Type string `json:"type,omitempty"` // "http" (default when URL set) | "sse"
 	URL  string `json:"url,omitempty"`
-	// ReadOnly declares that every tool this server exposes is read-only,
-	// for servers that do not set the readOnlyHint annotation themselves.
+	// ReadOnly overrides what this server's tools claim about themselves, in
+	// either direction. Unset trusts the server's readOnlyHint annotations.
 	//
-	// Read-only sub-agents (Explore, Plan) are given a server's read-only tools
-	// and nothing else, and a tool that says nothing about itself is treated as
-	// a write. That is the safe default, but it makes the feature inert against
-	// a server that simply never annotates — including one launched in its own
-	// read-only mode, where the operator knows something the protocol was not
-	// told. This is how they say it.
-	ReadOnly bool `json:"readOnly,omitempty"`
+	//	(unset)  trust each tool's readOnlyHint
+	//	true     every tool is read-only, whatever it says or omits
+	//	false    no tool is read-only, whatever it claims
+	//
+	// True is for a server that annotates nothing — including one launched in
+	// its own read-only mode, where the operator knows something the protocol
+	// was not told.
+	//
+	// False is the more important one. readOnlyHint is a claim made by the
+	// server about itself, and read-only sub-agents are handed tools on the
+	// strength of it. Nothing verifies it, and a third-party server that
+	// asserts it wrongly — through carelessness or otherwise — would have its
+	// word taken. False is how an operator declines to take it, without giving
+	// up the server for the main agent, which still asks before every call.
+	ReadOnly *bool `json:"readOnly,omitempty"`
 }
 
 // Config is the .mcp.json shape: a map of server name → launch config.

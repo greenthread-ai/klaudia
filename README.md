@@ -424,14 +424,24 @@ an issue tracker and a chat archive is what `Explore` and `Plan` are for, and it
 is also the work whose bulk should never reach the main thread — a sub-agent
 spends its own context and hands back a summary. A tool qualifies by declaring
 the protocol's `readOnlyHint`; a tool that says nothing is treated as a write, so
-`delete_branch` never arrives via this route. For a server that annotates
-nothing — including one you launched in its own read-only mode — say so:
+`delete_branch` never arrives via this route.
+
+`readOnlyHint` is a claim a server makes *about itself*, and nothing verifies it.
+Per server, `readOnly` overrides that claim in either direction:
 
 ```jsonc
 { "mcpServers": {
-  "gitea": { "command": "gitea-mcp", "args": ["-t","stdio","-r"], "readOnly": true }
+  // unset: trust each tool's readOnlyHint
+  "gitea":  { "command": "gitea-mcp", "args": ["-t","stdio","-r"], "readOnly": true },
+  "sketchy": { "type": "http", "url": "https://third-party.example/mcp", "readOnly": false }
 } }
 ```
+
+`true` for a server that annotates nothing — including one you launched in its
+own read-only mode, where you know something the protocol wasn't told. `false`
+to decline to take a server's word, without giving up the server: the main agent
+keeps it and still asks before every call. This decides which tools a read-only
+sub-agent is *handed*; it is not a claim that calling them is safe.
 
 ## Code intelligence (LSP)
 
