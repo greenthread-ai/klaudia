@@ -1028,6 +1028,16 @@ func run(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		out.Subtype = "error_during_execution"
 		out.Result = "Error: " + api.FriendlyError(err)
+	} else if agent.TurnEndedEmpty(res.Text) {
+		// The turn completed but produced no answer — a refusal, or a limit.
+		// Reporting "success" with empty output would let a pipeline treat a
+		// refusal as a done task. stop_reason already carries the detail; this
+		// makes stdout non-empty and the exit code non-zero to match.
+		if note := agent.TurnNote(res.StopReason, false); note != "" {
+			out.Subtype = res.StopReason
+			out.IsError = true
+			out.Result = note
+		}
 	}
 	if rerr := r.Result(out); rerr != nil {
 		return rerr
@@ -1046,6 +1056,10 @@ func run(cmd *cobra.Command, opts *options) error {
 		return exitError{ExitHostChangeBlocked}
 	case res.StopReason == "max_turns":
 		return exitError{ExitMaxTurns}
+	case agent.TurnEndedEmpty(res.Text) && agent.TurnNote(res.StopReason, false) != "":
+		// The model refused or hit a limit and returned nothing. No answer came
+		// back, so this is a failure a caller should be able to branch on.
+		return exitError{ExitError}
 	}
 	return nil
 }

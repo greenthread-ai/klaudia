@@ -5,6 +5,23 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+- **A refused or truncated turn showed nothing but "✓ done".** Reported from a
+  real session: three messages in a row got a silent completion, no answer above
+  them, indistinguishable from a bug. Three stop reasons cause it — the model
+  refused (`refusal`), ran out of output budget (`max_tokens`), or overflowed the
+  context window — and all three rendered as dead air. Klaudia now names what
+  happened and how to get out of it.
+
+  Refusal is the one that compounds: the model's safety system can be tripped by
+  earlier context rather than the latest message, so once a conversation has
+  drifted into refused territory even "hi" keeps refusing — and an auto-resumed
+  session brings the tainted history back with it. The note points at `/clear`
+  (or `--new-session`), which is the actual way out. Headless runs no longer
+  report a refusal as `success` with empty stdout: the payload carries the
+  explanation and the exit code is non-zero, so a pipeline can branch on it.
+
+
 ### Added
 - **The read-only sub-agents can reach read-only MCP tools.** `Explore` and
   `Plan` were limited to `Read`, `Glob` and `Grep`, so the two agents whose whole

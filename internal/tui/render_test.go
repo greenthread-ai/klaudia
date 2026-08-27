@@ -301,3 +301,50 @@ func TestShortModeNamesEveryMode(t *testing.T) {
 		seen[got] = mode
 	}
 }
+
+// A refusal turn must not render as a silent "✓ done". Reported from a real
+// session: three messages in a row got a completed turn with no answer above
+// it, indistinguishable from a bug.
+func TestRefusalTurnShowsAnExplanation(t *testing.T) {
+	m := newTestModel()
+	m.resize(120, 40)
+	m.setState(stateRunning)
+
+	m.update(doneMsg{res: agent.Result{StopReason: "refusal", Text: ""}})
+
+	out := stripANSI(m.transcript.String())
+	if !strings.Contains(out, "declined") {
+		t.Errorf("a refusal rendered no explanation:\n%s", out)
+	}
+	if !strings.Contains(out, "/clear") {
+		t.Errorf("the refusal note does not offer the way out:\n%s", out)
+	}
+	// The bare completion line alone was the bug.
+	if strings.Contains(out, "done in") && !strings.Contains(out, "declined") {
+		t.Error("only the completion line rendered")
+	}
+}
+
+// A normal answer is untouched — the note must not fire on ordinary turns.
+func TestNormalTurnShowsNoNote(t *testing.T) {
+	m := newTestModel()
+	m.resize(120, 40)
+	m.setState(stateRunning)
+	m.update(doneMsg{res: agent.Result{StopReason: "end_turn", Text: "here is your answer"}})
+	if out := stripANSI(m.transcript.String()); strings.Contains(out, "declined") || strings.Contains(out, "⚠") {
+		t.Errorf("a normal turn showed a warning:\n%s", out)
+	}
+}
+
+// A truncated turn that DID produce text keeps the text and adds an advisory,
+// not an error.
+func TestTruncatedTurnKeepsItsPartialAnswer(t *testing.T) {
+	m := newTestModel()
+	m.resize(120, 40)
+	m.setState(stateRunning)
+	m.update(doneMsg{res: agent.Result{StopReason: "max_tokens", Text: "a partial answer that got"}})
+	out := stripANSI(m.transcript.String())
+	if !strings.Contains(out, "cut off") {
+		t.Errorf("a truncated turn was not flagged:\n%s", out)
+	}
+}

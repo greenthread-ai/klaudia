@@ -713,6 +713,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.err != nil:
 			m.appendLine(errStyle.Render("error: " + api.FriendlyError(msg.err)))
 		default:
+			// A turn can complete at the protocol level and still say nothing —
+			// a refusal, or a truncation. Left alone that renders as "✓ done"
+			// with no answer above it, which reads as a bug. Name what happened
+			// and how to get out of it.
+			if note := agent.TurnNote(msg.res.StopReason, !agent.TurnEndedEmpty(msg.res.Text)); note != "" {
+				if agent.TurnEndedEmpty(msg.res.Text) {
+					m.appendLine(errStyle.Render("  ⚠ " + note))
+				} else {
+					m.appendLine(hintStyle.Render("  ⚠ " + note))
+				}
+			}
 			m.appendLine(bannerStyle.Render("  ✓ done in " + fmtDuration(elapsed) + throughput(msg.res.OutputTokens, elapsed)))
 		}
 		// Results before accounting: what changed and what was verified, if
