@@ -270,3 +270,57 @@ func hasMessages(path string) bool {
 	}
 	return false
 }
+
+// LastTurnRefused reports whether the transcript's final assistant turn was a
+// model refusal.
+//
+// A refusal is a dead end for resume: the safety system is tripped by the
+// accumulated context, not the last message, so resuming the conversation makes
+// the very next prompt refuse too — even an unrelated one. Auto-resume uses this
+// to start fresh instead of reviving a session that can only refuse.
+//
+// Two signatures, covering transcripts written before and after the recorder
+// stored request-shape messages: an explicit stop_reason of "refusal" (older
+// response-shape entries keep it), or an assistant turn with no content at all,
+// which is the only way a refusal is persisted once stop_reason is gone. A
+// normal turn always carries text or a tool call; an interrupted turn is not
+// recorded. So an empty trailing assistant turn is a refusal in practice.
+func LastTurnRefused(entries []Entry) bool {
+	for i := len(entries) - 1; i >= 0; i-- {
+		if entries[i].Type != "assistant" {
+			continue
+		}
+		var m struct {
+			StopReason string `json:"stop_reason"`
+			Content    []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		}
+		if err := json.Unmarshal(entries[i].Message, &m); err != nil {
+			return false // unreadable: don't guess it's a refusal
+		}
+		if m.StopReason == "refusal" {
+			return true
+		}
+		return !hasUsableContent(m.Content)
+	}
+	return false
+}
+
+func hasUsableContent(content []struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}) bool {
+	for _, b := range content {
+		switch b.Type {
+		case "text":
+			if strings.TrimSpace(b.Text) != "" {
+				return true
+			}
+		case "tool_use", "server_tool_use":
+			return true
+		}
+	}
+	return false
+}

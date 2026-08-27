@@ -623,6 +623,20 @@ func run(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		return err
 	}
+	// Auto-resume must not revive a session that ended in a model refusal:
+	// its context keeps tripping the refusal, so every prompt in the resumed
+	// session — even an unrelated one — refuses too. Start fresh instead. Only
+	// for the implicit pick-the-most-recent case; an explicit --resume/--continue
+	// is the user asking for that session by name, so it is honoured.
+	autoResume := resumeID != "" && opts.resume == "" && !opts.continueSession
+	if autoResume {
+		if entries, rerr := session.Read(session.ExistingPath(cwd, resumeID)); rerr == nil && session.LastTurnRefused(entries) {
+			fmt.Fprintln(cmd.ErrOrStderr(),
+				"Last session ended in a model refusal — starting fresh. Its history is left on disk; --resume "+resumeID+" to see it.")
+			resumeID = ""
+		}
+	}
+
 	sessionID := uuid.NewString()
 	if resumeID != "" {
 		// Token-saving resume: if a persisted compaction summary exists and the

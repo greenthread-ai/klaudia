@@ -5,6 +5,17 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Changed
+- **Auto-resume skips a session that ended in a model refusal.** A refusal is
+  tripped by the accumulated context, not the last message, so reviving that
+  conversation makes the very next prompt — even an unrelated one — refuse too.
+  Klaudia now starts fresh and says so ("Last session ended in a model refusal —
+  starting fresh"), leaving the transcript on disk for an explicit --resume. Only
+  the implicit pick-the-most-recent case; naming a session by --resume/--continue
+  is honoured. Detected by the refusal's signature — an assistant turn with no
+  content, or an older transcript's stop_reason — so it needs no new stored
+  field.
+
 ### Fixed
 - **A web search in the history could 400 the whole turn** with
   `web_search_tool_result.content ...: Input should be a valid array`. The
