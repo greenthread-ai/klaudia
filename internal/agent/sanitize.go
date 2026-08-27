@@ -33,6 +33,15 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 	}
 	out := append([]anthropic.BetaMessageParam(nil), messages...)
 
+	// (0) drop server-tool results that would be rejected on send. Done first,
+	// so a message left empty by the drop is caught by the empty-content repair
+	// below rather than slipping through.
+	for i := range out {
+		if repaired, changed := repairServerToolResults(out[i].Content); changed {
+			out[i].Content = repaired
+		}
+	}
+
 	// (1) fill empty content
 	for i, m := range out {
 		if len(m.Content) == 0 {
@@ -106,6 +115,9 @@ func hasToolResultAt(messages []anthropic.BetaMessageParam, i int, toolUseID str
 // needsSanitize is the fast path — when it returns false, sanitizeMessages
 // returns the input unchanged with no allocation.
 func needsSanitize(messages []anthropic.BetaMessageParam) bool {
+	if hasBrokenServerToolResult(messages) {
+		return true
+	}
 	var prev anthropic.BetaMessageParamRole
 	for i, m := range messages {
 		if len(m.Content) == 0 {

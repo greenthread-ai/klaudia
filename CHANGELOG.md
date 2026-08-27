@@ -6,6 +6,20 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **A web search in the history could 400 the whole turn** with
+  `web_search_tool_result.content ...: Input should be a valid array`. The
+  transcript recorder marshalled the raw response message, and the SDK's
+  response union types have no marshaller — so a server-tool result's content
+  serialised as an object full of leaked field names
+  (`OfBetaWebSearchResultBlockArray`) instead of an array. On resume that parsed
+  back into an empty error block and the API rejected it. Two fixes: the
+  recorder now stores the param form, which round-trips cleanly (RawJSON is not
+  an option — after streaming the SDK sets it to the same leaky marshal); and
+  sanitize drops an already-corrupted result and its server_tool_use before
+  send, with a visible placeholder, so a transcript written before this fix
+  resumes instead of failing. Verified against the real on-disk transcript that
+  hit it.
+
 - **A refused or truncated turn showed nothing but "✓ done".** Reported from a
   real session: three messages in a row got a silent completion, no answer above
   them, indistinguishable from a bug. Three stop reasons cause it — the model

@@ -866,6 +866,22 @@ func record(r Recorder, role string, msg any) {
 	if r == nil {
 		return
 	}
+	// A response BetaMessage must be converted to its request param before it
+	// is marshalled. The SDK's *response* union types carry no MarshalJSON, so
+	// json.Marshal on one dumps every internal field of the union — a text
+	// block comes out with "OfBetaWebSearchResultBlockArray" and a dozen other
+	// empty fields alongside the real one. For plain text and tool_use that is
+	// merely ugly, but for a server-tool result (web_search / web_fetch) the
+	// content field serialises to an object the API rejects with
+	// "content ... Input should be a valid array" the next time the history is
+	// sent — which is every resume. ToParam() runs through the param
+	// marshallers, which is clean and round-trips. RawJSON() is not an
+	// alternative: after streaming accumulation the SDK sets it to this same
+	// leaky marshal, so it is corrupt too. Params (user and tool_result
+	// messages) already marshal correctly and pass straight through.
+	if m, ok := msg.(anthropic.BetaMessage); ok {
+		msg = m.ToParam()
+	}
 	if b, err := json.Marshal(msg); err == nil {
 		_ = r.Record(role, b)
 	}
