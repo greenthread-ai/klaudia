@@ -443,6 +443,20 @@ to decline to take a server's word, without giving up the server: the main agent
 keeps it and still asks before every call. This decides which tools a read-only
 sub-agent is *handed*; it is not a claim that calling them is safe.
 
+There is no `${VAR}` expansion — a value is used exactly as written — but the
+server subprocess inherits Klaudia's environment, so export credentials in your
+shell rather than writing them into the file. `.mcp.json` is **strict JSON**: no
+comments, no trailing commas. `.mcp.json.example` is a working starting point;
+copy it and edit. `.mcp.json` itself is gitignored because a credential in it
+would be a literal in a committed file — `git add -f` it if you want a
+secret-free team config in the repo.
+
+Worth pairing with the `readOnly` guidance above: `-r` and `-S` on the server
+command narrow what exists at all, and `readOnly` decides who is handed it.
+`-S issue,pull_request,actions` matters more than it looks, because every tool's
+schema is sent on *every* request — loading 54 tools to use four is a permanent
+context tax.
+
 ## Code intelligence (LSP)
 
 Klaudia talks to **language servers you already have installed** to give the

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "gitea": {
+      "command": "gitea-mcp",
+      "args": ["-t", "stdio", "-r", "-S", "issue,pull_request,actions"],
+      "env": { "GITEA_HOST": "https://git.example.com" },
+      "readOnly": true
+    },
+    "third-party": {
+      "type": "http",
+      "url": "https://third-party.example/mcp",
+      "readOnly": false
+    }
+  }
+}

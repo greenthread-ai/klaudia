@@ -9,3 +9,9 @@
 # Legacy JS artifacts (the JS reference lives on the js-reference branch)
 /node_modules
 /dist
+
+# MCP server config. There is no ${VAR} expansion, so any credential in here is
+# a literal in a file — and the subprocess inherits Klaudia's environment, so it
+# does not need to be. See .mcp.json.example. Commit a secret-free team config
+# with `git add -f .mcp.json` if you want one.
+/.mcp.json
