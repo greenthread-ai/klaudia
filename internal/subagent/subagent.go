@@ -32,6 +32,11 @@ type Type struct {
 // do, from the protocol's readOnlyHint annotation or from .mcp.json.
 type readOnlyTool interface{ ReadOnly() bool }
 
+// toolSearchName is the tool that loads deferred tools on demand. Named here
+// rather than imported to keep this package free of a dependency on the tool
+// implementations it filters.
+const toolSearchName = "ToolSearch"
+
 // Builtin returns the built-in sub-agent types.
 func Builtin() []Type {
 	return []Type{
@@ -99,6 +104,7 @@ func (t Type) Filter(base *tools.Registry) *tools.Registry {
 		}
 	}
 	if t.ReadOnlyMCP {
+		var granted int
 		for _, name := range base.Names() {
 			if seen[name] {
 				continue
@@ -109,6 +115,20 @@ func (t Type) Filter(base *tools.Registry) *tools.Registry {
 			}
 			if ro, isRO := tool.(readOnlyTool); isRO && ro.ReadOnly() {
 				allowed = append(allowed, tool)
+				granted++
+			}
+		}
+		// MCP tools are numerous, so the parent withholds them from the request
+		// behind ToolSearch and loads them on demand. A sub-agent inherits that
+		// arrangement, so granting the tools without granting the means to find
+		// them grants nothing: the sub-agent holds tools it can neither see nor
+		// load, and reports — accurately — that it has only Read, Glob and Grep.
+		//
+		// Registry membership was what the first version asserted, and
+		// membership was never the thing that mattered.
+		if granted > 0 && !seen[toolSearchName] {
+			if ts, ok := base.Lookup(toolSearchName); ok {
+				allowed = append(allowed, ts)
 			}
 		}
 	}

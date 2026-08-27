@@ -127,3 +127,47 @@ func TestGeneralPurposeStillTakesEverything(t *testing.T) {
 		t.Errorf("general-purpose got %d tools, want 2", n)
 	}
 }
+
+// Granting MCP tools without ToolSearch grants nothing.
+//
+// The parent withholds MCP tools from the request behind ToolSearch and loads
+// them on demand, and a sub-agent inherits that arrangement. The first version
+// of this feature put the tools in the sub-agent's registry and stopped there,
+// so an Explore agent held 33 Gitea tools it could neither see nor load and
+// reported, accurately, that it had only Read, Glob and Grep. Every unit test
+// passed: they asserted membership, and membership was never what mattered.
+func TestReadOnlyMCPComesWithTheMeansToFindIt(t *testing.T) {
+	base := tools.NewRegistry(
+		stubTool{"Read"}, stubTool{"Glob"}, stubTool{"Grep"},
+		stubTool{"ToolSearch"},
+		roStub{stubTool{"mcp__gitea__search_repos"}, true},
+	)
+	for _, name := range []string{"Explore", "Plan"} {
+		typ, _ := Lookup(name)
+		got := map[string]bool{}
+		for _, n := range typ.Filter(base).Names() {
+			got[n] = true
+		}
+		if !got["mcp__gitea__search_repos"] {
+			t.Errorf("%s: no MCP tool", name)
+		}
+		if !got["ToolSearch"] {
+			t.Errorf("%s: has deferred MCP tools but no ToolSearch to load them with", name)
+		}
+	}
+}
+
+// ToolSearch is granted because MCP tools were, not as a new baseline. A project
+// with no MCP servers should see no change.
+func TestNoMCPMeansNoToolSearch(t *testing.T) {
+	base := tools.NewRegistry(
+		stubTool{"Read"}, stubTool{"Glob"}, stubTool{"Grep"},
+		stubTool{"ToolSearch"}, stubTool{"Edit"},
+	)
+	typ, _ := Lookup("Explore")
+	for _, n := range typ.Filter(base).Names() {
+		if n == "ToolSearch" {
+			t.Error("ToolSearch granted with no MCP tools to search for")
+		}
+	}
+}
