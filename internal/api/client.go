@@ -105,6 +105,40 @@ func ContextWindow(model string, override int) (limit int, source string) {
 	return 0, ContextSourceUnknown
 }
 
+// DefaultMaxOutputTokens is the conservative per-response output cap used when
+// the model is unknown. It is deliberately low enough to be safe on any model.
+const DefaultMaxOutputTokens = 8192
+
+// modelMaxOutputTokens is the offline default output cap per model. Values are
+// deliberate *under*-approximations of each model's real limit — high enough
+// that an ordinary document write no longer truncates at 8192 (the bug where a
+// half-written Write tool_use was dispatched with empty arguments), low enough
+// that the request can never be rejected for exceeding the model's cap. The
+// big Claude models all support at least 32000 output tokens; Haiku and unknown
+// models fall back to the conservative default.
+var modelMaxOutputTokens = map[string]int{
+	"claude-opus-5":              32000,
+	"claude-sonnet-5":            32000,
+	"claude-fable-5":             32000,
+	"claude-opus-4-8":            32000,
+	"claude-opus-4-7":            32000,
+	"claude-opus-4-6":            32000,
+	"claude-sonnet-4-6":          32000,
+	"claude-sonnet-4-5-20250929": 32000,
+	"claude-opus-4-5-20251101":   32000,
+}
+
+// MaxOutputTokens returns the default output-token cap for a model, resolving
+// aliases the same way ContextWindow does. Callers that have an explicit
+// override (config, or a live value from the models endpoint) should prefer it;
+// this is the offline default the agent loop falls back to.
+func MaxOutputTokens(model string) int {
+	if n, ok := modelMaxOutputTokens[string(ResolveModel(model))]; ok {
+		return n
+	}
+	return DefaultMaxOutputTokens
+}
+
 // ResolveModel turns a CLI --model value into a model ID. Empty → DefaultModel.
 func ResolveModel(m string) anthropic.Model {
 	m = strings.TrimSpace(m)

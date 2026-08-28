@@ -30,10 +30,11 @@ func TurnNote(stopReason string, hadText bool) string {
 			"starts a fresh conversation (or re-run with --new-session)."
 	case "max_tokens":
 		if hadText {
-			return "The response was cut off at the output limit. Ask it to continue, or raise " +
-				"--max-tokens."
+			return "The response was cut off at the output limit. Ask it to continue, or to " +
+				"write large output in smaller pieces."
 		}
-		return "The model reached the output limit before saying anything. Raise --max-tokens."
+		return "The model reached the output limit before saying anything. Ask for a shorter " +
+			"answer, or split the work into smaller steps."
 	case "model_context_window_exceeded":
 		return "The conversation is too large for the model's context window. /compact to " +
 			"summarise it, or /clear to start fresh."

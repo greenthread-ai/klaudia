@@ -6,6 +6,21 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **A large tool call (e.g. writing a long file) failed with a cryptic schema
+  error and then hung.** Writing a big document blew the 8192-token output cap
+  mid-tool-call, so `stop_reason` was `max_tokens` and the tool's argument JSON
+  arrived truncated. The stream layer patches truncated JSON to `{}` to keep the
+  SDK from crashing, but the loop then dispatched that `{}` as a real call —
+  `Write` with no `file_path`/`content` — surfacing "missing properties
+  'file_path', 'content'" and looping as the model retried the same oversized
+  write. Two fixes: (1) a tool_use truncated by the output limit is no longer
+  dispatched; it returns an actionable result telling the model its output was
+  cut off, nothing ran, and to write less or continue. (2) The output cap is now
+  model-aware (`api.MaxOutputTokens`): capable Claude models get 32000 instead of
+  the flat 8192, a safe under-approximation of each model's real limit, so an
+  ordinary document write no longer truncates. `turnnote` no longer points at a
+  `--max-tokens` flag that never existed.
+
 - **A web search poisoned the next turn with a 400.** After a successful search
   (the Anthropic-backend `web_search` server tool), the very next message failed
   with `citations.0.web_search_result_location.url: Value should have at least 1

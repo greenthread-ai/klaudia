@@ -23,9 +23,6 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
-// defaultMaxTokens is the per-response output cap when the caller doesn't set one.
-const defaultMaxTokens = 8192
-
 // Emitter receives streaming events for stream-json output. It is called for
 // assistant text, tool_use, and tool_result events as they occur. May be nil.
 type Emitter func(event Event)
@@ -73,7 +70,7 @@ type Options struct {
 	Model      anthropic.Model
 	System     string
 	MaxTurns   int   // 0 = unlimited
-	MaxTokens  int64 // 0 = defaultMaxTokens
+	MaxTokens  int64 // 0 = model-aware default via api.MaxOutputTokens
 	Permission permission.Context
 	// Host is the trust gate: it classifies each tool call and refuses changes
 	// to this machine that the user has not agreed to. Nil disables the whole
@@ -161,8 +158,12 @@ func New(provider api.Provider, registry *tools.Registry) *Loop {
 // Run executes the loop until the model stops calling tools or MaxTurns is hit.
 func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, error) {
 	maxTokens := opts.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = defaultMaxTokens
+	if maxTokens <= 0 {
+		// Model-aware default: the flat 8192 was low enough that an ordinary
+		// large write hit the output limit mid-tool-call and was dispatched with
+		// empty arguments. api.MaxOutputTokens raises it on models that support
+		// more, staying a safe under-approximation of each model's real cap.
+		maxTokens = int64(api.MaxOutputTokens(string(opts.Model)))
 	}
 
 	// Deferred tools are withheld from the request until ToolSearch reveals them.
@@ -306,8 +307,20 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 				revealed[n] = true
 			}
 		}
+		// A tool_use the model never finished emitting because the turn hit the
+		// output-token limit arrives here with empty ("{}") arguments — the
+		// stream layer patches its truncated, invalid JSON so Accumulate doesn't
+		// crash (see api.repairInvalidToolInputs). Dispatching it would run the
+		// tool with no arguments (e.g. Write with no file_path/content, which the
+		// user saw as a cryptic schema error and a retry loop). Return an
+		// actionable result instead so the model shortens or continues.
+		truncID, wasTruncated := truncatedToolUseID(assistant)
 		resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
 		for _, tu := range toolUses {
+			if wasTruncated && tu.ID == truncID {
+				resultBlocks = append(resultBlocks, shortCircuit(emit, tu, truncatedToolNote(maxTokens)))
+				continue
+			}
 			block := l.dispatch(ctx, tu, opts, emit, reveal, failures, errStreaks)
 			resultBlocks = append(resultBlocks, block)
 		}
@@ -578,6 +591,40 @@ func editedPaths(name string, raw []byte) []string {
 // shortCircuit returns a tool_result without touching the failure counters
 // (the loop-breaker is refusing the call, not registering another attempt).
 // Used by loop-breaker B; A reuses errResult since it bumps state intentionally.
+// truncatedToolUseID reports the id of a tool_use the model never finished
+// emitting because the turn hit the output-token limit. max_tokens truncates
+// only the final content block, so a trailing tool_use whose arguments never
+// closed is the casualty; the stream layer patches its invalid JSON to "{}"
+// (api.repairInvalidToolInputs) to keep Accumulate from crashing, which is the
+// empty input keyed on here. Only the final block qualifies, so a complete
+// tool_use earlier in the same turn still dispatches normally.
+func truncatedToolUseID(m anthropic.BetaMessage) (string, bool) {
+	if m.StopReason != "max_tokens" || len(m.Content) == 0 {
+		return "", false
+	}
+	last := m.Content[len(m.Content)-1]
+	if last.Type != "tool_use" || !isEmptyToolInput(last.Input) {
+		return "", false
+	}
+	return last.ID, true
+}
+
+func isEmptyToolInput(raw json.RawMessage) bool {
+	switch strings.TrimSpace(string(raw)) {
+	case "", "{}", "null":
+		return true
+	}
+	return false
+}
+
+func truncatedToolNote(maxTokens int64) string {
+	return fmt.Sprintf("This tool call was cut off before its arguments were complete: "+
+		"the turn reached the output-token limit (max_tokens=%d) mid-call, so it did NOT "+
+		"run — nothing was written or changed. Produce less in one turn: write a large file "+
+		"in smaller pieces (create it, then append/edit the rest), or shorten the content, "+
+		"then continue.", maxTokens)
+}
+
 func shortCircuit(emit Emitter, tu anthropic.BetaToolUseBlock, msg string) anthropic.BetaContentBlockParamUnion {
 	if emit != nil {
 		emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
