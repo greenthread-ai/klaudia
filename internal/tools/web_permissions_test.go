@@ -12,8 +12,8 @@ import (
 // drive a persistent-profile browser, so they ask by default and are denied in
 // the read-only modes.
 func TestWebToolsArePermissionGated(t *testing.T) {
-	ws, _ := NewWebSearch(nil)
-	wf, _ := NewWebFetch(nil)
+	ws, _ := NewBrowserSearch(nil)
+	wf, _ := NewBrowserFetch(nil)
 	bn, _ := NewBrowserNavigate(nil)
 	bs, _ := NewBrowserSnapshot(nil)
 	web := []Tool{ws, wf, bn, bs}
@@ -38,11 +38,11 @@ func TestWebToolsArePermissionGated(t *testing.T) {
 }
 
 func TestWebToolsReturnErrorWhenBrowserEngineMissing(t *testing.T) {
-	ws, err := NewWebSearch(nil)
+	ws, err := NewBrowserSearch(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wf, err := NewWebFetch(nil)
+	wf, err := NewBrowserFetch(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,8 +60,8 @@ func TestWebToolsReturnErrorWhenBrowserEngineMissing(t *testing.T) {
 		tool Tool
 		raw  json.RawMessage
 	}{
-		{"WebSearch", ws, json.RawMessage(`{"query":"example"}`)},
-		{"WebFetch", wf, json.RawMessage(`{"url":"https://example.com"}`)},
+		{"BrowserSearch", ws, json.RawMessage(`{"query":"example"}`)},
+		{"BrowserFetch", wf, json.RawMessage(`{"url":"https://example.com"}`)},
 		{"BrowserNavigate", bn, json.RawMessage(`{"url":"https://example.com"}`)},
 		{"BrowserSnapshot", bs, json.RawMessage(`{}`)},
 	}

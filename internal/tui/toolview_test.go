@@ -17,7 +17,7 @@ func TestToolSummary(t *testing.T) {
 		{"Bash", map[string]any{"command": "go test ./..."}, " go test ./..."},
 		{"Edit", map[string]any{"file_path": "internal/lsp/pool.go"}, " internal/lsp/pool.go"},
 		{"Grep", map[string]any{"pattern": "func New"}, " func New"},
-		{"WebSearch", map[string]any{"query": "go lsp client"}, " go lsp client"},
+		{"BrowserSearch", map[string]any{"query": "go lsp client"}, " go lsp client"},
 		{"Read", map[string]any{}, ""}, // missing key → no summary
 	}
 	for _, c := range cases {

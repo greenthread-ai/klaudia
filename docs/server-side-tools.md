@@ -315,8 +315,8 @@ Server-side features are gated behind beta headers sent as `anthropic-beta`:
 
 | Server-side tool | Klaudia equivalent |
 | --- | --- |
-| Web Search | local `WebSearch` (lazy headless Chrome, DDG/Google) — `internal/browser` |
-| Web Fetch | local `WebFetch` / `BrowserNavigate` / `BrowserSnapshot` → Markdown |
+| Web Search | Anthropic `web_search` server tool (preferred on Claude models, cited) with local `BrowserSearch` (lazy headless Chrome, DDG/Google) as the non-Claude fallback — `internal/browser` |
+| Web Fetch | Anthropic `web_fetch` server tool (preferred on Claude models) with local `BrowserFetch` / `BrowserNavigate` / `BrowserSnapshot` → Markdown as the fallback |
 | MCP | local stdio + HTTP/SSE MCP servers — `internal/mcp` |
 | Code Execution | container sandbox for the Bash tool (`sandbox.mode = "container"`) |
 | Browser Automation | the local browser tools above; an MCP browser server can be registered for richer control |

@@ -88,8 +88,8 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 		{"AskUserQuestion", func() (Tool, error) { return NewAskUserQuestion() }},
 		{"ExitPlanMode", func() (Tool, error) { return NewExitPlanMode() }},
 		{"RequestHostChange", func() (Tool, error) { return NewRequestHostChange() }},
-		{"WebSearch", func() (Tool, error) { return NewWebSearch(engine) }},
-		{"WebFetch", func() (Tool, error) { return NewWebFetch(engine) }},
+		{"BrowserSearch", func() (Tool, error) { return NewBrowserSearch(engine) }},
+		{"BrowserFetch", func() (Tool, error) { return NewBrowserFetch(engine) }},
 		{"BrowserNavigate", func() (Tool, error) { return NewBrowserNavigate(engine) }},
 		{"BrowserSnapshot", func() (Tool, error) { return NewBrowserSnapshot(engine) }},
 	}

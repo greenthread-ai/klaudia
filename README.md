@@ -391,9 +391,14 @@ overlays it (project wins). Settings merge per field.
 Built-in, permission-gated tools backed by a lazily-launched **headless Chrome**
 (nothing spawns until a web tool runs; the browser is closed at session end):
 
-- `WebSearch` — DuckDuckGo (default) or Google; returns titles/URLs/snippets.
-- `WebFetch` / `BrowserNavigate` / `BrowserSnapshot` — render a page and return
-  Markdown.
+- `BrowserSearch` — DuckDuckGo (default) or Google; returns titles/URLs/snippets.
+- `BrowserFetch` / `BrowserNavigate` / `BrowserSnapshot` — render a page and
+  return Markdown.
+
+On a Claude model these are the fallback: the built-in Anthropic `web_search` /
+`web_fetch` server tools are preferred (they return cited results). The
+Chrome-backed tools above are what non-Claude providers use, and what you get
+when you explicitly ask Klaudia to drive the browser.
 
 Requires a Chrome/Chromium install (auto-discovered; set `KLAUDIA_CHROME_PATH`
 on Linux/Windows if not on `PATH`). Tunable via `.klaudia/config.toml` →

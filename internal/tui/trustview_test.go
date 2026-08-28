@@ -158,9 +158,9 @@ func TestRevoke(t *testing.T) {
 func TestLegacyRulesAreListed(t *testing.T) {
 	m, _ := trustModel(agent.HostEnforce, permission.ModeAutonomous)
 	m.sessionAllow = []permission.Rule{{Tool: "Bash", Specifier: "git status:*"}}
-	m.sessionDeny = []permission.Rule{{Tool: "WebFetch"}}
+	m.sessionDeny = []permission.Rule{{Tool: "BrowserFetch"}}
 	out := stripANSI(m.renderTrust())
-	for _, want := range []string{"per-command model", "allow Bash(git status:*)", "deny WebFetch"} {
+	for _, want := range []string{"per-command model", "allow Bash(git status:*)", "deny BrowserFetch"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("/trust output missing %q:\n%s", want, out)
 		}

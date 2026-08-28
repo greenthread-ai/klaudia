@@ -68,12 +68,25 @@ port mirrors (see `internal/version`).
   model's call.
 
 ### Changed
+- **Web tools are disambiguated and steer toward the best source.** The local
+  Chrome-backed `WebSearch`/`WebFetch` are renamed `BrowserSearch`/`BrowserFetch`
+  (joining `BrowserNavigate`/`BrowserSnapshot`) so they no longer shadow the
+  Anthropic backend `web_search`/`web_fetch` server tools. Their descriptions now
+  tell the model to prefer the built-in `web_search`/`web_fetch` when available
+  (Claude models — cited, higher quality) and use the Chrome tools when it isn't
+  (non-Claude providers) or when explicitly asked to drive the browser. Tool
+  behaviour is unchanged; only the model-facing names and guidance moved.
+
 - **Dependencies:** Anthropic SDK `v1.45.0 → v1.68.0` (fixes the web-search
   citation bug above; `go build`/`vet`/`test` clean, no source changes needed)
   and `invopop/jsonschema v0.13.0 → v0.14.0`. `govulncheck ./...` reports no
-  vulnerabilities. The TUI's `charmbracelet/bubbles`/`bubbletea` are deliberately
-  held at their current versions — the input layer depends on exact textarea
-  internals — and get their own review before bumping.
+  vulnerabilities. `charmbracelet/bubbles`, `bubbletea`, and `lipgloss` are
+  already at (or ahead of) the newest v1 releases, so there is nothing to bump on
+  the v1 line. A v2 upgrade is deliberately **not** taken: v2's `textarea.
+  SetHeight` calls `repositionView` (which would reintroduce the just-fixed
+  wrapped-input scroll bug) and bubbletea v2 replaces the standard renderer with
+  a rewrite (which would invalidate the inline reflow/last-column cursor math).
+  Recorded so a future bump starts from the known incompatibilities.
 
 - **Auto-resume skips a session that ended in a model refusal.** A refusal is
   tripped by the accumulated context, not the last message, so reviving that

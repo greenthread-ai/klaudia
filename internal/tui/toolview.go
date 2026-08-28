@@ -29,7 +29,7 @@ var summaryKey = map[string]string{
 	"Read": "file_path", "Write": "file_path", "Edit": "file_path", "NotebookEdit": "notebook_path",
 	"Diagnostics": "file", "Definition": "file", "References": "file",
 	"Glob": "pattern", "Grep": "pattern",
-	"WebSearch": "query", "WebFetch": "url", "BrowserNavigate": "url",
+	"BrowserSearch": "query", "BrowserFetch": "url", "BrowserNavigate": "url",
 	"Skill": "name", "ToolSearch": "query",
 	"TaskCreate": "description", "TaskGet": "task_id", "TaskUpdate": "task_id",
 }

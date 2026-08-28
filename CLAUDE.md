@@ -50,5 +50,10 @@ where the implementation deliberately differs from them — read it before
 ## Rules
 
 - Pure Go: builds must stay `CGO_ENABLED=0`-clean (no cgo, no system libs).
+- Keep `charmbracelet/bubbles`, `bubbletea`, and `lipgloss` on the **v1** line.
+  The TUI depends on textarea/renderer internals that v2 changes (v2
+  `textarea.SetHeight` repositions the viewport; bubbletea v2 rewrites the inline
+  renderer), which would break the input-wrap and last-column workarounds. A v2
+  bump is a deliberate project, not a routine `go get -u` (see CHANGELOG).
 - The retired JavaScript reference lives on the `js-reference` branch; consult it
   with `git checkout js-reference` (not present on this branch).

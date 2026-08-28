@@ -11,7 +11,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
-type WebSearchInput struct {
+type BrowserSearchInput struct {
 	Query          string   `json:"query" jsonschema:"description=The search query to run"`
 	Engine         string   `json:"engine,omitempty" jsonschema:"description=Search engine to use: ddg or google (defaults to DDG)"`
 	AllowedDomains []string `json:"allowed_domains,omitempty" jsonschema:"description=Optional domains to include; subdomains are matched"`
@@ -19,32 +19,32 @@ type WebSearchInput struct {
 	MaxResults     int      `json:"max_results,omitempty" jsonschema:"description=Maximum number of results to return; defaults to 8 and caps at 20"`
 }
 
-type WebSearch struct {
+type BrowserSearch struct {
 	schema *schema.Schema
 	engine *browser.Engine
 }
 
-func NewWebSearch(engine *browser.Engine) (*WebSearch, error) {
-	s, err := schema.For[WebSearchInput]()
+func NewBrowserSearch(engine *browser.Engine) (*BrowserSearch, error) {
+	s, err := schema.For[BrowserSearchInput]()
 	if err != nil {
 		return nil, fmt.Errorf("websearch: build schema: %w", err)
 	}
-	return &WebSearch{schema: s, engine: engine}, nil
+	return &BrowserSearch{schema: s, engine: engine}, nil
 }
 
-func (w *WebSearch) Name() string { return "WebSearch" }
+func (w *BrowserSearch) Name() string { return "BrowserSearch" }
 
-func (w *WebSearch) Description(context.Context) (string, error) {
-	return "Search the web using a lazily launched headless Chrome browser. Defaults to DuckDuckGo; set engine to google when specifically needed. Returns result titles, URLs, and snippets as JSON.", nil
+func (w *BrowserSearch) Description(context.Context) (string, error) {
+	return "Search the web by driving a lazily launched headless Chrome browser (scrapes DuckDuckGo by default; set engine to google when needed). Returns titles, URLs, and snippets as JSON — no citations. Prefer the built-in web_search tool when it is available (Claude models): it returns higher-quality, cited results. Use this Chrome-based search when web_search is not available (non-Claude models) or when explicitly asked to use the browser.", nil
 }
 
-func (w *WebSearch) InputSchema() json.RawMessage { return w.schema.Raw }
+func (w *BrowserSearch) InputSchema() json.RawMessage { return w.schema.Raw }
 
-func (w *WebSearch) ValidateInput(raw json.RawMessage) error {
+func (w *BrowserSearch) ValidateInput(raw json.RawMessage) error {
 	if err := w.schema.Validate(raw); err != nil {
 		return err
 	}
-	var in WebSearchInput
+	var in BrowserSearchInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return err
 	}
@@ -58,18 +58,18 @@ func (w *WebSearch) ValidateInput(raw json.RawMessage) error {
 	return nil
 }
 
-func (w *WebSearch) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
-	var in WebSearchInput
+func (w *BrowserSearch) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
+	var in BrowserSearchInput
 	_ = json.Unmarshal(raw, &in)
 	return permission.PermissionRequest{Specifier: in.Query}
 }
 
-func (w *WebSearch) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
+func (w *BrowserSearch) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
 	return networkClassDecision(pctx)
 }
 
-func (w *WebSearch) Execute(ctx context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
-	var in WebSearchInput
+func (w *BrowserSearch) Execute(ctx context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+	var in BrowserSearchInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}

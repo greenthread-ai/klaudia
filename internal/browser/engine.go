@@ -1,6 +1,6 @@
 // Package browser provides a lazily-launched headless-Chrome engine (driven over
-// the Chrome DevTools Protocol) plus web search, used by the WebFetch,
-// WebSearch, BrowserNavigate, and BrowserSnapshot tools. Nothing spawns until a
+// the Chrome DevTools Protocol) plus web search, used by the BrowserFetch,
+// BrowserSearch, BrowserNavigate, and BrowserSnapshot tools. Nothing spawns until a
 // web tool actually runs, and the browser is closed at session end.
 package browser
 

@@ -46,7 +46,7 @@ type Config struct {
 	APIKeyEnv string `toml:"apiKeyEnv,omitempty"`
 	// Sandbox configures how the Bash tool executes commands.
 	Sandbox Sandbox `toml:"sandbox,omitempty"`
-	// Browser configures local browser-backed tools (WebSearch/WebFetch and browser tools).
+	// Browser configures local browser-backed tools (BrowserSearch/BrowserFetch and browser tools).
 	Browser Browser `toml:"browser,omitempty"`
 	// LSP configures language-server code-intelligence tools.
 	LSP LSP `toml:"lsp,omitempty"`
@@ -124,7 +124,7 @@ type Browser struct {
 	UserDataDir string `toml:"userDataDir,omitempty"`
 	// HeadedFallback relaunches headed Chrome for user-assisted search challenge handling.
 	HeadedFallback *bool `toml:"headedFallback,omitempty"`
-	// SearchEngine selects the default WebSearch engine: "ddg" or "google".
+	// SearchEngine selects the default BrowserSearch engine: "ddg" or "google".
 	SearchEngine string `toml:"searchEngine,omitempty"`
 }
 
