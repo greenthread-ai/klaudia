@@ -6,6 +6,25 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **Typing a line that wrapped grew the input box but hid the text above it.**
+  A soft-wrapping line made the box taller, yet instead of revealing the new
+  wrapped row the earlier row scrolled out of view and a blank row appeared at
+  the bottom. bubbles' textarea repositions its viewport during `Update` at the
+  height it had *before* the box grew — and only ever scrolls toward the cursor,
+  never back up — so growing the box afterwards left the view stranded past the
+  top. Edits now size the textarea to its full height before the keystroke is
+  applied, so a line that still fits never scrolls its top out; the box is then
+  shrunk for display with the view already at the top.
+
+- **Pasted attachments accumulated with no way to delete them.** Pasting parks
+  the payload behind a short `[#N pasted · …]` chip; deleting the chip from the
+  input never dropped the payload, and the counter only ever climbed, so
+  repeated paste-then-delete looked like attachments piling up. The store now
+  reconciles against what is actually referenced — the live input plus any
+  recall-able history entry — so deleting a chip drops its attachment and the
+  counter falls back to `#1` once nothing is outstanding. A chip still held by
+  history is kept, so `↑` recall re-expands it exactly as before.
+
 - **Queuing a message during a turn left a permanent hint smeared into the
   transcript.** "Klaudia will read this before its next step" was written to
   scrollback with appendLine — the immutable, terminal-owned layer — so a fresh

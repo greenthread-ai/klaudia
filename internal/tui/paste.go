@@ -96,6 +96,48 @@ func (p *pasteStore) expand(s string) string {
 
 func (p *pasteStore) reset() { *p = pasteStore{} }
 
+// reconcile drops every stored payload whose chip no longer appears in any of
+// sources — in practice the live input plus every recall-able history entry
+// (which keeps the chip form). Deleting a chip therefore deletes its attachment,
+// and the store stops accumulating orphaned pastes for the whole session.
+//
+// next is pulled down to the highest id still referenced (0 if none), so once
+// nothing is outstanding the next paste is #1 again instead of climbing without
+// bound. Because next never drops below an id that any source still mentions,
+// a fresh paste can never collide with a chip a history entry could recall —
+// even one whose payload was already evicted (it still shows in the text, so it
+// still counts toward maxRef).
+func (p *pasteStore) reconcile(sources ...string) {
+	referenced := map[int]bool{}
+	maxRef := 0
+	for _, s := range sources {
+		if !strings.Contains(s, "[#") {
+			continue
+		}
+		for _, m := range pasteChipRe.FindAllStringSubmatch(s, -1) {
+			id, err := strconv.Atoi(m[1])
+			if err != nil {
+				continue
+			}
+			referenced[id] = true
+			if id > maxRef {
+				maxRef = id
+			}
+		}
+	}
+	order := make([]int, 0, len(p.order))
+	bytes := 0
+	for _, id := range p.order {
+		if referenced[id] {
+			order = append(order, id)
+			bytes += len(p.items[id])
+			continue
+		}
+		delete(p.items, id)
+	}
+	p.order, p.bytes, p.next = order, bytes, maxRef
+}
+
 // pasteSummary describes a payload in the few words a chip has room for.
 func pasteSummary(text string) string {
 	if n := strings.Count(text, "\n") + 1; n > 1 {

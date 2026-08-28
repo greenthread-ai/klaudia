@@ -560,6 +560,36 @@ func (m *Model) syncInputHeight() {
 	m.syncPromptMarker()
 }
 
+// updateInput is the single choke point for feeding a key to the textarea while
+// keeping the box the right size. It grows the textarea to its full height
+// BEFORE Update, because bubbles' repositionView runs inside Update at the
+// current height and only ever scrolls *toward* the cursor — never back up to
+// reclaim slack. If a newly-wrapped line grew the box after Update, the view
+// would stay scrolled past the top and the first row would vanish (the reported
+// bug). Sizing to MaxHeight first means a line that still fits never scrolls the
+// top out; syncInputHeight then shrinks the box for display with YOffset already
+// at 0. reconcilePastes runs after the edit so deleting a chip drops its payload.
+func (m *Model) updateInput(msg tea.Msg) tea.Cmd {
+	m.input.SetHeight(m.input.MaxHeight)
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	m.syncInputHeight()
+	m.reconcilePastes()
+	return cmd
+}
+
+// reconcilePastes drops stored paste payloads that no longer appear anywhere the
+// user can still bring them back — neither the live input nor a recall-able
+// history entry (which stores the chip form, tui.go pushHistory). This is what
+// gives "delete the chip, delete the attachment", and it lets the chip counter
+// fall back to #1 once nothing is outstanding instead of climbing forever.
+func (m *Model) reconcilePastes() {
+	sources := make([]string, 0, len(m.inputHistory)+1)
+	sources = append(sources, m.input.Value())
+	sources = append(sources, m.inputHistory...)
+	m.pastes.reconcile(sources...)
+}
+
 // syncPromptMarker swaps the input's leading marker between "›" and "$" as the
 // user types.
 //
@@ -1032,10 +1062,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		var cmd tea.Cmd
-		m.input, cmd = m.input.Update(msg)
-		m.syncInputHeight()
-		return m, cmd
+		return m, m.updateInput(msg)
 	}
 
 	if m.state == stateAwaitingPlan {
@@ -1214,10 +1241,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.startTurn(prompt)
 	}
 
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	m.syncInputHeight()
-	return m, cmd
+	return m, m.updateInput(msg)
 }
 
 // cmdInfo describes one slash command — the single source of truth for both

@@ -235,3 +235,75 @@ func TestPasteStoreEvictsOldestOverBudget(t *testing.T) {
 		t.Errorf("store holds %d bytes, over the %d budget", p.bytes, pasteStoreMaxBytes)
 	}
 }
+
+// bigPaste is a chip-worthy payload (over the inline byte bound).
+func bigPaste(tag string) string { return tag + strings.Repeat("x", 500) }
+
+// The reported bug: paste, delete the chip, paste again — the number climbed
+// (#1 → #2 → …) and the stored payload lingered for the whole session with no
+// way to drop it. reconcile prunes a chip that no longer appears anywhere the
+// user can recall it, and lets the counter fall back to #1.
+func TestPasteReconcileResetsCounterWhenCleared(t *testing.T) {
+	m := newPasteModel(t)
+	m = paste(m, bigPaste("a"))
+	if !strings.Contains(m.input.Value(), "[#1 pasted") {
+		t.Fatalf("first paste chip = %q, want #1", m.input.Value())
+	}
+	// User deletes the chip out of the input.
+	m.input.SetValue("")
+	m.reconcilePastes()
+	if len(m.pastes.items) != 0 {
+		t.Errorf("orphaned paste not pruned: %d item(s) remain", len(m.pastes.items))
+	}
+	if m.pastes.next != 0 {
+		t.Errorf("counter did not reset: next = %d, want 0", m.pastes.next)
+	}
+	// The next paste starts back at #1 rather than climbing.
+	m = paste(m, bigPaste("b"))
+	if !strings.Contains(m.input.Value(), "[#1 pasted") {
+		t.Fatalf("second paste chip = %q, want #1 again", m.input.Value())
+	}
+}
+
+// Deleting one chip must not evict a sibling still present in the input.
+func TestPasteReconcilePrunesOnlyTheDeletedChip(t *testing.T) {
+	m := newPasteModel(t)
+	m = paste(m, bigPaste("A"))
+	m = paste(m, bigPaste("B"))
+	if _, ok := m.pastes.items[1]; !ok {
+		t.Fatal("first paste not stored")
+	}
+	// Keep only the second chip in the input, then reconcile.
+	second := fmt.Sprintf("[#2 pasted · %s]", pasteSummary(bigPaste("B")))
+	m.input.SetValue(second)
+	m.reconcilePastes()
+	if _, ok := m.pastes.items[1]; ok {
+		t.Error("deleted chip #1 was not pruned")
+	}
+	if _, ok := m.pastes.items[2]; !ok {
+		t.Fatal("surviving chip #2 was wrongly pruned")
+	}
+	if got := m.pastes.expand(second); got != bigPaste("B") {
+		t.Errorf("chip #2 no longer expands to its payload")
+	}
+}
+
+// A submitted paste is referenced by the history entry (which keeps the chip
+// form), so reconcile must NOT prune it — ↑ recall has to re-expand it.
+func TestPasteSurvivesSubmitForHistoryRecall(t *testing.T) {
+	m := newPasteModel(t)
+	payload := bigPaste("secret")
+	m = paste(m, payload)
+	display := m.input.Value() // chip form, what pushHistory stores
+
+	m.pushHistory(display)
+	m.input.Reset()
+	m.reconcilePastes()
+
+	if _, ok := m.pastes.items[1]; !ok {
+		t.Fatal("submitted paste was pruned; ↑ recall would break")
+	}
+	if got := m.pastes.expand(display); got != payload {
+		t.Errorf("recalled chip did not expand to the original payload")
+	}
+}
