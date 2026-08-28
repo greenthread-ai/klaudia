@@ -57,3 +57,19 @@ where the implementation deliberately differs from them — read it before
   bump is a deliberate project, not a routine `go get -u` (see CHANGELOG).
 - The retired JavaScript reference lives on the `js-reference` branch; consult it
   with `git checkout js-reference` (not present on this branch).
+
+## Commits
+
+`area: lowercase sentence` subject, then a body explaining the reasoning and
+separating what was measured from what was assumed. Sign your work with:
+
+```
+Co-Authored-By: Klaudia <noreply@greenthread.ai>
+```
+
+Nothing enforces this — there is no `commit.template` and no hook, and the
+author identity comes from the user's `~/.gitconfig` — so it lives here instead.
+Earlier commits carry `noreply@anthropic.com` (Claude Code's default) or a model
+name in place of `Klaudia`; both are history, not the convention. Use the same
+trailer on patches sent upstream on the maintainer's behalf.
+
