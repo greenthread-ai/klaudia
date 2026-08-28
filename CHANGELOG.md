@@ -5,6 +5,26 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+- **Interrupt-to-send during a command could strand the message.** Queue a
+  message, press Enter again to interrupt and send it now, and — if a tool was
+  running — the message sometimes vanished: the turn cancelled but no new turn
+  started, just an idle prompt. Two things drain the queue, on different
+  goroutines: the agent's mid-turn steering poll and the UI's interrupt path.
+  Cancelling an in-flight command completes its tool batch, which drives the
+  agent straight into its post-batch poll — draining the message into the turn
+  being killed, where it sat in history unanswered. Confirmed from the real
+  transcript, which ended with the queued message as a trailing user turn with
+  no reply. The interrupt now takes the message out of the queue before
+  cancelling, so a late poll finds nothing, and the message always becomes the
+  next turn.
+- **Interrupting no longer loses track of running jobs.** Cancelling a turn
+  kills the foreground command but leaves managed background jobs running (a dev
+  server keeps its port). The resend turn now tells the model what it left up so
+  it can decide whether each still matters for the new instruction — inspect,
+  stop, or leave running. It does not kill them automatically; that is the
+  model's call.
+
 ### Changed
 - **Auto-resume skips a session that ended in a model refusal.** A refusal is
   tripped by the accumulated context, not the last message, so reviving that

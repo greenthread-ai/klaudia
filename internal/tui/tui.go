@@ -411,6 +411,12 @@ type Model struct {
 	// consequential action rather than after the turn. Anything still pending
 	// when the turn ends becomes the next turn instead.
 	steer steerBox
+	// interruptResend holds a queued message the user escalated to "interrupt
+	// and send now". It is drained out of the steer box at the moment of the
+	// interrupt — before the turn is cancelled — so a late Interject poll on the
+	// agent goroutine cannot drain it into the turn being killed and strand it
+	// unanswered. doneMsg sends it as the next turn.
+	interruptResend agent.Interjection
 	// Pending AskUserQuestion.
 	askReply    chan string
 	askOptions  []tools.AskOption
@@ -767,16 +773,33 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
 			}
 		}
-		// Anything the agent did not get to before the turn ended becomes the
-		// next turn. The common case is that it was already consumed mid-turn,
-		// which is the whole point — drain() is what stops it being sent twice.
-		if q := strings.TrimSpace(m.steer.drain().Text); q != "" {
+		// A queued message becomes the next turn. Two sources, in priority
+		// order: one the user escalated to "interrupt and send now" (captured at
+		// interrupt time so a late agent poll can't strand it), then one queued
+		// during a turn that ended naturally before the agent drained it.
+		resend := m.interruptResend
+		interrupted := !resend.Empty()
+		m.interruptResend = agent.Interjection{}
+		if resend.Empty() {
+			resend = m.steer.drain()
+		}
+		if q := strings.TrimSpace(resend.Text); q != "" {
 			m.pushHistory(q)
 			m.appendLine(userStyle.Render("› ") + q)
 			m.setState(stateRunning)
 			// q is the chip form (kept short for the queued hint and ↑ recall);
 			// expand it only on the way to the model.
-			return m, tea.Batch(m.waitForEvent(), m.startTurn(m.pastes.expand(q)), stopSW)
+			next := m.pastes.expand(q)
+			// An interrupt kills the foreground command but leaves managed
+			// background jobs running (they are session-scoped). The model was
+			// mid-task when cut off, so tell it what is still up and let it
+			// decide whether each still matters for the new instruction.
+			if interrupted {
+				if note := m.runningJobsNote(); note != "" {
+					next = note + "\n\n" + next
+				}
+			}
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
 		}
 		m.setState(stateIdle)
 		m.input.Focus()
@@ -980,11 +1003,21 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					"  ⏎ Klaudia will read this before its next step — Enter again to interrupt now"))
 				return m, nil
 			}
-			if m.steer.pending() && m.turnCancel != nil {
-				m.turnCancel()
-				m.turnCancel = nil
-				m.cancelling = true // bottom view swaps to "cancelling…" so user sees the cancel registered
-				m.appendLine(toolStyle.Render("  ⊘ interrupting to send your queued message…"))
+			if m.turnCancel != nil {
+				// Take the queued message out of the box BEFORE cancelling. The
+				// agent loop drains the same box at its post-tool-batch poll, and
+				// cancelling an in-flight command completes that batch — so a
+				// poll that fires after the cancel would otherwise drain the
+				// message into the dying turn, leaving it in history unanswered
+				// while the UI goes idle (the reported bug). Draining here makes
+				// that poll find nothing.
+				if resend := m.steer.drain(); !resend.Empty() {
+					m.interruptResend = resend
+					m.turnCancel()
+					m.turnCancel = nil
+					m.cancelling = true // bottom view swaps to "cancelling…" so user sees the cancel registered
+					m.appendLine(toolStyle.Render("  ⊘ interrupting to send your queued message…"))
+				}
 			}
 			return m, nil
 		case tea.KeyUp:

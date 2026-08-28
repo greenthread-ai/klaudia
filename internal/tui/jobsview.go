@@ -326,3 +326,41 @@ func tailLines(text string, n int) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// runningJobsNote lists the background jobs still running, for the model to
+// read after an interrupt.
+//
+// Cancelling a turn kills the command in flight but not the managed jobs behind
+// it — a dev server keeps its port, a tail keeps tailing. The model was
+// mid-task when it was cut off, so on the follow-up turn it needs to know what
+// it left running to decide whether any of it still matters for the new
+// instruction. Returns "" when nothing is running, so it costs nothing then.
+func (m *Model) runningJobsNote() string {
+	if m.sess == nil || m.sess.Jobs == nil {
+		return ""
+	}
+	var running []tools.JobStatus
+	for _, j := range m.sess.Jobs.List() {
+		if j.Running {
+			running = append(running, j)
+		}
+	}
+	if len(running) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Background jobs still running from before this interruption:\n")
+	for _, j := range running {
+		line := "  " + j.Name + " (" + j.ID + ")"
+		if j.Port != "" {
+			line += " on :" + j.Port
+		}
+		if j.Where != "local" && j.Where != "" {
+			line += " @" + j.Where
+		}
+		b.WriteString(line + "\n")
+	}
+	b.WriteString("Decide whether each is still needed for what the user now wants — " +
+		"Jobs to inspect, KillShell to stop one, RestartJob to restart it. Leave them running if they are still useful.")
+	return strings.TrimRight(b.String(), "\n")
+}
