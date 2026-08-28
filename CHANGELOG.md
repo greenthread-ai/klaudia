@@ -5,6 +5,22 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Changed
+- **Server web tools bumped to the current GA versions.** `web_search` and
+  `web_fetch` now use the `20260318` tool types (were `20250305` / `20250910`),
+  pinned to `allowed_callers: ["direct"]`. Direct mode is deliberate: from
+  `20260209` on, the default runs search/fetch inside code execution ("dynamic
+  filtering"), which nests results under a `code_execution_tool_result` — a
+  different shape than the direct `web_search_result` blocks the recorder and
+  citation repair handle — and 400s on pre-4.6 models. `direct` keeps the exact
+  result/citation shape already round-tripped and works on every model. The
+  result/citation handling is version-agnostic, so it needed no change. Dynamic
+  filtering (its token-saving payoff) is a scoped follow-up: it needs
+  code-execution result handling, a model-capability gate for `allowed_callers`,
+  and a live smoke test. The original web-tool beta headers are kept (they are
+  ignored now that the tools are GA, and dropping them is an untestable change to
+  a working path).
+
 ### Fixed
 - **A large tool call (e.g. writing a long file) failed with a cryptic schema
   error and then hung.** Writing a big document blew the 8192-token output cap

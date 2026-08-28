@@ -13,9 +13,16 @@ shapes below document what those return.
 
 ## Web Search
 
-**Tool types:** `web_search_20260209` (current), `web_search_20250305` (legacy)
+**Tool types:** Klaudia sends `web_search_20260318` (current GA) with
+`allowed_callers: ["direct"]`. Older: `web_search_20260209`, `web_search_20250305`.
 
-The `_20260209` version supports dynamic filtering (model can refine domains per-call).
+`_20260209`+ support **dynamic filtering** — running the search inside code
+execution to filter results before they reach the context. Klaudia pins
+`direct` instead: dynamic filtering nests results under a
+`code_execution_tool_result` (a different shape than the direct
+`web_search_result` blocks the recorder and citation repair handle) and 400s on
+pre-4.6 models. Enabling it is a deliberate follow-up (code-execution result
+handling + a model-capability gate + a live test).
 
 ### Tool Definition (sent to API)
 
@@ -77,7 +84,8 @@ Content block type: `web_search_tool_result`
 
 ## Web Fetch
 
-**Tool types:** `web_fetch_20260209` (current), `web_fetch_20250305` (legacy)
+**Tool types:** Klaudia sends `web_fetch_20260318` (current GA) with
+`allowed_callers: ["direct"]`. Older: `web_fetch_20260209`, `web_fetch_20250910`.
 
 ### Tool Definition
 

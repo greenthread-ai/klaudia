@@ -35,8 +35,11 @@ const OAuthBeta anthropic.AnthropicBeta = "oauth-2025-04-20"
 // breaks if it lags.
 const claudeCodeVersion = "2.1.153"
 
-// WebToolBetas are the additional betas required when the server-side
-// web_search / web_fetch tools are enabled.
+// WebToolBetas are sent with the request when the server-side web_search /
+// web_fetch tools are enabled. The tools are GA now (the current 20260318 types
+// need no beta per the docs), but these original feature-enablement betas are
+// still accepted — obsolete betas are ignored, not rejected — so they are kept
+// as a harmless belt: dropping them is an untestable change to a working path.
 var WebToolBetas = []anthropic.AnthropicBeta{
 	"web-search-2025-03-05",
 	"web-fetch-2025-09-10",
