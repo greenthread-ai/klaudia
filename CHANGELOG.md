@@ -6,6 +6,17 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **A web search poisoned the next turn with a 400.** After a successful search,
+  the very next message failed with `citations.0.web_search_result_location.url:
+  Value should have at least 1 item`, and every follow-up re-sent the same bad
+  history. Cause: an SDK bug (v1.45.0) — converting a web-search citation to its
+  request form copies the title and cited text but drops the `url` and
+  `encrypted_index`, both of which the API then requires back. Assistant turns
+  are now converted with those two fields restored from the response, and a
+  sanitize step drops any still-empty web-search citation in history recorded
+  before the fix (the value can't be recovered at send time; the annotated text
+  is kept).
+
 - **Typing a line that wrapped grew the input box but hid the text above it.**
   A soft-wrapping line made the box taller, yet instead of revealing the new
   wrapped row the earlier row scrolled out of view and a blank row appeared at

@@ -40,6 +40,12 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 		if repaired, changed := repairServerToolResults(out[i].Content); changed {
 			out[i].Content = repaired
 		}
+		// (0b) drop web-search citations whose URL was lost to the SDK bug
+		// (citations.go) in history recorded before the fix — unrecoverable at
+		// send time, and the API rejects the empty url.
+		if repaired, changed := repairEmptyWebSearchCitations(out[i].Content); changed {
+			out[i].Content = repaired
+		}
 	}
 
 	// (1) fill empty content
@@ -116,6 +122,9 @@ func hasToolResultAt(messages []anthropic.BetaMessageParam, i int, toolUseID str
 // returns the input unchanged with no allocation.
 func needsSanitize(messages []anthropic.BetaMessageParam) bool {
 	if hasBrokenServerToolResult(messages) {
+		return true
+	}
+	if hasEmptyWebSearchCitation(messages) {
 		return true
 	}
 	var prev anthropic.BetaMessageParamRole
