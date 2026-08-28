@@ -17,8 +17,8 @@ extras we lean on day to day:
   index that links out to detail notes, recalled into every session.
 - **[Themes](#themes)** — the whole UI (banner, prompts, menus, Markdown)
   recolors, persisted in config.
-- **[Standing goals](#standing-goals)** — `/goal` pins an objective that's
-  re-stated to the model every turn.
+- **[Standing goals](#goals--autonomous-iteration)** — `/goal` pins an objective
+  that's re-stated to the model every turn.
 - Plus [OS/container Bash sandboxing](#sandboxing-the-bash-tool), local
   [web search & browsing](#web-search--browsing), [MCP](#mcp), and
   [skills](#skills).
@@ -343,6 +343,12 @@ apiKeyEnv = "MY_API_KEY"
 # OpenAI-compatible hosts) — otherwise long sessions can hit
 # "max_tokens must be at least 1, got -N" or "context length exceeded" 400s.
 # contextWindow = 128000
+
+# Optional: cap the tokens a single turn may generate. Defaults to the model's
+# real maximum (128000 on the 1M-context Claude models, 64000 on the 200k ones,
+# 8192 for models Klaudia doesn't recognise — including most OpenAI-compatible
+# ones). Set this when your provider's limit differs from that fallback.
+# maxTokens = 32000
 ```
 
 Create a commented starter config with `./klaudia --create-config=global` for
@@ -374,6 +380,23 @@ overlays it (project wins). Settings merge per field.
   required for long context requests"*, that's a billing/entitlement gate, not a
   transient throttle: retries won't help. Add usage credits, or reduce context
   (lower `contextWindow` so autocompaction triggers earlier, and `/compact`).
+
+### Logs & diagnostics
+
+The TUI paints inline and coordinates every write it makes; anything else
+writing to the terminal lands mid-repaint and tears the frame (a stray library
+log once spliced the input box's border into the status line). So while the
+program runs, Klaudia points the standard logger at `io.Discard`, and silences
+Chrome's CDP protocol chatter at the source. Both are recoverable when you need
+them:
+
+- `KLAUDIA_LOG` — file path for anything the process writes via the standard
+  `log` package (Klaudia's own and its dependencies').
+- `KLAUDIA_BROWSER_LOG` — file path for chromedp's browser/protocol log.
+
+Neither is on by default, and a path that can't be opened is dropped rather than
+reported — the noise is the thing being prevented. `/doctor` remains the way to
+check auth, tools and environment.
 
 ## Sandboxing the Bash tool
 
@@ -504,8 +527,8 @@ Review the staged changes carefully. $ARGUMENTS
 
 `/theme` recolors the whole UI — banner, prompts, menus, type-ahead, and
 Markdown rendering, not just code blocks. Built in: `dracula`, `gruvbox`,
-`tokyo-night`, `nord`, `catppuccin`. Persist a default in config (project
-`.klaudia` overrides `~/.klaudia`):
+`tokyo-night`, `nord`, `light`, `catppuccin`. Persist a default in config
+(project `.klaudia` overrides `~/.klaudia`):
 
 ```toml
 theme = "nord"
@@ -619,9 +642,10 @@ tools.
 - Bubble Tea TUI (not React + Ink).
 - A multi-provider abstraction (the reference was Anthropic-only): Anthropic
   Messages API + an OpenAI-compatible shim.
-- Local, default-on web search/browse via headless Chrome (the reference used
-  Anthropic's server-side `web_search`/`web_fetch`, still available on the
-  Anthropic provider).
+- Local web search/browse via headless Chrome, for providers that have no server
+  tools of their own (the reference was Anthropic-only, and used its server-side
+  `web_search`/`web_fetch` — which Klaudia still prefers on Claude models,
+  because their results come back cited).
 - Config and sessions live under `~/.klaudia` (`KLAUDIA_CONFIG_DIR`), not
   `~/.claude`.
 - New capabilities with no reference analogue: language-server code intelligence
