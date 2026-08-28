@@ -6,6 +6,15 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Changed
+- **chromedp 0.15.1 → 0.16.0, cdproto 2026-04-27 → 2026-08-04.** Routine
+  currency, prompted by the protocol-noise fix above: the four unhandled DOM
+  events are present in every version including master, so the upgrade neither
+  causes nor fixes them. Verified live on Chrome 152 — launch, navigate,
+  DOM-settle wait and HTML→Markdown snapshot unchanged on two real pages, and
+  chromedp logged nothing at all. The DuckDuckGo search parser returns no
+  results for a headless profile with `headedFallback` off, on 0.16.0 and
+  0.15.1 alike, so that is pre-existing and not from the bump.
+
 - **Server web tools bumped to the current GA versions.** `web_search` and
   `web_fetch` now use the `20260318` tool types (were `20250305` / `20250910`),
   pinned to `allowed_callers: ["direct"]`. Direct mode is deliberate: from
@@ -69,13 +78,21 @@ port mirrors (see `internal/version`).
   …)` on the tool result, where it is worth reading. `KLAUDIA_BROWSER_LOG=<path>`
   still captures the unfiltered stream for debugging chromedp itself.
 
-  The real fix belongs upstream (a case that ignores the events it doesn't
-  model); a fork pinned by a `replace` directive was rejected because
+  The real fix belongs upstream, and its shape is now known: `cdp.Node` has
+  `AdProvenance`, `AdoptedStyleSheets` and `AffectedByStartingStyles` fields, so
+  three of the four events can be stored on the node the way the maintainer's
+  own `ScrollableFlagUpdated` commit handled that one, and only
+  `topLayerElementsUpdated` (no parameters, so no node) needs ignoring. A fork
+  pinned by a `replace` directive was rejected because
   `go install pkg@version` ignores `replace`, so users installing from `@main`
-  would silently get unpatched chromedp. Measured, not assumed: chromedp v0.16.0
-  (the newest release) still has the same four gaps, and the unit tests build the
-  dropped messages from the real cdproto types through chromedp's own format
-  string, so they fail if either side changes. Not reproduced live: on Chrome
+  would silently get unpatched chromedp. Measured, not assumed: the gaps are in
+  chromedp master as well as v0.15.1 and v0.16.0, against both the old and the
+  current cdproto (checked by diffing cdproto's generated event types against
+  the switch), so this is not us sitting on a stale dependency; no upstream
+  issue or PR mentions any of the four (#1530, open since 2024, is the same
+  class for an event since handled); and the unit tests build the dropped
+  messages from the real cdproto types through chromedp's own format string, so
+  they fail if either side changes. Not reproduced live: on Chrome
   152 none of the four fired across four ad-heavy news sites, and a killed
   Chrome logs nothing at all (chromedp only logs a read error when the JSON is
   syntactically broken) — the classification is verified from chromedp's source
