@@ -6,6 +6,16 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **Queuing a message during a turn left a permanent hint smeared into the
+  transcript.** "Klaudia will read this before its next step" was written to
+  scrollback with appendLine — the immutable, terminal-owned layer — so a fresh
+  copy stuck in the history every time a message was queued, on top of the live
+  hint under the input that already showed the same state. Transient UI belongs
+  only in the composited live region, which clears itself; it no longer touches
+  scrollback. The live hint now also carries the reassurance the removed line
+  had — the message is read at the next step, so it is not lost while Klaudia
+  works.
+
 - **Interrupt-to-send during a command could strand the message.** Queue a
   message, press Enter again to interrupt and send it now, and — if a tool was
   running — the message sometimes vanished: the turn cancelled but no new turn

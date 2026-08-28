@@ -999,8 +999,12 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.steer.add(text)
 				m.input.Reset()
 				m.syncInputHeight()
-				m.appendLine(hintStyle.Render(
-					"  ⏎ Klaudia will read this before its next step — Enter again to interrupt now"))
+				// No scrollback line here. The queued state is transient — it
+				// ends the moment the message is sent — so it belongs only in
+				// the live region (renderQueuedHint), which is recomputed each
+				// frame and clears itself. Writing it to scrollback via
+				// appendLine baked a permanent, duplicate hint into the
+				// transcript every time a message was queued.
 				return m, nil
 			}
 			if m.turnCancel != nil {
@@ -2880,7 +2884,10 @@ func (m *Model) renderQueuedHint() string {
 		return hintStyle.Render("⏎ stopping after the current step…")
 	}
 	snippet := oneline(text, 60)
-	label := hintStyle.Render("⏎ queued: ")
+	// The label carries the reassurance that used to be a separate scrollback
+	// line: the message is not lost while Klaudia works — it is read at the next
+	// step without interrupting. Enter escalates to interrupting now.
+	label := hintStyle.Render("⏎ queued (read at next step): ")
 	body := userStyle.Render(snippet)
 	tail := "  " + hintStyle.Render("(Enter interrupts now · ↑ edits)")
 	if lines := strings.Count(text, "\n") + 1; lines > 1 {

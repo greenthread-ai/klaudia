@@ -147,3 +147,24 @@ func TestInterruptResendCarriesRunningJobsNote(t *testing.T) {
 		t.Errorf("a note appeared with no running jobs: %q", n)
 	}
 }
+
+// Queuing a message must not write anything to scrollback — the queued state is
+// transient and lives only in the composited live region. Writing it via
+// appendLine baked a permanent, duplicate hint into the transcript every time,
+// which is the "smearing" a real session showed.
+func TestQueuingWritesNothingToScrollback(t *testing.T) {
+	m := newTestModel()
+	m.state = stateRunning
+	m.turnCancel = func() {}
+
+	m.input.SetValue("a follow-up")
+	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if got := stripANSI(m.transcript.String()); strings.TrimSpace(got) != "" {
+		t.Errorf("queuing left a line in scrollback: %q", got)
+	}
+	// The live region is where the queued state shows, and it does.
+	if !strings.Contains(stripANSI(m.renderQueuedHint()), "a follow-up") {
+		t.Error("the queued message is not shown in the live region")
+	}
+}

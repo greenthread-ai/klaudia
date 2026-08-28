@@ -608,10 +608,13 @@ func TestRenderQueuedHintSurfacesMessage(t *testing.T) {
 	if !strings.Contains(out, "deploy to staging") {
 		t.Errorf("queued message body must be visible; got %q", out)
 	}
-	// Enter no longer "sends" it — the agent reads it mid-turn at its next
-	// step, so Enter's remaining job is the immediate escalation.
-	if !strings.Contains(out, "queued:") || !strings.Contains(out, "Enter interrupts now") {
-		t.Errorf("queued hint should keep the label and key hints; got %q", out)
+	// The hint carries both the reassurance (read at the next step, so the
+	// message is not lost while Klaudia works) and the escalation (Enter
+	// interrupts now). This replaces the old scrollback line that duplicated it.
+	for _, want := range []string{"queued", "read at next step", "Enter interrupts now"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("queued hint missing %q; got %q", want, out)
+		}
 	}
 }
 
