@@ -100,7 +100,7 @@ func newLaunchedWithOptions(parent context.Context, opts Options) (*Browser, err
 	}
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parent, flags...)
-	ctx, cancel := chromedp.NewContext(allocCtx)
+	ctx, cancel := chromedp.NewContext(allocCtx, logOptions()...)
 	if err := chromedp.Run(ctx); err != nil {
 		cancel()
 		allocCancel()
@@ -126,7 +126,7 @@ func newAttached(parent context.Context, opts Options) (*Browser, error) {
 		return nil, fmt.Errorf("attach mode requires remote URL")
 	}
 	allocCtx, allocCancel := chromedp.NewRemoteAllocator(parent, opts.RemoteURL)
-	ctx, cancel := chromedp.NewContext(allocCtx)
+	ctx, cancel := chromedp.NewContext(allocCtx, logOptions()...)
 	if err := chromedp.Run(ctx); err != nil {
 		cancel()
 		allocCancel()

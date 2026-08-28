@@ -43,6 +43,21 @@ port mirrors (see `internal/version`).
   table doesn't know. `turnnote` no longer points at a `--max-tokens` flag that
   never existed.
 
+- **Chrome's protocol noise tore the frame during a browser tool.** Fetching a
+  news page mid-turn printed `ERROR: unhandled node event
+  *dom.EventAdRelatedStateUpdated` over the spinner row and the input box
+  border, leaving the box's top edge spliced into the status line and the tool
+  result. Two causes, both fixed. chromedp defaults its browser logger to
+  `log.Printf`, so every message went to stderr — the same terminal the inline
+  renderer is painting, with nothing coordinating the two; we now pass
+  `WithLogf`/`WithErrorf` sinks that discard, or append to `KLAUDIA_BROWSER_LOG`
+  if it is set. The message itself is not actionable: `AdRelatedStateUpdated` is
+  a CDP DOM event newer than the type switch in chromedp's `target.go`, so any
+  ad-carrying page emits one per update and chromedp logs it as an error. As a
+  backstop for the next library to do the same, the TUI now points the standard
+  logger at `io.Discard` (or `KLAUDIA_LOG`) while the program runs, and restores
+  the previous writer on exit.
+
 - **A web search poisoned the next turn with a 400.** After a successful search
   (the Anthropic-backend `web_search` server tool), the very next message failed
   with `citations.0.web_search_result_location.url: Value should have at least 1

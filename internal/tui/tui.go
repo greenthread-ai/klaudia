@@ -3251,6 +3251,7 @@ func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	// tea.Println a no-op), and mouse capture sets DECSET 1002, which is
 	// precisely what stops click-drag from selecting text.
 	p := tea.NewProgram(New(ctx, run, history, sess))
+	defer quietStandardLogger()()
 	_, err := p.Run()
 	return err
 }
