@@ -117,9 +117,9 @@ func (e *Engine) RunWithTimeout(timeout time.Duration, fn func(context.Context) 
 	defer cancel()
 	if err := fn(ctx); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("browser operation exceeded %s timeout: %w", timeout, err)
+			return b.Diagnostics(fmt.Errorf("browser operation exceeded %s timeout: %w", timeout, err))
 		}
-		return err
+		return b.Diagnostics(err)
 	}
 	return nil
 }

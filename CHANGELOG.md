@@ -47,16 +47,43 @@ port mirrors (see `internal/version`).
   news page mid-turn printed `ERROR: unhandled node event
   *dom.EventAdRelatedStateUpdated` over the spinner row and the input box
   border, leaving the box's top edge spliced into the status line and the tool
-  result. Two causes, both fixed. chromedp defaults its browser logger to
-  `log.Printf`, so every message went to stderr — the same terminal the inline
-  renderer is painting, with nothing coordinating the two; we now pass
-  `WithLogf`/`WithErrorf` sinks that discard, or append to `KLAUDIA_BROWSER_LOG`
-  if it is set. The message itself is not actionable: `AdRelatedStateUpdated` is
-  a CDP DOM event newer than the type switch in chromedp's `target.go`, so any
-  ad-carrying page emits one per update and chromedp logs it as an error. As a
-  backstop for the next library to do the same, the TUI now points the standard
-  logger at `io.Discard` (or `KLAUDIA_LOG`) while the program runs, and restores
-  the previous writer on exit.
+  result. chromedp defaults its browser logger to `log.Printf`, so every message
+  went to stderr — the same terminal the inline renderer is painting, with
+  nothing coordinating the two.
+
+  The first fix pointed chromedp's `WithLogf`/`WithErrorf` at a sink that
+  discarded everything, which also threw away chromedp's real errors, so the
+  stream is now split by cause. The noisy class is structural, not a symptom:
+  chromedp routes DOM/Page events through a hand-written type switch
+  (`target.go`) while cdproto's event types are generated from the protocol, so
+  the switch permanently trails Chrome and everything newer than it is logged as
+  an error. Against the pinned cdproto that is four DOM events —
+  `AdRelatedStateUpdated`, `AdoptedStyleSheetsModified`,
+  `AffectedByStartingStylesFlagUpdated`, `TopLayerElementsUpdated` — all
+  carrying node state chromedp doesn't model, none actionable, and the first
+  emitted once per update by any ad-carrying page. Those are dropped, matched as
+  a class so the next protocol release doesn't reintroduce the tear. Everything
+  else chromedp says (JSON/unmarshal failures, malformed messages, missing
+  document root, executor bookkeeping) is kept in a small per-browser ring and
+  attached to the error of the next browser operation that fails — `(chrome:
+  …)` on the tool result, where it is worth reading. `KLAUDIA_BROWSER_LOG=<path>`
+  still captures the unfiltered stream for debugging chromedp itself.
+
+  The real fix belongs upstream (a case that ignores the events it doesn't
+  model); a fork pinned by a `replace` directive was rejected because
+  `go install pkg@version` ignores `replace`, so users installing from `@main`
+  would silently get unpatched chromedp. Measured, not assumed: chromedp v0.16.0
+  (the newest release) still has the same four gaps, and the unit tests build the
+  dropped messages from the real cdproto types through chromedp's own format
+  string, so they fail if either side changes. Not reproduced live: on Chrome
+  152 none of the four fired across four ad-heavy news sites, and a killed
+  Chrome logs nothing at all (chromedp only logs a read error when the JSON is
+  syntactically broken) — the classification is verified from chromedp's source
+  and unit tests rather than from a live capture.
+
+  As a backstop for the next library to reach for the standard logger, the TUI
+  points `log`'s output at `io.Discard` (or `KLAUDIA_LOG`) while the program
+  runs, and restores the previous writer, flags and prefix on exit.
 
 - **A web search poisoned the next turn with a 400.** After a successful search
   (the Anthropic-backend `web_search` server tool), the very next message failed

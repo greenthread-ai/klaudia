@@ -32,6 +32,7 @@ type Browser struct {
 	allocCancel context.CancelFunc
 	ctx         context.Context
 	cancel      context.CancelFunc
+	plog        *protocolLog
 }
 
 func defaultChromePath() string {
@@ -99,14 +100,15 @@ func newLaunchedWithOptions(parent context.Context, opts Options) (*Browser, err
 		flags = append(flags, chromedp.ExecPath(chromePath))
 	}
 
+	plog := newProtocolLog()
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parent, flags...)
-	ctx, cancel := chromedp.NewContext(allocCtx, logOptions()...)
+	ctx, cancel := chromedp.NewContext(allocCtx, plog.options()...)
 	if err := chromedp.Run(ctx); err != nil {
 		cancel()
 		allocCancel()
-		return nil, fmt.Errorf("launch chrome: %w", err)
+		return nil, plog.annotate(fmt.Errorf("launch chrome: %w", err))
 	}
-	return &Browser{allocCancel: allocCancel, ctx: ctx, cancel: cancel}, nil
+	return &Browser{allocCancel: allocCancel, ctx: ctx, cancel: cancel, plog: plog}, nil
 }
 
 func isProfileInUseError(err error) bool {
@@ -125,17 +127,27 @@ func newAttached(parent context.Context, opts Options) (*Browser, error) {
 	if opts.RemoteURL == "" {
 		return nil, fmt.Errorf("attach mode requires remote URL")
 	}
+	plog := newProtocolLog()
 	allocCtx, allocCancel := chromedp.NewRemoteAllocator(parent, opts.RemoteURL)
-	ctx, cancel := chromedp.NewContext(allocCtx, logOptions()...)
+	ctx, cancel := chromedp.NewContext(allocCtx, plog.options()...)
 	if err := chromedp.Run(ctx); err != nil {
 		cancel()
 		allocCancel()
-		return nil, fmt.Errorf("attach chrome at %s: %w", opts.RemoteURL, err)
+		return nil, plog.annotate(fmt.Errorf("attach chrome at %s: %w", opts.RemoteURL, err))
 	}
-	return &Browser{allocCancel: allocCancel, ctx: ctx, cancel: cancel}, nil
+	return &Browser{allocCancel: allocCancel, ctx: ctx, cancel: cancel, plog: plog}, nil
 }
 
 func (b *Browser) Ctx() context.Context { return b.ctx }
+
+// Diagnostics adds anything chromedp reported about this browser — minus the
+// unmodelled-event noise, see log.go — to a failed operation's error.
+func (b *Browser) Diagnostics(err error) error {
+	if b.plog == nil {
+		return err
+	}
+	return b.plog.annotate(err)
+}
 
 func (b *Browser) Close() {
 	if b.cancel != nil {

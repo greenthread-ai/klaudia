@@ -385,14 +385,23 @@ overlays it (project wins). Settings merge per field.
 
 The TUI paints inline and coordinates every write it makes; anything else
 writing to the terminal lands mid-repaint and tears the frame (a stray library
-log once spliced the input box's border into the status line). So while the
-program runs, Klaudia points the standard logger at `io.Discard`, and silences
-Chrome's CDP protocol chatter at the source. Both are recoverable when you need
-them:
+log once spliced the input box's border into the status line). Klaudia therefore
+keeps other writers off the terminal without going deaf:
+
+- Chrome's CDP chatter is split by cause. chromedp logs any DOM/Page event newer
+  than its own type switch as an error — structural, since that switch trails
+  the protocol, and noisy enough that an ad-carrying page emits one per update —
+  so that class is dropped. Everything else it reports is kept and attached to
+  the error of the next browser operation that fails, as `(chrome: …)`.
+- The standard logger is pointed at `io.Discard` while the program runs, as a
+  backstop for the next dependency that reaches for `log.Printf`.
+
+Two env vars recover the raw output when you're debugging:
 
 - `KLAUDIA_LOG` — file path for anything the process writes via the standard
   `log` package (Klaudia's own and its dependencies').
-- `KLAUDIA_BROWSER_LOG` — file path for chromedp's browser/protocol log.
+- `KLAUDIA_BROWSER_LOG` — file path for chromedp's browser/protocol log,
+  unfiltered, including the dropped events.
 
 Neither is on by default, and a path that can't be opened is dropped rather than
 reported — the noise is the thing being prevented. `/doctor` remains the way to
