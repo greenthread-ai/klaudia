@@ -105,27 +105,32 @@ func ContextWindow(model string, override int) (limit int, source string) {
 	return 0, ContextSourceUnknown
 }
 
-// DefaultMaxOutputTokens is the conservative per-response output cap used when
-// the model is unknown. It is deliberately low enough to be safe on any model.
+// DefaultMaxOutputTokens is the per-response output cap for an UNKNOWN model
+// (e.g. an OpenAI-compatible endpoint whose limit we can't look up). Kept
+// conservative so it is safe anywhere; set cfg.MaxTokens to raise it.
 const DefaultMaxOutputTokens = 8192
 
-// modelMaxOutputTokens is the offline default output cap per model. Values are
-// deliberate *under*-approximations of each model's real limit — high enough
-// that an ordinary document write no longer truncates at 8192 (the bug where a
-// half-written Write tool_use was dispatched with empty arguments), low enough
-// that the request can never be rejected for exceeding the model's cap. The
-// big Claude models all support at least 32000 output tokens; Haiku and unknown
-// models fall back to the conservative default.
+// modelMaxOutputTokens is each model's real maximum output tokens on the
+// synchronous Messages API (docs.claude.com model pages, verified 2026-08).
+// These are the true caps, not under-approximations: on Claude 4.5+ a request
+// whose input+max_tokens exceeds the context window is accepted and simply
+// stops with stop_reason model_context_window_exceeded, so requesting the full
+// cap can't 400. Every 1M-context model generates up to 128k; the 200k-context
+// models up to 64k. Keep this in sync with modelContextWindows.
 var modelMaxOutputTokens = map[string]int{
-	"claude-opus-5":              32000,
-	"claude-sonnet-5":            32000,
-	"claude-fable-5":             32000,
-	"claude-opus-4-8":            32000,
-	"claude-opus-4-7":            32000,
-	"claude-opus-4-6":            32000,
-	"claude-sonnet-4-6":          32000,
-	"claude-sonnet-4-5-20250929": 32000,
-	"claude-opus-4-5-20251101":   32000,
+	// 1M-context models → 128k output.
+	"claude-opus-5":     128000,
+	"claude-sonnet-5":   128000,
+	"claude-fable-5":    128000,
+	"claude-opus-4-8":   128000,
+	"claude-opus-4-7":   128000,
+	"claude-opus-4-6":   128000,
+	"claude-sonnet-4-6": 128000,
+	// 200k-context models → 64k output.
+	"claude-opus-4-5-20251101":   64000,
+	"claude-sonnet-4-5-20250929": 64000,
+	"claude-haiku-4-5":           64000,
+	"claude-haiku-4-5-20251001":  64000,
 }
 
 // MaxOutputTokens returns the default output-token cap for a model, resolving

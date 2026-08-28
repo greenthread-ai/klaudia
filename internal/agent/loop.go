@@ -599,7 +599,15 @@ func editedPaths(name string, raw []byte) []string {
 // empty input keyed on here. Only the final block qualifies, so a complete
 // tool_use earlier in the same turn still dispatches normally.
 func truncatedToolUseID(m anthropic.BetaMessage) (string, bool) {
-	if m.StopReason != "max_tokens" || len(m.Content) == 0 {
+	// Both stop reasons cut generation off mid-block: max_tokens is the output
+	// cap, model_context_window_exceeded is the context limit (Claude 4.5+
+	// accepts input+max_tokens>context and stops this way rather than 400ing).
+	if len(m.Content) == 0 {
+		return "", false
+	}
+	switch m.StopReason {
+	case "max_tokens", "model_context_window_exceeded":
+	default:
 		return "", false
 	}
 	last := m.Content[len(m.Content)-1]

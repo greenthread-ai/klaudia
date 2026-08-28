@@ -13,13 +13,19 @@ port mirrors (see `internal/version`).
   SDK from crashing, but the loop then dispatched that `{}` as a real call —
   `Write` with no `file_path`/`content` — surfacing "missing properties
   'file_path', 'content'" and looping as the model retried the same oversized
-  write. Two fixes: (1) a tool_use truncated by the output limit is no longer
-  dispatched; it returns an actionable result telling the model its output was
-  cut off, nothing ran, and to write less or continue. (2) The output cap is now
-  model-aware (`api.MaxOutputTokens`): capable Claude models get 32000 instead of
-  the flat 8192, a safe under-approximation of each model's real limit, so an
-  ordinary document write no longer truncates. `turnnote` no longer points at a
-  `--max-tokens` flag that never existed.
+  write. Fixes: (1) a tool_use truncated by the output limit — `max_tokens` OR
+  `model_context_window_exceeded` (Claude 4.5+ accepts input+max_tokens>context
+  and stops this way instead of 400ing) — is no longer dispatched; it returns an
+  actionable result telling the model its output was cut off, nothing ran, and to
+  write less or continue. (2) The output cap is now the model's real maximum
+  (`api.MaxOutputTokens`, doc-verified): 128000 for the 1M-context models
+  (Opus 5/4.8/4.7/4.6, Sonnet 5/4.6, Fable 5), 64000 for the 200k-context models
+  (Haiku 4.5, Opus 4.5, Sonnet 4.5), 8192 only for unknown/OpenAI-compatible
+  models. Requesting the full cap is safe — on Claude 4.5+ an over-long request
+  is accepted and stops gracefully rather than erroring. (3) A `maxTokens` config
+  key overrides it (mirrors `contextWindow`), for a provider whose limit the
+  table doesn't know. `turnnote` no longer points at a `--max-tokens` flag that
+  never existed.
 
 - **A web search poisoned the next turn with a 400.** After a successful search
   (the Anthropic-backend `web_search` server tool), the very next message failed

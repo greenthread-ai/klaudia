@@ -86,6 +86,21 @@ func TestTruncatedGuardSparesCompleteSiblingToolUse(t *testing.T) {
 	}
 }
 
+// A tool_use can also be cut off by the context limit, not just the output cap.
+// On Claude 4.5+ that surfaces as stop_reason model_context_window_exceeded with
+// the trailing tool_use truncated — the guard must catch it too.
+func TestContextWindowExceededTruncationIsCaught(t *testing.T) {
+	raw := `{"role":"assistant","stop_reason":"model_context_window_exceeded",
+		"content":[{"type":"tool_use","id":"tu9","name":"Write","input":{}}]}`
+	var m anthropic.BetaMessage
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		t.Fatal(err)
+	}
+	if id, ok := truncatedToolUseID(m); !ok || id != "tu9" {
+		t.Errorf("context-window truncation not caught: id=%q ok=%v", id, ok)
+	}
+}
+
 func TestIsEmptyToolInput(t *testing.T) {
 	for _, in := range []string{"", "{}", " {} ", "null"} {
 		if !isEmptyToolInput([]byte(in)) {

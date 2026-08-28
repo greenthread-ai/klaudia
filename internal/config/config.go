@@ -40,6 +40,12 @@ type Config struct {
 	// Set this when a provider rejects requests with negative max_tokens or
 	// "context length exceeded" errors deep into a session.
 	ContextWindow int `toml:"contextWindow,omitempty"`
+	// MaxTokens is the per-response output-token cap. 0 (unset) uses a
+	// model-aware default (api.MaxOutputTokens): capable Claude models get their
+	// real limit, unknown/OpenAI-compatible models a safe floor. Set this to
+	// raise or lower the cap explicitly — e.g. an OpenAI-compatible model whose
+	// output limit the table doesn't know.
+	MaxTokens int `toml:"maxTokens,omitempty"`
 	// APIKey is the bearer token. Prefer APIKeyEnv to keep secrets out of files.
 	APIKey string `toml:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable holding the key.
@@ -260,6 +266,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.ContextWindow != 0 {
 		dst.ContextWindow = src.ContextWindow
+	}
+	if src.MaxTokens != 0 {
+		dst.MaxTokens = src.MaxTokens
 	}
 	if src.Sandbox.Mode != "" {
 		dst.Sandbox.Mode = src.Sandbox.Mode
