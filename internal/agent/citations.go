@@ -2,53 +2,27 @@ package agent
 
 import "github.com/anthropics/anthropic-sdk-go"
 
-// A turn that used web search records citations on its text blocks, and the SDK
-// loses part of them on the way back to a request param.
+// Web-search citations recorded by an older build can be structurally broken,
+// and the API rejects the whole request when they are.
 //
-// BetaCitationsWebSearchResultLocation.toParamUnion (SDK v1.45.0,
-// betamessageutil.go) copies Title and CitedText but drops URL and
-// EncryptedIndex — yet the API marks both required on input. So the moment that
-// turn is replayed (the very next request, or any resume) the request fails with
+// SDK versions before v1.68.0 lost part of a web-search citation on the way
+// from response to request param: BetaCitationsWebSearchResultLocation.
+// toParamUnion copied the title and cited text but dropped the url and
+// encrypted_index, both of which the API marks required on input. A turn
+// recorded that way (via assistant.ToParam()) carried an empty url, so the
+// moment it was replayed the request failed with
 //
 //	messages.N.content.M.text.citations.0.web_search_result_location.url:
 //	Value should have at least 1 item after validation, not 0
 //
-// and the conversation is stuck: every follow-up re-sends the same poisoned
-// history. This bit a real session immediately after a successful web search.
-//
-// toParamRepaired closes the gap at the source — it copies the two dropped
-// fields back from the response, which still carries them, before they are lost.
-// repairEmptyWebSearchCitations is the matching sanitize step for history that
-// was already recorded (or built in memory) before this fix: at send time the
-// URL is gone for good, so the only sound repair is to drop the broken citation,
-// leaving the text it annotated intact.
+// and every follow-up re-sent the same poisoned history. The SDK bug is fixed
+// as of v1.68.0 (this module is on it), so freshly recorded turns are sound.
+// What remains is transcripts written by the old build: their url is gone for
+// good, so the only repair at send time is to drop the broken citation, leaving
+// the text it annotated intact. sanitizeMessages runs this on every request.
 
-// toParamRepaired is ToParam with the web-search citation fields the SDK drops
-// restored from the response. Use it everywhere assistant.ToParam() would feed
-// a request or the transcript.
-func toParamRepaired(m anthropic.BetaMessage) anthropic.BetaMessageParam {
-	p := m.ToParam()
-	for i := range p.Content {
-		tb := p.Content[i].OfText
-		if tb == nil || len(tb.Citations) == 0 || i >= len(m.Content) {
-			continue
-		}
-		src := m.Content[i].AsText().Citations
-		for j := range tb.Citations {
-			c := tb.Citations[j].OfWebSearchResultLocation
-			if c == nil || c.URL != "" || j >= len(src) {
-				continue
-			}
-			c.URL = src[j].URL
-			c.EncryptedIndex = src[j].EncryptedIndex
-		}
-	}
-	return p
-}
-
-// repairEmptyWebSearchCitations drops any web-search citation whose URL did not
-// survive into the param (the SDK bug above), since the API rejects it and the
-// value cannot be recovered at send time. Returns the repaired content and
+// repairEmptyWebSearchCitations drops any web-search citation whose URL is empty
+// (unrecoverable), keeping the annotated text. Returns the repaired content and
 // whether anything changed; originals are never mutated.
 func repairEmptyWebSearchCitations(content []anthropic.BetaContentBlockParamUnion) ([]anthropic.BetaContentBlockParamUnion, bool) {
 	changed := false

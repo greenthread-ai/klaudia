@@ -6,16 +6,18 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
-- **A web search poisoned the next turn with a 400.** After a successful search,
-  the very next message failed with `citations.0.web_search_result_location.url:
-  Value should have at least 1 item`, and every follow-up re-sent the same bad
-  history. Cause: an SDK bug (v1.45.0) — converting a web-search citation to its
-  request form copies the title and cited text but drops the `url` and
-  `encrypted_index`, both of which the API then requires back. Assistant turns
-  are now converted with those two fields restored from the response, and a
-  sanitize step drops any still-empty web-search citation in history recorded
-  before the fix (the value can't be recovered at send time; the annotated text
-  is kept).
+- **A web search poisoned the next turn with a 400.** After a successful search
+  (the Anthropic-backend `web_search` server tool), the very next message failed
+  with `citations.0.web_search_result_location.url: Value should have at least 1
+  item`, and every follow-up re-sent the same bad history. Root cause was an SDK
+  bug: before v1.68.0, converting a web-search citation to its request form
+  copied the title and cited text but dropped the `url` and `encrypted_index`,
+  both of which the API then requires back — so `ToParam()` produced an empty
+  `url`. Fixed by upgrading the Anthropic SDK to v1.68.0, where the conversion
+  copies both fields. A sanitize step still drops any empty-`url` web-search
+  citation found in a transcript recorded by an older build (the value can't be
+  recovered at send time; the annotated text is kept), so resuming an old
+  session no longer 400s.
 
 - **Typing a line that wrapped grew the input box but hid the text above it.**
   A soft-wrapping line made the box taller, yet instead of revealing the new
@@ -66,6 +68,13 @@ port mirrors (see `internal/version`).
   model's call.
 
 ### Changed
+- **Dependencies:** Anthropic SDK `v1.45.0 → v1.68.0` (fixes the web-search
+  citation bug above; `go build`/`vet`/`test` clean, no source changes needed)
+  and `invopop/jsonschema v0.13.0 → v0.14.0`. `govulncheck ./...` reports no
+  vulnerabilities. The TUI's `charmbracelet/bubbles`/`bubbletea` are deliberately
+  held at their current versions — the input layer depends on exact textarea
+  internals — and get their own review before bumping.
+
 - **Auto-resume skips a session that ended in a model refusal.** A refusal is
   tripped by the accumulated context, not the last message, so reviving that
   conversation makes the very next prompt — even an unrelated one — refuse too.

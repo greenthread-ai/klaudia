@@ -23,31 +23,25 @@ const webSearchResponseJSON = `{
   }]
 }`
 
-// toParamRepaired must keep the url and encrypted_index that the SDK's plain
-// ToParam drops (v1.45.0). Without it the very next request 400s on
-// citations.0.web_search_result_location.url.
-func TestToParamRepairedKeepsWebSearchCitationURL(t *testing.T) {
+// Guard against the SDK regressing to the pre-v1.68.0 behaviour: ToParam must
+// preserve a web-search citation's url and encrypted_index. If this fails after
+// a dependency change, the SDK dropped them again and the send-time repair (which
+// can only DROP the citation, not restore it) is the fallback — but new turns
+// would lose their citations, so we want to know.
+func TestSDKToParamPreservesWebSearchCitationURL(t *testing.T) {
 	var m anthropic.BetaMessage
 	if err := json.Unmarshal([]byte(webSearchResponseJSON), &m); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
-
-	// Guard: confirm the SDK bug is still present, so this test stays meaningful.
-	lossy := m.ToParam()
-	if c := lossy.Content[0].OfText.Citations[0].OfWebSearchResultLocation; c != nil && c.URL != "" {
-		t.Skip("SDK ToParam no longer drops the citation url; repair may be unnecessary")
+	c := m.ToParam().Content[0].OfText.Citations[0].OfWebSearchResultLocation
+	if c == nil {
+		t.Fatal("citation missing after ToParam")
 	}
-
-	p := toParamRepaired(m)
-	cit := p.Content[0].OfText.Citations[0].OfWebSearchResultLocation
-	if cit == nil {
-		t.Fatal("citation missing after repair")
+	if c.URL != "https://example.com/dolly" {
+		t.Errorf("url = %q — SDK dropped it again (regressed below v1.68.0)", c.URL)
 	}
-	if cit.URL != "https://example.com/dolly" {
-		t.Errorf("url = %q, want the restored value", cit.URL)
-	}
-	if cit.EncryptedIndex != "enc-abc-123" {
-		t.Errorf("encrypted_index = %q, want the restored value", cit.EncryptedIndex)
+	if c.EncryptedIndex != "enc-abc-123" {
+		t.Errorf("encrypted_index = %q — SDK dropped it again", c.EncryptedIndex)
 	}
 }
 

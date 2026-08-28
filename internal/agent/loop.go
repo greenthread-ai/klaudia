@@ -268,7 +268,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// has its tool_result paired up — see the record calls below. Persisting
 		// here, then dying mid-dispatch (Ctrl+C / SIGTERM / OOM), would leak an
 		// orphan tool_use to disk and poison the next resume.
-		messages = append(messages, toParamRepaired(assistant))
+		messages = append(messages, assistant.ToParam())
 
 		// pause_turn: the API paused a long-running server-side tool (e.g. web
 		// search). Re-send the accumulated turn to let it continue. The
@@ -879,10 +879,8 @@ func record(r Recorder, role string, msg any) {
 	// alternative: after streaming accumulation the SDK sets it to this same
 	// leaky marshal, so it is corrupt too. Params (user and tool_result
 	// messages) already marshal correctly and pass straight through.
-	// toParamRepaired also patches the web-search citation fields ToParam drops
-	// (see citations.go).
 	if m, ok := msg.(anthropic.BetaMessage); ok {
-		msg = toParamRepaired(m)
+		msg = m.ToParam()
 	}
 	if b, err := json.Marshal(msg); err == nil {
 		_ = r.Record(role, b)
