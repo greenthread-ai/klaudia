@@ -28,6 +28,20 @@ port mirrors (see `internal/version`).
   sub-agent on a 1M-token model summarised its history at a fifth of the room it
   had; it now inherits the model's real window.
 
+- **The unpaired-server-tool repair broke valid paused searches (regression).**
+  The fix below repaired a `server_tool_use` with no result, but checked each
+  message on its own. A paused server tool (`stop_reason: pause_turn`) records
+  its call in one assistant message and its result in the next, and the two are
+  only a visible pair *after* same-role messages are merged — which happened
+  later in the pipeline. So a perfectly good paused search was read as an orphan,
+  its call dropped, and its result left stranded, trading one 400 for its mirror:
+  ``unexpected `tool_use_id` found in `web_search_tool_result` blocks … must have
+  a corresponding `server_tool_use` block before it``. The merge now runs first,
+  and the pairing check is order-aware and symmetric — it drops a call with no
+  result *and* a result with no preceding call, either of which the API rejects.
+  Verified against the transcript that hit this: 5 unpaired blocks before, none
+  after.
+
 - **Interrupting a turn mid-web-search could brick the session.** Every
   subsequent message failed with ``messages.N: `web_search` tool use with id
   `srvtoolu_…` was found without a corresponding `web_search_tool_result`

@@ -31,16 +31,24 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 	if !needsSanitize(messages) {
 		return messages
 	}
-	out := append([]anthropic.BetaMessageParam(nil), messages...)
+	// (0) collapse consecutive same-role messages FIRST. The API requires
+	// user/assistant alternation, so this has to happen regardless — but the
+	// order matters for what follows. A paused server tool (stop_reason
+	// pause_turn) puts its server_tool_use in one assistant message and the
+	// result in the next, and only after merging are the two in the same message
+	// where the pairing repair below can see them as the matched pair they are.
+	// Running that repair first read the half as an orphan, dropped it, and left
+	// the result unpaired — trading one 400 for its mirror image.
+	out := mergeSameRole(messages)
 
-	// (0) drop server-tool results that would be rejected on send. Done first,
-	// so a message left empty by the drop is caught by the empty-content repair
-	// below rather than slipping through.
+	// (1) drop server-tool blocks that would be rejected on send. Done before
+	// the empty-content repair, so a message left empty by the drop is caught
+	// there rather than slipping through.
 	for i := range out {
 		if repaired, changed := repairServerToolResults(out[i].Content); changed {
 			out[i].Content = repaired
 		}
-		// (0b) drop web-search citations whose URL was lost to the SDK bug
+		// (1b) drop web-search citations whose URL was lost to the SDK bug
 		// (citations.go) in history recorded before the fix — unrecoverable at
 		// send time, and the API rejects the empty url.
 		if repaired, changed := repairEmptyWebSearchCitations(out[i].Content); changed {
@@ -48,7 +56,7 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 		}
 	}
 
-	// (1) fill empty content
+	// (2) fill empty content
 	for i, m := range out {
 		if len(m.Content) == 0 {
 			out[i].Content = []anthropic.BetaContentBlockParamUnion{
@@ -57,7 +65,7 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 		}
 	}
 
-	// (2) pair every tool_use with a tool_result in the next message
+	// (3) pair every client tool_use with a tool_result in the next message
 	for i := 0; i < len(out); i++ {
 		if out[i].Role != anthropic.BetaMessageParamRoleAssistant {
 			continue
@@ -89,9 +97,17 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 		}
 	}
 
-	// (3) collapse consecutive same-role messages (alternation requirement)
-	merged := make([]anthropic.BetaMessageParam, 0, len(out))
-	for _, m := range out {
+	// (4) merge again: step (3) can insert a user message next to an existing
+	// one. Idempotent, so it is cheap insurance rather than a second policy.
+	return mergeSameRole(out)
+}
+
+// mergeSameRole collapses runs of consecutive same-role messages into one,
+// concatenating their content in order. The API requires user/assistant
+// alternation. The input is never mutated.
+func mergeSameRole(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
+	merged := make([]anthropic.BetaMessageParam, 0, len(messages))
+	for _, m := range messages {
 		if n := len(merged); n > 0 && merged[n-1].Role == m.Role {
 			combined := make([]anthropic.BetaContentBlockParamUnion, 0, len(merged[n-1].Content)+len(m.Content))
 			combined = append(combined, merged[n-1].Content...)

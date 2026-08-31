@@ -32,49 +32,71 @@ var webServerToolNames = map[anthropic.BetaServerToolUseBlockParamName]bool{
 	anthropic.BetaServerToolUseBlockParamNameWebFetch:  true,
 }
 
-// orphanServerToolUseIDs returns the ids of web_search / web_fetch
-// server_tool_use blocks with no result block anywhere in the same message.
+// serverToolResultID returns the tool_use_id a web_search / web_fetch result
+// block answers, and whether the block is one.
+func serverToolResultID(b anthropic.BetaContentBlockParamUnion) (string, bool) {
+	if r := b.OfWebSearchToolResult; r != nil {
+		return r.ToolUseID, true
+	}
+	if r := b.OfWebFetchToolResult; r != nil {
+		return r.ToolUseID, true
+	}
+	return "", false
+}
+
+// unpairedServerToolIDs returns the tool_use_ids whose server-tool blocks do not
+// form a valid pair within one message, in either direction.
 //
 // Unlike a client tool_use — answered by a tool_result in the NEXT (user)
 // message — a server tool's result is appended to the same assistant message by
-// the API. So when a turn is cancelled while a search is in flight, the
-// half-built assistant message can be recorded carrying the server_tool_use
-// alone. Sent back, the API rejects the whole request with
+// the API, and it must come *after* its server_tool_use. Both halves can go
+// missing, and the API has a distinct 400 for each:
 //
-//	messages.N: `web_search` tool use with id `srvtoolu_…` was found without a
+//	`web_search` tool use with id `srvtoolu_…` was found without a
 //	corresponding `web_search_tool_result` block
 //
-// and, because the bad message stays in history, every following turn fails the
-// same way — a session that cannot be resumed or continued. Observed after
-// interrupting a sub-agent mid-search.
-func orphanServerToolUseIDs(content []anthropic.BetaContentBlockParamUnion) map[string]bool {
-	var answered map[string]bool
-	mark := func(id string) {
-		if answered == nil {
-			answered = map[string]bool{}
-		}
-		answered[id] = true
-	}
+//	unexpected `tool_use_id` found in `web_search_tool_result` blocks:
+//	srvtoolu_…. Each `web_search_tool_result` block must have a corresponding
+//	`server_tool_use` block before it
+//
+// Either way the bad message stays in history and every following turn fails the
+// same way, so the session can be neither continued nor resumed. The first shape
+// comes from a turn cancelled with a search in flight; the second from a result
+// whose call was lost.
+//
+// This runs on merged messages (sanitize.go collapses same-role runs first):
+// a paused search splits its call and result across two assistant messages, and
+// only after merging are they visibly the pair they are.
+func unpairedServerToolIDs(content []anthropic.BetaContentBlockParamUnion) map[string]bool {
+	answered := map[string]bool{}
 	for _, b := range content {
-		if r := b.OfWebSearchToolResult; r != nil {
-			mark(r.ToolUseID)
-		}
-		if r := b.OfWebFetchToolResult; r != nil {
-			mark(r.ToolUseID)
+		if id, ok := serverToolResultID(b); ok {
+			answered[id] = true
 		}
 	}
-	var orphans map[string]bool
+	var unpaired map[string]bool
+	drop := func(id string) {
+		if unpaired == nil {
+			unpaired = map[string]bool{}
+		}
+		unpaired[id] = true
+	}
+	called := map[string]bool{}
 	for _, b := range content {
-		su := b.OfServerToolUse
-		if su == nil || !webServerToolNames[su.Name] || answered[su.ID] {
+		if su := b.OfServerToolUse; su != nil && webServerToolNames[su.Name] {
+			called[su.ID] = true
+			if !answered[su.ID] { // a call whose result never arrived
+				drop(su.ID)
+			}
 			continue
 		}
-		if orphans == nil {
-			orphans = map[string]bool{}
+		// A result must be preceded by its call, so `called` is consulted as it
+		// stands here rather than over the whole message.
+		if id, ok := serverToolResultID(b); ok && !called[id] {
+			drop(id)
 		}
-		orphans[su.ID] = true
 	}
-	return orphans
+	return unpaired
 }
 
 // repairServerToolResults replaces any web_search / web_fetch result block whose
@@ -88,9 +110,9 @@ func repairServerToolResults(content []anthropic.BetaContentBlockParamUnion) ([]
 			drop[id] = true
 		}
 	}
-	// A server_tool_use with no result block at all is the other half of the
-	// problem: the API rejects it just as hard as a corrupt result.
-	for id := range orphanServerToolUseIDs(content) {
+	// A server-tool block with no partner is the other half of the problem: the
+	// API rejects it just as hard as a corrupt result, in either direction.
+	for id := range unpairedServerToolIDs(content) {
 		drop[id] = true
 	}
 	if len(drop) == 0 {
@@ -106,7 +128,9 @@ func repairServerToolResults(content []anthropic.BetaContentBlockParamUnion) ([]
 		}
 	}
 	for _, b := range content {
-		if id, ok := brokenResultToolUseID(b); ok && drop[id] {
+		// Any result block for a doomed id, not just a corrupt one: a perfectly
+		// well-formed result whose call is missing is still rejected on send.
+		if id, ok := serverToolResultID(b); ok && drop[id] {
 			note()
 			continue
 		}
@@ -154,9 +178,9 @@ func hasBrokenServerToolResult(messages []anthropic.BetaMessageParam) bool {
 				return true
 			}
 		}
-		// An unanswered server_tool_use counts too — without this the fast path
+		// An unpaired server-tool block counts too — without this the fast path
 		// short-circuits and the repair below never runs.
-		if len(orphanServerToolUseIDs(m.Content)) > 0 {
+		if len(unpairedServerToolIDs(m.Content)) > 0 {
 			return true
 		}
 	}

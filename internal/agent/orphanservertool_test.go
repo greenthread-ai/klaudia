@@ -50,7 +50,7 @@ func TestSanitizeDropsOrphanServerToolUse(t *testing.T) {
 	out := sanitizeMessages(msgs)
 
 	for _, m := range out {
-		if len(orphanServerToolUseIDs(m.Content)) > 0 {
+		if len(unpairedServerToolIDs(m.Content)) > 0 {
 			t.Error("orphan server_tool_use survived sanitize; the request would still 400")
 		}
 		for _, b := range m.Content {
@@ -103,7 +103,7 @@ func TestOrphanRepairIgnoresOtherServerTools(t *testing.T) {
 		anthropic.NewBetaServerToolUseBlock("srvtoolu_code", map[string]any{"code": "1+1"},
 			anthropic.BetaServerToolUseBlockParamNameCodeExecution),
 	}
-	if len(orphanServerToolUseIDs(content)) != 0 {
+	if len(unpairedServerToolIDs(content)) != 0 {
 		t.Error("a non-web server tool was wrongly treated as an orphan")
 	}
 }
@@ -114,8 +114,90 @@ func TestOrphanRepairIsPerToolUseID(t *testing.T) {
 		webSearchUse("done"), webSearchResult("done"),
 		webSearchUse("cut_off"),
 	}
-	orphans := orphanServerToolUseIDs(content)
+	orphans := unpairedServerToolIDs(content)
 	if len(orphans) != 1 || !orphans["cut_off"] {
 		t.Errorf("orphans = %v, want only cut_off", orphans)
+	}
+}
+
+// The regression this file's first fix caused, found in a real session.
+//
+// A paused server tool (stop_reason pause_turn) puts its server_tool_use in one
+// assistant message and its result in the NEXT one. Sanitize merges same-role
+// runs, so together they are a valid pair — but only after the merge. Repairing
+// before it read the first half as an orphan, dropped it, and left the result
+// with no preceding call, which the API rejects just as hard:
+//
+//	unexpected `tool_use_id` found in `web_search_tool_result` blocks: … Each
+//	`web_search_tool_result` block must have a corresponding `server_tool_use`
+//	block before it
+//
+// The pair must survive intact.
+func TestSanitizeKeepsAPairSplitAcrossPauseTurnMessages(t *testing.T) {
+	const id = "srvtoolu_01AHPyWiFdHX2DGhPwEjctdo"
+	msgs := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("research this")),
+		// pause_turn: the call, recorded before its result existed.
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("Searching."), webSearchUse(id),
+		}},
+		// the continuation, carrying the result for that same call
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			webSearchResult(id), anthropic.NewBetaTextBlock("Here's what I found."),
+		}},
+	}
+
+	out := sanitizeMessages(msgs)
+	for _, m := range out {
+		if bad := unpairedServerToolIDs(m.Content); len(bad) > 0 {
+			t.Fatalf("sanitize broke a valid pause_turn pair: %v", bad)
+		}
+	}
+	var sawCall, sawResult bool
+	for _, m := range out {
+		for _, b := range m.Content {
+			if su := b.OfServerToolUse; su != nil && su.ID == id {
+				sawCall = true
+			}
+			if rid, ok := serverToolResultID(b); ok && rid == id {
+				sawResult = true
+			}
+		}
+	}
+	if !sawCall || !sawResult {
+		t.Errorf("the pair did not survive: call=%v result=%v", sawCall, sawResult)
+	}
+}
+
+// The mirror shape: a result whose call is gone. Dropping it is the only repair
+// available — the call cannot be invented — and it must not be left to 400.
+func TestSanitizeDropsResultWithNoCall(t *testing.T) {
+	msgs := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("news?")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			webSearchResult("srvtoolu_lost"), anthropic.NewBetaTextBlock("Based on that…"),
+		}},
+	}
+	if !needsSanitize(msgs) {
+		t.Fatal("needsSanitize missed a result with no call")
+	}
+	out := sanitizeMessages(msgs)
+	for _, m := range out {
+		for _, b := range m.Content {
+			if _, ok := serverToolResultID(b); ok {
+				t.Error("unpaired result survived; the request would still 400")
+			}
+		}
+	}
+}
+
+// Ordering counts: the call must come BEFORE its result. A result that precedes
+// its call is rejected, so the pair is dropped rather than reordered.
+func TestResultBeforeItsCallIsUnpaired(t *testing.T) {
+	content := []anthropic.BetaContentBlockParamUnion{
+		webSearchResult("backwards"), webSearchUse("backwards"),
+	}
+	if bad := unpairedServerToolIDs(content); !bad["backwards"] {
+		t.Errorf("a result preceding its call was accepted: %v", bad)
 	}
 }
