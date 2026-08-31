@@ -274,6 +274,12 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// pause_turn: the API paused a long-running server-side tool (e.g. web
 		// search). Re-send the accumulated turn to let it continue. The
 		// assistant has no local tool_use to pair, so record it now.
+		//
+		// It may still carry a server_tool_use whose result hasn't arrived — the
+		// paused search itself. That is valid to send back mid-flight, but if the
+		// turn is then interrupted, the transcript keeps the unpaired block and
+		// every later request 400s on it. sanitizeMessages repairs that shape on
+		// the way out (servertool.go, orphanServerToolUseIDs).
 		if assistant.StopReason == "pause_turn" {
 			record(opts.Recorder, "assistant", assistant)
 			continue

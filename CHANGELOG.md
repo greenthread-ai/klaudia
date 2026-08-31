@@ -5,6 +5,23 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+- **Interrupting a turn mid-web-search could brick the session.** Every
+  subsequent message failed with ``messages.N: `web_search` tool use with id
+  `srvtoolu_…` was found without a corresponding `web_search_tool_result`
+  block``, and because the bad message stayed in history the session could be
+  neither continued nor resumed. Unlike a client `tool_use` — answered by a
+  `tool_result` in the *next* message, a case the sanitizer already repaired — a
+  server tool's result belongs to the *same* assistant message, so an unpaired
+  `server_tool_use` slipped through untouched. It arises whenever a turn is cut
+  off with a search in flight, including from the `pause_turn` continuation the
+  API uses for long searches, which records the paused turn before its result
+  exists. The sanitizer now drops an unanswered `web_search`/`web_fetch`
+  `server_tool_use` on the way out, leaving a note so the model knows the search
+  was lost rather than having it vanish silently. Completed searches, and server
+  tools this package doesn't model, are left untouched. Repairs already-poisoned
+  transcripts on the next send, so an affected session recovers by itself.
+
 ### Changed
 - **chromedp 0.15.1 → 0.16.0, cdproto 2026-04-27 → 2026-08-04.** Routine
   currency, prompted by the protocol-noise fix above: the four unhandled DOM
