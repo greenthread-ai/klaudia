@@ -72,7 +72,7 @@ func LoadConfig(dir string) (Config, error) {
 			return cfg, err
 		}
 		var c Config
-		if err := json.Unmarshal(data, &c); err != nil {
+		if err := json.Unmarshal(stripJSONComments(data), &c); err != nil {
 			return cfg, fmt.Errorf("%s: %w", filepath.Base(p), err)
 		}
 		for name, sc := range c.MCPServers {

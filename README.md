@@ -444,7 +444,9 @@ remain available when using the Anthropic provider.
 
 Model Context Protocol servers from `.mcp.json` (project `.klaudia/.mcp.json`
 overrides). A server is **stdio** (`command` + `args`) or **HTTP** (`url`, with
-`type:"sse"` for the legacy SSE transport):
+`type:"sse"` for the legacy SSE transport). `//` and `/* */` comments are
+allowed; a file that still doesn't parse is reported rather than silently
+loading nothing:
 
 ```jsonc
 { "mcpServers": {

@@ -6,6 +6,23 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **A `.mcp.json` with comments loaded no servers, and said nothing.** The file
+  is read with `encoding/json`, which rejects `//` and `/* */` — and this
+  README documents `.mcp.json` *with* comments in two places, so the
+  documented example was the broken case. Worse, `LoadConfig`'s error was
+  discarded at the call site (`mcpCfg, _ := mcp.LoadConfig(cwd)`), while
+  *connection* errors two lines below were reported. A stray comment therefore
+  produced a session with no MCP tools, no warning, and a model that
+  confidently reported the server was down — which is exactly how it was
+  found, wiring a stub ledger server into a new project.
+
+  Comments are now stripped before parsing (outside strings, so a
+  `"https://…"` URL keeps its slashes), and a config that still does not parse
+  is reported as `warning: mcp config: …`. Measured against a stub MCP server
+  that logs every JSON-RPC request: 0 requests before the fix with a commented
+  config, 3 after. Comment bytes are replaced with spaces rather than removed
+  so that a parse error's offset still points at the right line.
+
 - **A sub-agent showed nothing at all while it worked.** A twenty-minute
   research run and a hang were indistinguishable: one `⚙ Agent` line, then a
   spinner, then silence. The cause was structural rather than cosmetic — the
