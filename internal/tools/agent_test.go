@@ -9,10 +9,14 @@ import (
 type fakeSpawner struct {
 	gotType, gotPrompt string
 	result             string
+	gotProgress        func(string) // captured so a test can assert it was forwarded
 }
 
-func (f *fakeSpawner) Spawn(_ context.Context, subagentType, prompt string) (string, error) {
-	f.gotType, f.gotPrompt = subagentType, prompt
+func (f *fakeSpawner) Spawn(_ context.Context, subagentType, prompt string, progress func(string)) (string, error) {
+	f.gotType, f.gotPrompt, f.gotProgress = subagentType, prompt, progress
+	if progress != nil {
+		progress("Read main.go") // a child tool call, as the real spawner relays
+	}
 	return f.result, nil
 }
 

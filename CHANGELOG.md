@@ -6,6 +6,28 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **A sub-agent showed nothing at all while it worked.** A twenty-minute
+  research run and a hang were indistinguishable: one `⚙ Agent` line, then a
+  spinner, then silence. The cause was structural rather than cosmetic — the
+  child loop was started with a nil emitter (`spawner.go`), so it could not
+  report even in principle, and no seam existed to carry its events out. Tools
+  can now report progress through a `Progress` callback on `tools.Context`; the
+  Agent tool passes it down, and the child's tool calls come back as
+  `tool_progress` events rendered indented under the `Agent` line ("`↳ Read
+  pricing.go`"). Only tool calls are relayed, not the child's prose — what you
+  need while waiting is the shape of the work, not a second voice in the
+  transcript. Progress also counts as activity, so the "quiet for…" hint no
+  longer fires while a sub-agent is visibly busy.
+
+- **A sub-agent could run unbounded, and compacted far too early.** It took
+  `--max-turns` (default `0`, unlimited) — defensible for the main loop, where
+  you watch each step and can interrupt, but not for a child you cannot see. It
+  now defaults to a 50-turn bound and says so when it stops there, instead of
+  returning a truncated answer as though it were finished. Its context window
+  was also passed as `0`, falling back to the 200k compaction default, so a
+  sub-agent on a 1M-token model summarised its history at a fifth of the room it
+  had; it now inherits the model's real window.
+
 - **Interrupting a turn mid-web-search could brick the session.** Every
   subsequent message failed with ``messages.N: `web_search` tool use with id
   `srvtoolu_…` was found without a corresponding `web_search_tool_result`

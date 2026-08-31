@@ -64,29 +64,70 @@ func NewSpawnerWithDeferred(provider api.Provider, base *tools.Registry, model a
 	return &Spawner{provider: provider, base: base, model: model, permission: perm, approver: approver, maxTurns: maxTurns, deferredTools: copyDeferred}
 }
 
+// defaultSubagentMaxTurns bounds a sub-agent when the CLI sets no explicit
+// --max-turns (its default is 0, "unlimited"). Unlimited is a defensible
+// default for the main loop, where the user watches each step and can interrupt;
+// for a child it means an invisible loop that can run until someone notices.
+// Generous enough for real research, finite enough to end.
+const defaultSubagentMaxTurns = 50
+
 // Spawn runs a sub-agent of the named type to completion and returns its final
 // text. It satisfies tools.Spawner.
-func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string) (string, error) {
+//
+// progress, when non-nil, receives a short line per child tool call. Passing
+// nil (as headless callers do) restores the previous silent behaviour.
+func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progress func(string)) (string, error) {
 	t, ok := subagent.Lookup(subagentType)
 	if !ok {
 		return "", fmt.Errorf("unknown subagent_type %q", subagentType)
 	}
 	childTools := t.Filter(s.base)
+
+	// Relay the child's activity upward. Without an emitter the child ran
+	// completely dark: the frontend saw one Agent tool call and nothing until it
+	// returned, so a twenty-minute research run and a hang looked identical.
+	var emit Emitter
+	if progress != nil {
+		emit = func(ev Event) {
+			if line := subagentProgressLine(ev); line != "" {
+				progress(line)
+			}
+		}
+	}
+
+	maxTurns := s.maxTurns
+	if maxTurns <= 0 {
+		maxTurns = defaultSubagentMaxTurns
+	}
+	// Give the child the model's real window. Leaving this 0 fell back to the
+	// 200k compaction default, so a sub-agent on a 1M model summarised its
+	// history at a fifth of the room it actually had.
+	ctxWindow, _ := api.ContextWindow(string(s.model), 0)
+
 	loop := New(s.provider, childTools)
 	res, err := loop.Run(ctx, Options{
 		Prompt:        prompt,
 		Model:         s.model,
 		System:        t.SystemPrompt,
-		MaxTurns:      s.maxTurns,
+		MaxTurns:      maxTurns,
 		Permission:    s.permission,
 		Host:          s.hostGate,
 		WorkingDir:    s.workingDir,
 		Approver:      s.approver,
-		ContextWindow: 0,
+		ContextWindow: ctxWindow,
 		DeferredTools: filterDeferred(s.deferredTools, childTools),
-	}, nil)
+	}, emit)
 	if err != nil {
 		return "", err
+	}
+	// Say so rather than passing back a truncated answer as if it were complete.
+	if res.StopReason == "max_turns" {
+		note := fmt.Sprintf("[Sub-agent stopped at its %d-turn limit before finishing. "+
+			"The result below may be incomplete.]", maxTurns)
+		if res.Text == "" {
+			return note, nil
+		}
+		return note + "\n\n" + res.Text, nil
 	}
 	return res.Text, nil
 }

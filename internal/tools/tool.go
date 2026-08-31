@@ -84,6 +84,13 @@ type Context struct {
 	// Reveal, if non-nil, marks deferred tools active for the rest of the run
 	// (used by ToolSearch to load tools on demand).
 	Reveal func(names ...string)
+	// Progress, if non-nil, reports what a long-running tool is doing while it
+	// runs, one already-formatted line at a time. Without it a tool that works
+	// for minutes (the Agent tool, which runs a whole child loop) is a closed
+	// box: the frontend can only show a spinner, so a sub-agent researching for
+	// twenty minutes looked indistinguishable from a hang. It is a plain string
+	// callback rather than an event type because tools must not import agent.
+	Progress func(line string)
 }
 
 // Tool is the contract implemented by every local tool (Read, Write, Bash, …).

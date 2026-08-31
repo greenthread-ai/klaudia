@@ -14,7 +14,9 @@ import (
 // final textual result. Implemented by the agent package to avoid an import
 // cycle (tools must not import agent).
 type Spawner interface {
-	Spawn(ctx context.Context, subagentType, prompt string) (string, error)
+	// progress, when non-nil, is called with short display lines as the child
+	// works, so the frontend can show what it is doing instead of a bare spinner.
+	Spawn(ctx context.Context, subagentType, prompt string, progress func(line string)) (string, error)
 }
 
 // AgentTypeInfo is the model-facing summary of a sub-agent type, used to build
@@ -98,12 +100,12 @@ func (a *Agent) CheckPermissions(pctx permission.Context, _ permission.Permissio
 	return allowAlways(pctx)
 }
 
-func (a *Agent) Execute(ctx context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (a *Agent) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in AgentInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
-	result, err := a.spawner.Spawn(ctx, in.SubagentType, in.Prompt)
+	result, err := a.spawner.Spawn(ctx, in.SubagentType, in.Prompt, tctx.Progress)
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Sub-agent failed: %v", err), IsError: true}}, nil
 	}

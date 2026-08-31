@@ -2647,6 +2647,18 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.phase = "running " + ev.ToolName
 		m.activeToolName = ev.ToolName
 		m.activeToolStart = time.Now()
+	case "tool_progress":
+		// A long-running tool reporting what it is doing — in practice the Agent
+		// tool relaying its sub-agent's calls. Indented under the tool line it
+		// belongs to, in the same style, because it is the same kind of thing one
+		// level down. This goes to scrollback rather than the live region: it is
+		// a record of work that happened, not transient state, and it is the only
+		// evidence the user gets that a sub-agent is progressing.
+		m.flushAssistant()
+		m.appendLine(toolStyle.Render("  ↳ " + ev.Text))
+		if ev.Text != "" {
+			m.phase = "running " + ev.ToolName + " · " + ev.Text
+		}
 	case "tool_result":
 		m.flushAssistant()
 		// Store the untruncated output when the tool kept one: /last should show

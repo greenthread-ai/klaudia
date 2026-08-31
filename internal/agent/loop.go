@@ -29,7 +29,7 @@ type Emitter func(event Event)
 
 // Event is a streaming event emitted during a run (stream-json mode).
 type Event struct {
-	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_result" | "usage" | "compaction"
+	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_progress" | "tool_result" | "usage" | "compaction"
 	Text      string `json:"text,omitempty"`        // assistant text
 	ToolName  string `json:"tool_name,omitempty"`   // tool_use / tool_result
 	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use / tool_result
@@ -760,12 +760,27 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		}
 	}
 
+	// Progress is only wired when someone is listening. A long-running tool (the
+	// Agent tool, which runs a whole child loop) reports through this so the
+	// frontend can show movement instead of an unexplained pause.
+	var progress func(string)
+	if emit != nil {
+		progress = func(line string) {
+			emit(Event{
+				Type:      "tool_progress",
+				ToolName:  tu.Name,
+				ToolUseID: tu.ID,
+				Text:      line,
+			})
+		}
+	}
 	results, err := tool.Execute(ctx, tools.Context{
 		WorkingDir: opts.WorkingDir,
 		Ask:        opts.Asker,
 		Plan:       opts.Planner,
 		Reveal:     reveal,
 		HostChange: hostChangeFor(opts),
+		Progress:   progress,
 	}, raw)
 	if err != nil {
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))
