@@ -40,7 +40,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | TodoWrite | 05-app-core | `tools/todowrite.go` | ✅ done | |
 | Task tools (Create/List/Get/Update) | 07-app-features | `tools/task*.go` + `tasks/` | ✅ done | |
 | NotebookEdit | 05-app-core | `tools/notebookedit.go` | ✅ done | |
-| AskUserQuestion | 05-app-core | `tools/askuser.go` | ✅ done | Interactive via `Asker` seam. |
+| AskUserQuestion | 05-app-core | `tools/askuser.go` | ✅ done | Interactive via `Asker` seam. The TUI always appends a "something else" option (the model writes the choices, so its framing can be wrong); picking it — or just typing — opens free text, and the answer goes back verbatim. |
 | ExitPlanMode | 05-app-core | `tools/exitplan.go` | ✅ done | Via `Planner` seam. |
 | Agent (Task / sub-agents) | 07-app-features | `tools/agent.go` + `subagent/` | ✅ done | Dynamic description from `subagent.Builtin()`. |
 | Memory | 07-app-features | `tools/memory.go` + `memory/` | 🔀 divergent | Auto-memory + recall via `.klaudia/memory/`. |

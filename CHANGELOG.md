@@ -6,6 +6,24 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **A multiple-choice question always offers a way out of the multiple choice.**
+  `AskUserQuestion` accepted digits `1..N` and silently swallowed every other
+  key, so the only ways past a question were to pick one of its answers or kill
+  the turn. That is the wrong shape for the situation the tool exists to handle:
+  the *model* writes the options, so when its framing is off, a numbered list
+  asks you to choose between four answers to the wrong question. The list now
+  always carries one more entry the model did not write — "Something else —
+  answer in your own words" — and picking it, or simply starting to type, opens
+  a normal input box whose text is returned verbatim. `Esc` goes back to the
+  options; the question stays live. The tool's description tells the model the
+  answer may be none of its labels and to follow it as an instruction, including
+  when it rejects the premise, rather than snapping it to the nearest option.
+  Its result now reads "The user answered: …" instead of "chose", which is the
+  truthful wording for both cases.
+
+  Also closed while in there: answering a question whose turn had already been
+  interrupted sent on a nil channel, which blocks forever and would have frozen
+  the UI.
 - **`input.enter` config: `Return` can insert a newline instead of sending.**
   `enter = "newline"` swaps the prompt's two chords — `Return` adds a line,
   `Alt+Return` or `Ctrl+J` sends. The default is unchanged.

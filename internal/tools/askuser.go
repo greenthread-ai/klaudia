@@ -36,7 +36,10 @@ func (a *AskUserQuestion) Name() string { return "AskUserQuestion" }
 func (a *AskUserQuestion) Description(context.Context) (string, error) {
 	return "Ask the user a multiple-choice question when you need a decision only they can make " +
 		"(ambiguous requirements, a fork in approach). Provide a clear question and 2-4 options. " +
-		"Use sparingly — prefer acting on reasonable defaults. Returns the user's chosen label.", nil
+		"Use sparingly — prefer acting on reasonable defaults. The user is always offered a further " +
+		"'something else' option and can reply in their own words, so the answer you get back may be " +
+		"none of your labels — read it as their actual instruction, including when it rejects the " +
+		"premise of the question, and follow it rather than forcing it onto the nearest option.", nil
 }
 
 func (a *AskUserQuestion) InputSchema() json.RawMessage { return a.schema.Raw }
@@ -84,5 +87,6 @@ func (a *AskUserQuestion) Execute(ctx context.Context, tctx Context, raw json.Ra
 	if err != nil {
 		return []Result{{Content: "Could not get an answer: " + err.Error(), IsError: true}}, nil
 	}
-	return []Result{{Content: "The user chose: " + answer}}, nil
+	// "answered", not "chose": the reply may be free text rather than a label.
+	return []Result{{Content: "The user answered: " + answer}}, nil
 }

@@ -132,10 +132,20 @@ const (
 	stateRunning
 	stateAwaitingPermission
 	stateAwaitingAnswer
+	stateAnsweringOther
 	stateAwaitingPlan
 	stateAwaitingConfirm
 	stateAwaitingChoice
 )
+
+// otherAnswerLabel is the escape hatch appended to every AskUserQuestion.
+//
+// The model picks the options, which means a question can only ever offer the
+// answers it already thought of — and the moment its framing is wrong, a
+// numbered list is a trap: the user has to choose among four answers to the
+// wrong question, or kill the turn. So the list always carries one more entry
+// that the model did not write, and choosing it hands the keyboard back.
+const otherAnswerLabel = "Something else — answer in your own words"
 
 // choiceItem is one option in a local settings picker (e.g. /mode). apply runs
 // when the user selects it and returns a confirmation line.
@@ -535,7 +545,7 @@ func (m *Model) setState(s uiState) {
 func (m *Model) inputHeight() int {
 	// The input is shown (and editable) when idle and while the model works
 	// (for queueing a follow-up); other states show a one-line prompt.
-	if m.state != stateIdle && m.state != stateRunning {
+	if m.state != stateIdle && m.state != stateRunning && m.state != stateAnsweringOther {
 		return 1
 	}
 	// Count wrapped display rows, not logical lines: a single long line that
@@ -560,6 +570,32 @@ func (m *Model) syncInputHeight() {
 	}
 	m.input.SetHeight(m.inputHeight())
 	m.syncPromptMarker()
+}
+
+// answerAsk hands the answer back to the waiting tool and resumes the turn. The
+// nil check matters: a turn interrupted mid-question clears askReply, and a send
+// on a nil channel blocks forever — the UI would simply stop.
+func (m *Model) answerAsk(answer string) {
+	if m.askReply != nil {
+		m.askReply <- answer
+		m.askReply = nil
+	}
+	m.appendLine(toolStyle.Render("  → " + answer))
+	m.setState(stateRunning)
+}
+
+// beginOtherAnswer switches from the numbered list to free-text entry, seeding
+// the box with whatever the user already typed so the first keystroke isn't
+// swallowed.
+func (m *Model) beginOtherAnswer(seed string) tea.Cmd {
+	m.setState(stateAnsweringOther)
+	m.input.Reset()
+	if seed != "" {
+		m.input.InsertString(seed)
+	}
+	m.input.Focus()
+	m.syncInputHeight()
+	return textarea.Blink
 }
 
 // updateInput is the single choke point for feeding a key to the textarea while
@@ -727,6 +763,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.appendLine(toolStyle.Render(line))
 		}
+		// Always last, always present: see otherAnswerLabel.
+		m.appendLine(hintStyle.Render(fmt.Sprintf("  %d) %s", len(msg.options)+1, otherAnswerLabel)))
 		return m, m.waitForEvent()
 
 	case planMsg:
@@ -1130,18 +1168,50 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingAnswer {
-		// Digit keys 1..N select an option.
+		// Digit keys 1..N select an option; N+1 is the "something else" escape
+		// hatch. Typing anything else also opens it — reaching for the keyboard
+		// to say "none of these" should not require finding its number first.
 		s := msg.String()
 		if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
 			if n := int(s[0] - '0'); n <= len(m.askOptions) {
-				choice := m.askOptions[n-1].Label
-				m.askReply <- choice
-				m.askReply = nil
-				m.appendLine(toolStyle.Render("  → " + choice))
-				m.setState(stateRunning)
+				m.answerAsk(m.askOptions[n-1].Label)
+				return m, nil
 			}
+			if int(s[0]-'0') == len(m.askOptions)+1 {
+				return m, m.beginOtherAnswer("")
+			}
+			return m, nil // a digit past the list: ignore rather than guess
+		}
+		if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 {
+			return m, m.beginOtherAnswer(string(msg.Runes)) // start typing straight away
 		}
 		return m, nil
+	}
+
+	if m.state == stateAnsweringOther {
+		if msg.Type == tea.KeyEsc { // back to the list, draft discarded
+			m.input.Reset()
+			m.syncInputHeight()
+			m.setState(stateAwaitingAnswer)
+			return m, nil
+		}
+		switch action {
+		case actionNewline:
+			m.input.InsertString("\n")
+			m.syncInputHeight()
+			return m, nil
+		case actionSubmit:
+			answer := strings.TrimSpace(m.promptValue())
+			if answer == "" {
+				return m, nil // nothing to send yet
+			}
+			m.input.Reset()
+			m.syncInputHeight()
+			m.pushHistory(answer)
+			m.answerAsk(answer)
+			return m, nil
+		}
+		return m, m.updateInput(msg)
 	}
 
 	if m.state == stateAwaitingPermission {
@@ -3191,7 +3261,12 @@ func (m *Model) bottomView() string {
 	case stateAwaitingPermission:
 		bottom = caption(askStyle.Render(m.permissionPrompt()))
 	case stateAwaitingAnswer:
-		bottom = caption(askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions))))
+		bottom = caption(askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions)+1)) +
+			hintStyle.Render(fmt.Sprintf("  (%d, or just start typing, to answer in your own words)", len(m.askOptions)+1)))
+	case stateAnsweringOther:
+		m.input.SetHeight(m.inputHeight())
+		bottom = m.promptBox() + "\n" + caption(askStyle.Render("Your answer")+
+			hintStyle.Render("  (enter sends · esc goes back to the options)"))
 	case stateAwaitingPlan:
 		bottom = caption(askStyle.Render("Approve plan? (y)es / (n)o"))
 	case stateAwaitingConfirm:
