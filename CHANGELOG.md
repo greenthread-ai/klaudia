@@ -5,6 +5,97 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+- **`input.enter` config: `Return` can insert a newline instead of sending.**
+  `enter = "newline"` swaps the prompt's two chords — `Return` adds a line,
+  `Alt+Return` or `Ctrl+J` sends. The default is unchanged.
+
+  There is deliberately no `ctrl+enter` setting, because a terminal cannot
+  produce one: `Return` and `Ctrl+Return` are the same byte (CR), and `Ctrl+J`
+  is simply LF, which is why it has always been the newline chord. The Kitty
+  keyboard protocol can disambiguate them, but Bubble Tea v1 does not parse
+  those sequences — an enabled protocol would deliver `\x1b[13;5u` to the
+  prompt as the literal text `13;5u`, and would also break every other `Ctrl`
+  binding. So the supported route is to map the chord to `ESC` `CR` in the
+  terminal, which arrives as `Alt+Return`; the README has the incantation for
+  Ghostty, kitty, WezTerm, iTerm2, Windows Terminal and Apple Terminal, with
+  the caveats (Windows Terminal binds `Alt+Return` to fullscreen; macOS
+  Option-as-Meta costs you `é`).
+
+  **Behaviour change:** `Alt+Return` previously sent, because the handler
+  ignored the Alt modifier. It now inserts a newline in the default mode.
+  `Ctrl+J` is honoured in both modes with no terminal support at all, so a
+  mistyped `input.enter` (or a terminal that cannot send `Alt+Return`) can
+  never leave the prompt unable to send.
+
+  Caught while implementing: the queue-while-running path read `tea.KeyEnter`
+  directly rather than going through the new decision, so in `newline` mode a
+  `Return` meant to add a line queued a follow-up instead. Both paths now share
+  one function, and a test asserts they agree.
+
+- **The read-only sub-agents can reach read-only MCP tools.** `Explore` and
+  `Plan` were limited to `Read`, `Glob` and `Grep`, so the two agents whose whole
+  purpose is read-only fan-out research could not touch a wiki, an issue tracker
+  or a chat archive. Naming MCP tools in their whitelist was never an option:
+  they are discovered at connect time and differ per project.
+
+  This is also where the context argument points. Searching four sources to
+  answer one question is exactly the work that should not run in the main
+  thread — a sub-agent spends its own window and hands back a summary.
+
+  Eligibility is read from what a tool declares, not from what its agent is
+  asked to do. A tool qualifies by setting the protocol's `readOnlyHint`, and a
+  tool that says nothing is treated as a write, because the annotation is
+  optional and the safe reading of silence is that nobody considered it. That
+  matters: `mcp__gitea__delete_branch` is one connected server away from an
+  agent whose only previous guarantee was a system prompt asking it not to
+  write, and there is a test that fails if it ever arrives.
+
+  For a server that annotates nothing — including one launched in its own
+  read-only mode, where the operator knows something the protocol was not told —
+  `"readOnly": true` on the server in `.mcp.json` says so. `"readOnly": false`
+  says the opposite: `readOnlyHint` is a claim a server makes about itself and
+  nothing verifies it, so an operator who does not believe a third-party server
+  can decline to take its word without giving up the server, which the main
+  agent keeps and still asks about before every call. Unset trusts the
+  annotations. Measured against the case that prompted this: gitea-mcp annotates
+  all 54 of its tools, 33 of them read-only, matching exactly what its own `-r`
+  flag exposes.
+- **Klaudia tells your working-tree changes apart from its own.** `/changes`
+  splits them three ways: yours, Klaudia's, and *both* — a file it wrote that
+  was already dirty or that you edited afterwards. Klaudia cannot merge those
+  two changes, but it can refuse to pretend they are not there, which is what
+  keeps undo and `/commit` honest. Startup says once how many files were already
+  modified, for the case where you had forgotten.
+- **`/undo`, and it cannot destroy work you did.** Before a turn writes a file,
+  its contents are stored as a git blob with `git hash-object -w` — a plain
+  object write that leaves your index, HEAD and `git status` untouched. A stash
+  would have been simpler and is wrong: it moves the whole working tree
+  including your unrelated edits. Undo shows the plan first, including the
+  equivalent `git cat-file -p <sha> > path` for each file, because "undo 2
+  files?" is a promise rather than an inspection. Files you also touched are
+  skipped and named.
+- **The completion block says what was *not* verified.** "auth tests 83/83
+  passing" reads as proof until you notice the full suite was never run. A
+  targeted run now names its subset and reports the gap, and files changed with
+  nothing run at all says so outright.
+- **`/context`, `/pin`, `/unpin`, `/forget`.** What Klaudia has read, changed
+  and been working in, instead of a token percentage — with a closing line
+  saying that list is what it looked at, not what the task needed. A pinned file
+  is re-stated every turn, which is how it survives compaction; a file mentioned
+  once forty turns ago is not really in context at all.
+- **Resume reconciles the work, not just the chat.** The working tree is
+  re-read, ownership is recovered from the transcript's own Write/Edit calls,
+  and jobs are reported as stopped — they were children of a process that has
+  exited, and the conversation you are resuming implies they are still up.
+  Approvals are deliberately not restored: session-scoped means session-scoped,
+  and resurrecting them would be the flaky remembered permissions the trust
+  model replaced.
+- **Meaningful exit codes** for headless runs: 0 done, 1 failed, 2 invoked
+  wrongly, 3 hit `--max-turns`, 4 needed a host change with no way to ask, 130
+  interrupted. 4 is the one worth wiring up — it distinguishes "the task needed
+  a package installed" from "the model got it wrong".
+
 ### Fixed
 - **A `.mcp.json` with comments loaded no servers, and said nothing.** The file
   is read with `encoding/json`, which rejects `//` and `/* */` — and this
@@ -294,70 +385,6 @@ port mirrors (see `internal/version`).
   report a refusal as `success` with empty stdout: the payload carries the
   explanation and the exit code is non-zero, so a pipeline can branch on it.
 
-
-### Added
-- **The read-only sub-agents can reach read-only MCP tools.** `Explore` and
-  `Plan` were limited to `Read`, `Glob` and `Grep`, so the two agents whose whole
-  purpose is read-only fan-out research could not touch a wiki, an issue tracker
-  or a chat archive. Naming MCP tools in their whitelist was never an option:
-  they are discovered at connect time and differ per project.
-
-  This is also where the context argument points. Searching four sources to
-  answer one question is exactly the work that should not run in the main
-  thread — a sub-agent spends its own window and hands back a summary.
-
-  Eligibility is read from what a tool declares, not from what its agent is
-  asked to do. A tool qualifies by setting the protocol's `readOnlyHint`, and a
-  tool that says nothing is treated as a write, because the annotation is
-  optional and the safe reading of silence is that nobody considered it. That
-  matters: `mcp__gitea__delete_branch` is one connected server away from an
-  agent whose only previous guarantee was a system prompt asking it not to
-  write, and there is a test that fails if it ever arrives.
-
-  For a server that annotates nothing — including one launched in its own
-  read-only mode, where the operator knows something the protocol was not told —
-  `"readOnly": true` on the server in `.mcp.json` says so. `"readOnly": false`
-  says the opposite: `readOnlyHint` is a claim a server makes about itself and
-  nothing verifies it, so an operator who does not believe a third-party server
-  can decline to take its word without giving up the server, which the main
-  agent keeps and still asks about before every call. Unset trusts the
-  annotations. Measured against the case that prompted this: gitea-mcp annotates
-  all 54 of its tools, 33 of them read-only, matching exactly what its own `-r`
-  flag exposes.
-- **Klaudia tells your working-tree changes apart from its own.** `/changes`
-  splits them three ways: yours, Klaudia's, and *both* — a file it wrote that
-  was already dirty or that you edited afterwards. Klaudia cannot merge those
-  two changes, but it can refuse to pretend they are not there, which is what
-  keeps undo and `/commit` honest. Startup says once how many files were already
-  modified, for the case where you had forgotten.
-- **`/undo`, and it cannot destroy work you did.** Before a turn writes a file,
-  its contents are stored as a git blob with `git hash-object -w` — a plain
-  object write that leaves your index, HEAD and `git status` untouched. A stash
-  would have been simpler and is wrong: it moves the whole working tree
-  including your unrelated edits. Undo shows the plan first, including the
-  equivalent `git cat-file -p <sha> > path` for each file, because "undo 2
-  files?" is a promise rather than an inspection. Files you also touched are
-  skipped and named.
-- **The completion block says what was *not* verified.** "auth tests 83/83
-  passing" reads as proof until you notice the full suite was never run. A
-  targeted run now names its subset and reports the gap, and files changed with
-  nothing run at all says so outright.
-- **`/context`, `/pin`, `/unpin`, `/forget`.** What Klaudia has read, changed
-  and been working in, instead of a token percentage — with a closing line
-  saying that list is what it looked at, not what the task needed. A pinned file
-  is re-stated every turn, which is how it survives compaction; a file mentioned
-  once forty turns ago is not really in context at all.
-- **Resume reconciles the work, not just the chat.** The working tree is
-  re-read, ownership is recovered from the transcript's own Write/Edit calls,
-  and jobs are reported as stopped — they were children of a process that has
-  exited, and the conversation you are resuming implies they are still up.
-  Approvals are deliberately not restored: session-scoped means session-scoped,
-  and resurrecting them would be the flaky remembered permissions the trust
-  model replaced.
-- **Meaningful exit codes** for headless runs: 0 done, 1 failed, 2 invoked
-  wrongly, 3 hit `--max-turns`, 4 needed a host change with no way to ask, 130
-  interrupted. 4 is the one worth wiring up — it distinguishes "the task needed
-  a package installed" from "the model got it wrong".
 
 ### Changed
 - **`/commit` stages only Klaudia-owned files.** A file it wrote that you also

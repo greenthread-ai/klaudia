@@ -60,6 +60,22 @@ type Config struct {
 	Permissions Permissions `toml:"permissions,omitempty"`
 	// Trust configures the host-change guardrail.
 	Trust Trust `toml:"trust,omitempty"`
+	// Input configures the prompt's key handling.
+	Input Input `toml:"input,omitempty"`
+}
+
+// Input configures how the prompt treats the Return key.
+type Input struct {
+	// Enter is "send" (default) or "newline".
+	//
+	// "send":    Return submits; ctrl+j and alt+Return insert a newline.
+	// "newline": Return inserts a newline; alt+Return and ctrl+j submit.
+	//
+	// There is deliberately no "ctrl+Return" setting: a terminal cannot tell
+	// Ctrl+Return from Return — both send CR — unless it is configured to send
+	// something else for that chord. Map it to ESC CR ("\x1b\r") in the
+	// terminal and it arrives here as alt+Return.
+	Enter string `toml:"enter,omitempty"`
 }
 
 // Permissions persists allow/deny rule strings (e.g. "Bash(git status:*)",

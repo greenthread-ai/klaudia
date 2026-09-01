@@ -52,6 +52,7 @@ type Session struct {
 	Memory         memory.Store   // backs /memory; never nil — set to memory.Disabled() when unavailable
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
 	Theme          string         // markdown render theme ("" = dark)
+	EnterInserts   bool           // Return inserts a newline; alt+Return/ctrl+j submit
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
 
 	// Render-only context for /config and /context (set once at startup).
@@ -468,6 +469,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		sess = &Session{}
 	}
 	in := newPromptInput()
+	in.KeyMap.InsertNewline = newlineBinding(sess.EnterInserts)
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -1003,6 +1005,11 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onPaste(string(msg.Runes))
 	}
 
+	// What Return means depends on config (see keyAction). Computed once, so
+	// the idle prompt and the queue-while-running path cannot disagree about
+	// which chord sends — they did, in the first cut of this change.
+	action := keyAction(msg, m.sess.EnterInserts)
+
 	// No scrollback keys are bound. Klaudia renders inline, so PgUp/PgDn, the
 	// wheel, Home/End, tmux copy mode and the terminal's own search all operate
 	// on real scrollback — intercepting any of them would only take away a
@@ -1014,8 +1021,12 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// follow-up: Enter queues it; Enter again (empty) interrupts and sends it; ↑
 	// edits it.
 	if m.state == stateRunning {
-		switch msg.Type {
-		case tea.KeyEnter:
+		switch {
+		case action == actionNewline:
+			m.input.InsertString("\n")
+			m.syncInputHeight()
+			return m, nil
+		case action == actionSubmit:
 			text := strings.TrimSpace(m.input.Value())
 			if strings.HasPrefix(text, "/") {
 				expanded := strings.TrimSpace(m.promptValue())
@@ -1054,7 +1065,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case tea.KeyUp:
+		case msg.Type == tea.KeyUp:
 			if t := m.steer.takeBack(); t != "" { // recall the queued message to edit it
 				m.input.SetValue(t)
 				m.input.CursorEnd()
@@ -1198,13 +1209,13 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if msg.Type == tea.KeyCtrlJ && m.state == stateIdle {
+	if action == actionNewline && m.state == stateIdle {
 		m.input.InsertString("\n")
 		m.syncInputHeight()
 		return m, nil
 	}
 
-	if msg.Type == tea.KeyEnter && m.state == stateIdle && isBang(m.input.Value()) {
+	if action == actionSubmit && m.state == stateIdle && isBang(m.input.Value()) {
 		line := strings.TrimSpace(m.input.Value())
 		m.input.Reset()
 		m.pushHistory(line)
@@ -1213,7 +1224,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.runBang(line)
 	}
 
-	if msg.Type == tea.KeyEnter && m.state == stateIdle {
+	if action == actionSubmit && m.state == stateIdle {
 		// display is the chip form (what's echoed and remembered); prompt is
 		// the expanded payload (what the model receives). Echoing the chip
 		// keeps a thousand-line paste out of the scrollback, and remembering

@@ -87,7 +87,7 @@ func newPromptInput() textarea.Model {
 	in.EndOfBufferCharacter = ' '
 	in.CharLimit = 0
 	in.MaxHeight = 6
-	in.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "newline"))
+	in.KeyMap.InsertNewline = newlineBinding(false)
 	// Marker on the first line only: repeating it down a wrapped paste would
 	// read as several prompts rather than one.
 	in.SetPromptFunc(promptGutter, func(line int) string {
@@ -145,4 +145,14 @@ func reflowDeficit(lastFrameWidths []int, newWidth int) int {
 		physical += rows
 	}
 	return physical - len(lastFrameWidths)
+}
+
+// newlineBinding is the textarea's own newline chord. The prompt intercepts
+// these before the widget sees them (see keyAction); the binding is kept in
+// step so it cannot claim a chord that now sends.
+func newlineBinding(enterInserts bool) key.Binding {
+	if enterInserts {
+		return key.NewBinding(key.WithKeys("enter"), key.WithHelp("return", "newline"))
+	}
+	return key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"), key.WithHelp("ctrl+j", "newline"))
 }

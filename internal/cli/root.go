@@ -883,6 +883,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			ResolvedModel:       string(model),
 			Theme:               themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
 			PermissionMode:      string(mode),
+			EnterInserts:        tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 			Memory:              memStore,
 			MCP:                 mcpController{mgr: mcpMgr, ctx: ctx},
 			Skills:              tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),

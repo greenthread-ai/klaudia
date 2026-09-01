@@ -130,6 +130,46 @@ A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
 type-ahead, fuzzy `@path` file completion (Tab, Tab again to cycle), input
 history (↑/↓), and `Esc` to interrupt a turn. Type `/help` for the full list.
 
+### Return, and multi-line input
+
+`Return` sends; `Ctrl+J` and `Alt+Return` insert a newline. To swap them:
+
+```toml
+[input]
+enter = "newline"   # Return inserts a newline; Alt+Return or Ctrl+J sends
+```
+
+**Ctrl+Return is not something Klaudia can offer on its own.** A terminal sends
+the same byte for `Return` and `Ctrl+Return` (CR, 0x0D) — `Ctrl+J` is simply the
+LF byte, which is why it is the traditional newline chord. Terminals that
+implement the Kitty keyboard protocol can distinguish the two, but Bubble Tea v1
+does not parse those sequences, and enabling the protocol would break every
+other `Ctrl` binding.
+
+What does work is telling your terminal to send `ESC` `CR` for the chord, which
+arrives as `Alt+Return`:
+
+| Terminal | Setting | Caveat |
+|---|---|---|
+| Ghostty | `keybind = ctrl+enter=text:\x1b\r` | — |
+| kitty | `map ctrl+enter send_text all \x1b\r` | — |
+| WezTerm | `{ key="Enter", mods="CTRL", action=wezterm.action.SendString("\x1b\r") }` | — |
+| iTerm2 | Settings → Keys → Key Bindings → `⌃↩` → *Send Escape Sequence* → `\r` | — |
+| Apple Terminal | Cannot remap `Return` at all | Use `Option+Return`, with Settings → Profiles → Keyboard → *Use Option as Meta key*. That option also stops `Option` from typing `é`, `©` and friends |
+| Windows Terminal | `{ "keys": "ctrl+enter", "command": { "action": "sendInput", "input": "\u001b\r" } }` | `Alt+Return` is the fullscreen toggle by default and never reaches the app, so remap it or use `Ctrl+J` |
+| tmux / screen | nothing to do — `ESC` `CR` passes through | — |
+
+`Ctrl+J` works in every terminal, in both modes, needing no configuration at
+all: it is the LF byte. That is the escape hatch, and it is why
+`enter = "newline"` cannot leave you unable to send.
+
+**What this changed:** `Alt+Return` used to send, because the Return handler
+ignored the Alt modifier. It now inserts a newline (or sends, in `newline`
+mode). Two consequences worth knowing: if you were using `Option+Return` to
+send on macOS, that now adds a line; and pressing `Esc` immediately followed by
+`Return` can be read as `Alt+Return`, since that is the same byte sequence —
+one of the reasons a terminal cannot simply invent a `Ctrl+Return` key.
+
 **Klaudia renders inline, not full-screen.** Finished output is printed into
 your terminal's real scrollback and only the input and status bar are redrawn in
 place, so scrolling, drag-to-select, your terminal's own search and tmux copy
@@ -349,6 +389,13 @@ apiKeyEnv = "MY_API_KEY"
 # 8192 for models Klaudia doesn't recognise — including most OpenAI-compatible
 # ones). Set this when your provider's limit differs from that fallback.
 # maxTokens = 32000
+
+# Optional: what the Return key does at the prompt. "send" (default) submits
+# and ctrl+j / alt+Return insert a newline; "newline" swaps them. See
+# "Return, and multi-line input" above — ctrl+Return is not a value, because
+# terminals cannot send one.
+# [input]
+# enter = "newline"
 ```
 
 Create a commented starter config with `./klaudia --create-config=global` for
