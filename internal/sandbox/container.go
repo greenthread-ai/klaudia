@@ -91,6 +91,11 @@ func (c *Container) Run(ctx context.Context, req Request) (Response, error) {
 		resp.ExitCode = 124
 		return resp, nil
 	}
+	if ctx.Err() == context.Canceled {
+		resp.Canceled = true
+		resp.ExitCode = 130
+		return resp, nil
+	}
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {

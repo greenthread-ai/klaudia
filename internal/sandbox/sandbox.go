@@ -41,6 +41,13 @@ type Response struct {
 	Stderr   string
 	ExitCode int
 	TimedOut bool
+	// Canceled marks a command stopped by the caller — in practice the user
+	// interrupting the turn — as opposed to one that ran out of time. The two
+	// arrive identically at the shell (a killed process, no useful exit status),
+	// and a result that does not say which invites the reader to guess. One did
+	// guess, and told the user their build had "hit the 15-minute tool timeout"
+	// when they had interrupted it themselves four minutes in.
+	Canceled bool
 }
 
 // TTYRequired reports whether a command needs a terminal this executor cannot
@@ -130,6 +137,11 @@ func runArgv(ctx context.Context, req Request, name string, args []string) (Resp
 	if ctx.Err() == context.DeadlineExceeded {
 		resp.TimedOut = true
 		resp.ExitCode = 124 // conventional timeout exit code
+		return resp, nil
+	}
+	if ctx.Err() == context.Canceled {
+		resp.Canceled = true
+		resp.ExitCode = 130 // conventional "terminated by SIGINT" exit code
 		return resp, nil
 	}
 	if err != nil {

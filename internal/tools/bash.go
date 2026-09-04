@@ -304,6 +304,14 @@ func formatBashOutput(resp sandbox.Response, command string) (model, full string
 				"to make it a managed job: it keeps running, gets a name and a log, and you can carry on. " +
 				"Check Jobs first — it may already be up.]"
 		}
+	} else if resp.Canceled {
+		// Say plainly what happened, because the alternative is the model
+		// inferring a cause. Whatever the command had already done still
+		// happened, so the next move is to check the state rather than assume
+		// the work failed or re-run it blindly.
+		status = "\n[interrupted by the user before it finished — this was not a timeout and not a " +
+			"failure of the command. Anything it had already done still took effect; check the " +
+			"current state before re-running it.]"
 	} else if resp.ExitCode != 0 {
 		status = fmt.Sprintf("\n[exit code %d]", resp.ExitCode)
 	}

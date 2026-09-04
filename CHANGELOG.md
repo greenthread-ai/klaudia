@@ -6,6 +6,18 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **An interrupted command was reported as a bare `[exit code -1]`, and got
+  described back to the user as a timeout.** Interrupting a turn cancels the
+  running command's context, but only `DeadlineExceeded` was recognised — a
+  user cancellation fell through to a generic non-zero exit with no explanation.
+  The two are indistinguishable at the shell (a killed process, no useful
+  status), so the model filled the gap by guessing, and told the user a rebuild
+  they had interrupted four minutes in had "hit my 15-minute tool timeout".
+  Cancellation is now carried through as its own state and reported as such:
+  interrupted by the user, explicitly not a timeout and not a failure of the
+  command, with a note that whatever it had already done still took effect and
+  the state is worth checking before re-running. Exit code 130, the convention
+  for SIGINT, replaces the meaningless -1.
 - **The server-tool repair deleted a web search the model was still waiting on
   (regression).** When the model calls a server tool and a client tool in the
   same batch, the API deliberately does *not* run the server tool: it returns
