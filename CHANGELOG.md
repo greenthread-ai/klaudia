@@ -5,6 +5,21 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+- **The server-tool repair deleted a web search the model was still waiting on
+  (regression).** When the model calls a server tool and a client tool in the
+  same batch, the API deliberately does *not* run the server tool: it returns
+  `stop_reason: "tool_use"`, you return the client results, and it runs the
+  search on the next request. Its `server_tool_use` therefore sits unanswered on
+  purpose — and the unpaired-block repair read that as an orphan and deleted it,
+  losing the search silently and breaking the request that followed. The repair
+  now only treats an unanswered call as abandoned once the conversation has moved
+  past that turn. Both shapes end assistant-then-user; what separates them is
+  what the user message holds — only `tool_result`s means the turn is still being
+  answered, ordinary text means nobody is coming back for it. Verified against
+  both transcripts involved: the pending search survives untouched, and the three
+  genuinely abandoned calls in the older session are still repaired.
+
 ### Added
 - **A multiple-choice question always offers a way out of the multiple choice.**
   `AskUserQuestion` accepted digits `1..N` and silently swallowed every other

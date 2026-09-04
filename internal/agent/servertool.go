@@ -67,7 +67,16 @@ func serverToolResultID(b anthropic.BetaContentBlockParamUnion) (string, bool) {
 // This runs on merged messages (sanitize.go collapses same-role runs first):
 // a paused search splits its call and result across two assistant messages, and
 // only after merging are they visibly the pair they are.
-func unpairedServerToolIDs(content []anthropic.BetaContentBlockParamUnion) map[string]bool {
+//
+// pending says an unanswered call in this message is legitimate rather than
+// abandoned, and must be left alone. That is the state of the most recent
+// assistant turn: when the model calls a server tool and a client tool in the
+// same batch, the API does not run the server tool, returns stop_reason
+// "tool_use", and runs it on the next request once the client results come
+// back. Its call therefore sits unanswered on purpose, and deleting it throws
+// away a search the model asked for. Once the conversation has moved past that
+// turn, an unanswered call is one nobody is coming back for.
+func unpairedServerToolIDs(content []anthropic.BetaContentBlockParamUnion, pending bool) map[string]bool {
 	answered := map[string]bool{}
 	for _, b := range content {
 		if id, ok := serverToolResultID(b); ok {
@@ -85,7 +94,7 @@ func unpairedServerToolIDs(content []anthropic.BetaContentBlockParamUnion) map[s
 	for _, b := range content {
 		if su := b.OfServerToolUse; su != nil && webServerToolNames[su.Name] {
 			called[su.ID] = true
-			if !answered[su.ID] { // a call whose result never arrived
+			if !answered[su.ID] && !pending { // a call nobody is coming back for
 				drop(su.ID)
 			}
 			continue
@@ -103,7 +112,7 @@ func unpairedServerToolIDs(content []anthropic.BetaContentBlockParamUnion) map[s
 // content did not survive round-tripping, along with the server_tool_use it
 // answers, with a single text note. Returns the repaired content and whether
 // anything changed. The original blocks are never mutated.
-func repairServerToolResults(content []anthropic.BetaContentBlockParamUnion) ([]anthropic.BetaContentBlockParamUnion, bool) {
+func repairServerToolResults(content []anthropic.BetaContentBlockParamUnion, pending bool) ([]anthropic.BetaContentBlockParamUnion, bool) {
 	drop := map[string]bool{}
 	for _, b := range content {
 		if id, ok := brokenResultToolUseID(b); ok {
@@ -112,7 +121,7 @@ func repairServerToolResults(content []anthropic.BetaContentBlockParamUnion) ([]
 	}
 	// A server-tool block with no partner is the other half of the problem: the
 	// API rejects it just as hard as a corrupt result, in either direction.
-	for id := range unpairedServerToolIDs(content) {
+	for id := range unpairedServerToolIDs(content, pending) {
 		drop[id] = true
 	}
 	if len(drop) == 0 {
@@ -172,7 +181,8 @@ func brokenResultToolUseID(b anthropic.BetaContentBlockParamUnion) (string, bool
 // hasBrokenServerToolResult reports whether any message carries one, for the
 // sanitize fast path.
 func hasBrokenServerToolResult(messages []anthropic.BetaMessageParam) bool {
-	for _, m := range messages {
+	pending := pendingAssistantIndex(messages)
+	for i, m := range messages {
 		for _, b := range m.Content {
 			if _, ok := brokenResultToolUseID(b); ok {
 				return true
@@ -180,9 +190,44 @@ func hasBrokenServerToolResult(messages []anthropic.BetaMessageParam) bool {
 		}
 		// An unpaired server-tool block counts too — without this the fast path
 		// short-circuits and the repair below never runs.
-		if len(unpairedServerToolIDs(m.Content)) > 0 {
+		if len(unpairedServerToolIDs(m.Content, i == pending)) > 0 {
 			return true
 		}
 	}
 	return false
+}
+
+// pendingAssistantIndex returns the index of the assistant turn that is still in
+// progress, or -1. A server tool awaiting its result there is pending rather
+// than abandoned, so it must be sent back untouched.
+//
+// "In progress" means the conversation has not moved past that turn: it is the
+// most recent assistant message, and everything after it is the tool_result
+// message answering its client tools. That is exactly the parallel-call state —
+// the API withheld the server tool, we returned the client results, and it runs
+// the search on this request.
+//
+// The distinction matters because both shapes end assistant-then-user. What
+// separates them is what that user message contains: only tool_results means the
+// turn is still being answered; any ordinary text means the user moved on and
+// nobody is coming back for the search.
+func pendingAssistantIndex(messages []anthropic.BetaMessageParam) int {
+	last := -1
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == anthropic.BetaMessageParamRoleAssistant {
+			last = i
+			break
+		}
+	}
+	if last < 0 {
+		return -1
+	}
+	for _, m := range messages[last+1:] {
+		for _, b := range m.Content {
+			if b.OfToolResult == nil {
+				return -1 // ordinary content: the turn is over
+			}
+		}
+	}
+	return last
 }

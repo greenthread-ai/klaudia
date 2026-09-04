@@ -42,6 +42,9 @@ func TestSanitizeDropsOrphanServerToolUse(t *testing.T) {
 			anthropic.NewBetaTextBlock("Let me search."),
 			webSearchUse("srvtoolu_018gw2qiARDsZNG4iCuMLzGu"), // never answered
 		}},
+		// The conversation moved on, which is what makes the call abandoned
+		// rather than pending: the user came back and asked something else.
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("never mind, do this instead")),
 	}
 
 	if !needsSanitize(msgs) {
@@ -50,7 +53,7 @@ func TestSanitizeDropsOrphanServerToolUse(t *testing.T) {
 	out := sanitizeMessages(msgs)
 
 	for _, m := range out {
-		if len(unpairedServerToolIDs(m.Content)) > 0 {
+		if len(unpairedServerToolIDs(m.Content, false)) > 0 {
 			t.Error("orphan server_tool_use survived sanitize; the request would still 400")
 		}
 		for _, b := range m.Content {
@@ -103,7 +106,7 @@ func TestOrphanRepairIgnoresOtherServerTools(t *testing.T) {
 		anthropic.NewBetaServerToolUseBlock("srvtoolu_code", map[string]any{"code": "1+1"},
 			anthropic.BetaServerToolUseBlockParamNameCodeExecution),
 	}
-	if len(unpairedServerToolIDs(content)) != 0 {
+	if len(unpairedServerToolIDs(content, false)) != 0 {
 		t.Error("a non-web server tool was wrongly treated as an orphan")
 	}
 }
@@ -114,7 +117,7 @@ func TestOrphanRepairIsPerToolUseID(t *testing.T) {
 		webSearchUse("done"), webSearchResult("done"),
 		webSearchUse("cut_off"),
 	}
-	orphans := unpairedServerToolIDs(content)
+	orphans := unpairedServerToolIDs(content, false)
 	if len(orphans) != 1 || !orphans["cut_off"] {
 		t.Errorf("orphans = %v, want only cut_off", orphans)
 	}
@@ -149,7 +152,7 @@ func TestSanitizeKeepsAPairSplitAcrossPauseTurnMessages(t *testing.T) {
 
 	out := sanitizeMessages(msgs)
 	for _, m := range out {
-		if bad := unpairedServerToolIDs(m.Content); len(bad) > 0 {
+		if bad := unpairedServerToolIDs(m.Content, false); len(bad) > 0 {
 			t.Fatalf("sanitize broke a valid pause_turn pair: %v", bad)
 		}
 	}
@@ -197,7 +200,72 @@ func TestResultBeforeItsCallIsUnpaired(t *testing.T) {
 	content := []anthropic.BetaContentBlockParamUnion{
 		webSearchResult("backwards"), webSearchUse("backwards"),
 	}
-	if bad := unpairedServerToolIDs(content); !bad["backwards"] {
+	if bad := unpairedServerToolIDs(content, false); !bad["backwards"] {
 		t.Errorf("a result preceding its call was accepted: %v", bad)
+	}
+}
+
+// The second regression this repair caused, from a real session.
+//
+// When the model calls a server tool and a client tool in the same batch, the
+// API does NOT run the server tool: it returns stop_reason "tool_use", we return
+// the client results, and it runs the search on the next request. So the
+// server_tool_use sits unanswered *on purpose*. Reading that as an orphan and
+// deleting it threw away a search the model had asked for, and the very next
+// request failed.
+//
+// Shape taken from the transcript that broke: an assistant turn holding
+// thinking + text + a client tool_use + the pending web_search, answered by a
+// tool_result message carrying only the client tool's result.
+func TestSanitizeKeepsAPendingParallelServerToolCall(t *testing.T) {
+	const (
+		clientID = "toolu_memory"
+		searchID = "srvtoolu_pending"
+	)
+	msgs := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("get slurm running locally")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("Let me check memory and research the release."),
+			{OfToolUse: &anthropic.BetaToolUseBlockParam{ID: clientID, Name: "Memory", Input: map[string]any{}}},
+			webSearchUse(searchID), // withheld by the API until the client result returns
+		}},
+		anthropic.NewBetaUserMessage(
+			anthropic.NewBetaToolResultBlock(clientID, "No memories matched.", false)),
+	}
+
+	out := sanitizeMessages(msgs)
+	var kept bool
+	for _, m := range out {
+		for _, b := range m.Content {
+			if su := b.OfServerToolUse; su != nil && su.ID == searchID {
+				kept = true
+			}
+		}
+	}
+	if !kept {
+		t.Error("the pending web_search was deleted; the model's search is silently lost")
+	}
+}
+
+// Once the conversation moves past that turn, the same shape IS abandoned: the
+// following user message is ordinary text, not the tool_result answering it.
+func TestPendingOnlyAppliesWhileTheTurnIsStillBeingAnswered(t *testing.T) {
+	assistant := anthropic.BetaMessageParam{
+		Role:    anthropic.BetaMessageParamRoleAssistant,
+		Content: []anthropic.BetaContentBlockParamUnion{webSearchUse("srvtoolu_x")},
+	}
+	midTurn := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("q")), assistant,
+		anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock("toolu_1", "ok", false)),
+	}
+	if got := pendingAssistantIndex(midTurn); got != 1 {
+		t.Errorf("mid-turn: pending index = %d, want 1", got)
+	}
+	movedOn := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("q")), assistant,
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("never mind")),
+	}
+	if got := pendingAssistantIndex(movedOn); got != -1 {
+		t.Errorf("moved on: pending index = %d, want -1 (abandoned)", got)
 	}
 }

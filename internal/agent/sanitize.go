@@ -44,8 +44,9 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 	// (1) drop server-tool blocks that would be rejected on send. Done before
 	// the empty-content repair, so a message left empty by the drop is caught
 	// there rather than slipping through.
+	pendingTurn := pendingAssistantIndex(out)
 	for i := range out {
-		if repaired, changed := repairServerToolResults(out[i].Content); changed {
+		if repaired, changed := repairServerToolResults(out[i].Content, i == pendingTurn); changed {
 			out[i].Content = repaired
 		}
 		// (1b) drop web-search citations whose URL was lost to the SDK bug
