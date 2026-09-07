@@ -5,6 +5,27 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+- **Skills can be a directory: `.klaudia/skills/<name>/SKILL.md`.** The loader
+  only read top-level `*.md` and skipped subdirectories before parsing
+  anything, so a correctly written skill in the increasingly common
+  directory-per-skill layout produced no skill, no warning, and — because the
+  `Skill` tool is only registered when at least one skill loads — no tool
+  either. Two sessions concluded from that that Klaudia had no skill machinery
+  at all, which was the wrong lesson from true evidence.
+
+  Both layouts now load, the directory names the skill when the frontmatter
+  omits a name (`SKILL` would be useless), and a skill directory with no
+  `SKILL.md` warns instead of vanishing. `skill.md` is accepted alongside
+  `SKILL.md`, because a case-insensitive filesystem hides that difference until
+  the skill reaches Linux.
+
+- **`/doctor` reports skills.** It lists what loaded and from which scope
+  (project or user), and when nothing loaded it names the two directories to
+  put skills in. This is the only place that can distinguish "no skills
+  defined" from "skills are broken": with zero skills there is no `Skill` tool
+  to ask about.
+
 ### Fixed
 - **An interrupted command was reported as a bare `[exit code -1]`, and got
   described back to the user as a timeout.** Interrupting a turn cancels the

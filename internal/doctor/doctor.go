@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -35,6 +37,7 @@ type Input struct {
 	AuthKind    string      // "oauth" | "api-key" | "none"
 	MCPServers  int         // configured MCP server count
 	LSPServers  []LSPServer // detected language servers
+	Skills      []Skill     // user-defined skills loaded for this session
 	// Context-window facts resolved by the CLI (api.ContextWindow). Zero limit
 	// means the model isn't in our table and no config override was set — we
 	// fall back to compaction's default at request time.
@@ -43,6 +46,12 @@ type Input struct {
 	// MissingLSPHints are actionable suggestions for languages present in the
 	// project but lacking a server (e.g. "install gopls for go support").
 	MissingLSPHints []string
+}
+
+// Skill is one loaded user-defined skill, for the /doctor report.
+type Skill struct {
+	Name  string // invocation name
+	Scope string // "project" | "user"
 }
 
 // LSPServer is a detected language server for the /doctor report.
@@ -63,6 +72,21 @@ func Run(in Input) []Check {
 	}
 
 	add("platform", StatusInfo, runtime.GOOS+"/"+runtime.GOARCH)
+
+	// Skills are invisible when none are defined: with zero skills the Skill
+	// tool is not registered at all, so asking the model whether skills work
+	// gets "I have no such ability" — indistinguishable from a broken feature.
+	// This is the only place that can tell the two apart.
+	if len(in.Skills) == 0 {
+		add("skills", StatusInfo, "none loaded (add .md files to .klaudia/skills or ~/.klaudia/skills)")
+	} else {
+		names := make([]string, 0, len(in.Skills))
+		for _, sk := range in.Skills {
+			names = append(names, sk.Name+" ("+sk.Scope+")")
+		}
+		sort.Strings(names)
+		add("skills", StatusOK, strconv.Itoa(len(in.Skills))+" loaded: "+strings.Join(names, ", "))
+	}
 
 	// Authentication.
 	switch {

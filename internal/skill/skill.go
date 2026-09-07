@@ -90,6 +90,16 @@ func Load(cwd string, warn func(string)) []Skill {
 }
 
 // loadDir parses every *.md file in dir. A missing dir yields nothing.
+// loadDir reads both supported layouts:
+//
+//	<skills>/<name>.md         — one file per skill
+//	<skills>/<name>/SKILL.md   — one directory per skill, so a skill can keep
+//	                             supporting files (templates, scripts) beside it
+//
+// The directory form is the layout skills are increasingly published in, and
+// its failure mode used to be silent: subdirectories were skipped before
+// anything was parsed, so a correctly written skill in the wrong shape produced
+// no skill, no warning, and no Skill tool at all.
 func loadDir(dir string, warn func(string)) []Skill {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -97,16 +107,30 @@ func loadDir(dir string, warn func(string)) []Skill {
 	}
 	var out []Skill
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+		var (
+			path        string
+			defaultName string
+		)
+		switch {
+		case e.IsDir():
+			path, defaultName = skillFileIn(filepath.Join(dir, e.Name())), e.Name()
+			if path == "" {
+				warnf(warn, "skill %s: directory has no SKILL.md", filepath.Join(dir, e.Name()))
+				continue
+			}
+		case strings.HasSuffix(e.Name(), ".md"):
+			path = filepath.Join(dir, e.Name())
+			defaultName = strings.TrimSuffix(e.Name(), ".md")
+		default:
 			continue
 		}
-		path := filepath.Join(dir, e.Name())
+
 		data, err := os.ReadFile(path)
 		if err != nil {
 			warnf(warn, "skill %s: %v", path, err)
 			continue
 		}
-		sk, err := parse(data, path)
+		sk, err := parseNamed(data, path, defaultName)
 		if err != nil {
 			warnf(warn, "skill %s: %v", path, err)
 			continue
@@ -116,9 +140,27 @@ func loadDir(dir string, warn func(string)) []Skill {
 	return out
 }
 
-// parse splits frontmatter from body and validates required fields. The name
-// defaults to the file's base name (sans .md) when the frontmatter omits it.
+// skillFileIn returns the skill definition inside a skill directory, or "" if
+// there is none. Both spellings are accepted because a case-insensitive
+// filesystem hides the difference until the file reaches Linux.
+func skillFileIn(dir string) string {
+	for _, name := range []string{"SKILL.md", "skill.md"} {
+		p := filepath.Join(dir, name)
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+	}
+	return ""
+}
+
 func parse(data []byte, path string) (Skill, error) {
+	return parseNamed(data, path, strings.TrimSuffix(filepath.Base(path), ".md"))
+}
+
+// parseNamed parses a skill, falling back to defaultName when the frontmatter
+// omits one — the file's basename for the flat layout, the directory's name for
+// the SKILL.md layout, where "SKILL" would be a useless name.
+func parseNamed(data []byte, path, defaultName string) (Skill, error) {
 	fm, body, err := splitFrontmatter(data)
 	if err != nil {
 		return Skill{}, err
@@ -130,7 +172,7 @@ func parse(data []byte, path string) (Skill, error) {
 
 	name := strings.TrimSpace(meta.Name)
 	if name == "" {
-		name = strings.TrimSuffix(filepath.Base(path), ".md")
+		name = defaultName
 	}
 	typ := strings.TrimSpace(meta.Type)
 	switch typ {

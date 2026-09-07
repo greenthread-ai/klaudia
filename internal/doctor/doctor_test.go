@@ -152,3 +152,32 @@ var exerrNotFound = &exErr{}
 type exErr struct{}
 
 func (*exErr) Error() string { return "not found" }
+
+func TestSkillsCheckDistinguishesEmptyFromBroken(t *testing.T) {
+	// The whole point of this check: with no skills the Skill tool is never
+	// registered, so the model answers "I have no such ability" — which reads
+	// as a broken feature. /doctor is the only place that can say otherwise.
+	got, ok := find(Run(Input{}), "skills")
+	if !ok {
+		t.Fatal("no skills check in report")
+	}
+	if got.Status != StatusInfo {
+		t.Errorf("empty: status = %q, want %q", got.Status, StatusInfo)
+	}
+	if !strings.Contains(got.Detail, ".klaudia/skills") {
+		t.Errorf("empty: detail should name the directories, got %q", got.Detail)
+	}
+
+	got, _ = find(Run(Input{Skills: []Skill{
+		{Name: "policy", Scope: "project"},
+		{Name: "review", Scope: "user"},
+	}}), "skills")
+	if got.Status != StatusOK {
+		t.Errorf("loaded: status = %q, want %q", got.Status, StatusOK)
+	}
+	for _, want := range []string{"2 loaded", "policy (project)", "review (user)"} {
+		if !strings.Contains(got.Detail, want) {
+			t.Errorf("loaded: detail %q missing %q", got.Detail, want)
+		}
+	}
+}

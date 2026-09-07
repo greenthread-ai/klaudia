@@ -568,10 +568,18 @@ disabled = ["python"]
 
 ## Skills
 
-Drop Markdown files with YAML frontmatter in `~/.klaudia/skills` (user) or
-`.klaudia/skills/` (project, wins on name collision). They become a `Skill` tool
-the model can invoke and `/＜name＞` commands in the TUI. Body supports
-`$ARGUMENTS`.
+Skills live in `~/.klaudia/skills` (user) or `.klaudia/skills/` (project, wins
+on name collision), in either layout:
+
+```
+.klaudia/skills/review.md            # one file per skill
+.klaudia/skills/review/SKILL.md      # one directory per skill, for skills that
+                                     # ship templates or scripts alongside
+```
+
+They become a `Skill` tool the model can invoke and `/＜name＞` commands in the
+TUI. Body supports `$ARGUMENTS`. `name` defaults to the file's — or the
+directory's — name.
 
 ```markdown
 ---
@@ -580,6 +588,13 @@ description: Structured review of the current diff
 ---
 Review the staged changes carefully. $ARGUMENTS
 ```
+
+**If a skill doesn't seem to exist, run `/doctor`.** With no skills loaded the
+`Skill` tool is not registered at all, so asking the model whether it has skills
+gets an honest "I have no such tool" — which is indistinguishable from the
+feature being missing. `/doctor` reports what loaded, from which scope, and
+names the directories when nothing did. A skill directory without a `SKILL.md`
+warns at startup rather than being skipped in silence.
 
 ## Themes
 

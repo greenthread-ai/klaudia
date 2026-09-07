@@ -3,6 +3,7 @@ package skill
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -105,5 +106,72 @@ func TestLoadProjectOverlaysHome(t *testing.T) {
 	}
 	if len(warnings) == 0 {
 		t.Error("expected a warning for the malformed skill")
+	}
+}
+
+func TestLoadDirSkillLayout(t *testing.T) {
+	dir := t.TempDir()
+	skills := filepath.Join(dir, ".klaudia", "skills")
+	mustMkdir(t, filepath.Join(skills, "deploy"))
+	write(t, filepath.Join(skills, "deploy", "SKILL.md"), `---
+description: Ship it
+---
+Deploy the service. $ARGUMENTS`)
+	// Supporting files beside the definition are the reason this layout exists.
+	write(t, filepath.Join(skills, "deploy", "checklist.md"), "not a skill")
+
+	got := Load(dir, func(string) {})
+	if len(got) != 1 {
+		t.Fatalf("got %d skills, want 1: %+v", len(got), got)
+	}
+	// The directory names the skill: "SKILL" would be useless.
+	if got[0].Name != "deploy" {
+		t.Errorf("name = %q, want %q", got[0].Name, "deploy")
+	}
+	if got[0].Description != "Ship it" {
+		t.Errorf("description = %q", got[0].Description)
+	}
+	if !strings.Contains(got[0].Body, "Deploy the service") {
+		t.Errorf("body = %q", got[0].Body)
+	}
+}
+
+func TestLoadDirWarnsOnSkillDirWithoutDefinition(t *testing.T) {
+	dir := t.TempDir()
+	skills := filepath.Join(dir, ".klaudia", "skills")
+	mustMkdir(t, filepath.Join(skills, "halfdone"))
+	write(t, filepath.Join(skills, "halfdone", "notes.md"), "just notes")
+
+	var warnings []string
+	got := Load(dir, func(m string) { warnings = append(warnings, m) })
+	if len(got) != 0 {
+		t.Fatalf("got %d skills, want 0", len(got))
+	}
+	// Silence here is what sent two sessions hunting the filesystem.
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "no SKILL.md") {
+		t.Fatalf("warnings = %q, want one about a missing SKILL.md", warnings)
+	}
+}
+
+func TestLoadDirFrontmatterNameStillWins(t *testing.T) {
+	dir := t.TempDir()
+	skills := filepath.Join(dir, ".klaudia", "skills")
+	mustMkdir(t, filepath.Join(skills, "folder-name"))
+	write(t, filepath.Join(skills, "folder-name", "SKILL.md"), `---
+name: explicit
+description: d
+---
+body`)
+
+	got := Load(dir, func(string) {})
+	if len(got) != 1 || got[0].Name != "explicit" {
+		t.Fatalf("frontmatter name should win, got %+v", got)
+	}
+}
+
+func mustMkdir(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
 	}
 }
