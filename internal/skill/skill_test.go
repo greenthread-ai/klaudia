@@ -175,3 +175,39 @@ func mustMkdir(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 }
+
+func TestLoadReadsClaudeDirectories(t *testing.T) {
+	dir := t.TempDir()
+	// What a skills installer leaves behind for Claude Code.
+	write(t, filepath.Join(dir, ".claude", "skills", "frontend-design", "SKILL.md"), `---
+name: frontend-design
+description: installed
+---
+from .claude`)
+	// And Klaudia's own directory, which must win on a name collision.
+	write(t, filepath.Join(dir, ".klaudia", "skills", "frontend-design.md"), `---
+name: frontend-design
+description: overridden
+---
+from .klaudia`)
+	write(t, filepath.Join(dir, ".claude", "skills", "solo.md"), `---
+name: solo
+description: only in .claude
+---
+body`)
+
+	got := Load(dir, func(string) {})
+	if len(got) != 2 {
+		t.Fatalf("got %d skills, want 2: %+v", len(got), got)
+	}
+	byName := map[string]Skill{}
+	for _, sk := range got {
+		byName[sk.Name] = sk
+	}
+	if d := byName["frontend-design"].Description; d != "overridden" {
+		t.Errorf(".klaudia should win on collision, got %q", d)
+	}
+	if _, ok := byName["solo"]; !ok {
+		t.Error("a skill only in .claude/skills should load")
+	}
+}

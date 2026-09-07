@@ -20,6 +20,13 @@ port mirrors (see `internal/version`).
   `SKILL.md`, because a case-insensitive filesystem hides that difference until
   the skill reaches Linux.
 
+- **Skills are read from `.claude/skills` too.** Both `~/.claude/skills` and
+  `<project>/.claude/skills` are now searched, below their `.klaudia`
+  equivalents, because that is where the ecosystem's installers put skills —
+  the same reasoning that already has Klaudia reading `~/.claude/CLAUDE.md`.
+  Precedence runs user-`.claude`, user-`.klaudia`, project-`.claude`,
+  project-`.klaudia`, so a project can override an installed skill by name.
+
 - **`/doctor` reports skills.** It lists what loaded and from which scope
   (project or user), and when nothing loaded it names the two directories to
   put skills in. This is the only place that can distinguish "no skills

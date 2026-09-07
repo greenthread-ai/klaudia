@@ -568,13 +568,21 @@ disabled = ["python"]
 
 ## Skills
 
-Skills live in `~/.klaudia/skills` (user) or `.klaudia/skills/` (project, wins
-on name collision), in either layout:
+Skills are read from four directories, in increasing precedence — so a project
+skill overrides an installed one of the same name:
 
 ```
-.klaudia/skills/review.md            # one file per skill
-.klaudia/skills/review/SKILL.md      # one directory per skill, for skills that
-                                     # ship templates or scripts alongside
+~/.claude/skills/     ~/.klaudia/skills/     .claude/skills/     .klaudia/skills/
+```
+
+`.claude` is included because that is where the ecosystem's skill installers
+put things (`anthropics/skills` and friends), for the same reason Klaudia reads
+`~/.claude/CLAUDE.md`. Either layout works in any of them:
+
+```
+skills/review.md            # one file per skill
+skills/review/SKILL.md      # one directory per skill, for skills that ship
+                            # templates, licences or scripts alongside
 ```
 
 They become a `Skill` tool the model can invoke and `/＜name＞` commands in the

@@ -1,7 +1,9 @@
 // Package skill loads reusable prompt/command skills from Markdown files with
-// YAML frontmatter. Skills live in ~/.klaudia/skills (user) overlaid by
-// <cwd>/.klaudia/skills (project, wins on name collision) — the same overlay
-// pattern (and the same ~/.klaudia base) as config.Load and mcp.LoadConfig.
+// YAML frontmatter. Skills are read from ~/.claude/skills, ~/.klaudia/skills,
+// <cwd>/.claude/skills and <cwd>/.klaudia/skills, in that order of increasing
+// precedence — the same user-then-project overlay as config.Load and
+// mcp.LoadConfig, extended to the directories the wider ecosystem installs
+// into.
 //
 // A skill file looks like:
 //
@@ -69,11 +71,22 @@ func (s Skill) Render(args string) string {
 func Load(cwd string, warn func(string)) []Skill {
 	byName := map[string]Skill{}
 
-	dirs := make([]string, 0, 2)
+	// Searched in increasing precedence. ~/.claude and .claude are read for
+	// the same reason prompt.go reads ~/.claude/CLAUDE.md: that is where the
+	// ecosystem's skill installers put things, and a skill someone already has
+	// should work here without being moved. Klaudia's own directory wins at
+	// each level, so a project can override an installed skill by name.
+	dirs := make([]string, 0, 4)
 	if home, err := os.UserHomeDir(); err == nil {
-		dirs = append(dirs, filepath.Join(home, ".klaudia", "skills"))
+		dirs = append(dirs,
+			filepath.Join(home, ".claude", "skills"),
+			filepath.Join(home, ".klaudia", "skills"),
+		)
 	}
-	dirs = append(dirs, filepath.Join(cwd, ".klaudia", "skills")) // project wins
+	dirs = append(dirs,
+		filepath.Join(cwd, ".claude", "skills"),
+		filepath.Join(cwd, ".klaudia", "skills"),
+	)
 
 	for _, dir := range dirs {
 		for _, sk := range loadDir(dir, warn) {

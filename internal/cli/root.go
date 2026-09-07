@@ -107,10 +107,9 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 	// Loaded silently: skill.Load's warnings go to the session that owns the
 	// prompt, not to /doctor, which must stay quiet on stderr.
 	doctorSkills := make([]doctor.Skill, 0)
-	projectSkills := filepath.Join(cwd, ".klaudia", "skills")
 	for _, sk := range skill.Load(cwd, func(string) {}) {
 		scope := "user"
-		if strings.HasPrefix(sk.Path, projectSkills) {
+		if strings.HasPrefix(sk.Path, cwd) {
 			scope = "project"
 		}
 		doctorSkills = append(doctorSkills, doctor.Skill{Name: sk.Name, Scope: scope})
