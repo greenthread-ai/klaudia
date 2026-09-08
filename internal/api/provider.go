@@ -125,6 +125,10 @@ func (c *Client) streamRetrying(ctx context.Context, params anthropic.BetaMessag
 		// handed to the sink yet; otherwise a fresh request would re-emit the
 		// text/events already shown.
 		if !delivered && attempt < maxStreamStallRetries {
+			// The usual cause of a stall with nothing delivered is a pooled
+			// connection that died while the session was idle. Retrying onto
+			// the same corpse just burns another idle window.
+			c.dropIdleConnections()
 			continue
 		}
 		return acc, fmt.Errorf("%w: no data for %s: %w", ErrStreamStalled, idle, err)

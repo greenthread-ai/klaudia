@@ -34,6 +34,25 @@ port mirrors (see `internal/version`).
   to ask about.
 
 ### Fixed
+- **A session left idle came back with a six-minute stall.** Reconstructed from
+  the transcript: 6h11m between the previous reply and the send that failed,
+  then "the model connection stalled … auto-retried without success". Nothing
+  was flaky, and the watchdog was doing its job — the layer below it was lying.
+
+  The Anthropic API is HTTP/2, and Go's automatic HTTP/2 does no health
+  checking by default (`http2.Transport.ReadIdleTimeout` is zero: never send a
+  keepalive PING). A multiplexed connection killed by a sleep cycle, NAT or VPN
+  therefore sits in the pool looking perfectly usable; the request is written
+  into a black hole and the read blocks until the 120s stall watchdog fires.
+  `IdleConnTimeout` does not save it, because that timer does not fire reliably
+  across a sleep and the request can claim the corpse before cleanup runs. Each
+  of the two retries then reused the pool and burned another 120s.
+
+  Model calls now run on a transport with h2 keepalive pings (20s read-idle,
+  10s ping timeout — both well inside the stall window, so a dead connection
+  surfaces as a fast retryable error), and a stalled attempt drops idle
+  connections before retrying so the next one dials.
+
 - **An interrupted command was reported as a bare `[exit code -1]`, and got
   described back to the user as a timeout.** Interrupting a turn cancels the
   running command's context, but only `DeadlineExceeded` was recognised — a

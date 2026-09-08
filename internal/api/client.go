@@ -7,6 +7,7 @@
 package api
 
 import (
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -164,6 +165,17 @@ func ResolveModel(m string) anthropic.Model {
 type Client struct {
 	sdk  anthropic.Client
 	cred Credential
+	// httpc is the client the SDK was built with, kept so a stalled stream can
+	// drop its idle connections before retrying — see streamRetrying.
+	httpc *http.Client
+}
+
+// dropIdleConnections discards pooled connections, so the next attempt dials
+// instead of re-using one that a sleep or NAT timeout has silently killed.
+func (c *Client) dropIdleConnections() {
+	if c.httpc != nil {
+		c.httpc.CloseIdleConnections()
+	}
 }
 
 // augmentBetas adds credential-specific betas to a request's beta list — today
@@ -233,9 +245,11 @@ func maxRetries() int {
 // fix 429s; turned out none of it was the discriminator. The Go SDK's native
 // identity is fine on both paths.
 func New(cred Credential, baseURL string) *Client {
+	httpc := newHTTPClient()
 	opts := []option.RequestOption{
 		option.WithHeader("x-app", "cli"),
 		option.WithMaxRetries(maxRetries()),
+		option.WithHTTPClient(httpc),
 	}
 	if cred.IsOAuth() {
 		opts = append(opts, option.WithAuthToken(cred.AuthToken))
@@ -245,7 +259,7 @@ func New(cred Credential, baseURL string) *Client {
 	if baseURL != "" {
 		opts = append(opts, option.WithBaseURL(baseURL))
 	}
-	return &Client{sdk: anthropic.NewClient(opts...), cred: cred}
+	return &Client{sdk: anthropic.NewClient(opts...), cred: cred, httpc: httpc}
 }
 
 // IsOAuth reports whether this client authenticates via OAuth bearer token.

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
 // stallingServer answers /v1/messages with a 200 text/event-stream and then
@@ -180,5 +181,54 @@ func TestStreamIdleTimeoutOverride(t *testing.T) {
 	t.Setenv("KLAUDIA_STREAM_IDLE_TIMEOUT", "")
 	if got := streamIdleTimeout(); got != defaultStreamIdleTimeout {
 		t.Fatalf("streamIdleTimeout() = %v, want default %v", got, defaultStreamIdleTimeout)
+	}
+}
+
+// h2 keepalive pings are what stop a connection that died while the session was
+// idle from looking usable. The values matter (a ping must resolve well inside
+// the stall watchdog), so assert them rather than trusting the wiring.
+func TestConfigureH2EnablesKeepalivePings(t *testing.T) {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	h2, err := configureH2(tr)
+	if err != nil {
+		t.Fatalf("configureH2: %v", err)
+	}
+	if h2.ReadIdleTimeout != h2ReadIdleTimeout {
+		t.Errorf("ReadIdleTimeout = %s, want %s", h2.ReadIdleTimeout, h2ReadIdleTimeout)
+	}
+	if h2.PingTimeout != h2PingTimeout {
+		t.Errorf("PingTimeout = %s, want %s", h2.PingTimeout, h2PingTimeout)
+	}
+	if h2.PingTimeout >= defaultStreamIdleTimeout {
+		t.Error("a dead connection must be detected before the stall watchdog fires")
+	}
+}
+
+// countingTransport records CloseIdleConnections calls; http.Client delegates
+// to the transport when it implements the method.
+type countingTransport struct {
+	http.RoundTripper
+	closed atomic.Int32
+}
+
+func (c *countingTransport) CloseIdleConnections() { c.closed.Add(1) }
+
+func TestStallRetryDropsIdleConnections(t *testing.T) {
+	srv, attempts := stallingServer(t)
+	tr := &countingTransport{RoundTripper: http.DefaultTransport}
+	httpc := &http.Client{Transport: tr}
+	c := &Client{
+		sdk:   anthropic.NewClient(option.WithBaseURL(srv.URL), option.WithAPIKey("test"), option.WithHTTPClient(httpc), option.WithMaxRetries(0)),
+		httpc: httpc,
+	}
+
+	_, err := c.streamRetrying(context.Background(), testParams(), StreamSink{}, 50*time.Millisecond)
+	if !errors.Is(err, ErrStreamStalled) {
+		t.Fatalf("err = %v, want a stall", err)
+	}
+	// Retrying onto the same dead pooled connection is the bug; each retry
+	// must dial afresh.
+	if got, want := tr.closed.Load(), int32(maxStreamStallRetries); got != want {
+		t.Errorf("CloseIdleConnections called %d times, want %d (attempts=%d)", got, want, attempts.Load())
 	}
 }
