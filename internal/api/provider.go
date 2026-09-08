@@ -80,6 +80,11 @@ const maxStreamStallRetries = 2
 // off it to give network-stall advice instead of the generic baseURL hint.
 var ErrStreamStalled = errors.New("model stream stalled")
 
+// errStallMidStream distinguishes a stall that happened after output reached
+// the caller — never retried, since a re-issue would duplicate what was shown —
+// from one that stalled before any output and exhausted its retries.
+var errStallMidStream = errors.New("after partial output")
+
 // StreamTurn implements Provider for the native Anthropic client: it streams the
 // Beta Messages API and accumulates the response. Default betas are applied
 // when the caller set none. Each raw stream event is forwarded to the sink
@@ -131,6 +136,9 @@ func (c *Client) streamRetrying(ctx context.Context, params anthropic.BetaMessag
 			c.dropIdleConnections()
 			continue
 		}
+		if delivered {
+			return acc, fmt.Errorf("%w (%w): no data for %s: %w", ErrStreamStalled, errStallMidStream, idle, err)
+		}
 		return acc, fmt.Errorf("%w: no data for %s: %w", ErrStreamStalled, idle, err)
 	}
 }
@@ -143,24 +151,35 @@ func (c *Client) streamOnce(ctx context.Context, params anthropic.BetaMessageNew
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Liveness is measured in bytes off the socket, not in decoded events: the
+	// SDK drops the API's ping keepalives (`case "ping": continue` in
+	// packages/ssestream), and those pings are exactly what a healthy stream
+	// sends during the long pauses — a large tool_use payload, extended
+	// thinking, a loaded service. Counting events instead killed live streams
+	// that were merely slow. The tracker is touched by the round tripper.
+	activity := newActivityTracker()
+	streamCtx = withActivity(streamCtx, activity)
+
 	var tripped atomic.Bool
 	var timer *time.Timer
 	if idle > 0 {
-		timer = time.AfterFunc(idle, func() {
+		// Re-arm rather than fire when bytes are still arriving, so the timer
+		// only trips after a genuinely silent window.
+		var arm func()
+		arm = func() {
+			if remaining := idle - activity.idleFor(); remaining > 0 {
+				timer.Reset(remaining)
+				return
+			}
 			tripped.Store(true)
 			cancel()
-		})
+		}
+		timer = time.AfterFunc(idle, func() { arm() })
 		defer timer.Stop()
 	}
 
 	stream := c.sdk.Beta.Messages.NewStreaming(streamCtx, params)
 	for stream.Next() {
-		if timer != nil {
-			// An event arrived — push the idle deadline out. A late firing that
-			// races this Reset is harmless: tripped is already set and the
-			// cancelled ctx ends the stream on the next read.
-			timer.Reset(idle)
-		}
 		ev := stream.Current()
 		// Defend against an SDK bug in Accumulate (upstream issue #292):
 		// BetaRawContentBlockStopEvent and BetaRawMessageStopEvent run

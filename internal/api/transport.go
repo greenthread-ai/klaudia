@@ -1,7 +1,10 @@
 package api
 
 import (
+	"context"
+	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/http2"
@@ -47,7 +50,7 @@ const (
 func newHTTPClient() *http.Client {
 	t, ok := http.DefaultTransport.(*http.Transport)
 	if !ok { // not the stdlib default (test hook, or a future stdlib change)
-		return &http.Client{}
+		return &http.Client{Transport: activityRoundTripper{base: http.DefaultTransport}}
 	}
 	clone := t.Clone()
 	// A failure here means no h2 pings, which is exactly today's behaviour —
@@ -56,7 +59,7 @@ func newHTTPClient() *http.Client {
 	if h2, err := configureH2(clone); err == nil {
 		_ = h2
 	}
-	return &http.Client{Transport: clone}
+	return &http.Client{Transport: activityRoundTripper{base: clone}}
 }
 
 // configureH2 turns on keepalive pings for a transport's HTTP/2 support and
@@ -70,4 +73,80 @@ func configureH2(t *http.Transport) (*http2.Transport, error) {
 	h2.ReadIdleTimeout = h2ReadIdleTimeout
 	h2.PingTimeout = h2PingTimeout
 	return h2, nil
+}
+
+// The second failure this file exists for: a stall reported mid-turn, after
+// text had already streamed. Nothing was wrong with the connection — the
+// watchdog was measuring the wrong thing.
+//
+// The idle timer used to reset only when the SDK's stream.Next() returned a
+// decoded event, and the SDK swallows the API's keepalives outright
+// (`case "ping": continue` in packages/ssestream). Anthropic emits those pings
+// precisely during the long pauses that matter — a big tool_use payload being
+// assembled, extended thinking, or the service under load — so a healthy but
+// slow stream looked exactly like a dead one, and got killed at 120s.
+//
+// activityTracker moves the measurement down to the bytes: the round tripper
+// wraps the response body, so anything the server sends — ping, comment,
+// partial frame — counts as liveness, while a connection that has genuinely
+// gone quiet still trips the watchdog.
+
+// activityTracker records when bytes last arrived on a stream.
+type activityTracker struct {
+	last atomic.Int64 // unix nanos
+}
+
+func newActivityTracker() *activityTracker {
+	t := &activityTracker{}
+	t.touch()
+	return t
+}
+
+func (t *activityTracker) touch() { t.last.Store(time.Now().UnixNano()) }
+
+// idleFor reports how long it has been since the last byte.
+func (t *activityTracker) idleFor() time.Duration {
+	return time.Since(time.Unix(0, t.last.Load()))
+}
+
+type activityKey struct{}
+
+// withActivity attaches a tracker so the round tripper can find it. Passed by
+// context because the SDK owns request construction.
+func withActivity(ctx context.Context, t *activityTracker) context.Context {
+	return context.WithValue(ctx, activityKey{}, t)
+}
+
+func activityFrom(ctx context.Context) *activityTracker {
+	t, _ := ctx.Value(activityKey{}).(*activityTracker)
+	return t
+}
+
+// activityRoundTripper touches the request's tracker on every read of the
+// response body.
+type activityRoundTripper struct{ base http.RoundTripper }
+
+func (a activityRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := a.base.RoundTrip(req)
+	if err != nil || resp == nil || resp.Body == nil {
+		return resp, err
+	}
+	if t := activityFrom(req.Context()); t != nil {
+		t.touch() // headers arrived: the server is alive
+		resp.Body = activityBody{ReadCloser: resp.Body, tracker: t}
+	}
+	return resp, err
+}
+
+type activityBody struct {
+	io.ReadCloser
+	tracker *activityTracker
+}
+
+func (b activityBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if n > 0 {
+		b.tracker.touch()
+	}
+	return n, err
 }

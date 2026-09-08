@@ -128,6 +128,15 @@ func FriendlyError(err error) string {
 	// idle mid-stream (flaky network/proxy/VPN), which is unrelated to the
 	// baseURL the generic timeout branch below points at.
 	if errors.Is(err, ErrStreamStalled) {
+		// Two shapes, and saying "auto-retried" for both was a lie: a stall
+		// after output has been delivered is never retried, because a fresh
+		// request would re-emit what you already saw.
+		if errors.Is(err, errStallMidStream) {
+			return "The model connection went quiet mid-reply (no data before the idle timeout), so the " +
+				"partial answer above is all that arrived. It was not retried automatically — that would " +
+				"repeat what you already saw. Send your message again; tune the window with " +
+				"KLAUDIA_STREAM_IDLE_TIMEOUT (seconds, 0 disables)."
+		}
 		return "The model connection stalled (no data received before the idle timeout) and was " +
 			"auto-retried without success — usually a flaky network, proxy, or VPN dropping the " +
 			"streaming connection. Send your message again; tune the window with KLAUDIA_STREAM_IDLE_TIMEOUT " +

@@ -34,6 +34,29 @@ port mirrors (see `internal/version`).
   to ask about.
 
 ### Fixed
+- **A slow stream was killed as a stalled one.** Reported as a stall mid-turn,
+  after text had already streamed — a healthy connection, and the second
+  distinct cause behind the same message.
+
+  The watchdog reset only when the SDK's `stream.Next()` returned a decoded
+  event, and the SDK discards the API's keepalives outright (`case "ping":
+  continue` in `packages/ssestream`). Anthropic sends those pings during
+  exactly the pauses that matter — a large `tool_use` payload being assembled,
+  extended thinking, the service under load — so a stream that was alive on the
+  wire and merely slow was indistinguishable from a dead one, and got cancelled
+  at 120s.
+
+  Liveness is now measured in bytes off the socket: the transport wraps the
+  response body and touches an activity tracker on every read, and the timer
+  re-arms instead of firing while data is still arriving. A genuinely silent
+  connection still trips it. Both are regression-tested — the ping test fails
+  against the previous watchdog, and a hanging server must still stall.
+
+  The message was misleading too: it said "auto-retried without success" even
+  when no retry was attempted, which is the case whenever output has already
+  been delivered (a re-issue would repeat what you just read). That path now
+  says so, and points at the partial answer above it.
+
 - **A session left idle came back with a six-minute stall.** Reconstructed from
   the transcript: 6h11m between the previous reply and the send that failed,
   then "the model connection stalled … auto-retried without success". Nothing
