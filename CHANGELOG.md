@@ -6,6 +6,22 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **The startup banner lists loaded skills.** Three sessions in a row could not
+  establish whether skills were working, because there was no way to tell from
+  outside the model: with none loaded there is no `Skill` tool to ask about, and
+  with some loaded the only evidence was the model's own account of its tools.
+  The banner now shows `skills: frontend-design` under the model line (first
+  four names, then `+N more`), and omits the line entirely when none load —
+  an empty `skills:` would read as breakage. Names come from the same list that
+  backs the `/<name>` commands, so the banner cannot disagree with what will
+  actually dispatch.
+
+  Worth knowing about what is *not* automatic: a skill's name and description
+  are in every request (they are the `Skill` tool's description), but its
+  instructions are only loaded when the skill is invoked. That is the intended
+  progressive disclosure — skill bodies run to thousands of tokens — so a model
+  reporting "registered but not loaded" is describing correct behaviour.
+
 - **Skills can be a directory: `.klaudia/skills/<name>/SKILL.md`.** The loader
   only read top-level `*.md` and skipped subdirectories before parsing
   anything, so a correctly written skill in the increasingly common

@@ -249,7 +249,25 @@ func applyChromeTheme(p themePalette) {
 // interactive runs auto-resume the most recent project session, so reciting it
 // (and a manual `--resume` command) on every launch is noise; /status surfaces
 // it on demand.
-func intro(model, branch, tagline string) string {
+// skillNames lists the loaded skills for the banner. Sourced from the same
+// slash-command list the completer uses, so the banner cannot disagree with
+// what /<name> will actually dispatch.
+func skillNames(sess *Session) []string {
+	if sess == nil {
+		return nil
+	}
+	names := make([]string, 0, len(sess.Skills))
+	for _, sk := range sess.Skills {
+		names = append(names, sk.Name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// introSkillsShown caps the names listed before the line becomes noise.
+const introSkillsShown = 4
+
+func intro(model, branch, tagline string, skills []string) string {
 	logo := logoStyle.Render("✦ Klaudia")
 	tag := bannerStyle.Render(" " + tagline)
 	var meta string
@@ -258,6 +276,18 @@ func intro(model, branch, tagline string) string {
 	}
 	if branch != "" {
 		meta += bannerStyle.Render("   ⎇ " + branch)
+	}
+	// Skills were the thing nobody could tell was working: with none loaded
+	// there is no Skill tool to ask about, and with some loaded the only
+	// evidence was asking the model. One line at startup settles it.
+	if len(skills) > 0 {
+		shown := skills
+		suffix := ""
+		if len(shown) > introSkillsShown {
+			suffix = fmt.Sprintf(" +%d more", len(shown)-introSkillsShown)
+			shown = shown[:introSkillsShown]
+		}
+		meta += "\n" + bannerStyle.Render("  skills: "+strings.Join(shown, ", ")+suffix)
 	}
 	tip := hintStyle.Render("\n  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C twice to quit")
 	return logo + tag + meta + tip + "\n"
@@ -3140,7 +3170,7 @@ func (m *Model) resize(w, h int) {
 }
 
 func (m *Model) introText() string {
-	return intro(m.introModel, m.introBranch, m.introTagline)
+	return intro(m.introModel, m.introBranch, m.introTagline, skillNames(m.sess))
 }
 
 // View draws only the live region. Everything finished has already been printed

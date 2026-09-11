@@ -597,7 +597,12 @@ description: Structured review of the current diff
 Review the staged changes carefully. $ARGUMENTS
 ```
 
-**If a skill doesn't seem to exist, run `/doctor`.** With no skills loaded the
+Loaded skills are listed in the startup banner. A skill's **name and
+description** are in every request; its **instructions** load only when the
+skill is invoked (skill bodies are large, so this is deliberate) — a model
+saying "registered but not loaded" is reporting correct behaviour.
+
+**If a skill doesn't appear at all, run `/doctor`.** With no skills loaded the
 `Skill` tool is not registered at all, so asking the model whether it has skills
 gets an honest "I have no such tool" — which is indistinguishable from the
 feature being missing. `/doctor` reports what loaded, from which scope, and
