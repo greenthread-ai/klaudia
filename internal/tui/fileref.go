@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/greenthread-ai/klaudia/internal/fuzzy"
 	"github.com/greenthread-ai/klaudia/internal/native/search"
 )
 
@@ -113,34 +114,11 @@ func fuzzyScore(pattern, candidate string) (int, bool) {
 	case strings.Contains(cand, pat):
 		return 600 - len(cand), true
 	}
-	score, ok := subsequenceScore(pat, cand)
+	score, ok := fuzzy.Subsequence(pat, cand)
 	if !ok {
 		return 0, false
 	}
 	return score - len(cand), true
-}
-
-// subsequenceScore matches pattern as an ordered subsequence, rewarding
-// consecutive runs and matches at segment boundaries.
-func subsequenceScore(pat, cand string) (int, bool) {
-	score, pi, prev := 200, 0, -2
-	for ci := 0; ci < len(cand) && pi < len(pat); ci++ {
-		if cand[ci] != pat[pi] {
-			continue
-		}
-		if ci == prev+1 {
-			score += 10 // consecutive
-		}
-		if ci == 0 || cand[ci-1] == '/' || cand[ci-1] == '.' || cand[ci-1] == '_' || cand[ci-1] == '-' {
-			score += 15 // segment boundary
-		}
-		prev = ci
-		pi++
-	}
-	if pi < len(pat) {
-		return 0, false
-	}
-	return score, true
 }
 
 func hasUpper(s string) bool {

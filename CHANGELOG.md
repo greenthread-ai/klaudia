@@ -39,6 +39,33 @@ port mirrors (see `internal/version`).
   `/mcp` shows the resulting state.
 
 ### Fixed
+- **`ToolSearch` ranks matches instead of demanding every term.** Matching was
+  a strict AND of substrings: a tool was returned only if *every* word of the
+  query appeared in that one tool's name or description. Describing what you
+  wanted therefore returned nothing, and the more precisely you described it the
+  worse it got. With 65 Godot MCP tools loaded, `godot game time freeze runtime
+  state digest` matched none of them, while the bare word `godot` matched all
+  65 — including `godot_game_time`, whose own description contains *freeze*,
+  *step* and *state*. The failure mode is quietly expensive: an empty result
+  reads as "no such tool exists", so the obvious next move is to give up on the
+  capability rather than re-word the query.
+
+  Matching is now OR, scored and ranked, in tiers — an exact name beats a name
+  substring, which beats a description substring, which beats a fuzzy
+  subsequence on the name. Tools matching more of the query rank above tools
+  matching it more strongly, so a specific query still lands on one tool.
+  Fuzzy matching is deliberately confined to names: descriptions are long enough
+  that almost any short pattern appears in them as some scattered subsequence.
+
+  Results cap at 25, and the reply says when it truncated. Without a cap, OR
+  matching would hand a broad query an entire MCP server's surface — undoing
+  the context saving that deferred tools exist for.
+
+  The ordered-subsequence scorer behind `@`-file completion moved from
+  `internal/tui` to a new `internal/fuzzy` so both callers share one
+  implementation, rather than the tool catalog growing a second copy. The
+  domain-specific ranking stays with each caller; only the primitive is shared.
+
 - **A reload restarts an MCP server whose process has died.** Hot reload left
   one gap: a server that crashed, or was killed from outside, was skipped by
   every subsequent reload and stayed unreachable until Klaudia restarted.
