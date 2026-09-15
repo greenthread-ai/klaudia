@@ -6,6 +6,58 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **MCP servers can be configured globally, in `~/.klaudia/.mcp.json`.** Only
+  `./.mcp.json` and `./.klaudia/.mcp.json` were read, both relative to the
+  project, so a server you want in *every* project had to be copied into every
+  checkout. Worse, the message when none were configured — "Add them in
+  `.mcp.json` or `.klaudia/.mcp.json`" — reads like one of those is a home-dir
+  path, and installing to `~/.klaudia/.mcp.json` on that basis produces a file
+  that is never read, no error, and no servers. Config and sessions live under
+  `~/.klaudia`, and skills already load from `~/.klaudia/skills`, so the absence
+  of a global MCP scope was the odd one out.
+
+  Precedence is global → project `.mcp.json` → project `.klaudia/.mcp.json`,
+  per server name, matching how `config.toml` overlays a global file with a
+  project one. Parse errors now name the full path: three files share the base
+  name `.mcp.json`, and "which one is broken" is the entire question when the
+  answer is a file in another directory.
+
+- **MCP config changes apply to the running session.** Any `.mcp.json` that
+  applies to the project is watched, and an edit adds, drops or restarts servers
+  in place — a server whose config didn't change keeps its session rather than
+  being restarted along with the rest. Both the main registry and the one
+  sub-agents draw from are rebuilt, along with the deferred-tool set, so a
+  sub-agent spawned after a reload sees the same tools as its parent.
+
+  The watch covers only the config files themselves, not `~/.klaudia` as a
+  whole: that directory also holds `sessions/`, `jobs/` and `browser/`, which a
+  live session writes to continuously, and watching it recursively would rebuild
+  the MCP servers on every message typed. A config that no longer parses is left
+  unapplied rather than applied empty — a half-typed file should not take
+  working servers away. Reload failures are currently silent because there is no
+  way to write to a live TUI from the watcher without corrupting the render;
+  `/mcp` shows the resulting state.
+
+### Fixed
+- **A refused host change no longer disables the tool for the rest of the turn.**
+  The host gate refuses with the same text whatever the command was, so two
+  refused commands looked to loop-breaker B like one error shape recurring
+  across different inputs — its signature for "the environment is wedged". B
+  then answers *every* later call to that tool without running it, including
+  read-only ones, while reporting a shell that is perfectly healthy. Since the
+  only thing that clears a streak is a successful execution, and B is what
+  prevents one, the tool stayed dead until the next user message; approving the
+  host change didn't help either, because approval cleared nothing.
+
+  Gate refusals and declined asks are decisions, not malfunctions, and no longer
+  feed the shape streak. Loop-breaker A now refuses with the same short-circuit
+  B uses, so its own refusals can't feed B either, and a granted host change
+  clears both counters for the tool.
+
+- **A background job that exits immediately no longer races the status read.**
+  `Start` called `j.status()` outside `s.mu` while the process-reaping goroutine
+  wrote the same fields under it. Every other `status()` call site already held
+  the lock; this one was the outlier.
 - **The startup banner lists loaded skills.** Three sessions in a row could not
   establish whether skills were working, because there was no way to tell from
   outside the model: with none loaded there is no `Skill` tool to ask about, and

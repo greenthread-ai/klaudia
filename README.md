@@ -489,11 +489,17 @@ remain available when using the Anthropic provider.
 
 ## MCP
 
-Model Context Protocol servers from `.mcp.json` (project `.klaudia/.mcp.json`
-overrides). A server is **stdio** (`command` + `args`) or **HTTP** (`url`, with
-`type:"sse"` for the legacy SSE transport). `//` and `/* */` comments are
-allowed; a file that still doesn't parse is reported rather than silently
-loading nothing:
+Model Context Protocol servers from `.mcp.json`, read from three scopes in
+increasing precedence: **global** `~/.klaudia/.mcp.json` (honours
+`KLAUDIA_CONFIG_DIR`), then the project's `.mcp.json`, then
+`.klaudia/.mcp.json`. Per server name, the narrower scope wins — a project can
+point a globally configured server at a different binary without disturbing it
+elsewhere. Put personal servers you want everywhere in the global file, and
+servers belonging to a repo in the project's. A server is **stdio** (`command` +
+`args`) or **HTTP** (`url`, with `type:"sse"` for the legacy SSE transport).
+`//` and `/* */` comments are allowed; a file that still doesn't parse is
+reported — naming the file, since all three share a base name — rather than
+silently loading nothing:
 
 ```jsonc
 { "mcpServers": {
@@ -501,6 +507,13 @@ loading nothing:
   "remote": { "type": "http", "url": "https://mcp.example.com/v1" }
 } }
 ```
+
+Edits to any of those files apply **to the running session**: servers are
+added, dropped or restarted in place, and a server whose config didn't change
+keeps its session rather than being interrupted. Installing a server no longer
+means restarting to use it. A config that doesn't parse leaves the running
+servers alone, so a half-typed file can't take working tools away; the reload
+is otherwise silent, so check `/mcp` if a server doesn't appear.
 
 Their tools appear as `mcp__<server>__<tool>`, auto-deferred behind `ToolSearch`.
 In the TUI, `/mcp` lists servers and reconnects/disconnects them.
@@ -531,11 +544,10 @@ sub-agent is *handed*; it is not a claim that calling them is safe.
 
 There is no `${VAR}` expansion — a value is used exactly as written — but the
 server subprocess inherits Klaudia's environment, so export credentials in your
-shell rather than writing them into the file. `.mcp.json` is **strict JSON**: no
-comments, no trailing commas. `.mcp.json.example` is a working starting point;
-copy it and edit. `.mcp.json` itself is gitignored because a credential in it
-would be a literal in a committed file — `git add -f` it if you want a
-secret-free team config in the repo.
+shell rather than writing them into the file. `.mcp.json.example` is a working
+starting point; copy it and edit. `.mcp.json` itself is gitignored because a
+credential in it would be a literal in a committed file — `git add -f` it if you
+want a secret-free team config in the repo.
 
 Worth pairing with the `readOnly` guidance above: `-r` and `-S` on the server
 command narrow what exists at all, and `readOnly` decides who is handed it.

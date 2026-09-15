@@ -2,11 +2,13 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
@@ -56,6 +58,81 @@ func TestDispatchBreaksRetryLoop(t *testing.T) {
 	got := textOf(l.dispatch(context.Background(), tu, Options{}, nil, reveal, failures, streaks))
 	if !strings.Contains(got, "already tried this exact") {
 		t.Fatalf("expected loop-breaker steering, got %q", got)
+	}
+}
+
+// TestHostRefusalDoesNotLatchTheTool covers the interaction that made a whole
+// session's Bash unusable. The host gate refuses with the same text whatever
+// the command was, so two refused commands looked to loop-breaker B like one
+// error shape across different inputs — the environment-is-wedged signature.
+// B then refuses before the tool executes, and the only thing that clears a
+// streak is a successful execution, so the tool stayed dead for the rest of
+// the Run: every later call, including read-only ones, came back as "shell
+// wedged". A refusal is a decision about one command, not evidence the tool is
+// broken, and must not count.
+func TestHostRefusalDoesNotLatchTheTool(t *testing.T) {
+	g, proj := gateFixture(t)
+	g.DeclareTool = "RequestHostChange"
+	reg, bash := testRegistry(t)
+	l := New(nil, reg)
+
+	failures := map[string]int{}
+	streaks := map[string]errStreak{}
+	opts := Options{
+		WorkingDir: proj,
+		Host:       g,
+		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeDefault)},
+	}
+
+	// Two DIFFERENT host-changing commands. Both are stopped at the gate.
+	for _, cmd := range []string{
+		"sudo systemctl restart nginx",
+		"sudo launchctl stop com.example.agent",
+	} {
+		tu := anthropic.BetaToolUseBlock{ID: "t", Name: "Bash", Input: json.RawMessage(bashInput(cmd))}
+		l.dispatch(context.Background(), tu, opts, nil, func(...string) {}, failures, streaks)
+	}
+	if len(bash.ran) != 0 {
+		t.Fatalf("a host-changing command ran anyway: %v", bash.ran)
+	}
+	if s, ok := streaks["Bash"]; ok {
+		t.Fatalf("gate refusals fed the same-shape streak: %+v", s)
+	}
+
+	// The tool must still work. Before the fix this call never reached the
+	// registry — loop-breaker B answered it with a quote of the stale refusal.
+	tu := anthropic.BetaToolUseBlock{ID: "t3", Name: "Bash", Input: json.RawMessage(bashInput("git status --short"))}
+	body := resultText(l.dispatch(context.Background(), tu, opts, nil, func(...string) {}, failures, streaks))
+	if len(bash.ran) != 1 || bash.ran[0] != "git status --short" {
+		t.Fatalf("the tool latched: benign command never ran (ran=%v, result=%q)", bash.ran, body)
+	}
+}
+
+// Loop-breaker A refuses to re-run an identical failing call. That refusal is
+// ours, not the tool's, so it must not be recorded as another failure — doing
+// so let A feed B until B latched the tool for every input.
+func TestLoopBreakerARefusalDoesNotFeedB(t *testing.T) {
+	read, _ := tools.NewRead()
+	l := New(nil, tools.NewRegistry(read))
+
+	failures := map[string]int{}
+	streaks := map[string]errStreak{}
+	tu := anthropic.BetaToolUseBlock{ID: "t1", Name: "Frobnicate", Input: map[string]any{"a": 1}}
+
+	// Fail it to the limit, then keep hammering the identical call. Each of
+	// those later calls is answered by A.
+	for i := 0; i < repeatFailureLimit+3; i++ {
+		l.dispatch(context.Background(), tu, Options{}, nil, func(...string) {}, failures, streaks)
+	}
+
+	// The streak may hold the genuine failures from before A engaged, but it
+	// must not have grown past the limit on the back of A's own refusals.
+	if st := streaks["Frobnicate"]; st.count > repeatFailureLimit {
+		t.Fatalf("breaker A's refusals fed breaker B: streak=%+v", st)
+	}
+	got := resultText(l.dispatch(context.Background(), tu, Options{}, nil, func(...string) {}, failures, streaks))
+	if !strings.Contains(got, "already tried this exact") {
+		t.Fatalf("expected breaker A to keep steering the identical call, got %q", got)
 	}
 }
 

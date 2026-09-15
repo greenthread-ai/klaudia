@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"sync"
 
 	"github.com/greenthread-ai/klaudia/internal/permission"
 )
@@ -127,7 +128,12 @@ type Tool interface {
 }
 
 // Registry maps tool names to implementations, mirroring the JS `q5` lookup.
+//
+// The mutex exists because the tool set is no longer fixed for a session: an
+// MCP config edited while Klaudia runs replaces the MCP tools underneath a
+// session that is concurrently reading them to build a request.
 type Registry struct {
+	mu     sync.RWMutex
 	byName map[string]Tool
 }
 
@@ -140,8 +146,23 @@ func NewRegistry(ts ...Tool) *Registry {
 	return r
 }
 
+// Replace swaps the entire tool set atomically. Whole-set replacement rather
+// than Add/Remove: a reload has to be able to drop tools whose server is gone,
+// and a reader must never observe a half-applied change.
+func (r *Registry) Replace(ts ...Tool) {
+	next := make(map[string]Tool, len(ts))
+	for _, t := range ts {
+		next[t.Name()] = t
+	}
+	r.mu.Lock()
+	r.byName = next
+	r.mu.Unlock()
+}
+
 // Lookup returns the tool registered under name, or (nil, false) if absent.
 func (r *Registry) Lookup(name string) (Tool, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	t, ok := r.byName[name]
 	return t, ok
 }
@@ -152,6 +173,8 @@ func (r *Registry) Lookup(name string) (Tool, bool) {
 // order would change the request's cached prefix each turn and defeat prompt
 // caching (the cached prefix begins with the tool definitions).
 func (r *Registry) Names() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	names := make([]string, 0, len(r.byName))
 	for n := range r.byName {
 		names = append(names, n)
@@ -162,6 +185,8 @@ func (r *Registry) Names() []string {
 
 // All returns every registered tool.
 func (r *Registry) All() []Tool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	all := make([]Tool, 0, len(r.byName))
 	for _, t := range r.byName {
 		all = append(all, t)

@@ -41,6 +41,7 @@ func TestStripJSONCommentsPreservesLineNumbers(t *testing.T) {
 }
 
 func TestLoadConfigAcceptsComments(t *testing.T) {
+	isolateConfigRoot(t)
 	dir := t.TempDir()
 	// Exactly the shape klaudia's README documents.
 	cfg := `{ "mcpServers": {
@@ -66,6 +67,7 @@ func TestLoadConfigAcceptsComments(t *testing.T) {
 }
 
 func TestLoadConfigReportsMalformedFile(t *testing.T) {
+	isolateConfigRoot(t)
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(`{"mcpServers": {`), 0o600); err != nil {
 		t.Fatal(err)

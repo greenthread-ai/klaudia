@@ -79,6 +79,7 @@ func TestDisconnectMakesToolFailGracefully(t *testing.T) {
 }
 
 func TestLoadConfigParsesHTTPServer(t *testing.T) {
+	isolateConfigRoot(t)
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(`{
 		"mcpServers": {
@@ -96,6 +97,92 @@ func TestLoadConfigParsesHTTPServer(t *testing.T) {
 	}
 	if l := cfg.MCPServers["local"]; l.Command != "my-server" || len(l.Args) != 1 {
 		t.Errorf("local = %+v", l)
+	}
+}
+
+// isolateConfigRoot points session.ConfigRoot() at a scratch dir, so a test
+// reads no global .mcp.json but the one it writes itself. Without this, every
+// LoadConfig test would quietly depend on whatever the developer running it
+// has installed in ~/.klaudia.
+func isolateConfigRoot(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("KLAUDIA_CONFIG_DIR", root)
+	return root
+}
+
+// A server configured once in ~/.klaudia/.mcp.json is available in every
+// project, which is the whole point of the global scope.
+func TestLoadConfigReadsGlobalScope(t *testing.T) {
+	root := isolateConfigRoot(t)
+	os.WriteFile(filepath.Join(root, ".mcp.json"),
+		[]byte(`{"mcpServers":{"godot":{"command":"godot-mcp"}}}`), 0o644)
+
+	cfg, err := LoadConfig(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.MCPServers["godot"].Command; got != "godot-mcp" {
+		t.Errorf("godot = %q, want godot-mcp from the global config", got)
+	}
+}
+
+// Precedence runs global → ./.mcp.json → ./.klaudia/.mcp.json, so a project
+// can redefine a globally configured server (a different binary, different
+// env) without the global one being forced on it.
+func TestLoadConfigProjectOverridesGlobal(t *testing.T) {
+	root := isolateConfigRoot(t)
+	os.WriteFile(filepath.Join(root, ".mcp.json"),
+		[]byte(`{"mcpServers":{"shared":{"command":"global"},"only-global":{"command":"g"}}}`), 0o644)
+
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".mcp.json"),
+		[]byte(`{"mcpServers":{"shared":{"command":"project"}}}`), 0o644)
+	os.MkdirAll(filepath.Join(dir, ".klaudia"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".klaudia", ".mcp.json"),
+		[]byte(`{"mcpServers":{"shared":{"command":"local"}}}`), 0o644)
+
+	cfg, err := LoadConfig(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.MCPServers["shared"].Command; got != "local" {
+		t.Errorf("shared = %q, want local (.klaudia beats project beats global)", got)
+	}
+	if got := cfg.MCPServers["only-global"].Command; got != "g" {
+		t.Errorf("only-global = %q, want it to survive alongside the overrides", got)
+	}
+}
+
+// A broken global config must name the file that is broken. Three files share
+// the base name ".mcp.json", and reporting just the base name sent one reader
+// hunting through the wrong directory entirely.
+func TestLoadConfigErrorNamesTheOffendingFile(t *testing.T) {
+	root := isolateConfigRoot(t)
+	os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(`{"mcpServers": {`), 0o644)
+
+	_, err := LoadConfig(t.TempDir())
+	if err == nil {
+		t.Fatal("want an error for a malformed global config")
+	}
+	if !strings.Contains(err.Error(), filepath.Join(root, ".mcp.json")) {
+		t.Errorf("error should name the full path, got %q", err)
+	}
+}
+
+// Running Klaudia with the project dir set to the config dir itself made the
+// same file both the global base and the project base.
+func TestLoadConfigHandlesProjectDirEqualToConfigRoot(t *testing.T) {
+	root := isolateConfigRoot(t)
+	os.WriteFile(filepath.Join(root, ".mcp.json"),
+		[]byte(`{"mcpServers":{"one":{"command":"x"}}}`), 0o644)
+
+	cfg, err := LoadConfig(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.MCPServers) != 1 {
+		t.Errorf("expected the duplicate path to load once, got %v", cfg.MCPServers)
 	}
 }
 
@@ -148,6 +235,7 @@ func TestManagerToolsWrapsAndCalls(t *testing.T) {
 }
 
 func TestLoadConfigMissingIsEmpty(t *testing.T) {
+	isolateConfigRoot(t)
 	cfg, err := LoadConfig(t.TempDir())
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -158,6 +246,7 @@ func TestLoadConfigMissingIsEmpty(t *testing.T) {
 }
 
 func TestLoadConfigKlaudiaOverride(t *testing.T) {
+	isolateConfigRoot(t)
 	dir := t.TempDir()
 	// Base ./.mcp.json defines two servers.
 	os.WriteFile(filepath.Join(dir, ".mcp.json"),

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -15,15 +16,42 @@ import (
 // Spawner runs sub-agents. It implements tools.Spawner so the Agent tool can
 // launch a child loop with a filtered toolset and the type's system prompt.
 type Spawner struct {
-	provider      api.Provider
-	base          *tools.Registry
-	model         anthropic.Model
-	permission    permission.Context
-	approver      Approver
-	maxTurns      int
+	provider   api.Provider
+	base       *tools.Registry
+	model      anthropic.Model
+	permission permission.Context
+	approver   Approver
+	maxTurns   int
+
+	// mu guards deferredTools, which an MCP config reload replaces while the
+	// agent loop is reading it to spawn a sub-agent. The map is swapped
+	// wholesale and never mutated in place, so a reader that has taken a
+	// reference may safely use it after releasing the lock.
+	mu            sync.RWMutex
 	deferredTools map[string]bool
-	workingDir    string
-	hostGate      *HostGate
+
+	workingDir string
+	hostGate   *HostGate
+}
+
+// SetDeferred replaces the deferred-tool set. A config reload can add or drop
+// MCP tools mid-session, and a sub-agent spawned afterwards should inherit the
+// set as it is now, not as it was at startup.
+func (s *Spawner) SetDeferred(deferred map[string]bool) {
+	next := make(map[string]bool, len(deferred))
+	for name, ok := range deferred {
+		next[name] = ok
+	}
+	s.mu.Lock()
+	s.deferredTools = next
+	s.mu.Unlock()
+}
+
+// deferred returns the current deferred-tool set.
+func (s *Spawner) deferred() map[string]bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.deferredTools
 }
 
 // WithWorkingDir sets the project root sub-agents inherit. Without it a
@@ -115,7 +143,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		WorkingDir:    s.workingDir,
 		Approver:      s.approver,
 		ContextWindow: ctxWindow,
-		DeferredTools: filterDeferred(s.deferredTools, childTools),
+		DeferredTools: filterDeferred(s.deferred(), childTools),
 	}, emit)
 	if err != nil {
 		return "", err

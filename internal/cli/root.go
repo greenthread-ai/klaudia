@@ -45,9 +45,18 @@ func compactAndPersist(ctx context.Context, history []anthropic.BetaMessageParam
 	return newHistory, summary, err
 }
 
+// agentWiring is the registry the main loop dispatches from, plus the parts a
+// config reload needs in order to rebuild it: the Agent tool to re-append, and
+// the spawner whose deferred-tool set has to track the new tool list.
+type agentWiring struct {
+	registry  *tools.Registry
+	spawner   *agent.Spawner
+	agentTool tools.Tool
+}
+
 // withAgentTool returns a registry that is the base tools plus the Agent tool,
 // wired to a sub-agent spawner that draws from the base tools.
-func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *agent.HostGate) (*tools.Registry, error) {
+func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *agent.HostGate) (*agentWiring, error) {
 	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).
 		WithWorkingDir(workingDir).
 		WithHostGate(host)
@@ -60,7 +69,11 @@ func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.
 	if err != nil {
 		return nil, err
 	}
-	return tools.NewRegistry(append(base.All(), agentTool)...), nil
+	return &agentWiring{
+		registry:  tools.NewRegistry(append(base.All(), agentTool)...),
+		spawner:   spawner,
+		agentTool: agentTool,
+	}, nil
 }
 
 // skillToolInfos adapts loaded skills into the tools package's SkillInfo,
@@ -801,16 +814,12 @@ func run(cmd *cobra.Command, opts *options) error {
 	for _, e := range mcpErrs {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", e)
 	}
-	baseTools := base.All()
-	baseTools = append(baseTools, mcpMgr.Tools(ctx)...)
-	if rts, rerr := mcpMgr.ResourceTools(); rerr == nil && len(mcpMgr.Servers()) > 0 {
-		baseTools = append(baseTools, rts...)
-	}
 	// Persistent memory: one store shared by the Memory tool (agent + sub-agents)
 	// and the /memory command.
+	staticTools := base.All()
 	memStore := memory.New(filepath.Join(cwd, ".klaudia"))
 	if memTool, merr := tools.NewMemoryForProject(memStore, cwd); merr == nil {
-		baseTools = append(baseTools, memTool)
+		staticTools = append(staticTools, memTool)
 	}
 
 	// User-defined skills (~/.klaudia/skills overlaid by .klaudia/skills) become a
@@ -818,36 +827,92 @@ func run(cmd *cobra.Command, opts *options) error {
 	skills := skill.Load(cwd, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
 	skillInfos := skillToolInfos(skills)
 	if skillTool, serr := tools.NewSkill(skillInfos); serr == nil && skillTool != nil {
-		baseTools = append(baseTools, skillTool)
+		staticTools = append(staticTools, skillTool)
 	}
 
+	// buildTools folds the live MCP tools into the fixed local set. It runs at
+	// startup and again on every config reload, so the two cannot drift: a tool
+	// set assembled one way at boot and another way on reload is how a reloaded
+	// session ends up subtly unlike a restarted one.
+	//
 	// Deferred tool loading: MCP tools can be numerous, so withhold them from
 	// the initial request behind a ToolSearch tool that loads them on demand.
-	deferredTools := map[string]bool{}
-	for _, t := range baseTools {
-		if strings.HasPrefix(t.Name(), "mcp__") {
-			deferredTools[t.Name()] = true
+	buildTools := func() ([]tools.Tool, map[string]bool) {
+		all := append([]tools.Tool(nil), staticTools...)
+		all = append(all, mcpMgr.Tools(ctx)...)
+		if rts, rerr := mcpMgr.ResourceTools(); rerr == nil && len(mcpMgr.Servers()) > 0 {
+			all = append(all, rts...)
 		}
+		deferred := map[string]bool{}
+		for _, t := range all {
+			if strings.HasPrefix(t.Name(), "mcp__") {
+				deferred[t.Name()] = true
+			}
+		}
+		if len(deferred) > 0 {
+			catalog := make([]tools.ToolInfo, 0, len(all))
+			for _, t := range all {
+				desc, _ := t.Description(ctx)
+				catalog = append(catalog, tools.ToolInfo{Name: t.Name(), Description: desc})
+			}
+			if ts, terr := tools.NewToolSearch(catalog); terr == nil {
+				all = append(all, ts)
+			}
+		}
+		return all, deferred
 	}
-	if len(deferredTools) > 0 {
-		catalog := make([]tools.ToolInfo, 0, len(baseTools))
-		for _, t := range baseTools {
-			desc, _ := t.Description(ctx)
-			catalog = append(catalog, tools.ToolInfo{Name: t.Name(), Description: desc})
-		}
-		if ts, terr := tools.NewToolSearch(catalog); terr == nil {
-			baseTools = append(baseTools, ts)
-		}
-	}
+
+	baseTools, deferredTools := buildTools()
 	base = tools.NewRegistry(baseTools...)
+
+	// deferredTools is replaced when the MCP config reloads, on the watcher's
+	// goroutine, while per-turn closures below read it on the session's. Reads
+	// go through currentDeferred; the map is swapped whole, never mutated.
+	var deferredMu sync.RWMutex
+	currentDeferred := func() map[string]bool {
+		deferredMu.RLock()
+		defer deferredMu.RUnlock()
+		return deferredTools
+	}
 
 	// Headless has no one to ask. Ordinary work still runs; host changes are
 	// refused with the flag that would permit them, so the output says what to
 	// do rather than only what failed.
 	approver := agent.HeadlessApprover(opts.allowHostChanges)
-	registry, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd, hostGate)
+	wiring, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd, hostGate)
 	if err != nil {
 		return err
+	}
+	registry := wiring.registry
+
+	// MCP config hot reload. An edit to any .mcp.json that applies here takes
+	// effect in this session instead of at the next start — installing a server
+	// and then having to restart to use it is the whole problem.
+	//
+	// Both registries are rebuilt: the main loop dispatches from `registry`,
+	// while sub-agents draw from `base`. Updating one and not the other would
+	// give a sub-agent a different tool set than its parent.
+	//
+	// A config that no longer parses is left alone rather than applied — a
+	// half-typed file should not take working servers away mid-session. The
+	// failure is deliberately not printed: there is no way to write to a live
+	// TUI from here without corrupting the render, and /mcp shows the state.
+	stopWatch, werr := mcp.Watch(cwd, func() {
+		cfg, lerr := mcp.LoadConfig(cwd)
+		if lerr != nil {
+			return
+		}
+		mcpMgr.Reload(ctx, cfg)
+		next, deferred := buildTools()
+		base.Replace(next...)
+		registry.Replace(append(append([]tools.Tool(nil), next...), wiring.agentTool)...)
+		wiring.spawner.SetDeferred(deferred)
+		deferredMu.Lock()
+		deferredTools = deferred
+		deferredMu.Unlock()
+	})
+	if werr == nil {
+		defer stopWatch()
 	}
 
 	// Open the transcript for this session (best effort: a transcript failure
@@ -946,7 +1011,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				Host:            hostGate,
 				Interject:       interject,
 				BeforeEdit:      beforeEdit,
-				DeferredTools:   deferredTools,
+				DeferredTools:   currentDeferred(),
 				Approver:        ap,
 				Asker:           asker,
 				Planner:         planner,
@@ -976,7 +1041,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				Permission:      permCtx,
 				Host:            hostGate,
 				Approver:        ap,
-				DeferredTools:   deferredTools,
+				DeferredTools:   currentDeferred(),
 				InitialMessages: history,
 				Recorder:        recorder,
 				WebTools:        true,

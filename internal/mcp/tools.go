@@ -76,10 +76,11 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 	if len(raw) > 0 {
 		_ = json.Unmarshal(raw, &args)
 	}
-	if !t.server.Connected() {
+	sess := t.server.sess()
+	if sess == nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP server %q is disconnected; reconnect it with /mcp.", t.server.Name), IsError: true}}, nil
 	}
-	res, err := t.server.session.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args})
+	res, err := sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args})
 	if err != nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP call failed: %v", err), IsError: true}}, nil
 	}
@@ -90,17 +91,19 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 // to list are skipped.
 func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 	var out []tools.Tool
-	for _, srv := range m.servers {
-		if !srv.Connected() {
+	for _, srv := range m.Servers() {
+		sess := srv.sess()
+		if sess == nil {
 			continue
 		}
-		res, err := srv.session.ListTools(ctx, &mcpsdk.ListToolsParams{})
+		res, err := sess.ListTools(ctx, &mcpsdk.ListToolsParams{})
 		if err != nil {
 			continue
 		}
 		// An override, when present, decides for every tool on the server and
 		// the annotations are not consulted at all — in either direction.
-		override := m.cfg.MCPServers[srv.Name].ReadOnly
+		cfg, _ := m.serverConfig(srv.Name)
+		override := cfg.ReadOnly
 		for _, rt := range res.Tools {
 			schema, _ := json.Marshal(rt.InputSchema)
 			if len(schema) == 0 || string(schema) == "null" {
@@ -138,23 +141,17 @@ func (m *Manager) ResourceTools() ([]tools.Tool, error) {
 }
 
 // findServer returns the connected server with the given name.
-func (m *Manager) findServer(name string) *Server {
-	for _, s := range m.servers {
-		if s.Name == name {
-			return s
-		}
-	}
-	return nil
-}
+func (m *Manager) findServer(name string) *Server { return m.find(name) }
 
 // formatResourceList renders the resources of all servers as text.
 func (m *Manager) formatResourceList(ctx context.Context) string {
 	var b strings.Builder
-	for _, srv := range m.servers {
-		if !srv.Connected() {
+	for _, srv := range m.Servers() {
+		sess := srv.sess()
+		if sess == nil {
 			continue
 		}
-		res, err := srv.session.ListResources(ctx, &mcpsdk.ListResourcesParams{})
+		res, err := sess.ListResources(ctx, &mcpsdk.ListResourcesParams{})
 		if err != nil {
 			continue
 		}

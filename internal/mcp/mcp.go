@@ -10,12 +10,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/greenthread-ai/klaudia/internal/session"
 	"github.com/greenthread-ai/klaudia/internal/version"
 )
 
@@ -55,15 +58,43 @@ type Config struct {
 	MCPServers map[string]ServerConfig `json:"mcpServers"`
 }
 
-// LoadConfig reads .mcp.json from dir. A missing file yields an empty config
-// (not an error). A project .klaudia/.mcp.json overrides ./.mcp.json per server,
-// so MCP servers can be locally overridden in the .klaudia folder.
+// ConfigPaths returns the .mcp.json files that apply to a project at dir, in
+// increasing order of precedence: the global ~/.klaudia/.mcp.json (honouring
+// KLAUDIA_CONFIG_DIR), the project's ./.mcp.json, then ./.klaudia/.mcp.json.
+//
+// Loading and watching must agree on this list — a file that is read but not
+// watched reloads only by restart, and one that is watched but not read fires
+// reloads that change nothing — so both go through here.
+func ConfigPaths(dir string) []string {
+	out := make([]string, 0, 3)
+	seen := map[string]bool{}
+	for _, p := range []string{
+		filepath.Join(session.ConfigRoot(), ".mcp.json"),
+		filepath.Join(dir, ".mcp.json"),
+		filepath.Join(dir, ".klaudia", ".mcp.json"),
+	} {
+		// When the project IS the config dir the same file appears twice.
+		// Collapsing it here keeps a duplicate from re-reporting its errors.
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return out
+}
+
+// LoadConfig reads the .mcp.json files that apply to dir (see ConfigPaths), in
+// increasing precedence. A missing file yields an empty config (not an error);
+// later files override earlier ones per server name, so a project can redefine
+// or extend a globally configured server.
+//
+// The global scope is what makes a personal server — one you want in every
+// project rather than in one repo — installable once. Without it the only
+// answer was to copy the same file into every checkout.
 func LoadConfig(dir string) (Config, error) {
 	cfg := Config{MCPServers: map[string]ServerConfig{}}
-	for _, p := range []string{
-		filepath.Join(dir, ".mcp.json"),             // base
-		filepath.Join(dir, ".klaudia", ".mcp.json"), // local override (wins)
-	} {
+	for _, p := range ConfigPaths(dir) {
 		data, err := os.ReadFile(p)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -73,7 +104,10 @@ func LoadConfig(dir string) (Config, error) {
 		}
 		var c Config
 		if err := json.Unmarshal(stripJSONComments(data), &c); err != nil {
-			return cfg, fmt.Errorf("%s: %w", filepath.Base(p), err)
+			// The full path, not the base name: three files share the name
+			// ".mcp.json", and "which one is broken" is the entire question
+			// when the answer is a config in a different directory.
+			return cfg, fmt.Errorf("%s: %w", p, err)
 		}
 		for name, sc := range c.MCPServers {
 			cfg.MCPServers[name] = sc
@@ -83,13 +117,40 @@ func LoadConfig(dir string) (Config, error) {
 }
 
 // Server is a connected MCP server session and its configured name.
+//
+// session is guarded because the goroutines that read it and the ones that
+// replace it are different: tool calls run on the agent loop, /mcp runs on the
+// TUI, and a config reload runs on the config watcher.
 type Server struct {
-	Name    string
+	Name string
+
+	mu      sync.RWMutex
 	session *mcpsdk.ClientSession
 }
 
+// sess returns the live session, or nil when the server is disconnected.
+func (s *Server) sess() *mcpsdk.ClientSession {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.session
+}
+
+// swapSession installs next and returns the session it displaced, which the
+// caller closes. Returning it rather than closing it here keeps the (possibly
+// blocking) Close outside the lock.
+func (s *Server) swapSession(next *mcpsdk.ClientSession) *mcpsdk.ClientSession {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prev := s.session
+	s.session = next
+	return prev
+}
+
 // Connected reports whether the server currently has a live session.
-func (s *Server) Connected() bool { return s != nil && s.session != nil }
+func (s *Server) Connected() bool { return s.sess() != nil }
 
 func newClient() *mcpsdk.Client {
 	return mcpsdk.NewClient(&mcpsdk.Implementation{Name: "klaudia", Version: version.Version}, nil)
@@ -139,6 +200,7 @@ func ConnectTransport(ctx context.Context, name string, t mcpsdk.Transport) (*Se
 // a server crashes); reconnect swaps the live session into the existing *Server
 // pointer, so already-registered tool wrappers resume working.
 type Manager struct {
+	mu      sync.RWMutex
 	servers []*Server
 	cfg     Config
 	ctx     context.Context
@@ -170,13 +232,31 @@ func Connect(ctx context.Context, cfg Config) (*Manager, []error) {
 }
 
 // Add registers an already-connected server (used by tests).
-func (m *Manager) Add(s *Server) { m.servers = append(m.servers, s) }
+func (m *Manager) Add(s *Server) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.servers = append(m.servers, s)
+}
 
 // Servers returns the connected servers.
-func (m *Manager) Servers() []*Server { return m.servers }
+func (m *Manager) Servers() []*Server {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]*Server(nil), m.servers...)
+}
+
+// serverConfig returns the launch config recorded for name.
+func (m *Manager) serverConfig(name string) (ServerConfig, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	cfg, ok := m.cfg.MCPServers[name]
+	return cfg, ok
+}
 
 // find returns the server with the given name, or nil.
 func (m *Manager) find(name string) *Server {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	for _, s := range m.servers {
 		if s.Name == name {
 			return s
@@ -192,10 +272,8 @@ func (m *Manager) Disconnect(name string) error {
 	if s == nil {
 		return fmt.Errorf("no such MCP server %q", name)
 	}
-	if s.session != nil {
-		err := s.session.Close()
-		s.session = nil
-		return err
+	if prev := s.swapSession(nil); prev != nil {
+		return prev.Close()
 	}
 	return nil
 }
@@ -207,13 +285,12 @@ func (m *Manager) Reconnect(name string) error {
 	if s == nil {
 		return fmt.Errorf("no such MCP server %q", name)
 	}
-	cfg, ok := m.cfg.MCPServers[name]
+	cfg, ok := m.serverConfig(name)
 	if !ok {
 		return fmt.Errorf("no launch config for MCP server %q", name)
 	}
-	if s.session != nil {
-		_ = s.session.Close()
-		s.session = nil
+	if prev := s.swapSession(nil); prev != nil {
+		_ = prev.Close()
 	}
 	// Bound the launch+handshake so a hung server can't block the caller (the
 	// TUI runs this synchronously). On timeout the server stays disconnected.
@@ -226,8 +303,88 @@ func (m *Manager) Reconnect(name string) error {
 		}
 		return err
 	}
-	s.session = fresh.session
+	if prev := s.swapSession(fresh.sess()); prev != nil {
+		_ = prev.Close()
+	}
 	return nil
+}
+
+// Reload applies a freshly loaded config to the running servers: ones that are
+// no longer configured are disconnected and dropped, ones whose launch config
+// changed are restarted, and new ones are connected. A server whose config is
+// untouched keeps its session — adding one server must not interrupt the work
+// of the others, which is the whole difference between a reload and a restart.
+//
+// Errors are collected rather than returned early, matching Connect: one bad
+// server leaves the rest running.
+func (m *Manager) Reload(ctx context.Context, cfg Config) []error {
+	m.mu.Lock()
+	prevCfg := m.cfg
+	prev := append([]*Server(nil), m.servers...)
+	m.cfg = cfg
+	m.mu.Unlock()
+
+	existing := make(map[string]*Server, len(prev))
+	for _, s := range prev {
+		existing[s.Name] = s
+	}
+
+	names := make([]string, 0, len(cfg.MCPServers))
+	for n := range cfg.MCPServers {
+		names = append(names, n)
+	}
+	sort.Strings(names) // deterministic order, for stable tool lists
+
+	var errs []error
+	next := make([]*Server, 0, len(names))
+	for _, name := range names {
+		sc := cfg.MCPServers[name]
+		old, had := existing[name]
+		delete(existing, name)
+
+		// Unchanged and already running: leave it completely alone.
+		if had && old.Connected() && reflect.DeepEqual(prevCfg.MCPServers[name], sc) {
+			next = append(next, old)
+			continue
+		}
+
+		if had {
+			if s := old.swapSession(nil); s != nil {
+				_ = s.Close()
+			}
+		}
+		fresh, err := connectServer(ctx, name, sc)
+		if err != nil {
+			errs = append(errs, err)
+			// Keep a disconnected placeholder, so /mcp can retry it by hand.
+			if had {
+				next = append(next, old)
+			} else {
+				next = append(next, &Server{Name: name})
+			}
+			continue
+		}
+		if had {
+			// Reuse the pointer: tool wrappers built before this reload hold
+			// it, and swapping the session keeps them working.
+			old.swapSession(fresh.sess())
+			next = append(next, old)
+			continue
+		}
+		next = append(next, fresh)
+	}
+
+	// Whatever is still in existing was dropped from the config.
+	for _, s := range existing {
+		if sess := s.swapSession(nil); sess != nil {
+			_ = sess.Close()
+		}
+	}
+
+	m.mu.Lock()
+	m.servers = next
+	m.mu.Unlock()
+	return errs
 }
 
 // reconnectTimeout bounds a single /mcp reconnect attempt.
@@ -235,9 +392,9 @@ const reconnectTimeout = 10 * time.Second
 
 // Close terminates all server sessions.
 func (m *Manager) Close() {
-	for _, s := range m.servers {
-		if s.session != nil {
-			_ = s.session.Close()
+	for _, s := range m.Servers() {
+		if sess := s.swapSession(nil); sess != nil {
+			_ = sess.Close()
 		}
 	}
 }

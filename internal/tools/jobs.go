@@ -152,7 +152,13 @@ func (s *JobStore) Start(e sandbox.Executor, req sandbox.Request) (StartResult, 
 		j.log.Close()
 		return StartResult{}, err
 	}
-	return StartResult{Job: j.status()}, nil
+	// status() reads fields that jobExited writes under s.mu, and a job that
+	// exits immediately can do so before this line. Every other status() call
+	// site holds the lock; this one was the outlier.
+	s.mu.Lock()
+	st := j.status()
+	s.mu.Unlock()
+	return StartResult{Job: st}, nil
 }
 
 // launch starts (or relaunches) a job's process.

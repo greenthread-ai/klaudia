@@ -656,7 +656,17 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	rawStr := string(raw)
 	errResultTagged := func(msg string, hostBlocked bool) anthropic.BetaContentBlockParamUnion {
 		failures[key]++
-		bumpErrStreak(errStreaks, tu.Name, msg, rawStr)
+		// A refusal by the host gate is a decision, not a malfunction. Its text
+		// is identical whatever the command was, so feeding it to the same-shape
+		// streak makes two unrelated refused commands look like proof the
+		// environment is wedged, and loop-breaker B then latches the tool for
+		// the rest of the Run — a latch nothing can clear, because the only
+		// reset is a successful execution and B is what prevents one. Count the
+		// exact call (breaker A still stops a literal retry) but leave the shape
+		// streak out of it.
+		if !hostBlocked {
+			bumpErrStreak(errStreaks, tu.Name, msg, rawStr)
+		}
 		if emit != nil {
 			emit(Event{
 				Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID,
@@ -670,9 +680,12 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	}
 
 	// Loop-breaker A: this exact call has already failed repeatedly. Don't run
-	// it again — it would fail identically.
+	// it again — it would fail identically. Refuse with shortCircuit for the
+	// same reason B does: we are declining to run the call, not observing it
+	// fail, and recording our own refusal as a failure would let A feed B until
+	// B latches the tool outright.
 	if failures[key] >= repeatFailureLimit {
-		return errResult(repeatedFailureMsg(tu.Name, failures[key]))
+		return shortCircuit(emit, tu, repeatedFailureMsg(tu.Name, failures[key]))
 	}
 	// Loop-breaker B: the same tool has produced the same KIND of error for
 	// `repeatFailureLimit` consecutive calls. Two cases — identical inputs (the
@@ -709,6 +722,12 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 			if !l.approveHostChange(ctx, tu, raw, opts, hd) {
 				return errResultTagged(hostDeclinedMsg(hd), true)
 			}
+			// Approval is new information about the tool's prospects. Anything
+			// it was carrying from earlier refusals — this call's own count and
+			// the tool's shape streak — is now stale, and leaving it in place
+			// is how "permission granted" still leaves the tool unusable.
+			delete(failures, key)
+			delete(errStreaks, tu.Name)
 		}
 	}
 
