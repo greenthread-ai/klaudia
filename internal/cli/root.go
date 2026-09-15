@@ -772,8 +772,6 @@ func run(cmd *cobra.Command, opts *options) error {
 		mode = permission.ModeBypassPermissions
 	}
 
-	// Headless path: the mode is fixed for the lifetime of this command.
-	permCtx := permission.Context{Mode: permission.StaticMode(mode), Allow: allowRules, Deny: denyRules}
 	var extraDirs func() []string
 	hostGate := &agent.HostGate{
 		Policy: hostPolicy,
@@ -789,6 +787,14 @@ func run(cmd *cobra.Command, opts *options) error {
 		// Refusals point the model at the tool that gets an operation approved
 		// in one go, rather than leaving it to retry the command.
 		DeclareTool: "RequestHostChange",
+	}
+
+	// Headless path: the mode is fixed for the lifetime of this command.
+	permCtx := permission.Context{
+		Mode:     permission.StaticMode(mode),
+		Allow:    allowRules,
+		Deny:     denyRules,
+		Trusting: func() bool { return hostGate.Policy == agent.HostEnforce },
 	}
 
 	// Refresh MEMORY.md's links to the .klaudia/memory/*.md detail notes before
@@ -1035,6 +1041,9 @@ func run(cmd *cobra.Command, opts *options) error {
 				Mode:  func() permission.Mode { return permission.Mode(sess.PermissionMode) },
 				Allow: allowRules,
 				Deny:  denyRules,
+				// Live for the same reason the mode is: /trust upgrade should
+				// stop the MCP prompts on the next tool call, not the next turn.
+				Trusting: func() bool { return hostGate.Policy == agent.HostEnforce },
 			}
 			return loop.Run(ctx, agent.Options{
 				WorkingDir:      cwd,

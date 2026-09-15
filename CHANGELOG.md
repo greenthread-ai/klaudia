@@ -53,6 +53,29 @@ port mirrors (see `internal/version`).
   print a line each time an unrelated key in the file was saved.
 
 ### Fixed
+- **An enforcing session no longer prompts for every MCP call.** MCP tools were
+  the one door the zone model did not reach: their intrinsic decision was `Ask`
+  in every interactive mode regardless of trust, on the grounds that external
+  code should never be auto-allowed by mode alone. In a session that actually
+  uses MCP that produced a stream of prompts nobody could answer on the merits
+  — *may `mcp__gsol__godot_game_time` run?* is not a question the user has the
+  information to decide — and approving one bought a single qualified name.
+  Nothing accumulated: renaming a server in `.mcp.json`, or reaching for the
+  twenty-second tool on a server with sixty, started again from nothing. Rule
+  matching is exact on the tool name, so `mcp__server__*` could not help.
+
+  MCP calls now follow the trust posture, like every other tool. Enforcing acts;
+  observing and off still ask. Plan mode still refuses, because that is about
+  what the session is for rather than who vouches for the call, and `dontAsk`
+  now proceeds when trust is enforcing instead of refusing for want of anyone to
+  prompt — which is what makes MCP usable in unattended runs.
+
+  What this gives up is documented rather than glossed: the classifier reads
+  tool inputs and has no model of what an MCP server does, so an MCP call raises
+  no concerns and is permitted. Following the posture means trusting the servers
+  in `.mcp.json` roughly as much as the shell — the same bet configuring them
+  already made. See `docs/trust.md`.
+
 - **`ToolSearch` ranks matches instead of demanding every term.** Matching was
   a strict AND of substrings: a tool was returned only if *every* word of the
   query appeared in that one tool's name or description. Describing what you

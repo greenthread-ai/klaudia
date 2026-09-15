@@ -120,6 +120,25 @@ type Context struct {
 	Mode  func() Mode
 	Allow []Rule
 	Deny  []Rule
+	// Trusting reports whether the zone-based trust model is enforcing for this
+	// session. It is a function for the same reason Mode is: /trust upgrade
+	// should take effect on the next tool call, not the next turn.
+	//
+	// It is a bool rather than the trust posture itself so that this package
+	// stays a leaf. permission is imported by both tools and agent, and giving
+	// it a dependency on trust — which needs a filesystem view and a
+	// session-scoped ledger — would invert that. The one bit of information
+	// that crosses is "is something else already vouching for this call".
+	Trusting func() bool
+}
+
+// IsTrusting reports c.Trusting() with a nil-safe default of false, so a
+// zero-value Context behaves as it did before trust existed.
+func IsTrusting(c Context) bool {
+	if c.Trusting == nil {
+		return false
+	}
+	return c.Trusting()
 }
 
 // StaticMode returns a Mode-function that always reports m. Convenience for

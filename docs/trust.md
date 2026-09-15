@@ -77,6 +77,35 @@ Some consequences worth being explicit about:
   inside the project is project work. Treating every `sudo` as a host change is
   how a protection gets switched off.
 
+## MCP tools
+
+An enforcing session calls MCP tools without asking. An observing or disabled
+one asks before every call, as it always did.
+
+This is the one place where the zone model is trusted without being able to see
+what it is trusting. The classifier reads command lines and tool inputs; it has
+no model of what a given MCP server does with `{"action": "run"}`, so an MCP
+call raises no concerns and the gate permits it. Following the trust posture
+therefore means treating the servers in `.mcp.json` roughly as you treat the
+shell — which is the same bet you already made by configuring them, since an
+MCP server is an ordinary local process with your privileges.
+
+The alternative was worse in practice. Asking per call produced a prompt no one
+could answer on the merits — *may `mcp__gsol__godot_game_time` run?* is not a
+question the user has the information to decide — and the approval bought one
+qualified name. Approvals never accumulated into anything: a server renamed in
+`.mcp.json`, or the twenty-second tool on a server with sixty, started again
+from nothing. The result was a stream of consent decisions that carried no
+information and conferred no lasting permission, which is how people learn to
+approve without reading.
+
+Plan mode still refuses MCP calls. That is about what the session is for, not
+about who vouches for the call.
+
+If you want a server available without granting it a trusting session, mark it
+read-only in `.mcp.json` and reach for it from a read-only sub-agent; that path
+is governed by the `readOnlyHint` annotation rather than by trust.
+
 ## One approval per operation
 
 When Klaudia needs to change this machine it calls `RequestHostChange` first,

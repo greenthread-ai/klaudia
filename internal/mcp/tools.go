@@ -12,18 +12,38 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
-// mcpPermission is the intrinsic decision for MCP tools: ask in interactive
-// modes, blocked in plan/dontAsk. (bypass is handled upstream.) MCP tools are
-// external code, so they are never auto-allowed by mode alone.
+// mcpPermission is the intrinsic decision for MCP tools.
+//
+// When the trust model is enforcing, MCP calls proceed without a prompt. The
+// host gate runs in front of every tool call and is what actually protects the
+// machine; asking again here made MCP the one door where the zone model was
+// ignored and the user was handed a per-tool consent decision instead. That
+// decision was not answerable in any useful way — "may godot_game_time run?"
+// carries no information the user has — and it did not even accumulate, because
+// approvals key on the qualified name: renaming a server, or reaching for the
+// twenty-second tool on it, started again from nothing.
+//
+// What this gives up is real and worth stating. The gate classifies tool calls
+// by reading their inputs, and it has no model of what an MCP server does, so
+// an MCP call raises no concerns and is allowed. Trusting the zone model here
+// means trusting the servers in .mcp.json roughly as much as the shell —
+// which is the same bet as running them at all, and is why this follows the
+// trust posture rather than being unconditional.
+//
+// Without trust enforcing, the old behaviour stands: ask in interactive modes,
+// refuse where there is nobody to ask.
 func mcpPermission(pctx permission.Context) permission.Decision {
-	switch permission.CurrentMode(pctx) {
-	case permission.ModePlan:
+	if permission.CurrentMode(pctx) == permission.ModePlan {
+		// Plan mode is read-only for every tool, trusted or not.
 		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; MCP tools are not allowed"}
-	case permission.ModeDontAsk:
-		return permission.Decision{Behavior: permission.Deny, Message: "not pre-approved (dontAsk mode)"}
-	default:
-		return permission.Decision{Behavior: permission.Ask}
 	}
+	if permission.IsTrusting(pctx) {
+		return permission.Decision{Behavior: permission.Allow}
+	}
+	if permission.CurrentMode(pctx) == permission.ModeDontAsk {
+		return permission.Decision{Behavior: permission.Deny, Message: "not pre-approved (dontAsk mode)"}
+	}
+	return permission.Decision{Behavior: permission.Ask}
 }
 
 // mcpTool adapts a single MCP server tool to the Klaudia Tool interface. Its
@@ -51,7 +71,8 @@ func (t *mcpTool) InputSchema() json.RawMessage                { return t.inputS
 //
 // This governs which tools a read-only sub-agent is handed. It is not a claim
 // that calling the tool is safe — nothing here verifies what a server does, and
-// the main agent still asks before every MCP call regardless.
+// under an enforcing trust posture the main agent calls MCP tools without
+// asking, read-only or not.
 func (t *mcpTool) ReadOnly() bool { return t.readOnly }
 
 // ValidateInput is a no-op beyond JSON well-formedness; the server validates
