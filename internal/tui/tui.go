@@ -79,6 +79,11 @@ type Session struct {
 	ListModels func(context.Context) ([]api.ModelInfo, error)
 	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
 	MCP MCPController
+	// OnMCPReload, if set, registers a listener for the outcome of MCP config
+	// hot reloads. The TUI calls it once at startup. Nil means reload failures
+	// are not reported, which is what happened before it existed: an edit that
+	// broke the config looked identical to one that worked.
+	OnMCPReload func(func(MCPReloadEvent))
 	// Executor runs `!` commands, shared with the Bash tool so a direct command
 	// behaves the same as one Klaudia runs. Nil falls back to an unconfined
 	// local process.
@@ -105,6 +110,24 @@ type MCPServerInfo struct {
 	Connected bool
 	Tools     int
 }
+
+// MCPReloadEvent reports the outcome of one hot reload of the MCP config.
+//
+// Only failures travel: a reload that works is meant to be invisible, and
+// announcing every successful one would punish the config file for being
+// edited.
+type MCPReloadEvent struct {
+	// ConfigErr is set when the config could not be read or parsed. Nothing
+	// was applied in that case and the servers already running are untouched,
+	// which is worth saying — the edit looks live but is not.
+	ConfigErr string
+	// ServerErrs are the per-server launch failures from an otherwise applied
+	// reload, already formatted.
+	ServerErrs []string
+}
+
+// Failed reports whether anything in the reload went wrong.
+func (e MCPReloadEvent) Failed() bool { return e.ConfigErr != "" || len(e.ServerErrs) > 0 }
 
 // CompactFunc summarizes the conversation history via the model, returning the
 // replacement history and the summary text.
@@ -546,6 +569,19 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 			}
 		})
 	}
+	// A broken .mcp.json edit used to be silent: the watcher reloaded, failed,
+	// and said nothing, so the config looked applied. Reload outcomes go down
+	// the same channel as job exits, which is how the TUI is written to across
+	// goroutines without touching the renderer.
+	if sess.OnMCPReload != nil {
+		events := m.events
+		sess.OnMCPReload(func(ev MCPReloadEvent) {
+			select {
+			case events <- mcpReloadMsg{event: ev}:
+			default: // never block the config watcher
+			}
+		})
+	}
 	// Colour the chrome for the session's theme before drawing the banner.
 	applyChromeTheme(chromePaletteFor(m.currentThemeID()))
 	model, branch := "", ""
@@ -740,6 +776,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case jobExitMsg:
 		m.onJobExit(msg.status)
+		return m, m.waitForEvent()
+
+	case mcpReloadMsg:
+		m.onMCPReload(msg.event)
 		return m, m.waitForEvent()
 
 	case followTickMsg:

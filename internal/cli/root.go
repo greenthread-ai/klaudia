@@ -398,6 +398,32 @@ func (c mcpController) Servers() []tui.MCPServerInfo {
 func (c mcpController) Reconnect(name string) error  { return c.mgr.Reconnect(name) }
 func (c mcpController) Disconnect(name string) error { return c.mgr.Disconnect(name) }
 
+// mcpReloadNotifier carries reload outcomes from the config watcher to the TUI.
+//
+// The two run on different goroutines and the watcher starts first — it is
+// wired before the TUI model exists — so the listener is registered late and
+// the emit side tolerates there being nobody home. In headless runs nobody ever
+// registers, and emit is a no-op.
+type mcpReloadNotifier struct {
+	mu sync.Mutex
+	fn func(tui.MCPReloadEvent)
+}
+
+func (n *mcpReloadNotifier) register(fn func(tui.MCPReloadEvent)) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.fn = fn
+}
+
+func (n *mcpReloadNotifier) emit(ev tui.MCPReloadEvent) {
+	n.mu.Lock()
+	fn := n.fn
+	n.mu.Unlock()
+	if fn != nil {
+		fn(ev)
+	}
+}
+
 // gitBranch returns the current git branch for dir, or "" if not a repo.
 func gitBranch(dir string) string {
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
@@ -894,15 +920,18 @@ func run(cmd *cobra.Command, opts *options) error {
 	// give a sub-agent a different tool set than its parent.
 	//
 	// A config that no longer parses is left alone rather than applied — a
-	// half-typed file should not take working servers away mid-session. The
-	// failure is deliberately not printed: there is no way to write to a live
-	// TUI from here without corrupting the render, and /mcp shows the state.
+	// half-typed file should not take working servers away mid-session — and
+	// that, along with any server that failed to launch, is reported through
+	// mcpReloads so a broken edit is not silently indistinguishable from a
+	// working one.
+	mcpReloads := &mcpReloadNotifier{}
 	stopWatch, werr := mcp.Watch(cwd, func() {
 		cfg, lerr := mcp.LoadConfig(cwd)
 		if lerr != nil {
+			mcpReloads.emit(tui.MCPReloadEvent{ConfigErr: lerr.Error()})
 			return
 		}
-		mcpMgr.Reload(ctx, cfg)
+		errs := mcpMgr.Reload(ctx, cfg)
 		next, deferred := buildTools()
 		base.Replace(next...)
 		registry.Replace(append(append([]tools.Tool(nil), next...), wiring.agentTool)...)
@@ -910,6 +939,13 @@ func run(cmd *cobra.Command, opts *options) error {
 		deferredMu.Lock()
 		deferredTools = deferred
 		deferredMu.Unlock()
+		if len(errs) > 0 {
+			msgs := make([]string, 0, len(errs))
+			for _, e := range errs {
+				msgs = append(msgs, e.Error())
+			}
+			mcpReloads.emit(tui.MCPReloadEvent{ServerErrs: msgs})
+		}
 	})
 	if werr == nil {
 		defer stopWatch()
@@ -962,6 +998,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			EnterInserts:        tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 			Memory:              memStore,
 			MCP:                 mcpController{mgr: mcpMgr, ctx: ctx},
+			OnMCPReload:         mcpReloads.register,
 			Skills:              tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 			Provider:            providerName(cfg),
 			SandboxMode:         sandboxMode(cfg.Sandbox),

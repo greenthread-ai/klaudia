@@ -34,9 +34,23 @@ port mirrors (see `internal/version`).
   live session writes to continuously, and watching it recursively would rebuild
   the MCP servers on every message typed. A config that no longer parses is left
   unapplied rather than applied empty — a half-typed file should not take
-  working servers away. Reload failures are currently silent because there is no
-  way to write to a live TUI from the watcher without corrupting the render;
-  `/mcp` shows the resulting state.
+  working servers away — and both that and any server which fails to launch are
+  now reported in the transcript.
+
+- **A failed MCP reload says so.** Reload outcomes were silent, on the grounds
+  that the watcher could not write to a live TUI without corrupting the render.
+  That was not true: background jobs already report their exits across
+  goroutines through the model's event channel, and reload notices go the same
+  way. Silence was the expensive part — a typo in `.mcp.json` looked exactly
+  like a clean reload, and the first sign of trouble was an unrelated-looking
+  tool failure much later.
+
+  A config that fails to parse reports the parse error *and* that the previously
+  loaded servers are still running, because the natural reading of a config
+  error is that MCP is now down, and the useful fact is the opposite. Servers
+  that fail to launch are named, capped at three with a count of the rest, and
+  point at `/mcp`. A reload that works stays silent: announcing every one would
+  print a line each time an unrelated key in the file was saved.
 
 ### Fixed
 - **`ToolSearch` ranks matches instead of demanding every term.** Matching was
