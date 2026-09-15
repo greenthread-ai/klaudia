@@ -39,6 +39,27 @@ port mirrors (see `internal/version`).
   `/mcp` shows the resulting state.
 
 ### Fixed
+- **A reload restarts an MCP server whose process has died.** Hot reload left
+  one gap: a server that crashed, or was killed from outside, was skipped by
+  every subsequent reload and stayed unreachable until Klaudia restarted.
+  `Reload` asked `Connected()`, which reports whether we still hold a
+  `ClientSession` — and a stdio server whose child process has died keeps a
+  non-nil one, because nothing nils it out. So the corpse read as "unchanged and
+  running" and was left in place. Editing `.mcp.json` did nothing; the only way
+  back was renaming the server's key, which made it look new rather than
+  unchanged.
+
+  Reload now probes with a 2s-bounded protocol `Ping` instead. The config
+  comparison runs first, so the ping is paid only for servers that would
+  otherwise have been kept, and a server that fails it is relaunched like any
+  other changed one. `Connected()` keeps its cheap non-blocking meaning for
+  `/mcp` and the tool wrappers, which want "is there a session" rather than "is
+  the far end alive".
+
+  Found while running two Godot MCP servers side by side, where killing a server
+  by hand is routine; the regression test kills the peer and asserts the
+  relaunch, and fails against the previous condition.
+
 - **A refused host change no longer disables the tool for the rest of the turn.**
   The host gate refuses with the same text whatever the command was, so two
   refused commands looked to loop-breaker B like one error shape recurring

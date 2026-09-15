@@ -149,8 +149,28 @@ func (s *Server) swapSession(next *mcpsdk.ClientSession) *mcpsdk.ClientSession {
 	return prev
 }
 
-// Connected reports whether the server currently has a live session.
+// Connected reports whether the server currently holds a session object. It is
+// cheap and non-blocking, which is what /mcp and the tool wrappers want, but it
+// is not a health check: see alive.
 func (s *Server) Connected() bool { return s.sess() != nil }
+
+// alive reports whether the server still answers a protocol ping.
+//
+// Connected only says a session object exists. A stdio server whose child
+// process has died keeps a non-nil ClientSession — nothing nils it out — so a
+// reload that trusted Connected would leave the corpse in place and skip the
+// relaunch, and no edit to .mcp.json could bring the server back short of
+// restarting Klaudia. Renaming the server key was the only workaround, because
+// that made it look new rather than unchanged.
+func (s *Server) alive(ctx context.Context) bool {
+	sess := s.sess()
+	if sess == nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, livenessTimeout)
+	defer cancel()
+	return sess.Ping(ctx, nil) == nil
+}
 
 func newClient() *mcpsdk.Client {
 	return mcpsdk.NewClient(&mcpsdk.Implementation{Name: "klaudia", Version: version.Version}, nil)
@@ -342,8 +362,10 @@ func (m *Manager) Reload(ctx context.Context, cfg Config) []error {
 		old, had := existing[name]
 		delete(existing, name)
 
-		// Unchanged and already running: leave it completely alone.
-		if had && old.Connected() && reflect.DeepEqual(prevCfg.MCPServers[name], sc) {
+		// Unchanged and still answering: leave it completely alone. The config
+		// comparison comes first so the ping only costs anything for a server
+		// we would otherwise have kept.
+		if had && reflect.DeepEqual(prevCfg.MCPServers[name], sc) && old.alive(ctx) {
 			next = append(next, old)
 			continue
 		}
@@ -389,6 +411,12 @@ func (m *Manager) Reload(ctx context.Context, cfg Config) []error {
 
 // reconnectTimeout bounds a single /mcp reconnect attempt.
 const reconnectTimeout = 10 * time.Second
+
+// livenessTimeout bounds the per-server health probe a reload runs before
+// deciding an unchanged server can be left alone. It is short because it is
+// paid for every surviving server on every reload, and a healthy stdio peer
+// answers a ping in microseconds.
+const livenessTimeout = 2 * time.Second
 
 // Close terminates all server sessions.
 func (m *Manager) Close() {

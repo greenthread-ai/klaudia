@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // A reload triggered by adding one server must not disturb the servers that
@@ -151,5 +153,71 @@ func TestReloadPicksUpAServerAddedToTheGlobalConfig(t *testing.T) {
 	servers := m.Servers()
 	if len(servers) != 1 || servers[0].Name != "godot" {
 		t.Fatalf("the server from the global config never arrived: %v", servers)
+	}
+}
+
+// startTestServerWithPeer is startTestServer with the server side handed back,
+// so a test can kill the peer and leave the client holding the stale session a
+// crashed stdio server actually leaves behind.
+func startTestServerWithPeer(t *testing.T) (*Manager, *mcpsdk.ServerSession) {
+	t.Helper()
+	srv := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "testsrv", Version: "0.0.1"}, nil)
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{Name: "echo", Description: "Echo the message back"},
+		func(_ context.Context, _ *mcpsdk.CallToolRequest, in echoIn) (*mcpsdk.CallToolResult, any, error) {
+			return &mcpsdk.CallToolResult{
+				Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: "echo: " + in.Message}},
+			}, nil, nil
+		})
+
+	clientT, serverT := mcpsdk.NewInMemoryTransports()
+	peer, err := srv.Connect(context.Background(), serverT, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client, err := ConnectTransport(context.Background(), "testsrv", clientT)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	m := &Manager{}
+	m.Add(client)
+	t.Cleanup(m.Close)
+	return m, peer
+}
+
+// A server whose peer has died must be relaunched by a reload even though its
+// config is byte-identical. Connected only reports that a session object
+// exists, so a reload keyed on it skipped the corpse and left the server
+// unreachable until Klaudia restarted — renaming the key in .mcp.json was the
+// only way back.
+func TestReloadRestartsServerWhosePeerDied(t *testing.T) {
+	m, peer := startTestServerWithPeer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	cfg := Config{MCPServers: map[string]ServerConfig{"testsrv": {Command: "testsrv"}}}
+	m.mu.Lock()
+	m.ctx = ctx
+	m.cfg = cfg
+	m.mu.Unlock()
+
+	if err := peer.Close(); err != nil {
+		t.Fatalf("closing the peer: %v", err)
+	}
+	// The precondition that makes this bug possible: the client still believes
+	// it holds a session. If that ever stops being true the bug is gone, but so
+	// is the meaning of this test, so assert it rather than assume it.
+	if !m.Servers()[0].Connected() {
+		t.Fatal("precondition failed: the session went nil on peer death, so Connected would have caught this")
+	}
+
+	// Identical config, dead peer: the reload must attempt a relaunch. The
+	// command "testsrv" is not a real binary, so the attempt fails and the
+	// server ends up disconnected — that it was attempted at all is the point.
+	errs := m.Reload(ctx, cfg)
+	if len(errs) == 0 {
+		t.Fatal("reload skipped a dead server instead of relaunching it")
+	}
+	if m.Servers()[0].Connected() {
+		t.Error("the dead session is still installed after the reload")
 	}
 }
