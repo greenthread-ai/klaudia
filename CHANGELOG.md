@@ -77,6 +77,19 @@ port mirrors (see `internal/version`).
   idle, and a bang line submits from idle, so a pasted multi-line command was
   handed to the shell as the literal chip text.
 
+- **Pasting into "answer in your own words" works.** The paste gate listed the
+  states with an editable box, and so did `inputHeight`, and the two copies
+  drifted: `stateAnsweringOther` was in one and not the other. A paste there was
+  dropped entirely — no chip, no text, no message — in the one state whose
+  answer is most likely to be a pasted log or diff, since it exists precisely
+  because the offered options were wrong.
+
+  Both now ask `editableInput`, and the four submit paths take their text from
+  one `readInput` that returns the chip form and the expanded form together.
+  Three bugs in this area were all the same mistake — a submit path reading the
+  raw input and sending it — so the accessor that can give the wrong answer now
+  has a single caller.
+
 - **An enforcing session no longer prompts for every MCP call.** MCP tools were
   the one door the zone model did not reach: their intrinsic decision was `Ask`
   in every interactive mode regardless of trust, on the grounds that external

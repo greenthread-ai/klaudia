@@ -608,10 +608,55 @@ func (m *Model) setState(s uiState) {
 	m.syncInputHeight()
 }
 
+// editableInput reports whether the current state shows a real, growing text
+// box, as opposed to a one-line prompt waiting on a keystroke.
+//
+// Single source of truth on purpose. This set was written out twice — once in
+// inputHeight, once in the paste gate — and the copies drifted:
+// stateAnsweringOther grew a box in one and not the other, so pasting into
+// "answer in your own words" silently did nothing, in the very state whose
+// answer is most likely to be a pasted log.
+func (m *Model) editableInput() bool {
+	switch m.state {
+	case stateIdle, stateRunning, stateAnsweringOther:
+		return true
+	default:
+		return false
+	}
+}
+
+// inputText is what the user typed, in the two forms the rest of the code has
+// to keep straight.
+//
+// Display is the paste-chip form: what is echoed to the transcript, pushed to
+// history, and put back in the box by ↑. Prompt is the expanded payload: what
+// the model, the shell, or a slash command actually receives.
+//
+// They travel together because every bug in this area has been a submit path
+// reading the raw input and sending it — the chip text arriving where the
+// payload belonged. Taking both at once makes the choice explicit at each site
+// instead of implicit in which accessor was reached for.
+type inputText struct {
+	Display string
+	Prompt  string
+}
+
+// Empty reports whether there is nothing to submit.
+func (t inputText) Empty() bool { return t.Display == "" }
+
+// readInput reads the box in both forms, trimmed. It does not consume.
+func (m *Model) readInput() inputText {
+	return inputText{
+		Display: strings.TrimSpace(m.input.Value()),
+		Prompt:  strings.TrimSpace(m.promptValue()),
+	}
+}
+
 func (m *Model) inputHeight() int {
-	// The input is shown (and editable) when idle and while the model works
-	// (for queueing a follow-up); other states show a one-line prompt.
-	if m.state != stateIdle && m.state != stateRunning && m.state != stateAnsweringOther {
+	// The input is shown (and editable) when idle, while the model works (for
+	// queueing a follow-up), and when answering a question in your own words;
+	// other states show a one-line prompt.
+	if !m.editableInput() {
 		return 1
 	}
 	// Count wrapped display rows, not logical lines: a single long line that
@@ -1054,7 +1099,10 @@ func (m *Model) onCtrlC() (tea.Model, tea.Cmd) {
 func (m *Model) onPaste(text string) (tea.Model, tea.Cmd) {
 	// Only the states that show an editable input accept a paste. Elsewhere
 	// (y/n prompts, numbered pickers) it would be interpreted as a keystroke.
-	if m.state != stateIdle && m.state != stateRunning {
+	// editableInput is shared with inputHeight so the two cannot disagree about
+	// which states have a box — they did, and a paste into the other-answer box
+	// vanished without trace.
+	if !m.editableInput() {
 		return m, nil
 	}
 	text = normalizeNewlines(text)
@@ -1073,9 +1121,13 @@ func (m *Model) onPaste(text string) (tea.Model, tea.Cmd) {
 }
 
 // promptValue is the text to actually send: what the user sees, with any paste
-// chips substituted back to their verbatim payloads. Deliberately used ONLY at
-// the submit sites — input sizing, type-ahead and history all keep working on
-// the chip form, which is the whole point of chipping.
+// chips substituted back to their verbatim payloads.
+//
+// Call readInput rather than this. Submit sites need both forms and get them
+// together; reaching for one accessor or the other at each site is how the chip
+// form ended up being sent to the model, the shell and the steer box. Input
+// sizing, type-ahead and history deliberately keep working on the chip form,
+// which is the whole point of chipping.
 func (m *Model) promptValue() string {
 	return m.pastes.expand(m.input.Value())
 }
@@ -1135,21 +1187,16 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.syncInputHeight()
 			return m, nil
 		case action == actionSubmit:
-			text := strings.TrimSpace(m.input.Value())
-			if strings.HasPrefix(text, "/") {
-				expanded := strings.TrimSpace(m.promptValue())
+			in := m.readInput()
+			if strings.HasPrefix(in.Display, "/") {
 				m.input.Reset()
-				m.pushHistory(text)
-				m.appendLine(userStyle.Render("› ") + text)
+				m.pushHistory(in.Display)
+				m.appendLine(userStyle.Render("› ") + in.Display)
 				m.syncInputHeight()
-				return m.handleSlash(expanded)
+				return m.handleSlash(in.Prompt)
 			}
-			if text != "" {
-				// Queue both forms: the chip is what the user sees and can
-				// recall, the expansion is what the agent reads. Sending the
-				// chip meant a paste made mid-turn reached the model as
-				// "[#1 pasted · 8 lines]" and nothing else.
-				m.steer.add(text, strings.TrimSpace(m.promptValue()))
+			if !in.Empty() {
+				m.steer.add(in.Display, in.Prompt)
 				m.input.Reset()
 				m.syncInputHeight()
 				// No scrollback line here. The queued state is transient — it
@@ -1275,10 +1322,11 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.syncInputHeight()
 			return m, nil
 		case actionSubmit:
-			answer := strings.TrimSpace(m.promptValue())
-			if answer == "" {
+			in := m.readInput()
+			if in.Empty() {
 				return m, nil // nothing to send yet
 			}
+			answer := in.Prompt
 			m.input.Reset()
 			m.syncInputHeight()
 			m.pushHistory(answer)
@@ -1360,37 +1408,27 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if action == actionSubmit && m.state == stateIdle && isBang(m.input.Value()) {
-		// Same display/prompt split as the idle prompt below: history keeps the
-		// chip so ↑ stays usable, the shell gets the real command. Running the
-		// chip meant a pasted multi-line command executed as the literal text
-		// "[#1 pasted · 5 lines]".
-		display := strings.TrimSpace(m.input.Value())
-		line := strings.TrimSpace(m.promptValue())
+		in := m.readInput()
 		m.input.Reset()
-		m.pushHistory(display)
+		m.pushHistory(in.Display)
 		m.syncInputHeight()
 		m.setState(stateRunning)
-		return m.runBang(line)
+		return m.runBang(in.Prompt)
 	}
 
 	if action == actionSubmit && m.state == stateIdle {
-		// display is the chip form (what's echoed and remembered); prompt is
-		// the expanded payload (what the model receives). Echoing the chip
-		// keeps a thousand-line paste out of the scrollback, and remembering
-		// the chip keeps ↑ recall usable.
-		display := strings.TrimSpace(m.input.Value())
-		prompt := strings.TrimSpace(m.promptValue())
-		if display == "" {
+		in := m.readInput()
+		if in.Empty() {
 			return m, nil
 		}
 		m.input.Reset()
-		m.pushHistory(display)
-		m.appendLine(userStyle.Render("› ") + display)
-		m.noteNav(navUser, display, prompt, 0)
+		m.pushHistory(in.Display)
+		m.appendLine(userStyle.Render("› ") + in.Display)
+		m.noteNav(navUser, in.Display, in.Prompt, 0)
 
 		// Slash commands are handled locally, not sent to the model.
-		if strings.HasPrefix(display, "/") {
-			return m.handleSlash(prompt)
+		if strings.HasPrefix(in.Display, "/") {
+			return m.handleSlash(in.Prompt)
 		}
 
 		m.setState(stateRunning)
@@ -1398,7 +1436,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// be outstanding (Init armed it; each channel-event handler re-arms it).
 		// A second reader would race and deliver streamed deltas out of order.
 		// startTurn returns only spinner/stopwatch ticks (separate cmd loops).
-		return m, m.startTurn(prompt)
+		return m, m.startTurn(in.Prompt)
 	}
 
 	return m, m.updateInput(msg)

@@ -400,3 +400,69 @@ func TestPastedBangCommandRunsExpanded(t *testing.T) {
 		t.Errorf("the chip text reached the shell:\n%s", out)
 	}
 }
+
+// The "answer in your own words" box is a real multi-line input — inputHeight
+// grows it, the submit path expands chips — but the paste gate did not list it,
+// so a paste there vanished entirely. Not truncated, not chipped: nothing.
+//
+// This is the state where pasting matters most. The escape hatch exists because
+// the model's options were wrong, and the answer is often a log or a diff.
+func TestPasteIntoTheOtherAnswerBox(t *testing.T) {
+	payload := "expected:\n\tfoo\ngot:\n\tbar\n(4 lines, tab-bearing)"
+	m := newPasteModel(t)
+	m.setState(stateAnsweringOther)
+
+	m = paste(m, payload)
+	if m.input.Value() == "" {
+		t.Fatal("the paste was swallowed at the other-answer box")
+	}
+	if !strings.Contains(m.input.Value(), "[#1 pasted") {
+		t.Fatalf("paste was not chipped, input = %q", m.input.Value())
+	}
+	if got := m.promptValue(); got != payload {
+		t.Errorf("the answer would be sent as %q, want %q", got, payload)
+	}
+}
+
+// Which states have a real text box. Both the paste gate and inputHeight now
+// ask editableInput, so they cannot disagree by construction — what this pins
+// down is the set itself, which is the part a future state can still get wrong.
+//
+// They did disagree once: stateAnsweringOther grew a box in inputHeight but was
+// missing from the paste gate, so a paste into "answer in your own words"
+// vanished without trace.
+//
+// The box is probed with a directly-set value rather than with the paste,
+// because a chipped paste is deliberately one line and would not grow it.
+func TestPasteGateMatchesTheEditableStates(t *testing.T) {
+	states := []struct {
+		name     string
+		state    uiState
+		editable bool
+	}{
+		{"idle", stateIdle, true},
+		{"running", stateRunning, true},
+		{"other-answer", stateAnsweringOther, true},
+		{"permission", stateAwaitingPermission, false},
+		{"answer picker", stateAwaitingAnswer, false},
+		{"plan y/n", stateAwaitingPlan, false},
+		{"confirm y/n", stateAwaitingConfirm, false},
+		{"choice", stateAwaitingChoice, false},
+	}
+	for _, tt := range states {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newPasteModel(t)
+			m.setState(tt.state)
+			if accepted := paste(m, "one\ntwo\nthree\nfour\nfive").input.Value() != ""; accepted != tt.editable {
+				t.Errorf("paste accepted = %v, want %v", accepted, tt.editable)
+			}
+
+			probe := newPasteModel(t)
+			probe.setState(tt.state)
+			probe.input.SetValue("one\ntwo\nthree\nfour\nfive")
+			if hasBox := probe.inputHeight() > 1; hasBox != tt.editable {
+				t.Errorf("inputHeight reports a growing box = %v, want %v", hasBox, tt.editable)
+			}
+		})
+	}
+}
