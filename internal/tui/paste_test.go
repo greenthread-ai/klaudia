@@ -307,3 +307,96 @@ func TestPasteSurvivesSubmitForHistoryRecall(t *testing.T) {
 		t.Errorf("recalled chip did not expand to the original payload")
 	}
 }
+
+// The regression a user hit in /goal mode: a paste made while Klaudia is
+// working is queued as a steering message, and that path was added three days
+// after paste chips and never taught about them — so the model received the
+// literal chip text and nothing else.
+//
+// /goal only made it likely rather than causing it: pasting a spec into a
+// session that is already running is exactly the steering path.
+func TestPasteQueuedMidTurnReachesTheAgentExpanded(t *testing.T) {
+	payload := "line one\nline two\nline three\nline four\nline five"
+	m := newPasteModel(t)
+	m.state = stateRunning
+
+	m = paste(m, payload)
+	if !strings.Contains(m.input.Value(), "[#1 pasted") {
+		t.Fatalf("precondition: paste was not chipped, input = %q", m.input.Value())
+	}
+	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = model.(*Model)
+
+	if got := peekSteerPrompt(m); got != payload {
+		t.Errorf("the agent would receive %q, want the expanded payload %q", got, payload)
+	}
+	// The user-facing forms stay compact: the hint and the recall box show the
+	// chip, not five lines of payload.
+	if got := peekSteer(m); !strings.Contains(got, "[#1 pasted") {
+		t.Errorf("the queued hint shows %q, want the chip form", got)
+	}
+}
+
+// Expansion happens when the message is queued, not when it is drained. The
+// queued branch resets the input without pushing history, so the chip is then
+// referenced nowhere and a reconcile evicts the payload — a drain-time
+// expansion would find nothing left to expand.
+func TestQueuedPasteSurvivesReconcile(t *testing.T) {
+	payload := "alpha\nbravo\ncharlie\ndelta\necho"
+	m := newPasteModel(t)
+	m.state = stateRunning
+	m = paste(m, payload)
+	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = model.(*Model)
+
+	// Nothing on screen or in history mentions the chip any more.
+	m.pastes.reconcile(m.input.Value())
+	if got := peekSteerPrompt(m); got != payload {
+		t.Errorf("after reconcile the agent would receive %q, want %q", got, payload)
+	}
+}
+
+// Two mid-turn pastes must both survive, in both forms, in order.
+func TestTwoQueuedPastesBothExpand(t *testing.T) {
+	first := "one\ntwo\nthree\nfour\nfive"
+	second := "six\nseven\neight\nnine\nten"
+	m := newPasteModel(t)
+	m.state = stateRunning
+
+	for _, p := range []string{first, second} {
+		m = paste(m, p)
+		model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+		m = model.(*Model)
+	}
+	if got, want := peekSteerPrompt(m), first+"\n"+second; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// The same hole in the `!` path: pastes are accepted while idle, and a bang
+// line submits from idle, so a pasted multi-line command reached the shell as
+// the literal chip text.
+//
+// runBang echoes the command before executing, and the execution itself only
+// happens inside the tea.Cmd it returns — which this never invokes — so the
+// echo is the assertion and no shell runs.
+func TestPastedBangCommandRunsExpanded(t *testing.T) {
+	script := "for f in a b c; do\n\techo $f\ndone\nwait\necho ok"
+	m := newPasteModel(t)
+	m.input.SetValue("!")
+	m = paste(m, script)
+	if !strings.Contains(m.input.Value(), "[#1 pasted") {
+		t.Fatalf("precondition: paste was not chipped, input = %q", m.input.Value())
+	}
+
+	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m = model.(*Model)
+
+	out := stripANSI(m.transcript.String())
+	if !strings.Contains(out, script) {
+		t.Errorf("the shell would not receive the expanded script; transcript:\n%s", out)
+	}
+	if strings.Contains(out, "[#1 pasted") {
+		t.Errorf("the chip text reached the shell:\n%s", out)
+	}
+}

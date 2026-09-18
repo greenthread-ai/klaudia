@@ -1145,7 +1145,11 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m.handleSlash(expanded)
 			}
 			if text != "" {
-				m.steer.add(text)
+				// Queue both forms: the chip is what the user sees and can
+				// recall, the expansion is what the agent reads. Sending the
+				// chip meant a paste made mid-turn reached the model as
+				// "[#1 pasted · 8 lines]" and nothing else.
+				m.steer.add(text, strings.TrimSpace(m.promptValue()))
 				m.input.Reset()
 				m.syncInputHeight()
 				// No scrollback line here. The queued state is transient — it
@@ -1356,9 +1360,14 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if action == actionSubmit && m.state == stateIdle && isBang(m.input.Value()) {
-		line := strings.TrimSpace(m.input.Value())
+		// Same display/prompt split as the idle prompt below: history keeps the
+		// chip so ↑ stays usable, the shell gets the real command. Running the
+		// chip meant a pasted multi-line command executed as the literal text
+		// "[#1 pasted · 5 lines]".
+		display := strings.TrimSpace(m.input.Value())
+		line := strings.TrimSpace(m.promptValue())
 		m.input.Reset()
-		m.pushHistory(line)
+		m.pushHistory(display)
 		m.syncInputHeight()
 		m.setState(stateRunning)
 		return m.runBang(line)

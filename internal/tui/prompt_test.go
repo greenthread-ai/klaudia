@@ -53,7 +53,7 @@ func TestLiveRegionNeverFillsTheLastColumn(t *testing.T) {
 		"streaming with a queued steer": func(m *Model) {
 			m.setState(stateRunning)
 			m.streamBuf.WriteString(strings.Repeat("prose ", 60))
-			m.steer.add(strings.Repeat("a correction ", 20))
+			m.steer.add(strings.Repeat("a correction ", 20), strings.Repeat("a correction ", 20))
 		},
 		"awaiting permission": func(m *Model) {
 			m.setState(stateAwaitingPermission)

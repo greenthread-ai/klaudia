@@ -53,6 +53,30 @@ port mirrors (see `internal/version`).
   print a line each time an unrelated key in the file was saved.
 
 ### Fixed
+- **A paste made while Klaudia is working reaches the model.** Pasting mid-turn
+  queues a steering message, and that path sent the paste *chip* rather than its
+  payload: the model received the literal `[#1 pasted · 8 lines]` and nothing
+  else. It then did the only thing it could and said the paste had not come
+  through, which reads as a transport failure rather than a Klaudia bug — the
+  reporting user and Klaudia each concluded the other end had dropped it.
+
+  A regression, and a narrow one. Paste chips landed on 2026-08-21 with
+  `promptValue()` at every submit site; mid-turn steering landed on 2026-08-24
+  as a new submit path and was never taught about chips. `/goal` made it easy to
+  hit rather than causing it — pasting a spec into a session that is already
+  running is exactly the steering path.
+
+  The steer box now carries both forms, as the idle prompt already did: the chip
+  for the queued hint and for `↑` recall, the expansion for the agent.
+  Expansion happens when the message is queued rather than when it is drained,
+  because the queued branch resets the input without pushing history — the chip
+  is then referenced nowhere, and the next reconcile would evict the payload out
+  from under a later expansion.
+
+  The same hole in the `!` path is fixed with it: pastes are accepted while
+  idle, and a bang line submits from idle, so a pasted multi-line command was
+  handed to the shell as the literal chip text.
+
 - **An enforcing session no longer prompts for every MCP call.** MCP tools were
   the one door the zone model did not reach: their intrinsic decision was `Ask`
   in every interactive mode regardless of trust, on the grounds that external

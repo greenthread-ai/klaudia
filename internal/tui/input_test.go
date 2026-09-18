@@ -603,7 +603,7 @@ func TestRenderQueuedHintSurfacesMessage(t *testing.T) {
 	// (real session: a "ive setup caddy…" message got lost when a Bash tool
 	// stuck the goroutine and the hint visually blended with the spinner).
 	m := newTestModel()
-	m.steer.add("deploy to staging when this is done")
+	m.steer.add("deploy to staging when this is done", "deploy to staging when this is done")
 	out := m.renderQueuedHint()
 	if !strings.Contains(out, "deploy to staging") {
 		t.Errorf("queued message body must be visible; got %q", out)
@@ -622,7 +622,7 @@ func TestRenderQueuedHintLineCountForMultiline(t *testing.T) {
 	// Multi-line queued messages get a "(N lines · …)" annotation so the
 	// user knows they're not seeing the whole thing.
 	m := newTestModel()
-	m.steer.add("line one\nline two\nline three")
+	m.steer.add("line one\nline two\nline three", "line one\nline two\nline three")
 	out := m.renderQueuedHint()
 	if !strings.Contains(out, "3 lines") {
 		t.Errorf("multi-line queued message should show line count; got %q", out)
@@ -631,7 +631,7 @@ func TestRenderQueuedHintLineCountForMultiline(t *testing.T) {
 	// interjection appends to the first rather than replacing it — two
 	// corrections typed before Klaudia looks must both survive.
 	m.steer.drain()
-	m.steer.add("just one")
+	m.steer.add("just one", "just one")
 	out = m.renderQueuedHint()
 	if strings.Contains(out, "lines") {
 		t.Errorf("single-line queued message must not show line count; got %q", out)

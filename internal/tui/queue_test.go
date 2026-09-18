@@ -115,7 +115,7 @@ func TestNaturalEndStillResendsAQueuedMessage(t *testing.T) {
 		_ func() agent.Interjection, _ func(string, []string)) (agent.Result, error) {
 		return agent.Result{}, nil
 	}
-	m.steer.add("follow-up question")
+	m.steer.add("follow-up question", "follow-up question")
 	m.update(doneMsg{res: agent.Result{StopReason: "end_turn", Text: "answer"}})
 	if !strings.Contains(stripANSI(m.transcript.String()), "follow-up question") {
 		t.Error("a message queued before a natural turn-end was not resent")
