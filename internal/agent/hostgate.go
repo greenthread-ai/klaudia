@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -53,7 +54,10 @@ const (
 // The zero value is inert, so a caller that has not wired trust up gets the old
 // behaviour rather than a panic.
 type HostGate struct {
-	Policy HostPolicy
+	// policy is read on every tool call from the agent's goroutine and written
+	// by /trust from the Bubble Tea update loop, so it cannot be a plain field.
+	// Use Policy and SetPolicy.
+	policy atomic.Value // HostPolicy
 	// Roots is a function, not a value, for the same reason
 	// permission.Context.Mode is: a session that adds a directory with /add-dir
 	// should start treating it as project work on the next tool call, not at
@@ -77,6 +81,18 @@ type HostGate struct {
 	mu      sync.Mutex
 	reports []HostReport
 }
+
+// Policy reports the current posture. The zero value — a gate nobody set a
+// policy on — reads as "", which every caller already treats as off.
+func (g *HostGate) Policy() HostPolicy {
+	p, _ := g.policy.Load().(HostPolicy)
+	return p
+}
+
+// SetPolicy changes the posture, for /trust upgrade and downgrade. Safe to call
+// from the UI goroutine while the agent is mid-turn: the next tool call reads
+// the new value, and one already in flight keeps the one it read.
+func (g *HostGate) SetPolicy(p HostPolicy) { g.policy.Store(p) }
 
 // maxHostReports bounds the in-memory log. It exists so /trust can show what
 // the classifier found, especially in observe mode where nothing else does;
@@ -156,7 +172,7 @@ type HostDecision struct {
 
 // Check classifies a tool call and decides whether it may proceed.
 func (g *HostGate) Check(tool string, input []byte, cwd string) HostDecision {
-	if g == nil || g.Policy == HostOff || g.Policy == "" {
+	if g == nil || g.Policy() == HostOff || g.Policy() == "" {
 		return HostDecision{Allow: true}
 	}
 
@@ -190,7 +206,7 @@ func (g *HostGate) Check(tool string, input []byte, cwd string) HostDecision {
 		return HostDecision{Allow: true, Assessment: as}
 	}
 
-	if g.Policy == HostObserve {
+	if g.Policy() == HostObserve {
 		g.record(report)
 		return HostDecision{Allow: true, Assessment: as}
 	}

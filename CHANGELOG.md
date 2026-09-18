@@ -53,6 +53,18 @@ port mirrors (see `internal/version`).
   print a line each time an unrelated key in the file was saved.
 
 ### Fixed
+- **The trust posture is no longer read and written unsynchronised.**
+  `HostGate.Policy` was a plain field, written by `/trust upgrade` from the
+  Bubble Tea update loop and read by the gate on every tool call from the
+  agent's goroutine — a data race on every session that changed posture
+  mid-turn. `-race` never caught it because no test changed the policy while a
+  turn was in flight. Adding the MCP trust probe gave it a third concurrent
+  reader, which is what prompted looking.
+
+  It is now an `atomic.Value` behind `Policy()`/`SetPolicy()`, so the field
+  cannot be touched directly. The regression test drives all three access
+  patterns at once and reports `WARNING: DATA RACE` against a plain field.
+
 - **A paste made while Klaudia is working reaches the model.** Pasting mid-turn
   queues a steering message, and that path sent the paste *chip* rather than its
   payload: the model received the literal `[#1 pasted · 8 lines]` and nothing

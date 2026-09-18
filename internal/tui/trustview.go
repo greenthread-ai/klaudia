@@ -45,8 +45,8 @@ func NewTrustController(g *agent.HostGate) TrustController {
 	return gateController{gate: g}
 }
 
-func (c gateController) Policy() agent.HostPolicy     { return c.gate.Policy }
-func (c gateController) SetPolicy(p agent.HostPolicy) { c.gate.Policy = p }
+func (c gateController) Policy() agent.HostPolicy     { return c.gate.Policy() }
+func (c gateController) SetPolicy(p agent.HostPolicy) { c.gate.SetPolicy(p) }
 func (c gateController) Grants() []*trust.Grant       { return c.gate.Grants() }
 func (c gateController) Reports() []agent.HostReport  { return c.gate.Reports() }
 func (c gateController) Covers(e []trust.Effect) bool {

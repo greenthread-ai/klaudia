@@ -25,7 +25,7 @@ type hostChangeApprover struct {
 // approve against. Nil is meaningful: the tool tells the model there is no one
 // to ask, rather than reporting a failure it cannot act on.
 func hostChangeFor(opts Options) tools.HostApprover {
-	if opts.Host == nil || opts.Host.Ledger == nil || opts.Host.Policy == HostOff || opts.Host.Policy == "" {
+	if opts.Host == nil || opts.Host.Ledger == nil || opts.Host.Policy() == HostOff || opts.Host.Policy() == "" {
 		return nil
 	}
 	return hostChangeApprover{gate: opts.Host, approver: opts.Approver}

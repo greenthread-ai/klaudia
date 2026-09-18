@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -26,11 +27,12 @@ func gateFixture(t *testing.T) (*HostGate, string) {
 		}
 	}
 	roots := trust.NewRoots(home, proj)
-	return &HostGate{
-		Policy: HostEnforce,
+	g := &HostGate{
 		Roots:  func() trust.Roots { return roots },
 		Ledger: trust.NewLedger(roots),
-	}, proj
+	}
+	g.SetPolicy(HostEnforce)
+	return g, proj
 }
 
 func bashInput(cmd string) []byte {
@@ -125,7 +127,7 @@ func TestGateCoversFileTools(t *testing.T) {
 
 func TestObserveModeChangesNothing(t *testing.T) {
 	g, proj := gateFixture(t)
-	g.Policy = HostObserve
+	g.SetPolicy(HostObserve)
 	var seen []HostReport
 	g.Observed = func(r HostReport) { seen = append(seen, r) }
 
@@ -142,7 +144,7 @@ func TestObserveModeChangesNothing(t *testing.T) {
 
 func TestHostOffAndNilGateAreInert(t *testing.T) {
 	g, proj := gateFixture(t)
-	g.Policy = HostOff
+	g.SetPolicy(HostOff)
 	if d := g.Check("Bash", bashInput("sudo rm -rf /etc"), proj); !d.Allow {
 		t.Error("HostOff gated a call")
 	}
@@ -332,4 +334,48 @@ func testRegistry(t *testing.T, extra ...tools.Tool) (*tools.Registry, *stubBash
 func resultText(block anthropic.BetaContentBlockParamUnion) string {
 	b, _ := json.Marshal(block)
 	return string(b)
+}
+
+// /trust upgrade is typed into the Bubble Tea update loop while the agent is
+// mid-turn on its own goroutine, so the posture is written and read
+// concurrently by construction. It was a plain field, and -race never caught it
+// because no test changed the policy while a turn was running.
+//
+// Run under -race; without synchronisation this reports a write/read data race.
+func TestHostGatePolicyIsRaceFree(t *testing.T) {
+	g, proj := gateFixture(t)
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	// The UI goroutine: /trust upgrade, /trust downgrade, repeatedly.
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 500; i++ {
+			if i%2 == 0 {
+				g.SetPolicy(HostEnforce)
+			} else {
+				g.SetPolicy(HostObserve)
+			}
+		}
+	}()
+	// The agent goroutine: classify a tool call, which reads the posture.
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 500; i++ {
+			g.Check("Bash", bashInput("ls "+proj), proj)
+		}
+	}()
+	// The permission probe added for MCP, which reads it on every tool call.
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 500; i++ {
+			_ = g.Policy() == HostEnforce
+		}
+	}()
+
+	wg.Wait()
+	if p := g.Policy(); p != HostEnforce && p != HostObserve {
+		t.Errorf("posture ended as %q, want one of the two written", p)
+	}
 }
