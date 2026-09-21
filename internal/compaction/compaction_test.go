@@ -81,3 +81,58 @@ func TestShouldAutocompact(t *testing.T) {
 		t.Error("should compact at 170k/200k (> 167k threshold)")
 	}
 }
+
+func TestCalibrationCorrectsUnderestimate(t *testing.T) {
+	var c Calibration
+	// Uncalibrated, the estimate passes through — turn one behaves as before.
+	if got := c.Scale(1000); got != 1000 {
+		t.Fatalf("uncalibrated Scale = %d, want 1000", got)
+	}
+
+	// The real case: the estimate saw only the messages, the request also
+	// carried the system prompt and every tool schema.
+	c.Observe(900_000, 1_000_464)
+	if r := c.Ratio(); r < 1.1 {
+		t.Fatalf("ratio = %v, want the correction to be material", r)
+	}
+	if got := c.Scale(900_000); got < 1_000_000 {
+		t.Errorf("Scale = %d, should reach the reported size", got)
+	}
+
+	// A cached turn reports a small input; that must not undo the correction.
+	before := c.Ratio()
+	c.Observe(900_000, 10_000)
+	if c.Ratio() != before {
+		t.Errorf("ratio dropped to %v after a cached turn (was %v)", c.Ratio(), before)
+	}
+}
+
+func TestCalibrationIgnoresNonsenseAndClamps(t *testing.T) {
+	var c Calibration
+	c.Observe(0, 500)
+	c.Observe(500, 0)
+	if c.Ratio() != 1 {
+		t.Errorf("zero observations should not calibrate, ratio = %v", c.Ratio())
+	}
+
+	c.Observe(10, 10_000_000) // one absurd turn
+	if c.Ratio() > maxCalibrationRatio {
+		t.Errorf("ratio = %v exceeds the clamp %v", c.Ratio(), maxCalibrationRatio)
+	}
+}
+
+// The threshold that let the reported failure through: 1M window, autocompact
+// at 967k, an estimate that ran ~10% low.
+func TestCalibratedEstimateTripsThresholdThatWasMissed(t *testing.T) {
+	const window = 1_000_000
+	estimate := 950_000 // under the 967k threshold, so nothing fired
+	if ShouldAutocompact(estimate, window) {
+		t.Fatal("precondition: the raw estimate is below the threshold")
+	}
+
+	var c Calibration
+	c.Observe(900_000, 1_000_464) // what the API said about the previous turn
+	if !ShouldAutocompact(c.Scale(estimate), window) {
+		t.Errorf("calibrated estimate %d should trip the threshold", c.Scale(estimate))
+	}
+}

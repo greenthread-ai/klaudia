@@ -167,3 +167,58 @@ func ComputeThresholds(contextWindow int) Thresholds {
 func ShouldAutocompact(tokenCount, contextWindow int) bool {
 	return tokenCount > ComputeThresholds(contextWindow).CompactThreshold
 }
+
+// Calibration corrects the local estimate against what the API actually
+// charged for the request.
+//
+// EstimateTokens only sees the message list, at ~4 chars/token. A real request
+// also carries the system prompt, the project instructions and every tool's
+// JSON schema, and code tokenises closer to 3 chars/token — so the estimate
+// runs low, and in a large window it runs low by more than the safety buffer.
+// That is how a 1M-token session reached "prompt is too long: 1000464 tokens >
+// 1000000 maximum" with the 967k autocompact threshold never tripping.
+//
+// Every response reports the true input size, so after one turn we know the
+// ratio between estimate and reality and can scale subsequent estimates by it.
+// The ratio only ever grows: a turn whose cache made the reported figure look
+// small must not talk us out of a correction we have already earned.
+type Calibration struct {
+	ratio float64
+}
+
+// maxCalibrationRatio bounds the correction, so one anomalous turn (a giant
+// image, a pathological schema) cannot make every later estimate absurd.
+const maxCalibrationRatio = 4.0
+
+// Observe records an estimate and the reported input tokens for the same
+// request. Zero or negative values are ignored.
+func (c *Calibration) Observe(estimated, reported int) {
+	if estimated <= 0 || reported <= 0 {
+		return
+	}
+	r := float64(reported) / float64(estimated)
+	if r > maxCalibrationRatio {
+		r = maxCalibrationRatio
+	}
+	if r > c.ratio {
+		c.ratio = r
+	}
+}
+
+// Scale applies the correction. Before any observation it returns the estimate
+// unchanged, so behaviour on turn one is what it always was.
+func (c *Calibration) Scale(estimate int) int {
+	if c.ratio <= 1 {
+		return estimate
+	}
+	return int(float64(estimate) * c.ratio)
+}
+
+// Ratio reports the current correction factor (1 when uncalibrated), for
+// diagnostics.
+func (c *Calibration) Ratio() float64 {
+	if c.ratio <= 1 {
+		return 1
+	}
+	return c.ratio
+}

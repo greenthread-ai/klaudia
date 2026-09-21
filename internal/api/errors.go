@@ -248,6 +248,12 @@ func isContextOverflow(detail string) bool {
 	d := strings.ToLower(detail)
 	switch {
 	case strings.Contains(d, "max_tokens") && (strings.Contains(d, "at least 1") || strings.Contains(d, "must be positive")),
+		// Anthropic's own wording, which this list did not cover: the 400 reads
+		// "prompt is too long: 1000464 tokens > 1000000 maximum". It was
+		// reported as a bare "Bad request" with no hint that /compact is the
+		// way out.
+		strings.Contains(d, "prompt is too long"),
+		strings.Contains(d, "prompt too long"),
 		strings.Contains(d, "context length"),
 		strings.Contains(d, "context window"),
 		strings.Contains(d, "maximum context"),
@@ -285,4 +291,19 @@ func apiStatus(err error) (int, bool) {
 		return openaiErr.StatusCode, true
 	}
 	return 0, false
+}
+
+// IsContextOverflow reports whether err is the provider refusing a request for
+// being larger than the model's context window. The agent loop uses this to
+// compact and retry rather than surfacing a dead end: once a session is over
+// the limit, every resend fails the same way, so without recovery the
+// transcript is unusable.
+func IsContextOverflow(err error) bool {
+	if err == nil {
+		return false
+	}
+	if detail := providerDetail(err); detail != "" && isContextOverflow(detail) {
+		return true
+	}
+	return isContextOverflow(err.Error())
 }

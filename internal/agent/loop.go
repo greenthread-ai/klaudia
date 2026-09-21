@@ -195,6 +195,11 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 
 	var res Result
 	halted := false
+	// calib corrects the local token estimate using the input sizes the API
+	// reports; overflowRecovered ensures the compact-and-retry path fires at
+	// most once per Run, so a genuinely oversized request still surfaces.
+	var calib compaction.Calibration
+	overflowRecovered := false
 	for {
 		res.NumTurns++
 
@@ -215,7 +220,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// Compaction runs at the top of every turn (docs/compaction.md):
 		// microcompact first (cheap, local), then autocompact (model-based) if
 		// near the context limit.
-		messages = l.compact(ctx, messages, opts, emit)
+		messages = l.compact(ctx, messages, opts, emit, &calib, false)
 
 		// Build the tool list for this turn: eager tools plus any deferred tools
 		// revealed so far (via ToolSearch). Rebuilt per turn so reveals take
@@ -241,11 +246,30 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			Betas:     betas,
 		}
 
+		estimateAtSend := compaction.EstimateTokens(messages)
 		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages)
+		if err != nil && api.IsContextOverflow(err) && !overflowRecovered {
+			// Every resend of an over-limit conversation fails identically, so
+			// without this the session is finished. Summarise and re-send once;
+			// a second overflow is a real failure and is reported.
+			overflowRecovered = true
+			if emit != nil {
+				emit(Event{Type: "compaction"})
+			}
+			messages = l.compact(ctx, messages, opts, emit, &calib, true)
+			if emit != nil {
+				emit(Event{Type: "compaction", Content: "context overflowed the model's window — summarised and retried"})
+			}
+			continue
+		}
 		if err != nil {
 			res.Messages = messages
 			return res, err
 		}
+		// The response reports the request's true input size: that is the only
+		// honest number available, so feed it back into the estimate.
+		calib.Observe(estimateAtSend, int(assistant.Usage.InputTokens+
+			assistant.Usage.CacheReadInputTokens+assistant.Usage.CacheCreationInputTokens))
 		res.StopReason = string(assistant.StopReason)
 		res.InputTokens += assistant.Usage.InputTokens
 		res.OutputTokens += assistant.Usage.OutputTokens
@@ -372,7 +396,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 // compact applies microcompact then (if near the limit) autocompact to the
 // message list. Honors DISABLE_COMPACT / DISABLE_MICROCOMPACT /
 // DISABLE_AUTO_COMPACT, matching the JS env switches.
-func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, emit Emitter) []anthropic.BetaMessageParam {
+func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, emit Emitter, calib *compaction.Calibration, force bool) []anthropic.BetaMessageParam {
 	if os.Getenv("DISABLE_COMPACT") != "" {
 		return messages
 	}
@@ -386,8 +410,13 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 		}
 	}
 
+	// The estimate is corrected by what the API actually charged for earlier
+	// turns; uncorrected it runs low by more than the safety buffer, which is
+	// how a session reached "prompt is too long" without ever tripping this.
+	// force is set when the provider has already rejected the request for
+	// size: the threshold is moot, we are over it by definition.
 	if os.Getenv("DISABLE_AUTO_COMPACT") == "" &&
-		compaction.ShouldAutocompact(compaction.EstimateTokens(messages), opts.ContextWindow) {
+		(force || compaction.ShouldAutocompact(calib.Scale(compaction.EstimateTokens(messages)), opts.ContextWindow)) {
 		// Autocompact is a model call that runs silently (emit=nil), so signal
 		// its start with a contentless "compaction" event — the frontend shows
 		// "compacting…" for the duration. Microcompact above is instant and

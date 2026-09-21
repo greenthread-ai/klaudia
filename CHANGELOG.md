@@ -236,6 +236,30 @@ port mirrors (see `internal/version`).
   to ask about.
 
 ### Fixed
+- **A long session hit `prompt is too long: 1000464 tokens > 1000000 maximum`
+  and could not be resumed.** Three separate faults lined up, found from a
+  four-day, 1174-record transcript in one project.
+
+  Autocompaction never fired. Its trigger compares `EstimateTokens(messages)`
+  against the window — but that only counts the message list, at ~4 chars per
+  token, while the real request also carries the system prompt, the project
+  instructions and every tool's JSON schema, and code tokenises closer to 3
+  chars per token. For a 1M window the threshold sits at 967k, so an estimate
+  running ~10% low never reaches it while the actual request sails past 1M. The
+  estimate is now calibrated against the input size the API reports for each
+  response — ground truth that includes the system prompt and tools — with the
+  ratio only ever increasing, so a cache-heavy turn cannot undo a correction.
+
+  The 400 was then unrecoverable: every resend is the same oversized request, so
+  the session was finished. An overflow now forces a summarise-and-retry once
+  per run, with the reason surfaced; a second overflow is reported rather than
+  looped on.
+
+  And the error text was unhelpful, because `isContextOverflow` matched several
+  OpenAI-compatible phrasings but not Anthropic's own "prompt is too long". The
+  report was a bare "Bad request (400)" with no mention of `/compact` or
+  `contextWindow`.
+
 - **A slow stream was killed as a stalled one.** Reported as a stall mid-turn,
   after text had already streamed — a healthy connection, and the second
   distinct cause behind the same message.

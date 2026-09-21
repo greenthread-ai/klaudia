@@ -413,3 +413,34 @@ func TestIsSessionLimitRecognition(t *testing.T) {
 		}
 	}
 }
+
+func TestIsContextOverflowMatchesAnthropicWording(t *testing.T) {
+	// The exact 400 from the reported failure. It was previously classified as
+	// a generic bad request, so the message offered no way out.
+	overflow := []string{
+		"prompt is too long: 1000464 tokens > 1000000 maximum",
+		"This model's maximum context length is 200000 tokens",
+		"max_tokens must be at least 1, got -71",
+		"too many tokens",
+	}
+	for _, d := range overflow {
+		if !isContextOverflow(d) {
+			t.Errorf("isContextOverflow(%q) = false, want true", d)
+		}
+		if !IsContextOverflow(errors.New(d)) {
+			t.Errorf("IsContextOverflow(%q) = false, want true", d)
+		}
+	}
+
+	for _, d := range []string{
+		"messages.0.content: Field required",
+		"invalid model name",
+	} {
+		if isContextOverflow(d) {
+			t.Errorf("isContextOverflow(%q) = true, want false", d)
+		}
+	}
+	if IsContextOverflow(nil) {
+		t.Error("IsContextOverflow(nil) should be false")
+	}
+}
