@@ -53,6 +53,16 @@ port mirrors (see `internal/version`).
   print a line each time an unrelated key in the file was saved.
 
 ### Fixed
+- **A permission rule naming an MCP server matched nothing.** Rules were
+  compared for equality against the tool's qualified name, so `mcp__loki` in
+  `[permissions] allow` never matched `mcp__loki__loki_query`, and the check
+  fell through to the tool's own stance as if the rule were not there. In an
+  interactive session that meant being asked for a tool the config had already
+  allowed; in a stream-json embedder it meant a `control_request` the client
+  was not expecting (see below). `mcp__<server>` and `mcp__<server>__*` now
+  cover every tool on that server, for allow and deny alike, which is the form
+  the JS reference documents for MCP rules and the one people write first.
+
 - **The repeated-failure breaker latched, and bricked Bash for the rest of the
   run.** From a live session: after two failures of the same shape, every
   subsequent Bash call — including `true`, `pwd` and `echo hello` — was refused
