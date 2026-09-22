@@ -541,6 +541,8 @@ type options struct {
 	createConfig    string // --create-config global|local
 	loop            bool   // --loop: autonomous goal-spec iteration
 	maxIterations   int    // --max-iterations: outer-loop cap for --loop
+
+	askTimeout time.Duration // --ask-timeout: bound on a stream-json can_use_tool wait
 }
 
 // resolveResumeID selects the prior session to seed from, if any.
@@ -604,7 +606,8 @@ func NewRootCommand() *cobra.Command {
 	f.StringVar(&opts.model, "model", "", "Model alias (haiku|sonnet|opus) or full model ID")
 	f.StringVar(&opts.outputFormat, "output-format", "text", "Output format: text|json|stream-json")
 	f.StringVar(&opts.inputFormat, "input-format", "text", "Input format: text|stream-json (stream-json drives a persistent agent over stdin)")
-	f.StringVar(&opts.permissionMode, "permission-mode", "", "Permission mode: autonomous|plan|bypassPermissions (default: config [permissions] mode, else autonomous)")
+	f.StringVar(&opts.permissionMode, "permission-mode", "", "Permission mode: autonomous|plan|bypassPermissions|dontAsk (default: config [permissions] mode, else autonomous; dontAsk runs allow-listed tools and denies the rest without prompting — for headless and embedded runs)")
+	f.DurationVar(&opts.askTimeout, "ask-timeout", streamjson.DefaultAskTimeout, "With --input-format stream-json: how long a can_use_tool control_request waits for the client's control_response before it is denied (0 = wait forever)")
 	f.BoolVar(&opts.allowHostChanges, "allow-host-changes", false, "Non-interactive runs: permit changes to this machine (packages, services, /etc, …) without a human to approve them")
 	f.BoolVar(&opts.dangerouslySkip, "dangerously-skip-permissions", false, "Skip all permission checks (sets bypassPermissions)")
 	f.BoolVar(&opts.verbose, "verbose", false, "Verbose output (required for stream-json)")
@@ -761,7 +764,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	mode := permission.Mode(modeStr)
 	if !mode.Valid() {
-		return usageErrorf("invalid permission mode %q (autonomous|plan|bypassPermissions, or legacy default|acceptEdits|dontAsk)", modeStr)
+		return usageErrorf("invalid permission mode %q (autonomous|plan|bypassPermissions|dontAsk, or legacy default|acceptEdits)", modeStr)
 	}
 	if mode == permission.ModeAutonomous && hostPolicy != agent.HostEnforce {
 		return usageErrorf("permission mode %q needs the host guardrail enforcing, but [trust] mode is %q — "+
@@ -1075,7 +1078,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	// surfaced as control_request and answered by the peer.
 	if opts.inputFormat == "stream-json" {
 		driver := streamjson.NewDriver(cmd.OutOrStdout())
-		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
+		driver.AskTimeout = opts.askTimeout
+		driver.SessionID = sessionID
+		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, rec agent.Recorder, emit agent.Emitter) (agent.Result, error) {
 			return loop.Run(ctx, agent.Options{
 				WorkingDir:      cwd,
 				Prompt:          prompt,
@@ -1089,9 +1094,11 @@ func run(cmd *cobra.Command, opts *options) error {
 				Approver:        ap,
 				DeferredTools:   currentDeferred(),
 				InitialMessages: history,
-				Recorder:        recorder,
-				WebTools:        true,
-				OnSummary:       onSummary,
+				// The transcript on disk and the peer's envelope stream are
+				// fed from the same Record calls, as in the -p path.
+				Recorder:  multiRecorder{recorder, rec},
+				WebTools:  true,
+				OnSummary: onSummary,
 			}, emit)
 		}
 		return driver.Run(ctx, cmd.InOrStdin(), runFn)
