@@ -181,9 +181,20 @@ type PermissionRequest struct {
 
 // matches reports whether rule r applies to tool name with the given specifier.
 // A trailing ":*" or "*" on the rule specifier is treated as a prefix match.
+//
+// MCP tools are named "mcp__<server>__<tool>", and a rule may name the whole
+// server rather than one tool: "mcp__<server>" or "mcp__<server>__*" matches
+// every tool that server exposes. That is the form the JS reference documents
+// for MCP rules, and the one a user reaches for first — an allow list that
+// names a server is saying "I trust what this server does", not enumerating
+// its tools. Before this, such a rule matched nothing, silently: the check fell
+// through to the tool's own stance and the session asked (or, headless,
+// refused) for a tool the config had explicitly allowed.
 func (r Rule) matches(tool, specifier string) bool {
 	if r.Tool != tool {
-		return false
+		if server, ok := mcpServerRule(r.Tool); !ok || !strings.HasPrefix(tool, "mcp__"+server+"__") {
+			return false
+		}
 	}
 	if r.Specifier == "" {
 		return true
@@ -206,6 +217,22 @@ func anyMatch(rules []Rule, tool, specifier string) bool {
 		}
 	}
 	return false
+}
+
+// mcpServerRule reports whether a rule's tool name is the server-scoped MCP
+// form, and if so which server it names. "mcp__loki" and "mcp__loki__*" both
+// name the server "loki"; "mcp__loki__query" names one tool on it and is not
+// server-scoped. A bare "mcp__" names nothing.
+func mcpServerRule(ruleTool string) (server string, ok bool) {
+	rest, isMCP := strings.CutPrefix(ruleTool, "mcp__")
+	if !isMCP || rest == "" {
+		return "", false
+	}
+	rest = strings.TrimSuffix(rest, "__*")
+	if rest == "" || strings.Contains(rest, "__") {
+		return "", false
+	}
+	return rest, true
 }
 
 // MatchAny reports whether any rule matches the given tool + specifier. Exported

@@ -235,6 +235,42 @@ channel for editor/SDK integrations (no terminal needed):
 ./klaudia --input-format stream-json --verbose
 ```
 
+Each `{"type":"user","message":{"role":"user","content":"…"}}` line is one
+turn; the agent's events stream back and the turn ends with a `result` line.
+
+**Permission asks are the client's to answer.** When the permission flow cannot
+settle a tool call on its own, Klaudia emits a control request and blocks the
+turn until the client replies:
+
+```json
+{"type":"control_request","request_id":"<id>",
+ "request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"}}}
+```
+
+The reply carries the same `request_id`; `behavior` is `"allow"` or `"deny"`,
+and a deny may explain itself in `message`:
+
+```json
+{"type":"control_response","response":{"subtype":"success","request_id":"<id>",
+ "response":{"behavior":"deny","message":"read-only embedder"}}}
+```
+
+A client that does not implement this must not be asked. Two ways to arrange
+that:
+
+- **Pre-decide in config.** `[permissions] allow` and `deny` rules are applied
+  before anyone is asked, so an allow-listed tool never produces a
+  `control_request`. MCP tools take the server-scoped forms `mcp__<server>`
+  or `mcp__<server>__*` (every tool that server exposes) as well as
+  `mcp__<server>__<tool>`.
+- **Set `mode = "dontAsk"`** (or `--permission-mode dontAsk`): allow-listed
+  tools run, everything else is denied without a prompt. That is the mode for a
+  headless, config-driven embedder.
+
+An ask the client never answers is denied after `--ask-timeout` (default
+10 minutes; `0` waits forever), with a tool result that says so — a stalled or
+protocol-unaware client sees a finished turn, not a hung process.
+
 ### Resuming
 
 ```bash
