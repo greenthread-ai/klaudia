@@ -53,6 +53,41 @@ port mirrors (see `internal/version`).
   print a line each time an unrelated key in the file was saved.
 
 ### Fixed
+- **A permission rule naming an MCP server matched nothing.** Rules were
+  compared for equality against the tool's qualified name, so `mcp__loki` in
+  `[permissions] allow` never matched `mcp__loki__loki_query`, and the check
+  fell through to the tool's own stance as if the rule were not there. In an
+  interactive session that meant being asked for a tool the config had already
+  allowed; in a stream-json embedder it meant a `control_request` the client
+  was not expecting (see below). `mcp__<server>` and `mcp__<server>__*` now
+  cover every tool on that server, for allow and deny alike, which is the form
+  the JS reference documents for MCP rules and the one people write first.
+
+- **A stream-json `can_use_tool` request with no answer blocked the turn
+  forever.** The approver waited on the context and the reply channel only.
+  A client that never sent the `control_response` — because it relied on the
+  config allow list and never implemented the control protocol, or because it
+  stalled — left the agent wedged mid-turn with no output and no exit, and the
+  only diagnosis available was the process not finishing. The wait is now
+  bounded by `--ask-timeout` (default ten minutes; `0` restores the unbounded
+  wait), after which the ask is denied with a tool result that names the tool,
+  the timeout, and the two remedies: answer `can_use_tool`, or pre-approve the
+  tool with an allow rule so it is never asked. An answer that arrives after
+  the deadline is dropped rather than applied to a later request.
+
+  Ten minutes was chosen as long enough for a person behind an editor
+  integration to read a prompt and decide, and short enough that an unattended
+  pipeline fails inside the run rather than at whatever outer timeout kills it.
+  The JS reference waits forever; that was measured to be the wrong default
+  for a channel whose peer is a program.
+
+- **`dontAsk` was the right mode for a headless embedder, and nothing said
+  so.** `--permission-mode` listed it only as "legacy", so a read-only embedder
+  had no obvious way to say "run what the allow list permits, deny the rest,
+  never prompt". The flag help, the config comment and the README's embedding
+  section now name it and describe the `control_request` / `control_response`
+  exchange a client must otherwise implement.
+
 - **The repeated-failure breaker latched, and bricked Bash for the rest of the
   run.** From a live session: after two failures of the same shape, every
   subsequent Bash call — including `true`, `pwd` and `echo hello` — was refused
