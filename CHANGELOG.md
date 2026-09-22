@@ -72,6 +72,28 @@ port mirrors (see `internal/version`).
   print a line each time an unrelated key in the file was saved.
 
 ### Fixed
+- **The stream-json embedding channel emitted a different shape from
+  `-p --output-format stream-json`.** Single-shot runs wrap each conversation
+  message in the JS-compatible envelope (`{"type":"assistant","message":{…},
+  "session_id":…}`); the `--input-format stream-json` driver wrote Klaudia's
+  flat agent events instead (`{"type":"assistant","text":…}`, `{"type":
+  "tool_use",…}`, `{"type":"tool_result",…}`). One binary, two answers to
+  "what does an assistant message look like", and the README promised the
+  first. A client written against the documented envelope — the one Claude
+  Code SDKs already parse — dropped every mid-turn line and showed nothing of
+  a turn until its `result`, which from the outside is indistinguishable from
+  a hang. Observed in an embedding GUI whose transcripts stayed empty while
+  the agent was calling tools and answering behind it.
+
+  The driver is now the run's Recorder, so every message the loop records is
+  also the message the peer is shown, in the envelope, stamped with the
+  session id; the flat `assistant` / `tool_use` / `tool_result` events are no
+  longer written there, since the same content would otherwise arrive twice in
+  two shapes. `usage`, `tool_progress` and `compaction` still stream as flat
+  events — they have no message form. A client that had adapted to the flat
+  shape will need to read the envelope; the README's embedding section shows
+  it.
+
 - **A permission rule naming an MCP server matched nothing.** Rules were
   compared for equality against the tool's qualified name, so `mcp__loki` in
   `[permissions] allow` never matched `mcp__loki__loki_query`, and the check

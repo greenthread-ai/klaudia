@@ -8,10 +8,22 @@
 //	in:  {"type":"user","message":{"role":"user","content":"..."}}
 //	in:  {"type":"control_response","response":{"subtype":"success",
 //	      "request_id":"<id>","response":{"behavior":"allow"|"deny",...}}}
-//	out: assistant / tool_use / tool_result / compaction events (agent.Event)
+//	out: {"type":"assistant"|"user","message":{"role":...,"content":[...]},
+//	      "session_id":"<id>","parent_tool_use_id":null,"uuid":"<id>"}
+//	out: usage / tool_progress / compaction events (agent.Event)
 //	out: {"type":"control_request","request_id":"<id>",
 //	      "request":{"subtype":"can_use_tool","tool_name":"...","input":{...}}}
 //	out: {"type":"result", ...}
+//
+// Conversation content — assistant text, tool_use blocks, tool_result blocks —
+// travels in the message envelope, the same line the single-shot `-p
+// --output-format stream-json` path and the JS reference emit. It used to be
+// written here as Klaudia's flat agent.Event lines ({"type":"assistant","text":
+// ...}, {"type":"tool_use",...}, {"type":"tool_result",...}) instead, so the
+// two stream-json outputs of one binary disagreed on the shape of an assistant
+// message, and a client written against the documented one saw nothing of a
+// turn until its result line. The Driver is the run's Recorder for that reason:
+// every message the loop records is also the message the peer is shown.
 //
 // A can_use_tool request is emitted only for calls the permission flow could
 // not settle on its own — a tool on the config allow list, or one denied by a
@@ -41,10 +53,13 @@ import (
 )
 
 // RunFunc runs one user turn to completion, seeded with prior conversation
-// history, using the supplied approver and emitter. It returns the agent
-// Result whose Messages field carries the updated history forward. The CLI
-// provides this, wiring in the API client, tools, model, and permission context.
-type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, emit agent.Emitter) (agent.Result, error)
+// history, using the supplied approver, recorder and emitter. It returns the
+// agent Result whose Messages field carries the updated history forward. The
+// CLI provides this, wiring in the API client, tools, model, and permission
+// context. rec must be given to the loop as (part of) its Recorder: it is how
+// the conversation reaches the peer, and a run that drops it streams no
+// assistant text at all.
+type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, rec agent.Recorder, emit agent.Emitter) (agent.Result, error)
 
 // inMessage is a decoded stdin line.
 type inMessage struct {
@@ -84,6 +99,11 @@ type Driver struct {
 	out     io.Writer
 	mu      sync.Mutex // serializes writes to out
 	pending sync.Map   // request_id -> chan permission.Decision
+
+	// SessionID is stamped on every message envelope, as the JS reference does,
+	// so a peer can tell which conversation a line belongs to. The CLI sets it
+	// to the transcript's session id.
+	SessionID string
 
 	// AskTimeout bounds the wait for a control_response to each can_use_tool
 	// request; an unanswered request is denied when it elapses. Zero or
@@ -140,14 +160,39 @@ func (d *Driver) Run(ctx context.Context, r io.Reader, run RunFunc) error {
 			if prompt == "" {
 				continue
 			}
-			emit := func(ev agent.Event) { d.write(ev) }
-			res, err := run(ctx, prompt, history, approver, emit)
+			// Conversation content reaches the peer through Record, in the
+			// envelope. The flat events carrying the same text, tool calls
+			// and results are dropped here so nothing arrives twice in two
+			// shapes; what remains are the events that have no message form.
+			emit := func(ev agent.Event) {
+				switch ev.Type {
+				case "assistant", "tool_use", "tool_result":
+					return
+				}
+				d.write(ev)
+			}
+			res, err := run(ctx, prompt, history, approver, d, emit)
 			if res.Messages != nil {
 				history = res.Messages // carry conversation forward
 			}
 			d.write(resultEvent(res, err))
 		}
 	}
+}
+
+// Record implements agent.Recorder: each conversation message the loop
+// records is written to the peer as a JS-compatible envelope
+// {type, message, session_id, parent_tool_use_id, uuid} — the same line
+// cli's envelopeRecorder produces for `-p --output-format stream-json`.
+func (d *Driver) Record(role string, message json.RawMessage) error {
+	d.write(map[string]any{
+		"type":               role, // "user" | "assistant"
+		"message":            message,
+		"session_id":         d.SessionID,
+		"parent_tool_use_id": nil,
+		"uuid":               uuid.NewString(),
+	})
+	return nil
 }
 
 // write emits one JSON line, serialized against concurrent writers.

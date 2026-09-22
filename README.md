@@ -236,7 +236,19 @@ channel for editor/SDK integrations (no terminal needed):
 ```
 
 Each `{"type":"user","message":{"role":"user","content":"…"}}` line is one
-turn; the agent's events stream back and the turn ends with a `result` line.
+turn. Conversation content streams back as the same message envelope the `-p
+--output-format stream-json` path (and Claude Code) emit — one line per
+assistant message and per tool-result message, with `session_id` and `uuid`:
+
+```json
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"…"},
+ {"type":"tool_use","id":"…","name":"Read","input":{…}}]},"session_id":"…","uuid":"…"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"…",
+ "content":"…"}]},"session_id":"…","uuid":"…"}
+```
+
+`usage`, `tool_progress` and `compaction` events follow as flat lines, and the
+turn ends with a `result` line.
 
 **Permission asks are the client's to answer.** When the permission flow cannot
 settle a tool call on its own, Klaudia emits a control request and blocks the

@@ -1079,7 +1079,8 @@ func run(cmd *cobra.Command, opts *options) error {
 	if opts.inputFormat == "stream-json" {
 		driver := streamjson.NewDriver(cmd.OutOrStdout())
 		driver.AskTimeout = opts.askTimeout
-		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
+		driver.SessionID = sessionID
+		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, rec agent.Recorder, emit agent.Emitter) (agent.Result, error) {
 			return loop.Run(ctx, agent.Options{
 				WorkingDir:      cwd,
 				Prompt:          prompt,
@@ -1093,9 +1094,11 @@ func run(cmd *cobra.Command, opts *options) error {
 				Approver:        ap,
 				DeferredTools:   currentDeferred(),
 				InitialMessages: history,
-				Recorder:        recorder,
-				WebTools:        true,
-				OnSummary:       onSummary,
+				// The transcript on disk and the peer's envelope stream are
+				// fed from the same Record calls, as in the -p path.
+				Recorder:  multiRecorder{recorder, rec},
+				WebTools:  true,
+				OnSummary: onSummary,
 			}, emit)
 		}
 		return driver.Run(ctx, cmd.InOrStdin(), runFn)
