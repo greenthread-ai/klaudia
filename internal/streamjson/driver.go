@@ -12,14 +12,25 @@
 //	out: {"type":"control_request","request_id":"<id>",
 //	      "request":{"subtype":"can_use_tool","tool_name":"...","input":{...}}}
 //	out: {"type":"result", ...}
+//
+// A can_use_tool request is emitted only for calls the permission flow could
+// not settle on its own — a tool on the config allow list, or one denied by a
+// deny rule, never reaches the peer. What does reach it must be answered: the
+// agent turn blocks on the reply. The wait is bounded by Driver.AskTimeout
+// (DefaultAskTimeout unless the CLI overrides it), after which the ask is
+// denied with a message saying so; a peer that does not implement the control
+// protocol therefore sees a denied tool and a finished turn, not a hung
+// process.
 package streamjson
 
 import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
@@ -55,21 +66,41 @@ type permissionAnswer struct {
 	Message  string `json:"message,omitempty"`
 }
 
+// DefaultAskTimeout bounds how long a can_use_tool request waits for its
+// control_response when the CLI does not say otherwise.
+//
+// The JS reference waits forever, and so did this driver. Forever is the wrong
+// default for an embedding channel: the peer is a program, and a program that
+// never answers — because it was written against the config allow list and
+// never implemented control responses, or because it stalled — left the agent
+// wedged mid-turn with no output and no exit. Ten minutes is long enough for a
+// human behind an editor integration to read a prompt and decide, and short
+// enough that an unattended pipeline fails visibly within the run rather than
+// at whatever outer timeout kills it.
+const DefaultAskTimeout = 10 * time.Minute
+
 // Driver runs the stream-json protocol over a reader/writer pair.
 type Driver struct {
 	out     io.Writer
 	mu      sync.Mutex // serializes writes to out
 	pending sync.Map   // request_id -> chan permission.Decision
+
+	// AskTimeout bounds the wait for a control_response to each can_use_tool
+	// request; an unanswered request is denied when it elapses. Zero or
+	// negative means wait until the context ends, which is the pre-timeout
+	// behaviour and the JS reference's.
+	AskTimeout time.Duration
 }
 
-// NewDriver builds a Driver writing to w.
+// NewDriver builds a Driver writing to w, waiting DefaultAskTimeout for each
+// permission answer.
 func NewDriver(w io.Writer) *Driver {
-	return &Driver{out: w}
+	return &Driver{out: w, AskTimeout: DefaultAskTimeout}
 }
 
 // Run reads messages from r until EOF, running the agent for each user message.
 // Permission asks are emitted as control_request lines and block until the
-// peer sends the matching control_response.
+// peer sends the matching control_response, or AskTimeout passes.
 func (d *Driver) Run(ctx context.Context, r io.Reader, run RunFunc) error {
 	lines := make(chan inMessage, 8)
 
@@ -175,11 +206,29 @@ func (a *controlApprover) Approve(ctx context.Context, req agent.ApprovalRequest
 		},
 	})
 
+	// A nil channel never fires, so no timeout means the old unbounded wait.
+	var timeout <-chan time.Time
+	if a.driver.AskTimeout > 0 {
+		timer := time.NewTimer(a.driver.AskTimeout)
+		defer timer.Stop()
+		timeout = timer.C
+	}
+
 	select {
 	case <-ctx.Done():
 		return permission.Decision{Behavior: permission.Deny, Message: "cancelled"}
 	case dec := <-ch:
 		return dec
+	case <-timeout:
+		// The deferred Delete drops the waiter, so an answer that arrives after
+		// this is discarded by deliverControlResponse rather than misapplied.
+		return permission.Decision{
+			Behavior: permission.Deny,
+			Message: fmt.Sprintf("Permission for tool %s was requested from the embedding client "+
+				"(control_request can_use_tool) but no control_response arrived within %s; denied. "+
+				"The client must answer can_use_tool requests, or pre-approve the tool with a "+
+				"[permissions] allow rule so it is never asked.", req.ToolName, a.driver.AskTimeout),
+		}
 	}
 }
 
