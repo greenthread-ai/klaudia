@@ -578,9 +578,24 @@ to decline to take a server's word, without giving up the server: the main agent
 keeps it and still asks before every call. This decides which tools a read-only
 sub-agent is *handed*; it is not a claim that calling them is safe.
 
-There is no `${VAR}` expansion — a value is used exactly as written — but the
-server subprocess inherits Klaudia's environment, so export credentials in your
-shell rather than writing them into the file. `.mcp.json.example` is a working
+`command`, `args`, `env` values and `url` may reference Klaudia's environment
+as `${VAR}` or `${VAR:-default}` — the syntax the reference MCP clients accept,
+so a `.mcp.json` written for one of them works here unchanged:
+
+```jsonc
+{ "mcpServers": {
+  "loki": { "command": "python", "args": ["-m", "mspagent.mcp.loki"],
+            "env": { "MSP_LOKI_URL": "${MSP_LOKI_URL:-http://loki:3100}" } }
+} }
+```
+
+A reference to a variable that is unset and has no default is an error for that
+server (named in the transcript and in `/mcp`; the other servers still start),
+not an empty string — an empty value would vanish into the subprocess and
+surface only as the server misbehaving. A bare `$VAR` is not expanded. The
+server subprocess also inherits Klaudia's whole environment, so a credential the
+server reads under its own name needs no `env` entry at all: export it in your
+shell rather than writing it into the file. `.mcp.json.example` is a working
 starting point; copy it and edit. `.mcp.json` itself is gitignored because a
 credential in it would be a literal in a committed file — `git add -f` it if you
 want a secret-free team config in the repo.

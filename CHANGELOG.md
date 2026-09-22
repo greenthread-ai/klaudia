@@ -6,6 +6,25 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **`.mcp.json` resolves `${VAR}` and `${VAR:-default}`.** `command`, `args`,
+  `env` values and `url` may reference Klaudia's environment with the syntax
+  the reference MCP clients accept. The README used to say, deliberately, that
+  there was no expansion and a value was used exactly as written. That held
+  until a config written for the reference client arrived: its stdio server was
+  spawned with `MSP_LOKI_URL='${MSP_LOKI_URL:-http://loki:3100}'` — the literal
+  — connected to nothing, and every tool on it failed with the server's own
+  generic error. Nothing in the output pointed at the config, because from
+  Klaudia's side nothing had gone wrong.
+
+  References are resolved at connect time, not at load, so the stored config
+  stays as written and a reload can still tell an unchanged file from a changed
+  one. A variable that is unset with no default is an error naming the server,
+  the field and the variable, and it fails only that server — an empty string,
+  which is what `sh` would substitute, would vanish into the subprocess and
+  come back as the same unexplained failure this is fixing. A bare `$VAR` is
+  left alone, as the reference clients leave it, so a value that merely
+  contains a dollar sign is not rewritten.
+
 - **MCP servers can be configured globally, in `~/.klaudia/.mcp.json`.** Only
   `./.mcp.json` and `./.klaudia/.mcp.json` were read, both relative to the
   project, so a server you want in *every* project had to be copied into every
