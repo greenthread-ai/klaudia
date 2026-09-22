@@ -3,7 +3,7 @@
     "gitea": {
       "command": "gitea-mcp",
       "args": ["-t", "stdio", "-r", "-S", "issue,pull_request,actions"],
-      "env": { "GITEA_HOST": "https://git.example.com" },
+      "env": { "GITEA_HOST": "${GITEA_HOST:-https://git.example.com}" },
       "readOnly": true
     },
     "third-party": {

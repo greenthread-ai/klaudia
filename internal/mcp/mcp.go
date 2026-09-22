@@ -25,6 +25,11 @@ import (
 // ServerConfig defines how to reach an MCP server. A stdio server sets
 // Command (+ Args/Env); an HTTP server sets URL (Type selects the streamable
 // HTTP transport, the default, or "sse" for the legacy SSE transport).
+//
+// Command, Args, Env values and URL may reference Klaudia's environment as
+// ${VAR} or ${VAR:-default}, the syntax the reference MCP clients accept in
+// .mcp.json. They are resolved at connect time, not at load: the stored config
+// stays as written, so a reload can tell an unchanged file from a changed one.
 type ServerConfig struct {
 	// stdio transport
 	Command string            `json:"command,omitempty"`
@@ -177,8 +182,15 @@ func newClient() *mcpsdk.Client {
 }
 
 // connectServer connects to a server using the transport its config implies:
-// HTTP (streamable, or SSE) when URL is set, otherwise stdio.
+// HTTP (streamable, or SSE) when URL is set, otherwise stdio. ${VAR} and
+// ${VAR:-default} references in the config are resolved against Klaudia's
+// environment first (see expandServerConfig); an unresolvable one is this
+// server's error and leaves the others alone.
 func connectServer(ctx context.Context, name string, cfg ServerConfig) (*Server, error) {
+	cfg, err := expandServerConfig(name, cfg, os.LookupEnv)
+	if err != nil {
+		return nil, err
+	}
 	if url := strings.TrimSpace(cfg.URL); url != "" {
 		var t mcpsdk.Transport
 		switch strings.ToLower(strings.TrimSpace(cfg.Type)) {
