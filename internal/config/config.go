@@ -95,8 +95,14 @@ type Trust struct {
 
 type Permissions struct {
 	// Mode is the default permission mode when no --permission-mode flag is
-	// given: default | acceptEdits | bypassPermissions | plan | dontAsk.
-	Mode  string   `toml:"mode,omitempty"`
+	// given: autonomous | plan | bypassPermissions | dontAsk, or the legacy
+	// default | acceptEdits. dontAsk runs allow-listed tools and denies the
+	// rest without prompting — the mode for headless and embedded runs.
+	Mode string `toml:"mode,omitempty"`
+	// Allow and Deny are rule strings: a tool name ("Edit"), a tool with a
+	// specifier ("Bash(git status:*)"), or for MCP tools "mcp__<server>" /
+	// "mcp__<server>__*" (every tool on that server) or
+	// "mcp__<server>__<tool>" (one tool).
 	Allow []string `toml:"allow,omitempty"`
 	Deny  []string `toml:"deny,omitempty"`
 }
