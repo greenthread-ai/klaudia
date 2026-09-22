@@ -727,6 +727,15 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		if streak.varied {
 			msg = envFailureMsg(tu.Name, streak.count, streak.sig)
 		}
+		// Clear the streak as the directive goes out, because the only other
+		// reset is a successful execution and this branch is what prevents one.
+		// Left in place it is not a circuit breaker but a latch: a real session
+		// reached a state where `true`, `pwd` and `echo hello` were all refused
+		// in 0ms for the rest of the run, long after whatever broke had passed.
+		// Firing once per streak keeps the anti-loop property — a model that
+		// keeps failing gets the directive again after another
+		// repeatFailureLimit failures — without making the tool unusable.
+		delete(errStreaks, tu.Name)
 		return shortCircuit(emit, tu, msg)
 	}
 

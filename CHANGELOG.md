@@ -53,6 +53,26 @@ port mirrors (see `internal/version`).
   print a line each time an unrelated key in the file was saved.
 
 ### Fixed
+- **The repeated-failure breaker latched, and bricked Bash for the rest of the
+  run.** From a live session: after two failures of the same shape, every
+  subsequent Bash call — including `true`, `pwd` and `echo hello` — was refused
+  in 0ms with the "environment issue" directive, long after whatever broke had
+  passed. `KillShell` had nothing to kill and `Jobs` showed nothing running,
+  because nothing was actually wedged.
+
+  The streak that fires the directive was only ever cleared by a *successful*
+  execution, and the directive is what prevents one — a latch, not a breaker.
+  The streak is now cleared as the directive is sent, so the next call runs. The
+  anti-loop property is unchanged: a tool that keeps failing rebuilds the streak
+  and gets told again. Two host-gate paths already worked around the same
+  deadlock locally; this fixes the general case.
+
+- **The Bash tool now says that exit status is reported for it.** A model was
+  seen appending `; echo "EXIT_STATUS: $?"` to capture a status Klaudia already
+  surfaces as `[exit code N]` — which makes the shell exit 0, so the call is
+  recorded as successful and the failure never reaches the loop's error
+  tracking at all. The description says so, and says not to.
+
 - **The trust posture is no longer read and written unsynchronised.**
   `HostGate.Policy` was a plain field, written by `/trust upgrade` from the
   Bubble Tea update loop and read by the gate on every tool call from the

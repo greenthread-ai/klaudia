@@ -296,7 +296,12 @@ func TestDeclinedHostChangeFailsOnlyThatCall(t *testing.T) {
 // `sudo systemctl restart nginx`, and a test that reaches Execute would either
 // hang on a password prompt or, worse, work. The stub records what it was asked
 // to run so a test can assert the gate stopped it.
-type stubBash struct{ ran []string }
+type stubBash struct {
+	ran []string
+	// err, when set, makes every execution fail with this message — for the
+	// loop-breaker tests, which need a tool that fails identically.
+	err string
+}
 
 func (s *stubBash) Name() string { return "Bash" }
 func (s *stubBash) Description(context.Context) (string, error) {
@@ -321,6 +326,9 @@ func (s *stubBash) Execute(_ context.Context, _ tools.Context, raw json.RawMessa
 		Command string `json:"command"`
 	}
 	_ = json.Unmarshal(raw, &in)
+	if s.err != "" {
+		return []tools.Result{{Content: s.err, IsError: true}}, nil
+	}
 	s.ran = append(s.ran, in.Command)
 	return []tools.Result{{Content: "(stub)"}}, nil
 }

@@ -51,7 +51,13 @@ func (b *Bash) Name() string { return "Bash" }
 func (b *Bash) Description(context.Context) (string, error) {
 	return "Executes a shell command and returns its combined output. Commands run via bash. " +
 		"Provide an optional timeout in milliseconds (default 120000, max 600000). " +
-		"Prefer the Read/Glob/Grep tools over cat/find/grep where possible.", nil
+		"Prefer the Read/Glob/Grep tools over cat/find/grep where possible. " +
+		// Observed in a real session: the model appended `; echo \"EXIT_STATUS: $?\"`
+		// to capture a status that was already being reported, and in doing so
+		// made the shell exit 0 every time — so the failure never surfaced as
+		// one. Say plainly that the status is already there.
+		"A non-zero exit is reported for you as \"[exit code N]\" and marks the call failed; " +
+		"do not append `; echo $?` or similar, which makes the shell exit 0 and hides the failure.", nil
 }
 
 func (b *Bash) InputSchema() json.RawMessage { return b.schema.Raw }
