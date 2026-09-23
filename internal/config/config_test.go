@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -194,5 +195,52 @@ func TestLoadMissingIsEmpty(t *testing.T) {
 	cfg := Load(t.TempDir())
 	if cfg.Provider != "" {
 		t.Errorf("expected empty config, got %+v", cfg)
+	}
+}
+
+func TestExtraHeadersEnvMergeOverlaysPerKey(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, `provider = "openai"
+baseURL = "https://x/v1"
+extraHeadersEnv = { "CF-Access-Client-Id" = "CF_ID_HOME", "X-Extra" = "X_HOME" }
+`)
+	cwd := t.TempDir()
+	writeConfig(t, cwd, `extraHeadersEnv = { "CF-Access-Client-Id" = "CF_ID_PROJECT", "CF-Access-Client-Secret" = "CF_SECRET" }
+`)
+
+	cfg := Load(cwd)
+	// Project overrides the shared key; home-only key survives; project-only key is added.
+	want := map[string]string{
+		"CF-Access-Client-Id":     "CF_ID_PROJECT",
+		"X-Extra":                 "X_HOME",
+		"CF-Access-Client-Secret": "CF_SECRET",
+	}
+	if !reflect.DeepEqual(cfg.ExtraHeadersEnv, want) {
+		t.Fatalf("merged extraHeadersEnv = %v, want %v", cfg.ExtraHeadersEnv, want)
+	}
+}
+
+func TestResolveExtraHeaders(t *testing.T) {
+	// Absent -> nil, nil.
+	if h, m := (Config{}).ResolveExtraHeaders(); h != nil || m != nil {
+		t.Fatalf("empty config: headers=%v missing=%v, want nil,nil", h, m)
+	}
+	cfg := Config{ExtraHeadersEnv: map[string]string{
+		"CF-Access-Client-Id":     "CF_ID",
+		"CF-Access-Client-Secret": "CF_SECRET",
+	}}
+	t.Setenv("CF_ID", "id-123")
+	os.Unsetenv("CF_SECRET") // referenced but unset -> reported missing (name only)
+
+	headers, missing := cfg.ResolveExtraHeaders()
+	if headers["CF-Access-Client-Id"] != "id-123" {
+		t.Errorf("resolved header = %q, want id-123", headers["CF-Access-Client-Id"])
+	}
+	if _, ok := headers["CF-Access-Client-Secret"]; ok {
+		t.Errorf("unset var must not appear in headers: %v", headers)
+	}
+	if len(missing) != 1 || missing[0] != "CF_SECRET" {
+		t.Errorf("missing = %v, want [CF_SECRET]", missing)
 	}
 }

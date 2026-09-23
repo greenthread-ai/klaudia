@@ -88,7 +88,7 @@ func (p *OpenAIProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	p.setAuth(req)
 	resp, err := p.http.Do(req)
 	if err != nil {
 		return nil, err

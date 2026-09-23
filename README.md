@@ -89,6 +89,11 @@ baseURL = "https://api.example.com/v1"
 # pick any name you like and export a variable of that name (see below).
 # Prefer this over apiKey = "sk-..." so the key stays out of the file.
 apiKeyEnv = "MY_API_KEY"
+
+# extraHeadersEnv adds HTTP headers to every request, each read from the NAMED env
+# var (never a value in the file). Use it for endpoints gated by non-bearer headers
+# — e.g. a Cloudflare Access service token — with or without apiKeyEnv:
+extraHeadersEnv = { "CF-Access-Client-Id" = "CF_ID", "CF-Access-Client-Secret" = "CF_SECRET" }
 ```
 
 Then export the variable you named in `apiKeyEnv` and run:
@@ -235,6 +240,54 @@ channel for editor/SDK integrations (no terminal needed):
 ./klaudia --input-format stream-json --verbose
 ```
 
+Each `{"type":"user","message":{"role":"user","content":"…"}}` line is one
+turn. Conversation content streams back as the same message envelope the `-p
+--output-format stream-json` path (and Claude Code) emit — one line per
+assistant message and per tool-result message, with `session_id` and `uuid`:
+
+```json
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"…"},
+ {"type":"tool_use","id":"…","name":"Read","input":{…}}]},"session_id":"…","uuid":"…"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"…",
+ "content":"…"}]},"session_id":"…","uuid":"…"}
+```
+
+`usage`, `tool_progress` and `compaction` events follow as flat lines, and the
+turn ends with a `result` line.
+
+**Permission asks are the client's to answer.** When the permission flow cannot
+settle a tool call on its own, Klaudia emits a control request and blocks the
+turn until the client replies:
+
+```json
+{"type":"control_request","request_id":"<id>",
+ "request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"}}}
+```
+
+The reply carries the same `request_id`; `behavior` is `"allow"` or `"deny"`,
+and a deny may explain itself in `message`:
+
+```json
+{"type":"control_response","response":{"subtype":"success","request_id":"<id>",
+ "response":{"behavior":"deny","message":"read-only embedder"}}}
+```
+
+A client that does not implement this must not be asked. Two ways to arrange
+that:
+
+- **Pre-decide in config.** `[permissions] allow` and `deny` rules are applied
+  before anyone is asked, so an allow-listed tool never produces a
+  `control_request`. MCP tools take the server-scoped forms `mcp__<server>`
+  or `mcp__<server>__*` (every tool that server exposes) as well as
+  `mcp__<server>__<tool>`.
+- **Set `mode = "dontAsk"`** (or `--permission-mode dontAsk`): allow-listed
+  tools run, everything else is denied without a prompt. That is the mode for a
+  headless, config-driven embedder.
+
+An ask the client never answers is denied after `--ask-timeout` (default
+10 minutes; `0` waits forever), with a tool result that says so — a stalled or
+protocol-unaware client sees a finished turn, not a hung process.
+
 ### Resuming
 
 ```bash
@@ -376,6 +429,12 @@ baseURL = "https://api.example.com/v1"
 # apiKeyEnv names the env var holding the key (you then `export MY_API_KEY=...`).
 # Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
+
+# extraHeadersEnv maps a header name -> the NAME of an env var holding its value.
+# Applied to every request (alongside Authorization when a key is set); for endpoints
+# gated by non-bearer headers such as a Cloudflare Access service token. With no
+# apiKey/apiKeyEnv, the endpoint is authenticated by these headers alone.
+extraHeadersEnv = { "CF-Access-Client-Id" = "CF_ID", "CF-Access-Client-Secret" = "CF_SECRET" }
 
 # Optional: set the model's context window in tokens so autocompaction kicks
 # in before the provider overflows. Defaults to 200000 (Anthropic-sized); set
@@ -542,9 +601,24 @@ to decline to take a server's word, without giving up the server: the main agent
 keeps it and still asks before every call. This decides which tools a read-only
 sub-agent is *handed*; it is not a claim that calling them is safe.
 
-There is no `${VAR}` expansion — a value is used exactly as written — but the
-server subprocess inherits Klaudia's environment, so export credentials in your
-shell rather than writing them into the file. `.mcp.json.example` is a working
+`command`, `args`, `env` values and `url` may reference Klaudia's environment
+as `${VAR}` or `${VAR:-default}` — the syntax the reference MCP clients accept,
+so a `.mcp.json` written for one of them works here unchanged:
+
+```jsonc
+{ "mcpServers": {
+  "loki": { "command": "python", "args": ["-m", "mspagent.mcp.loki"],
+            "env": { "MSP_LOKI_URL": "${MSP_LOKI_URL:-http://loki:3100}" } }
+} }
+```
+
+A reference to a variable that is unset and has no default is an error for that
+server (named in the transcript and in `/mcp`; the other servers still start),
+not an empty string — an empty value would vanish into the subprocess and
+surface only as the server misbehaving. A bare `$VAR` is not expanded. The
+server subprocess also inherits Klaudia's whole environment, so a credential the
+server reads under its own name needs no `env` entry at all: export it in your
+shell rather than writing it into the file. `.mcp.json.example` is a working
 starting point; copy it and edit. `.mcp.json` itself is gitignored because a
 credential in it would be a literal in a committed file — `git add -f` it if you
 want a secret-free team config in the repo.
