@@ -6,6 +6,14 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **`extraHeadersEnv` for OpenAI-compatible providers.** A config map of HTTP header
+  name → environment-variable NAME (never a value in the file, mirroring `apiKeyEnv`),
+  applied to every request alongside `Authorization`. `provider = "openai"` is now valid
+  with no `apiKey`/`apiKeyEnv` when `extraHeadersEnv` is set, so an endpoint gated only by
+  non-bearer headers — e.g. a Cloudflare Access service token
+  (`CF-Access-Client-Id`/`CF-Access-Client-Secret`) — is reachable; a referenced env var
+  that is unset is a startup error naming the variable (not its value). Both request paths
+  (`streamAttempt` and `ListModels`) authenticate through one `setAuth` helper.
 - **`.mcp.json` resolves `${VAR}` and `${VAR:-default}`.** `command`, `args`,
   `env` values and `url` may reference Klaudia's environment with the syntax
   the reference MCP clients accept. The README used to say, deliberately, that

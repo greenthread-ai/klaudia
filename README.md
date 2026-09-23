@@ -89,6 +89,11 @@ baseURL = "https://api.example.com/v1"
 # pick any name you like and export a variable of that name (see below).
 # Prefer this over apiKey = "sk-..." so the key stays out of the file.
 apiKeyEnv = "MY_API_KEY"
+
+# extraHeadersEnv adds HTTP headers to every request, each read from the NAMED env
+# var (never a value in the file). Use it for endpoints gated by non-bearer headers
+# — e.g. a Cloudflare Access service token — with or without apiKeyEnv:
+extraHeadersEnv = { "CF-Access-Client-Id" = "CF_ID", "CF-Access-Client-Secret" = "CF_SECRET" }
 ```
 
 Then export the variable you named in `apiKeyEnv` and run:
@@ -424,6 +429,12 @@ baseURL = "https://api.example.com/v1"
 # apiKeyEnv names the env var holding the key (you then `export MY_API_KEY=...`).
 # Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
+
+# extraHeadersEnv maps a header name -> the NAME of an env var holding its value.
+# Applied to every request (alongside Authorization when a key is set); for endpoints
+# gated by non-bearer headers such as a Cloudflare Access service token. With no
+# apiKey/apiKeyEnv, the endpoint is authenticated by these headers alone.
+extraHeadersEnv = { "CF-Access-Client-Id" = "CF_ID", "CF-Access-Client-Secret" = "CF_SECRET" }
 
 # Optional: set the model's context window in tokens so autocompaction kicks
 # in before the provider overflows. Defaults to 200000 (Anthropic-sized); set

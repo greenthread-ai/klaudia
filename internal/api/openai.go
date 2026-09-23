@@ -20,20 +20,35 @@ import (
 // SSE response, and assembling an anthropic.BetaMessage so the rest of Klaudia
 // (loop, tools, sessions, compaction) is unchanged.
 type OpenAIProvider struct {
-	baseURL     string // e.g. https://api.demo.gthread.dev/v1
-	apiKey      string
-	temperature *float64
-	http        *http.Client
+	baseURL      string // e.g. https://api.demo.gthread.dev/v1
+	apiKey       string
+	extraHeaders map[string]string // resolved header -> value (e.g. CF Access service token)
+	temperature  *float64
+	http         *http.Client
 }
 
 // NewOpenAIProvider builds the provider. baseURL should include the /v1 suffix.
-// temperature may be nil (omit from request) or a pointer to a value.
-func NewOpenAIProvider(baseURL, apiKey string, temperature *float64) *OpenAIProvider {
+// temperature may be nil (omit from request) or a pointer to a value. extraHeaders are
+// applied to every request (may be nil); use them for endpoints gated by non-bearer headers.
+func NewOpenAIProvider(baseURL, apiKey string, temperature *float64, extraHeaders map[string]string) *OpenAIProvider {
 	return &OpenAIProvider{
-		baseURL:     strings.TrimRight(baseURL, "/"),
-		apiKey:      apiKey,
-		temperature: temperature,
-		http:        &http.Client{},
+		baseURL:      strings.TrimRight(baseURL, "/"),
+		apiKey:       apiKey,
+		extraHeaders: extraHeaders,
+		temperature:  temperature,
+		http:         &http.Client{},
+	}
+}
+
+// setAuth sets Authorization (only when a key is configured — a header-authenticated endpoint
+// has none) and applies every configured extra header. Used by streamAttempt and ListModels so
+// the two request paths authenticate identically.
+func (p *OpenAIProvider) setAuth(req *http.Request) {
+	if p.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
+	for name, value := range p.extraHeaders {
+		req.Header.Set(name, value)
 	}
 }
 
@@ -145,7 +160,7 @@ func (p *OpenAIProvider) streamAttempt(ctx context.Context, body []byte, model s
 	if err != nil {
 		return anthropic.BetaMessage{}, false, false, err
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	p.setAuth(httpReq)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
 

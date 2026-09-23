@@ -245,10 +245,14 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 			return nil, "", fmt.Errorf("provider \"openai\" requires baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml (try --create-config=global or --create-config=local)")
 		}
 		key := cfg.ResolveAPIKey()
-		if key == "" {
-			return nil, "", fmt.Errorf("provider \"openai\" needs apiKey or apiKeyEnv in ~/.klaudia/config.toml or ./.klaudia/config.toml; if using apiKeyEnv, export that variable before running")
+		extraHeaders, missing := cfg.ResolveExtraHeaders()
+		if len(missing) > 0 {
+			return nil, "", fmt.Errorf("provider \"openai\": extraHeadersEnv references unset environment variable(s): %s — export them before running", strings.Join(missing, ", "))
 		}
-		return api.NewOpenAIProvider(cfg.BaseURL, key, cfg.Temperature), cfg.Model, nil
+		if key == "" && len(cfg.ExtraHeadersEnv) == 0 {
+			return nil, "", fmt.Errorf("provider \"openai\" needs apiKey or apiKeyEnv (or extraHeadersEnv for a header-authenticated endpoint) in ~/.klaudia/config.toml or ./.klaudia/config.toml; if using apiKeyEnv, export that variable before running")
+		}
+		return api.NewOpenAIProvider(cfg.BaseURL, key, cfg.Temperature, extraHeaders), cfg.Model, nil
 	default:
 		cred, err := api.ResolveCredential()
 		if err != nil {

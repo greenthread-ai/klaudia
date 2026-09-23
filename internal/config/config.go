@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -50,6 +51,13 @@ type Config struct {
 	APIKey string `toml:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable holding the key.
 	APIKeyEnv string `toml:"apiKeyEnv,omitempty"`
+	// ExtraHeadersEnv maps an HTTP header name to the NAME of an environment variable
+	// holding its value (never a value in the file, mirroring apiKeyEnv). For
+	// OpenAI-compatible endpoints gated by non-bearer headers — e.g. a Cloudflare Access
+	// service token — set:
+	//   extraHeadersEnv = { "CF-Access-Client-Id" = "CF_ID", "CF-Access-Client-Secret" = "CF_SECRET" }
+	// The headers are applied to every request (alongside Authorization when a key is set).
+	ExtraHeadersEnv map[string]string `toml:"extraHeadersEnv,omitempty"`
 	// Sandbox configures how the Bash tool executes commands.
 	Sandbox Sandbox `toml:"sandbox,omitempty"`
 	// Browser configures local browser-backed tools (BrowserSearch/BrowserFetch and browser tools).
@@ -283,6 +291,15 @@ func merge(dst *Config, src Config) {
 	if src.APIKeyEnv != "" {
 		dst.APIKeyEnv = src.APIKeyEnv
 	}
+	// Extra headers overlay per key (project over home), rather than replacing wholesale.
+	if len(src.ExtraHeadersEnv) > 0 {
+		if dst.ExtraHeadersEnv == nil {
+			dst.ExtraHeadersEnv = make(map[string]string, len(src.ExtraHeadersEnv))
+		}
+		for header, envVar := range src.ExtraHeadersEnv {
+			dst.ExtraHeadersEnv[header] = envVar
+		}
+	}
 	if src.Temperature != nil {
 		dst.Temperature = src.Temperature
 	}
@@ -357,4 +374,25 @@ func (c Config) ResolveAPIKey() string {
 		return strings.TrimSpace(os.Getenv(c.APIKeyEnv))
 	}
 	return ""
+}
+
+// ResolveExtraHeaders resolves ExtraHeadersEnv (header -> env var NAME) to concrete header
+// values by reading each named environment variable. It returns the resolved headers and the
+// sorted NAMES of any referenced variables that are unset/empty (names only, never values).
+func (c Config) ResolveExtraHeaders() (map[string]string, []string) {
+	if len(c.ExtraHeadersEnv) == 0 {
+		return nil, nil
+	}
+	headers := make(map[string]string, len(c.ExtraHeadersEnv))
+	var missing []string
+	for header, envVar := range c.ExtraHeadersEnv {
+		val := strings.TrimSpace(os.Getenv(envVar))
+		if val == "" {
+			missing = append(missing, envVar)
+			continue
+		}
+		headers[header] = val
+	}
+	sort.Strings(missing)
+	return headers, missing
 }

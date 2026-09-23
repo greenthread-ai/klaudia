@@ -122,7 +122,7 @@ func oaStallingServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 // (not a user cancel) so StreamTurn can apply the same retry policy.
 func TestOpenAIStreamAttemptStallTripsWatchdog(t *testing.T) {
 	srv, attempts := oaStallingServer(t)
-	p := NewOpenAIProvider(srv.URL, "k", nil)
+	p := NewOpenAIProvider(srv.URL, "k", nil, nil)
 
 	done := make(chan struct{}, 1)
 	go func() {
@@ -148,7 +148,7 @@ func TestOpenAIStreamAttemptStallTripsWatchdog(t *testing.T) {
 // A user interrupt (ctx cancel) on the OpenAI path is NOT a stall.
 func TestOpenAIStreamAttemptUserCancelNotStall(t *testing.T) {
 	srv, _ := oaStallingServer(t)
-	p := NewOpenAIProvider(srv.URL, "k", nil)
+	p := NewOpenAIProvider(srv.URL, "k", nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{}, 1)
