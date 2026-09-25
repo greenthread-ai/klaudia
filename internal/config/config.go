@@ -14,13 +14,19 @@ import (
 
 // Provider names.
 const (
-	ProviderAnthropic = "anthropic" // default: native Anthropic Messages API
-	ProviderOpenAI    = "openai"    // OpenAI-compatible Chat Completions endpoint
+	ProviderAnthropic   = "anthropic"   // default: native Anthropic Messages API
+	ProviderOpenAI      = "openai"      // OpenAI-compatible Chat Completions endpoint
+	ProviderGreenThread = "greenthread" // GreenThread AI Console (defaults: api.GreenThread*)
 )
+
+// GreenThreadAPIKeyEnv is where provider "greenthread" reads its key when
+// neither apiKey nor apiKeyEnv is set.
+const GreenThreadAPIKeyEnv = "GREENTHREAD_API_KEY"
 
 // Config is the .klaudia/config.toml schema.
 type Config struct {
-	// Provider selects the backend: "anthropic" (default) or "openai".
+	// Provider selects the backend: "anthropic" (default), "openai" or
+	// "greenthread".
 	Provider string `toml:"provider,omitempty"`
 	// Model is the default model (e.g. "openai/gpt-5.5"); --model overrides it.
 	Model string `toml:"model,omitempty"`
@@ -28,6 +34,7 @@ type Config struct {
 	// "" uses the default; /theme overrides it for the current session.
 	Theme string `toml:"theme,omitempty"`
 	// BaseURL is the OpenAI-compatible endpoint (including /v1), if provider=openai.
+	// For provider=greenthread it overrides the console URL.
 	BaseURL string `toml:"baseURL,omitempty"`
 	// Temperature for the OpenAI-compatible provider. Omitted from the request
 	// when nil (lets the server pick its default).
@@ -342,13 +349,26 @@ func merge(dst *Config, src Config) {
 	dst.LSP.Disabled = append(dst.LSP.Disabled, src.LSP.Disabled...)
 }
 
-// ResolveAPIKey returns the inline key, or the value of the named env var.
+// ResolveAPIKey returns the inline key, or the value of the env var KeyEnv
+// names.
 func (c Config) ResolveAPIKey() string {
 	if c.APIKey != "" {
 		return c.APIKey
 	}
+	if env := c.KeyEnv(); env != "" {
+		return strings.TrimSpace(os.Getenv(env))
+	}
+	return ""
+}
+
+// KeyEnv names the env var the key is read from: apiKeyEnv when set, else the
+// provider's own default (GREENTHREAD_API_KEY for "greenthread"), else "".
+func (c Config) KeyEnv() string {
 	if c.APIKeyEnv != "" {
-		return strings.TrimSpace(os.Getenv(c.APIKeyEnv))
+		return c.APIKeyEnv
+	}
+	if c.Provider == ProviderGreenThread {
+		return GreenThreadAPIKeyEnv
 	}
 	return ""
 }

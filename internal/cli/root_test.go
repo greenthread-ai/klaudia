@@ -8,6 +8,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/session"
 )
 
@@ -135,5 +137,35 @@ func TestCompactAndPersistSkipsSummaryOnError(t *testing.T) {
 	})
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want boom", err)
+	}
+}
+
+func TestBuildProviderGreenThread(t *testing.T) {
+	t.Setenv("GREENTHREAD_API_KEY", "")
+	cfg := config.Config{Provider: config.ProviderGreenThread}
+
+	// No key: the error names the variable to export.
+	if _, _, err := buildProvider(cfg); err == nil || !strings.Contains(err.Error(), "GREENTHREAD_API_KEY") {
+		t.Fatalf("err = %v, want one naming GREENTHREAD_API_KEY", err)
+	}
+
+	t.Setenv("GREENTHREAD_API_KEY", "gt_live_test")
+	p, model, err := buildProvider(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.(*api.GreenThreadProvider); !ok {
+		t.Errorf("provider = %T, want *api.GreenThreadProvider", p)
+	}
+	if model != api.GreenThreadModel {
+		t.Errorf("default model = %q, want %q", model, api.GreenThreadModel)
+	}
+	if modelLister(p) == nil {
+		t.Error("/model needs the console's model list")
+	}
+
+	cfg.Model = "openai/gpt-oss-20b"
+	if _, model, _ := buildProvider(cfg); model != cfg.Model {
+		t.Errorf("configured model = %q, want %q", model, cfg.Model)
 	}
 }
