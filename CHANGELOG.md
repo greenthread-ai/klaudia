@@ -6,6 +6,32 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **`provider = "greenthread"`: the GreenThread AI Console as a built-in
+  provider.** With only that line and `GREENTHREAD_API_KEY` exported, Klaudia
+  talks to `https://console.gt-syd.gthread.dev` using `moonshotai/Kimi-K3`
+  (1M context, 32000 output tokens). `baseURL`, `model`, `apiKey` /
+  `apiKeyEnv`, `contextWindow` and `maxTokens` still override the defaults.
+  `/model` lists the console's chat models (its audio and image models are left
+  out), and a missing key is a startup error naming `GREENTHREAD_API_KEY`.
+
+  Turns go over the console's Anthropic Messages endpoint for models that list
+  `messages` in their `supported_endpoints` (Kimi K3 today), and over Chat
+  Completions for the rest. On Messages, Kimi's tool calls arrive as native
+  `tool_use` blocks, and its reasoning as `thinking` blocks that stay in the
+  history and go back to the model on the next turn. Through the Chat
+  Completions shim that reasoning is dropped at every tool call. Measured
+  against the console: a create/read/edit/read task ran in five turns with
+  every tool call intact, and streaming, `/model`, `/compact` and the
+  Chat Completions fallback (`openai/gpt-oss-20b`) all worked.
+
+  The console is not Anthropic, so Anthropic's betas, `cache_control` markers
+  and server-side `web_search` / `web_fetch` tools are not sent. The console
+  rejects the server tools with a 400; the local `BrowserSearch` /
+  `BrowserFetch` tools cover the web. The SDK is also kept from reading
+  `ANTHROPIC_*` credentials from the environment. Left to its defaults, it
+  would have attached an exported `ANTHROPIC_AUTH_TOKEN` to requests bound for
+  the console.
+
 - **MCP servers can be configured globally, in `~/.klaudia/.mcp.json`.** Only
   `./.mcp.json` and `./.klaudia/.mcp.json` were read, both relative to the
   project, so a server you want in *every* project had to be copied into every

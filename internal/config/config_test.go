@@ -196,3 +196,27 @@ func TestLoadMissingIsEmpty(t *testing.T) {
 		t.Errorf("expected empty config, got %+v", cfg)
 	}
 }
+
+func TestGreenThreadKeyDefaultsToItsEnvVar(t *testing.T) {
+	t.Setenv("GREENTHREAD_API_KEY", " gt_live_env \n")
+	t.Setenv("MY_GT_KEY", "gt_live_named")
+
+	gt := Config{Provider: ProviderGreenThread}
+	if gt.KeyEnv() != GreenThreadAPIKeyEnv || gt.ResolveAPIKey() != "gt_live_env" {
+		t.Errorf("KeyEnv = %q, key = %q; want GREENTHREAD_API_KEY and its trimmed value", gt.KeyEnv(), gt.ResolveAPIKey())
+	}
+	// apiKeyEnv and apiKey keep their meaning, and override the default.
+	gt.APIKeyEnv = "MY_GT_KEY"
+	if gt.KeyEnv() != "MY_GT_KEY" || gt.ResolveAPIKey() != "gt_live_named" {
+		t.Errorf("apiKeyEnv: KeyEnv = %q, key = %q", gt.KeyEnv(), gt.ResolveAPIKey())
+	}
+	gt.APIKey = "gt_live_inline"
+	if gt.ResolveAPIKey() != "gt_live_inline" {
+		t.Errorf("inline apiKey should win; got %q", gt.ResolveAPIKey())
+	}
+	// The default is GreenThread's alone: an openai config naming no variable
+	// still has no key.
+	if oa := (Config{Provider: ProviderOpenAI}); oa.KeyEnv() != "" || oa.ResolveAPIKey() != "" {
+		t.Errorf("openai picked up a default key env: %q", oa.KeyEnv())
+	}
+}

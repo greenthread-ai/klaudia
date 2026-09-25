@@ -58,11 +58,12 @@ func TestModelInfoNameFallsBackToID(t *testing.T) {
 	}
 }
 
-// Both providers must satisfy the optional interface, or /model silently
+// Every provider must satisfy the optional interface, or /model silently
 // degrades to type-the-id.
 func TestProvidersImplementModelLister(t *testing.T) {
 	var _ ModelLister = (*Client)(nil)
 	var _ ModelLister = (*OpenAIProvider)(nil)
+	var _ ModelLister = (*GreenThreadProvider)(nil)
 }
 
 // Live check against the real endpoint. Skipped without credentials, so CI and
