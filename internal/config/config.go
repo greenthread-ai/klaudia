@@ -13,13 +13,19 @@ import (
 
 // Provider names.
 const (
-	ProviderAnthropic = "anthropic" // default: native Anthropic Messages API
-	ProviderOpenAI    = "openai"    // OpenAI-compatible Chat Completions endpoint
+	ProviderAnthropic   = "anthropic"   // default: native Anthropic Messages API
+	ProviderOpenAI      = "openai"      // OpenAI-compatible Chat Completions endpoint
+	ProviderGreenThread = "greenthread" // GreenThread AI Console (defaults: api.GreenThread*)
 )
+
+// GreenThreadAPIKeyEnv is where provider "greenthread" reads its key when
+// neither apiKey nor apiKeyEnv is set.
+const GreenThreadAPIKeyEnv = "GREENTHREAD_API_KEY"
 
 // Config is the .klaudia/config.toml schema.
 type Config struct {
-	// Provider selects the backend: "anthropic" (default) or "openai".
+	// Provider selects the backend: "anthropic" (default), "openai" or
+	// "greenthread".
 	Provider string `toml:"provider,omitempty"`
 	// Model is the default model (e.g. "openai/gpt-5.5"); --model overrides it.
 	Model string `toml:"model,omitempty"`
@@ -29,9 +35,10 @@ type Config struct {
 	// BaseURL is the API endpoint, in whichever dialect Provider selects: an
 	// OpenAI-compatible base (including the /v1 suffix) under
 	// provider="openai", an Anthropic-compatible one (a proxy or gateway)
-	// otherwise. Empty uses the provider's own default, which for Anthropic is
-	// production and for OpenAI-compatible does not exist — there it is
-	// required.
+	// otherwise. Under provider="greenthread" it overrides the console URL.
+	// Empty uses the provider's own default, which for Anthropic is production,
+	// for GreenThread the console, and for OpenAI-compatible does not exist —
+	// there it is required.
 	//
 	// Endpoint and dialect are deliberately two keys rather than one: a bare
 	// baseURL cannot say whether the host behind it speaks Anthropic or
@@ -412,13 +419,26 @@ func (c Config) ResolveBaseURL() string {
 	return strings.TrimSpace(c.BaseURL)
 }
 
-// ResolveAPIKey returns the inline key, or the value of the named env var.
+// ResolveAPIKey returns the inline key, or the value of the env var KeyEnv
+// names.
 func (c Config) ResolveAPIKey() string {
 	if c.APIKey != "" {
 		return c.APIKey
 	}
+	if env := c.KeyEnv(); env != "" {
+		return strings.TrimSpace(os.Getenv(env))
+	}
+	return ""
+}
+
+// KeyEnv names the env var the key is read from: apiKeyEnv when set, else the
+// provider's own default (GREENTHREAD_API_KEY for "greenthread"), else "".
+func (c Config) KeyEnv() string {
 	if c.APIKeyEnv != "" {
-		return strings.TrimSpace(os.Getenv(c.APIKeyEnv))
+		return c.APIKeyEnv
+	}
+	if c.Provider == ProviderGreenThread {
+		return GreenThreadAPIKeyEnv
 	}
 	return ""
 }

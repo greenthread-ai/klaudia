@@ -83,6 +83,8 @@ var modelContextWindows = map[string]int{
 	"claude-opus-4-5-20251101":   200_000,
 	"claude-haiku-4-5":           200_000,
 	"claude-haiku-4-5-20251001":  200_000,
+	// GreenThread AI Console's default model (provider "greenthread").
+	GreenThreadModel: 1_000_000,
 }
 
 // ContextWindow source labels for /stats and /doctor reporting.
@@ -135,6 +137,10 @@ var modelMaxOutputTokens = map[string]int{
 	"claude-sonnet-4-5-20250929": 64000,
 	"claude-haiku-4-5":           64000,
 	"claude-haiku-4-5-20251001":  64000,
+	// Not Kimi K3's cap but a default for it: a reasoning model spends output
+	// on thinking before the answer or tool call, and 8192 is too little for
+	// both.
+	GreenThreadModel: 32000,
 }
 
 // MaxOutputTokens returns the default output-token cap for a model, resolving

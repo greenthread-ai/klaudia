@@ -163,7 +163,7 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, effort api.Effor
 		Effort:          string(effort),
 		MaxOutputTokens: effectiveMaxOutputTokens(cfg, model),
 	}
-	if cfg.Provider == config.ProviderOpenAI {
+	if cfg.Provider == config.ProviderOpenAI || cfg.Provider == config.ProviderGreenThread {
 		if cfg.ResolveAPIKey() != "" {
 			in.AuthOK, in.AuthKind = true, "api-key"
 		}
@@ -350,11 +350,7 @@ func acpSessions(cwd string) []acp.SessionSummary {
 }
 
 // modelLister exposes the provider's model enumeration to the TUI when it has
-// one. Both shipped providers do, but the capability is an optional interface
-// rather than part of Provider — so a future backend that can't list models
-// still satisfies Provider, and /model degrades to accepting a typed id.
-// modelLister exposes the provider's model enumeration to the TUI when it has
-// one. Both shipped providers do, but the capability is an optional interface
+// one. Every shipped provider does, but the capability is an optional interface
 // rather than part of Provider — so a future backend that can't list models
 // still satisfies Provider, and /model degrades to accepting a typed id.
 func modelLister(p api.Provider) func(context.Context) ([]api.ModelInfo, error) {
@@ -376,7 +372,9 @@ func resolveEndpoint(cfg config.Config) string {
 
 // buildProvider selects and constructs the model provider from config. It
 // returns the provider and the provider's default model. Anthropic is the
-// default; "openai" uses an OpenAI-compatible Chat Completions endpoint.
+// default; "openai" uses an OpenAI-compatible Chat Completions endpoint;
+// "greenthread" is the GreenThread AI Console, with its URL, key variable and
+// model defaulted.
 func buildProvider(cfg config.Config) (api.Provider, string, error) {
 	endpoint := resolveEndpoint(cfg)
 	switch cfg.Provider {
@@ -389,6 +387,13 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 			return nil, "", fmt.Errorf("provider \"openai\" needs apiKey or apiKeyEnv in ~/.klaudia/config.toml or ./.klaudia/config.toml; if using apiKeyEnv, export that variable before running")
 		}
 		return api.NewOpenAIProvider(endpoint, key, cfg.Temperature), cfg.Model, nil
+	case config.ProviderGreenThread:
+		key := cfg.ResolveAPIKey()
+		if key == "" {
+			return nil, "", fmt.Errorf("provider \"greenthread\" needs an API key: export %s=\"gt_live_...\" before running (or set apiKey / apiKeyEnv in ~/.klaudia/config.toml or ./.klaudia/config.toml)", cfg.KeyEnv())
+		}
+		return api.NewGreenThreadProvider(firstNonEmpty(endpoint, api.GreenThreadBaseURL), key, cfg.Temperature),
+			firstNonEmpty(cfg.Model, api.GreenThreadModel), nil
 	default:
 		cred, err := api.ResolveCredential()
 		if err != nil {
@@ -916,7 +921,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 	}
 
-	// Select the model provider (.klaudia/config.toml: anthropic | openai).
+	// Select the model provider (.klaudia/config.toml: anthropic | openai | greenthread).
 	cfg := config.Load(cwd)
 	provider, providerModel, err := buildProvider(cfg)
 	if err != nil {
