@@ -823,11 +823,17 @@ func run(cmd *cobra.Command, opts *options) error {
 	// first use, and shut down at session end. Not downloaded.
 	lspPool := lsp.NewPool(ctx, cwd, cfg.LSP.Disabled, nil)
 	defer lspPool.Close()
-	base, err := tools.DefaultRegistry(executor,
+	regOpts := []tools.RegOption{
 		tools.WithBrowserEngine(browserEngine),
 		tools.WithJobStore(jobStore),
 		tools.WithLSP(lspPool),
-	)
+	}
+	if !interactive {
+		// Headless / --loop / stream-json embedding: there is nobody to answer a
+		// question, so do not offer AskUserQuestion to the model at all.
+		regOpts = append(regOpts, tools.WithoutFrontend())
+	}
+	base, err := tools.DefaultRegistry(executor, regOpts...)
 	if err != nil {
 		return err
 	}

@@ -39,6 +39,31 @@ func TestDefaultRegistryLoadsAllTools(t *testing.T) {
 	}
 }
 
+// A run with no interactive frontend (headless -p, --loop, stream-json embedding)
+// must not offer AskUserQuestion: shown the tool, a model reaches for it on any
+// ambiguity and burns a turn learning nobody is there. Everything else stays.
+func TestWithoutFrontendDropsAskUserQuestion(t *testing.T) {
+	reg, err := DefaultRegistry(nil, WithoutFrontend())
+	if err != nil {
+		t.Fatalf("DefaultRegistry: %v", err)
+	}
+	if _, ok := reg.Lookup("AskUserQuestion"); ok {
+		t.Errorf("AskUserQuestion registered without a frontend")
+	}
+	full, err := DefaultRegistry(nil)
+	if err != nil {
+		t.Fatalf("DefaultRegistry: %v", err)
+	}
+	if got, want := len(reg.Names()), len(full.Names())-1; got != want {
+		t.Errorf("registry has %d tools, want %d (all but AskUserQuestion)", got, want)
+	}
+	for _, name := range []string{"Read", "Bash", "ExitPlanMode", "RequestHostChange"} {
+		if _, ok := reg.Lookup(name); !ok {
+			t.Errorf("tool %q missing without a frontend", name)
+		}
+	}
+}
+
 // Names must be stable (sorted) across calls. The tool order drives the request
 // sent every turn; a varying order changes the cached prefix each turn and
 // defeats prompt caching. Regression guard for the map-iteration order bug.
