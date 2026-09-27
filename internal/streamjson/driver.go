@@ -213,6 +213,13 @@ func decodeUserContent(raw json.RawMessage) string {
 }
 
 // resultEvent builds the terminal result line for a turn.
+//
+// It carries the turn's token usage in the same shape as the -p path's
+// ResultMessage (cli/headless.go), so an embedder can account for a turn from
+// the result line alone. Before this the embedding channel's result had no
+// usage at all; the per-call "usage" delta events were the only counts an
+// embedder ever saw, and one that only read the result (msp-agent) reported
+// 0→0 tokens for every turn.
 func resultEvent(res agent.Result, err error) map[string]any {
 	m := map[string]any{
 		"type":        "result",
@@ -221,6 +228,12 @@ func resultEvent(res agent.Result, err error) map[string]any {
 		"num_turns":   res.NumTurns,
 		"result":      res.Text,
 		"stop_reason": res.StopReason,
+		"usage": map[string]any{
+			"input_tokens":                res.InputTokens,
+			"output_tokens":               res.OutputTokens,
+			"cache_read_input_tokens":     res.CacheReadInputTokens,
+			"cache_creation_input_tokens": res.CacheCreationInputTokens,
+		},
 	}
 	if err != nil {
 		m["subtype"] = "error_during_execution"
