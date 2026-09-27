@@ -109,3 +109,50 @@ func waitForRequestID(out *lineSink) string {
 	}
 	return ""
 }
+
+// TestResultLineCarriesUsage pins that the embedding channel's result line
+// reports the turn's token usage, matching the -p ResultMessage shape. An
+// embedder that only reads the result (rather than summing the per-call
+// "usage" deltas) must still see the real counts, not zeros.
+func TestResultLineCarriesUsage(t *testing.T) {
+	out := &lineSink{}
+	d := NewDriver(out)
+
+	runFn := func(_ context.Context, turn agent.Turn) (agent.Result, error) {
+		turn.Emit(agent.Event{Type: "usage", InputDelta: 1200, OutputDelta: 40, TurnDelta: 1})
+		turn.Emit(agent.Event{Type: "usage", InputDelta: 300, OutputDelta: 5, TurnDelta: 1})
+		return agent.Result{
+			Text: "done", NumTurns: 2, StopReason: "end_turn",
+			InputTokens: 1500, OutputTokens: 45, CacheReadInputTokens: 7,
+		}, nil
+	}
+
+	in := strings.NewReader(`{"type":"user","message":{"role":"user","content":"hi"}}` + "\n")
+	if err := d.Run(context.Background(), in, nil, runFn); err != nil {
+		t.Fatalf("driver run: %v", err)
+	}
+
+	var result map[string]any
+	for _, l := range out.snapshot() {
+		var m map[string]any
+		if err := json.Unmarshal([]byte(l), &m); err != nil {
+			t.Fatalf("not JSON: %s", l)
+		}
+		if m["type"] == "result" {
+			result = m
+		}
+	}
+	if result == nil {
+		t.Fatalf("no result line:\n%s", strings.Join(out.snapshot(), "\n"))
+	}
+	usage, ok := result["usage"].(map[string]any)
+	if !ok {
+		t.Fatalf("result line has no usage object: %v", result)
+	}
+	if usage["input_tokens"] != float64(1500) || usage["output_tokens"] != float64(45) {
+		t.Errorf("usage = %v, want input_tokens=1500 output_tokens=45", usage)
+	}
+	if usage["cache_read_input_tokens"] != float64(7) || usage["cache_creation_input_tokens"] != float64(0) {
+		t.Errorf("cache usage = %v, want read=7 creation=0", usage)
+	}
+}
