@@ -500,7 +500,7 @@ func createConfig(scope, cwd string) (string, error) {
 	case "local":
 		path = config.ProjectPath(cwd)
 	default:
-		return "", fmt.Errorf("--create-config must be global or local")
+		return "", usageErrorf("--create-config must be global or local")
 	}
 	if _, err := os.Stat(path); err == nil {
 		return "", fmt.Errorf("config already exists: %s", path)
@@ -550,7 +550,7 @@ type options struct {
 // and embedding (stream-json) runs stay stateless unless asked.
 func resolveResumeID(cwd string, opts options, interactive bool) (string, error) {
 	if opts.newSession && (opts.resume != "" || opts.continueSession) {
-		return "", fmt.Errorf("--new-session cannot be combined with --resume or --continue")
+		return "", usageErrorf("--new-session cannot be combined with --resume or --continue")
 	}
 	if opts.resume != "" {
 		return opts.resume, nil
@@ -630,7 +630,7 @@ func NewRootCommand() *cobra.Command {
 func run(cmd *cobra.Command, opts *options) error {
 	format, err := ParseOutputFormat(opts.outputFormat)
 	if err != nil {
-		return err
+		return usageErrorf("%s", err)
 	}
 
 	cwd, _ := os.Getwd()
