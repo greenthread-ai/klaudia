@@ -490,8 +490,11 @@ type Model struct {
 	// Pending /commit-style confirmation: run on "y", returns a result line.
 	confirmAction func() string
 	// Pending local settings picker (e.g. /mode): numbered choices.
+	// choiceReturn is the state the picker hands back to when it closes:
+	// stateRunning when it was opened over a turn that is still in flight.
 	choiceItems  []choiceItem
 	choicePrompt string
+	choiceReturn uiState
 	// Input history: submitted prompts (newest last), navigated with Up/Down.
 	// histPos == len(inputHistory) means "not navigating" (editing a fresh line).
 	inputHistory []string
@@ -509,6 +512,10 @@ type Model struct {
 	// Elapsed-run stopwatch and per-turn cancel (Esc interrupts the model).
 	sw         stopwatch.Model
 	turnCancel context.CancelFunc
+	// turnInFlight is true from startTurn until that turn's doneMsg. Unlike
+	// turnCancel it survives an interrupt, which clears turnCancel while the
+	// cancelled goroutine is still winding down.
+	turnInFlight bool
 	// streamBuf holds the not-yet-printed part of the in-progress assistant
 	// message; scan tracks how much of it is safe to commit to scrollback, and
 	// chunked records whether this message has already flushed a chunk (so the
@@ -848,6 +855,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.waitForEvent()
 			}
 		}
+		m.closeChoiceForPrompt()
 		m.setState(stateAwaitingPermission)
 		m.pending = msg.reply
 		m.pendingReq = msg.req
@@ -866,6 +874,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case askMsg:
+		m.closeChoiceForPrompt()
 		m.setState(stateAwaitingAnswer)
 		m.askReply = msg.reply
 		m.askOptions = msg.options
@@ -883,6 +892,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case planMsg:
+		m.closeChoiceForPrompt()
 		m.setState(stateAwaitingPlan)
 		m.planReply = msg.reply
 		m.appendLine(askStyle.Render("Proposed plan:"))
@@ -896,6 +906,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		elapsed := m.sw.Elapsed()
 		stopSW := m.sw.Stop()
 		m.turnCancel = nil
+		m.turnInFlight = false
 		m.cancelling = false // the goroutine returned; we're past the cancel window
 		m.flushAssistant()   // prettify the final answer through glamour
 		switch {
@@ -954,7 +965,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// is complete, the turn errored/was interrupted, or we've fully stopped.
 		if m.loopRemaining > 0 || m.loopWrapUp {
 			if next := m.loopNext(msg.res, msg.err); next != "" {
-				m.setState(stateRunning)
 				return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
 			}
 		}
@@ -971,7 +981,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if q := strings.TrimSpace(resend.Text); q != "" {
 			m.pushHistory(q)
 			m.appendLine(userStyle.Render("› ") + q)
-			m.setState(stateRunning)
 			// q is the chip form (kept short for the queued hint and ↑ recall);
 			// expand it only on the way to the model.
 			next := m.pastes.expand(q)
@@ -986,7 +995,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
 		}
-		m.setState(stateIdle)
+		m.settleState(stateIdle)
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW)
 
@@ -1015,7 +1024,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.history = msg.history
 			m.appendLine(bannerStyle.Render("Compacted conversation. Summary:\n" + strings.TrimSpace(msg.summary)))
 		}
-		m.setState(stateIdle)
+		m.settleState(stateIdle)
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent())
 
@@ -1079,8 +1088,7 @@ func (m *Model) onCtrlC() (tea.Model, tea.Cmd) {
 		m.appendLine(toolStyle.Render("  → cancelled"))
 		return m, nil
 	case stateAwaitingChoice:
-		m.choiceItems, m.choicePrompt = nil, ""
-		m.setState(stateIdle)
+		m.closeChoice()
 		m.appendLine(toolStyle.Render("  → cancelled"))
 		return m, nil
 	}
@@ -1146,6 +1154,15 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// watching", not "kill the turn that started an hour ago". The job keeps
 		// running either way — following is a view, not a lifecycle.
 		if m.stopFollow() {
+			return m, nil
+		}
+		// Esc on an open picker dismisses the picker, whatever is running
+		// behind it: the hint on screen says "esc to cancel", and a picker
+		// opened mid-turn (/mode while Klaudia works) is not a request to
+		// stop the turn.
+		if m.state == stateAwaitingChoice {
+			m.closeChoice()
+			m.appendLine(toolStyle.Render("  → cancelled"))
 			return m, nil
 		}
 		// Interrupt the in-flight turn (and any pending approval/question it is
@@ -1270,18 +1287,12 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingChoice {
-		if msg.Type == tea.KeyEsc {
-			m.choiceItems, m.choicePrompt = nil, ""
-			m.setState(stateIdle)
-			m.appendLine(toolStyle.Render("  → cancelled"))
-			return m, nil
-		}
+		// Esc was handled above, before the interrupt check.
 		s := msg.String()
 		if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
 			if n := int(s[0] - '0'); n <= len(m.choiceItems) {
 				item := m.choiceItems[n-1]
-				m.choiceItems, m.choicePrompt = nil, ""
-				m.setState(stateIdle)
+				m.closeChoice()
 				m.appendLine(bannerStyle.Render("  → " + item.apply()))
 			}
 		}
@@ -1563,7 +1574,23 @@ func (m *Model) slashSuggestionLine() string {
 
 // startChoice opens a numbered settings picker. The selected item's apply runs
 // when the user presses its digit (Esc cancels). Reusable for any quick toggle.
+//
+// A picker can open over a running turn (/mode, /mcp, or a /model list that
+// arrives after a turn started): the turn keeps going, and closing the picker
+// returns to stateRunning rather than idle. Returning to idle mid-turn is what
+// let Enter start a second, concurrent turn. It does not open over a prompt the
+// turn is blocked on — that prompt owns the keyboard and would be hidden.
 func (m *Model) startChoice(title string, items []choiceItem) {
+	switch m.state {
+	case stateIdle, stateRunning:
+		m.choiceReturn = m.state
+	case stateAwaitingChoice:
+		// One picker replacing another (a /model list landing while /mode is
+		// open): keep where the first one was going to return to.
+	default:
+		m.appendLine(toolStyle.Render("  (not showing the picker: answer the prompt first, then try again)"))
+		return
+	}
 	m.choiceItems = items
 	m.choicePrompt = title
 	m.setState(stateAwaitingChoice)
@@ -1571,6 +1598,36 @@ func (m *Model) startChoice(title string, items []choiceItem) {
 	for i, it := range items {
 		m.appendLine(toolStyle.Render(fmt.Sprintf("  %d) %s", i+1, it.label)))
 	}
+}
+
+// closeChoice dismisses the picker and returns to the state it opened over.
+func (m *Model) closeChoice() {
+	m.choiceItems, m.choicePrompt = nil, ""
+	m.setState(m.choiceReturn)
+}
+
+// closeChoiceForPrompt dismisses an open picker because the running turn now
+// needs an answer (approval, question, plan). That prompt takes the bottom
+// view; the picker's items are dropped rather than left stale, and the user is
+// told it closed so the missing picker is not a mystery.
+func (m *Model) closeChoiceForPrompt() {
+	if m.state != stateAwaitingChoice {
+		return
+	}
+	m.closeChoice()
+	m.appendLine(toolStyle.Render("  → picker closed: Klaudia needs an answer first"))
+}
+
+// settleState moves to s when background work (a turn, a compaction, a !
+// command) finishes. If a picker is open over that work it stays open, and s
+// becomes the state it returns to — otherwise the picker would vanish under the
+// user's fingers and a later digit would land in the input box.
+func (m *Model) settleState(s uiState) {
+	if m.state == stateAwaitingChoice {
+		m.choiceReturn = s
+		return
+	}
+	m.setState(s)
 }
 
 // currentMode returns the live permission mode, defaulting to ModeDefault.
@@ -2746,6 +2803,19 @@ func (m *Model) hostReportCount() int {
 // runs under a cancellable context so Esc can interrupt it. A standing /goal is
 // re-stated to the model each turn (Ralph-style).
 func (m *Model) startTurn(prompt string) tea.Cmd {
+	// One turn at a time. Two agent goroutines would interleave events on the
+	// one channel and each overwrite the history with its own copy. Every
+	// caller is meant to reach here only when idle; this is the backstop for
+	// the one that isn't.
+	if m.turnInFlight {
+		m.appendLine(errStyle.Render("  a turn is already running — not starting another. Esc to interrupt it first."))
+		return nil
+	}
+	m.turnInFlight = true
+	// A turn in flight is the running state, whoever started it (/logs
+	// --errors used to start one while the UI stayed idle). settleState, not
+	// setState, so a picker open when a follow-up turn starts stays open.
+	m.settleState(stateRunning)
 	// Belt-and-braces: zero the per-turn live tally so a path that skipped
 	// doneMsg can't poison the next reconcile. The normal path also resets
 	// these on doneMsg, so this is just a guard.
