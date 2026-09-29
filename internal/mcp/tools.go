@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -117,7 +118,8 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 		if sess == nil {
 			continue
 		}
-		res, err := sess.ListTools(ctx, &mcpsdk.ListToolsParams{})
+		list, err := listTools(ctx, sess)
+		srv.setListError(err)
 		if err != nil {
 			continue
 		}
@@ -125,7 +127,7 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 		// the annotations are not consulted at all — in either direction.
 		cfg, _ := m.serverConfig(srv.Name)
 		override := cfg.ReadOnly
-		for _, rt := range res.Tools {
+		for _, rt := range list {
 			schema, _ := json.Marshal(rt.InputSchema)
 			if len(schema) == 0 || string(schema) == "null" {
 				schema = json.RawMessage(`{"type":"object"}`)
@@ -185,3 +187,38 @@ func (m *Manager) formatResourceList(ctx context.Context) string {
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
+
+// listTools reads a server's whole tool list, every page of it, retrying once
+// after a short pause when the read fails.
+//
+// One ListTools call read the first page only, so a server that paginates lost
+// every tool past it; and a failure was skipped with `continue`, which looked
+// exactly like a server with no tools.
+func listTools(ctx context.Context, sess *mcpsdk.ClientSession) ([]*mcpsdk.Tool, error) {
+	var err error
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(listRetryDelay):
+			}
+		}
+		var list []*mcpsdk.Tool
+		err = nil
+		for tool, terr := range sess.Tools(ctx, nil) {
+			if terr != nil {
+				err = terr
+				break
+			}
+			list = append(list, tool)
+		}
+		if err == nil {
+			return list, nil
+		}
+	}
+	return nil, fmt.Errorf("listing tools: %w", err)
+}
+
+// listRetryDelay is the pause before a failed tools/list is tried again.
+var listRetryDelay = 500 * time.Millisecond

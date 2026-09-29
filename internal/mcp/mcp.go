@@ -126,6 +126,8 @@ type Server struct {
 
 	mu      sync.RWMutex
 	session *mcpsdk.ClientSession
+	// listErr is why the last tools/list failed, or nil.
+	listErr error
 }
 
 // sess returns the live session, or nil when the server is disconnected.
@@ -153,6 +155,21 @@ func (s *Server) swapSession(next *mcpsdk.ClientSession) *mcpsdk.ClientSession {
 // cheap and non-blocking, which is what /mcp and the tool wrappers want, but it
 // is not a health check: see alive.
 func (s *Server) Connected() bool { return s.sess() != nil }
+
+// ListError is why the server's tool list could not be read the last time it
+// was asked, or nil. A connected server that fails to list looked exactly
+// like one with no tools; this is what /mcp and startup report instead.
+func (s *Server) ListError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.listErr
+}
+
+func (s *Server) setListError(err error) {
+	s.mu.Lock()
+	s.listErr = err
+	s.mu.Unlock()
+}
 
 // alive reports whether the server still answers a protocol ping.
 //
