@@ -223,6 +223,16 @@ func contains(ss []string, s string) bool {
 	return false
 }
 
+// LoadHome reads only ~/.klaudia/config.toml: the project's file is not read
+// at all. Used by --safe-mode.
+func LoadHome() Config {
+	var cfg Config
+	if home, err := os.UserHomeDir(); err == nil {
+		merge(&cfg, read(filepath.Join(home, ".klaudia", "config.toml")))
+	}
+	return cfg
+}
+
 // Load reads ~/.klaudia/config.toml then overlays ./.klaudia/config.toml
 // (project settings win). Missing files are ignored.
 func Load(cwd string) Config {

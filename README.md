@@ -54,6 +54,11 @@ klaudia --create-config=local    # ./.klaudia/config.toml  (project override)
 Both commands refuse to overwrite an existing config (so you can't accidentally
 clobber settings); delete the file first if you want a fresh starter.
 
+`klaudia --safe-mode` starts without anything the project supplies — its
+`.klaudia/config.toml`, `.mcp.json` servers, skills, `CLAUDE.md`, memory and
+knowledge — for opening an unfamiliar repository or getting past a broken
+project config. Your own config, global MCP servers and skills still load.
+
 ### Authentication
 
 Pick one of these paths:
