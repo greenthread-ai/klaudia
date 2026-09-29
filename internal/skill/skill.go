@@ -10,19 +10,33 @@
 //	---
 //	name: review
 //	description: Structured review of the current diff
-//	type: prompt        # prompt | command
-//	tools: [Bash, Read] # optional allowlist (growth point; unused in v1)
+//	type: prompt              # prompt | command
+//	allowed-tools: [Bash, Read] # optional tool allowlist (stored/surfaced; not yet enforced)
+//	argument-hint: <path>     # optional hint shown in completion/help
+//	model: sonnet             # optional per-skill model hint (stored/documented)
 //	---
 //	Review the staged changes carefully. $ARGUMENTS
 //
-// The body supports $ARGUMENTS substitution when the skill is invoked.
+// The body supports argument substitution when the skill is invoked:
+//
+//	$ARGUMENTS         all invocation arguments, verbatim
+//	$1, $2, … $N       the Nth whitespace-separated argument ("" when absent)
+//	$KLAUDIA_SKILL_DIR the skill's base directory, for referencing bundled files
+//	                   (also written ${KLAUDIA_SKILL_DIR})
+//
+// Frontmatter parity note: `allowed-tools`, `argument-hint` and `model` mirror
+// Claude Code's skill/command frontmatter. `allowed-tools` is the preferred
+// spelling; the older `tools` key is still accepted as an alias. Substitution
+// and the base-directory preamble follow Claude Code semantics.
 package skill
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -39,30 +53,83 @@ type Skill struct {
 	Name        string   // invocation name (also the /<name> slash command)
 	Description string   // one-line, model-facing
 	Type        string   // TypePrompt (default) | TypeCommand
-	Tools       []string // optional tool allowlist (growth point; unused in v1)
-	Body        string   // template body; supports $ARGUMENTS
+	Tools       []string // tool allowlist from allowed-tools (alias: tools); stored/surfaced, not yet enforced
+	ArgHint     string   // argument-hint: shown in completion/help; surfaced in the Skill tool description
+	Model       string   // model: per-skill model hint; stored/documented, no invocation-time switch yet
+	Body        string   // template body; supports $ARGUMENTS, $1..$N and $KLAUDIA_SKILL_DIR
 	Path        string   // source file, for diagnostics
+	Dir         string   // base directory holding the skill and its bundled files
 }
 
 // frontmatter is the YAML header schema.
 type frontmatter struct {
-	Name        string   `yaml:"name"`
-	Description string   `yaml:"description"`
-	Type        string   `yaml:"type"`
-	Tools       []string `yaml:"tools"`
+	Name         string   `yaml:"name"`
+	Description  string   `yaml:"description"`
+	Type         string   `yaml:"type"`
+	Tools        []string `yaml:"tools"`         // legacy alias for allowed-tools
+	AllowedTools []string `yaml:"allowed-tools"` // Claude Code spelling; wins over tools
+	ArgHint      string   `yaml:"argument-hint"`
+	Model        string   `yaml:"model"`
 }
 
-// Render substitutes $ARGUMENTS in the body with args (the text after the skill
-// name). When the body contains no $ARGUMENTS placeholder and args is non-empty,
-// the args are appended on a new line so they are never silently dropped.
+// positionalRe matches a positional argument placeholder: $1, $2, … $12. The
+// digit run is captured so multi-digit indices ($10) are not mistaken for $1
+// followed by a literal 0.
+var positionalRe = regexp.MustCompile(`\$(\d+)`)
+
+// Render expands the skill body for one invocation and returns the text handed
+// to the model (as a Skill tool result) or submitted as the /<name> prompt.
+//
+// Substitutions, in order:
+//   - $KLAUDIA_SKILL_DIR / ${KLAUDIA_SKILL_DIR} → the skill's base directory
+//   - $ARGUMENTS → the full args string, verbatim
+//   - $1, $2, … $N → the Nth whitespace-separated argument, "" when absent
+//
+// When the body references none of $ARGUMENTS or $1..$N and args is non-empty,
+// the args are appended on a new line so they are never silently dropped — the
+// original backward-compatible behaviour. Finally, when the skill has a known
+// base directory, a short preamble names it so the model can locate bundled
+// files even if the body never mentions $KLAUDIA_SKILL_DIR.
 func (s Skill) Render(args string) string {
-	if strings.Contains(s.Body, "$ARGUMENTS") {
-		return strings.ReplaceAll(s.Body, "$ARGUMENTS", args)
+	body := s.Body
+	if s.Dir != "" {
+		body = strings.ReplaceAll(body, "${KLAUDIA_SKILL_DIR}", s.Dir)
+		body = strings.ReplaceAll(body, "$KLAUDIA_SKILL_DIR", s.Dir)
 	}
-	if strings.TrimSpace(args) == "" {
-		return s.Body
+
+	usesArgs := false
+	if strings.Contains(body, "$ARGUMENTS") {
+		usesArgs = true
+		body = strings.ReplaceAll(body, "$ARGUMENTS", args)
 	}
-	return strings.TrimRight(s.Body, "\n") + "\n\n" + args
+	if positionalRe.MatchString(body) {
+		usesArgs = true
+		fields := strings.Fields(args)
+		body = positionalRe.ReplaceAllStringFunc(body, func(m string) string {
+			n, err := strconv.Atoi(m[1:])
+			if err != nil || n < 1 || n > len(fields) {
+				return ""
+			}
+			return fields[n-1]
+		})
+	}
+	if !usesArgs && strings.TrimSpace(args) != "" {
+		body = strings.TrimRight(body, "\n") + "\n\n" + args
+	}
+
+	return s.withBaseDir(body)
+}
+
+// withBaseDir prepends a one-line note naming the skill's base directory, so a
+// skill can reference bundled files (templates, scripts) that live beside it.
+// Skills with no known directory (e.g. a bare Skill value in a test) are
+// returned unchanged.
+func (s Skill) withBaseDir(body string) string {
+	if s.Dir == "" {
+		return body
+	}
+	return "Skill base directory: " + s.Dir +
+		"\n(Bundled files live here; $KLAUDIA_SKILL_DIR expands to this path.)\n\n" + body
 }
 
 // Load reads skills from ~/.klaudia/skills then overlays <cwd>/.klaudia/skills
@@ -197,13 +264,23 @@ func parseNamed(data []byte, path, defaultName string) (Skill, error) {
 		return Skill{}, fmt.Errorf("invalid type %q (want %q or %q)", typ, TypePrompt, TypeCommand)
 	}
 
+	// allowed-tools is the Claude Code spelling and wins; tools is the legacy
+	// alias kept so existing skills keep working.
+	toolset := meta.AllowedTools
+	if len(toolset) == 0 {
+		toolset = meta.Tools
+	}
+
 	return Skill{
 		Name:        name,
 		Description: strings.TrimSpace(meta.Description),
 		Type:        typ,
-		Tools:       meta.Tools,
+		Tools:       toolset,
+		ArgHint:     strings.TrimSpace(meta.ArgHint),
+		Model:       strings.TrimSpace(meta.Model),
 		Body:        strings.TrimSpace(string(body)),
 		Path:        path,
+		Dir:         filepath.Dir(path),
 	}, nil
 }
 

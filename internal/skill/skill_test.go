@@ -33,6 +33,95 @@ func TestParseFrontmatterAndBody(t *testing.T) {
 	}
 }
 
+func TestParseFrontmatterParityKeys(t *testing.T) {
+	sk, err := parse([]byte("---\nname: ship\ndescription: Ship it\nallowed-tools: [Bash, Read]\nargument-hint: <service> <env>\nmodel: sonnet\n---\nDeploy $1 to $2. $ARGUMENTS"), "/x/ship.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sk.Tools) != 2 || sk.Tools[0] != "Bash" || sk.Tools[1] != "Read" {
+		t.Errorf("allowed-tools = %v", sk.Tools)
+	}
+	if sk.ArgHint != "<service> <env>" {
+		t.Errorf("argument-hint = %q", sk.ArgHint)
+	}
+	if sk.Model != "sonnet" {
+		t.Errorf("model = %q", sk.Model)
+	}
+	if sk.Dir != "/x" {
+		t.Errorf("dir = %q, want /x", sk.Dir)
+	}
+}
+
+func TestAllowedToolsWinsOverLegacyTools(t *testing.T) {
+	// allowed-tools is the Claude Code spelling and takes precedence.
+	sk, err := parse([]byte("---\nname: x\nallowed-tools: [Read]\ntools: [Bash, Edit]\n---\nbody"), "x.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sk.Tools) != 1 || sk.Tools[0] != "Read" {
+		t.Errorf("allowed-tools should win, got %v", sk.Tools)
+	}
+	// And the legacy `tools` key still works on its own.
+	sk2, err := parse([]byte("---\nname: y\ntools: [Bash]\n---\nbody"), "y.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sk2.Tools) != 1 || sk2.Tools[0] != "Bash" {
+		t.Errorf("legacy tools alias broken, got %v", sk2.Tools)
+	}
+}
+
+func TestRenderPositionalArguments(t *testing.T) {
+	sk := Skill{Body: "Deploy $1 to $2 (all: $ARGUMENTS)"}
+	if got := sk.Render("api staging extra"); got != "Deploy api to staging (all: api staging extra)" {
+		t.Errorf("positional render = %q", got)
+	}
+	// A positional with no matching argument becomes empty, and multi-digit
+	// indices are not confused with single digits.
+	sk2 := Skill{Body: "one=$1 ten=$10 missing=$3"}
+	if got := sk2.Render("A B C D E F G H I J"); got != "one=A ten=J missing=C" {
+		t.Errorf("multi-digit render = %q", got)
+	}
+	// Using only positionals still consumes the args (no append).
+	sk3 := Skill{Body: "just $1"}
+	if got := sk3.Render("here there"); got != "just here" {
+		t.Errorf("positional-only render = %q", got)
+	}
+}
+
+func TestRenderBaseDirectory(t *testing.T) {
+	sk := Skill{Body: "Read $KLAUDIA_SKILL_DIR/template.md", Dir: "/home/u/.klaudia/skills/deploy"}
+	got := sk.Render("")
+	if !strings.Contains(got, "Read /home/u/.klaudia/skills/deploy/template.md") {
+		t.Errorf("skill dir not substituted in body: %q", got)
+	}
+	if !strings.Contains(got, "Skill base directory: /home/u/.klaudia/skills/deploy") {
+		t.Errorf("base directory preamble missing: %q", got)
+	}
+	// The ${...} spelling also works.
+	sk2 := Skill{Body: "cd ${KLAUDIA_SKILL_DIR}", Dir: "/d"}
+	if !strings.Contains(sk2.Render(""), "cd /d") {
+		t.Errorf("braced skill dir not substituted: %q", sk2.Render(""))
+	}
+}
+
+func TestLoadSetsSkillDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", t.TempDir()) // isolate from the real ~/.claude skills
+	skills := filepath.Join(dir, ".klaudia", "skills")
+	mustMkdir(t, filepath.Join(skills, "deploy"))
+	write(t, filepath.Join(skills, "deploy", "SKILL.md"), "---\ndescription: d\n---\nbody")
+
+	got := Load(dir, func(string) {})
+	if len(got) != 1 {
+		t.Fatalf("got %d skills, want 1", len(got))
+	}
+	wantDir := filepath.Join(skills, "deploy")
+	if got[0].Dir != wantDir {
+		t.Errorf("dir = %q, want %q", got[0].Dir, wantDir)
+	}
+}
+
 func TestParseDefaults(t *testing.T) {
 	// No frontmatter: name from filename, type defaults to prompt.
 	sk, err := parse([]byte("just a body"), "/x/quickfix.md")

@@ -85,6 +85,7 @@ func skillToolInfos(skills []skill.Skill) []tools.SkillInfo {
 		infos = append(infos, tools.SkillInfo{
 			Name:        sk.Name,
 			Description: sk.Description,
+			ArgHint:     sk.ArgHint,
 			Render:      sk.Render,
 		})
 	}
