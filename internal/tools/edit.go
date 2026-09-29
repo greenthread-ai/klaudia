@@ -66,7 +66,7 @@ func (e *Edit) ValidateInput(raw json.RawMessage) error {
 func (e *Edit) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
 	var in EditInput
 	_ = json.Unmarshal(raw, &in)
-	return permission.PermissionRequest{Specifier: in.FilePath}
+	return pathRequest(in.FilePath)
 }
 
 // CheckPermissions: Edit is a file-mutating (edit-class) tool.
