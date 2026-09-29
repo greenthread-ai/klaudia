@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -110,6 +111,10 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		return "", fmt.Errorf("unknown subagent_type %q", subagentType)
 	}
 	childTools := t.Filter(s.base)
+	childTools = subagentTools(childTools)
+	// The child sees the environment and the project's instructions, not only
+	// its type's prompt; t is a copy, so the built-in stays as it was.
+	t.SystemPrompt = subagentSystem(t.SystemPrompt, s.workingDir)
 
 	// Relay the child's activity upward. Without an emitter the child ran
 	// completely dark: the frontend saw one Agent tool call and nothing until it
@@ -132,6 +137,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 	// history at a fifth of the room it actually had.
 	ctxWindow, _ := api.ContextWindow(string(s.model), 0)
 
+	start := time.Now()
 	loop := New(s.provider, childTools)
 	res, err := loop.Run(ctx, Options{
 		Prompt:        prompt,
@@ -153,11 +159,11 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		note := fmt.Sprintf("[Sub-agent stopped at its %d-turn limit before finishing. "+
 			"The result below may be incomplete.]", maxTurns)
 		if res.Text == "" {
-			return note, nil
+			return note + subagentUsage(res, time.Since(start)), nil
 		}
-		return note + "\n\n" + res.Text, nil
+		return note + "\n\n" + res.Text + subagentUsage(res, time.Since(start)), nil
 	}
-	return res.Text, nil
+	return res.Text + subagentUsage(res, time.Since(start)), nil
 }
 
 func filterDeferred(deferred map[string]bool, registry *tools.Registry) map[string]bool {

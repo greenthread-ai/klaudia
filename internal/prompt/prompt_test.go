@@ -128,3 +128,39 @@ func TestSystemNoClaudeMd(t *testing.T) {
 		t.Error("should not emit CLAUDE.md section when none exists")
 	}
 }
+
+// A sub-agent's prompt keeps its type's text first and adds the environment,
+// CLAUDE.md and KNOWLEDGE.md — but not the parent's recalled memory, nor the
+// main agent's own persona.
+func TestSubagentAddsEnvAndProjectContext(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	klaudiaDir := filepath.Join(dir, ".klaudia")
+	if err := os.MkdirAll(klaudiaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		filepath.Join(dir, "CLAUDE.md"):           "Always run gofmt.",
+		filepath.Join(klaudiaDir, "KNOWLEDGE.md"): "The API is v2.",
+		filepath.Join(klaudiaDir, "MEMORY.md"):    "- parent session note",
+	} {
+		if err := os.WriteFile(name, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	p := Subagent("TYPE PROMPT", dir)
+	if !strings.HasPrefix(p, "TYPE PROMPT") {
+		t.Errorf("type prompt should lead:\n%s", p)
+	}
+	for _, want := range []string{"<env>", "Working directory: " + dir, "Always run gofmt.", "The API is v2."} {
+		if !strings.Contains(p, want) {
+			t.Errorf("sub-agent prompt missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"parent session note", "You are Klaudia"} {
+		if strings.Contains(p, unwanted) {
+			t.Errorf("sub-agent prompt should not contain %q", unwanted)
+		}
+	}
+}
