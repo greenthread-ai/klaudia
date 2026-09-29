@@ -189,6 +189,33 @@ func TestAppendProjectPermission(t *testing.T) {
 	}
 }
 
+// [input] enter must survive Load: merge once dropped the whole Input section,
+// so the documented `enter = "newline"` never reached the prompt (#101).
+func TestLoadInputEnterProjectOverridesHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "[input]\nenter = \"newline\"\n")
+
+	// Global-only: inherited.
+	if cfg := Load(t.TempDir()); cfg.Input.Enter != "newline" {
+		t.Errorf("input.enter = %q, want newline (from home)", cfg.Input.Enter)
+	}
+
+	// Project overrides global.
+	cwd := t.TempDir()
+	writeConfig(t, cwd, "[input]\nenter = \"send\"\n")
+	if cfg := Load(cwd); cfg.Input.Enter != "send" {
+		t.Errorf("input.enter = %q, want send (project wins)", cfg.Input.Enter)
+	}
+
+	// A project config without [input] keeps the home value.
+	other := t.TempDir()
+	writeConfig(t, other, "theme = \"nord\"\n")
+	if cfg := Load(other); cfg.Input.Enter != "newline" {
+		t.Errorf("input.enter = %q, want newline (inherited past a project config)", cfg.Input.Enter)
+	}
+}
+
 func TestLoadMissingIsEmpty(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	cfg := Load(t.TempDir())

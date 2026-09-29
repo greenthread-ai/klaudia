@@ -338,6 +338,9 @@ func merge(dst *Config, src Config) {
 	if src.Trust.Mode != "" {
 		dst.Trust.Mode = src.Trust.Mode
 	}
+	if src.Input.Enter != "" {
+		dst.Input.Enter = src.Input.Enter
+	}
 	// Disabled LSP languages accumulate (union of home + project).
 	dst.LSP.Disabled = append(dst.LSP.Disabled, src.LSP.Disabled...)
 }
