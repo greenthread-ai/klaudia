@@ -97,6 +97,13 @@ type Options struct {
 	// Approver resolves permission "ask" decisions. Supplied by the frontend
 	// (headless/TUI/editor/SDK). If nil, DenyAll is used.
 	Approver Approver
+	// CollectBackground, if set, is polled at the same safe injection points as
+	// Interject. It returns a report of background sub-agents that have finished
+	// since the last poll (empty when none), which the loop appends as a user
+	// message so their results reach the model on the next request. This is what
+	// delivers a background Agent-tool launch back to the parent. Nil means the
+	// caller has no background sub-agents to collect (headless single-shot).
+	CollectBackground func() string
 	// InitialMessages seeds the conversation when resuming a session. The new
 	// Prompt (if any) is appended after them.
 	InitialMessages []anthropic.BetaMessageParam
@@ -215,6 +222,19 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 				}
 			}
 			halted = halted || in.Halt
+		}
+
+		// Deliver any background sub-agent that finished since the last turn, at
+		// the same safe point a steer lands: as a user message before the request
+		// is built, so the model sees the result while deciding what to do next.
+		if report := pollBackground(opts); report != "" {
+			if msg, ok := backgroundMessage(report); ok {
+				messages = append(messages, msg)
+				record(opts.Recorder, "user", msg)
+				if emit != nil {
+					emit(Event{Type: "background", Content: report})
+				}
+			}
 		}
 
 		// Compaction runs at the top of every turn (docs/compaction.md):
@@ -377,6 +397,18 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 				}
 			}
 			halted = halted || in.Halt
+		}
+		// The second delivery point, mirroring the interjection poll above: a
+		// background agent that finished while this turn's tools ran reaches the
+		// model on the next request rather than a turn later.
+		if report := pollBackground(opts); report != "" {
+			if msg, ok := backgroundMessage(report); ok {
+				messages = append(messages, msg)
+				record(opts.Recorder, "user", msg)
+				if emit != nil {
+					emit(Event{Type: "background", Content: report})
+				}
+			}
 		}
 		if halted {
 			// One more request so the model can report what it finished, then

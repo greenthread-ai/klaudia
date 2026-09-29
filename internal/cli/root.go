@@ -59,7 +59,10 @@ type agentWiring struct {
 func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *agent.HostGate) (*agentWiring, error) {
 	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).
 		WithWorkingDir(workingDir).
-		WithHostGate(host)
+		WithHostGate(host).
+		// Background writers run in their own git worktree so concurrent writers
+		// cannot corrupt the shared tree; read-only agents share it.
+		WithWorktrees(agent.NewGitWorktrees())
 
 	infos := make([]tools.AgentTypeInfo, 0)
 	for _, t := range subagent.Builtin() {
@@ -1024,10 +1027,11 @@ func run(cmd *cobra.Command, opts *options) error {
 			},
 			// Nil unless the provider can enumerate its models; /model falls
 			// back to type-the-id when it is.
-			ListModels: modelLister(provider),
-			Trust:      tui.NewTrustController(hostGate),
-			Jobs:       jobStore,
-			Executor:   executor,
+			ListModels:       modelLister(provider),
+			Trust:            tui.NewTrustController(hostGate),
+			Jobs:             jobStore,
+			Executor:         executor,
+			BackgroundAgents: wiring.spawner.Background(),
 		}
 		extraDirs = func() []string { return sess.ExtraDirs }
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, interject func() agent.Interjection, beforeEdit func(string, []string)) (agent.Result, error) {
@@ -1046,25 +1050,27 @@ func run(cmd *cobra.Command, opts *options) error {
 				Trusting: func() bool { return hostGate.Policy() == agent.HostEnforce },
 			}
 			return loop.Run(ctx, agent.Options{
-				WorkingDir:      cwd,
-				Prompt:          prompt,
-				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
-				System:          withExtraDirs(sysPrompt, sess.ExtraDirs),
-				MaxTurns:        opts.maxTurns,
-				ContextWindow:   cfg.ContextWindow,
-				MaxTokens:       int64(cfg.MaxTokens),
-				Permission:      turnPerm,
-				Host:            hostGate,
-				Interject:       interject,
-				BeforeEdit:      beforeEdit,
-				DeferredTools:   currentDeferred(),
-				Approver:        ap,
-				Asker:           asker,
-				Planner:         planner,
-				InitialMessages: history,
-				Recorder:        recorder,
-				WebTools:        true,
-				OnSummary:       onSummary,
+				WorkingDir:    cwd,
+				Prompt:        prompt,
+				Model:         api.ResolveModel(sess.Model), // resolved fresh each turn
+				System:        withExtraDirs(sysPrompt, sess.ExtraDirs),
+				MaxTurns:      opts.maxTurns,
+				ContextWindow: cfg.ContextWindow,
+				MaxTokens:     int64(cfg.MaxTokens),
+				Permission:    turnPerm,
+				Host:          hostGate,
+				Interject:     interject,
+				// Deliver finished background sub-agents into the next turn.
+				CollectBackground: wiring.spawner.Background().PendingReport,
+				BeforeEdit:        beforeEdit,
+				DeferredTools:     currentDeferred(),
+				Approver:          ap,
+				Asker:             asker,
+				Planner:           planner,
+				InitialMessages:   history,
+				Recorder:          recorder,
+				WebTools:          true,
+				OnSummary:         onSummary,
 			}, emit)
 		}
 		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages, sess)

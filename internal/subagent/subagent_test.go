@@ -21,6 +21,28 @@ func TestBuiltinLookup(t *testing.T) {
 	}
 }
 
+// MayWrite decides whether a background instance needs an isolated worktree:
+// the wildcard general-purpose can write, the read-only types cannot.
+func TestMayWrite(t *testing.T) {
+	gp, _ := Lookup("general-purpose")
+	if !gp.MayWrite() {
+		t.Error("general-purpose (wildcard toolset) should be a writer")
+	}
+	for _, name := range []string{"Explore", "Plan"} {
+		ty, _ := Lookup(name)
+		if ty.MayWrite() {
+			t.Errorf("%s is read-only and must not be treated as a writer", name)
+		}
+	}
+	// An explicit mutating tool marks a type a writer even without the wildcard.
+	if !(Type{Tools: []string{"Read", "Edit"}}).MayWrite() {
+		t.Error("a type granted Edit should be a writer")
+	}
+	if (Type{Tools: []string{"Read", "Grep"}}).MayWrite() {
+		t.Error("a purely read/search type should not be a writer")
+	}
+}
+
 func TestFilterAllVsRestricted(t *testing.T) {
 	base, err := tools.DefaultRegistry(nil)
 	if err != nil {
