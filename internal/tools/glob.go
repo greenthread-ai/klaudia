@@ -59,6 +59,8 @@ func (g *Glob) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	root := in.Path
 	if root == "" {
 		root = tctx.WorkingDir
+	} else {
+		root = resolvePath(tctx, root)
 	}
 	files, err := search.Glob(search.GlobOptions{Root: root, Pattern: in.Pattern})
 	if err != nil {
