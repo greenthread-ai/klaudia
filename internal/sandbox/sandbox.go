@@ -9,7 +9,6 @@
 package sandbox
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -124,9 +123,9 @@ func runArgv(ctx context.Context, req Request, name string, args []string) (Resp
 	// (ExitCode 124), which is more informative than "still working… 43m".
 	cmd.WaitDelay = postCancelWait
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout, stderr := newHeadTailBuffer(streamKeep), newHeadTailBuffer(streamKeep)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 	resp := Response{
