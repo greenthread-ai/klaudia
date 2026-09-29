@@ -140,14 +140,25 @@ func (a Analysis) Prefix() string {
 	if len(a.Commands) == 0 {
 		return ""
 	}
-	c := a.Commands[0]
-	for _, arg := range c.Args {
+	return ShortForm(a.Commands[0].Name, a.Commands[0].Args)
+}
+
+// ShortForm is a command's "program subcommand" form: the name plus its first
+// non-flag argument ("git status"), or the name alone when there is none. It
+// is the form Prefix gives the first command, and the form older permission
+// rules were written against.
+func ShortForm(name string, args []string) string {
+	for _, arg := range args {
 		if !strings.HasPrefix(arg, "-") {
-			return c.Name + " " + arg
+			return name + " " + arg
 		}
 	}
-	return c.Name
+	return name
 }
+
+// Base strips any directory from a program name, so /usr/bin/sudo and sudo
+// are recognised alike.
+func Base(name string) string { return base(name) }
 
 // ShellPayloads returns the script text passed to an inline shell — the
 // argument after -c for sh/bash/zsh/dash/ksh, and the argument to eval.
@@ -159,23 +170,32 @@ func (a Analysis) Prefix() string {
 func (a Analysis) ShellPayloads() []string {
 	var out []string
 	for _, c := range a.Commands {
-		switch base(c.Name) {
-		case "sh", "bash", "zsh", "dash", "ksh":
-			for i, arg := range c.Args {
-				// -c, and combined forms like -lc / -ec that end in c.
-				if strings.HasPrefix(arg, "-") && strings.HasSuffix(arg, "c") && i+1 < len(c.Args) {
-					out = append(out, c.Args[i+1])
-					break
-				}
-			}
-		case "eval":
-			// eval concatenates its arguments into one script.
-			if len(c.Args) > 0 {
-				out = append(out, strings.Join(c.Args, " "))
-			}
+		if p, ok := ShellPayload(c.Name, c.Args); ok {
+			out = append(out, p)
 		}
 	}
 	return out
+}
+
+// ShellPayload returns the script an inline shell or eval runs — the argument
+// after -c for sh/bash/zsh/dash/ksh, the joined arguments of eval — for one
+// command given as its program and arguments.
+func ShellPayload(name string, args []string) (string, bool) {
+	switch base(name) {
+	case "sh", "bash", "zsh", "dash", "ksh":
+		for i, arg := range args {
+			// -c, and combined forms like -lc / -ec that end in c.
+			if strings.HasPrefix(arg, "-") && strings.HasSuffix(arg, "c") && i+1 < len(args) {
+				return args[i+1], true
+			}
+		}
+	case "eval":
+		// eval concatenates its arguments into one script.
+		if len(args) > 0 {
+			return strings.Join(args, " "), true
+		}
+	}
+	return "", false
 }
 
 // base strips any directory from a program name, so /usr/bin/sudo and sudo
