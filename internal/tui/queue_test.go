@@ -88,7 +88,7 @@ func TestInterruptCapturesMessageBeforeAgentCanDrainIt(t *testing.T) {
 	}
 
 	// doneMsg with a cancelled turn must still send the captured message.
-	m.run = func(ctx context.Context, prompt string, _ []anthropic.BetaMessageParam,
+	m.run = func(ctx context.Context, prompt string, _ []tools.ResultImage, _ []anthropic.BetaMessageParam,
 		_ agent.Approver, _ tools.Asker, _ tools.Planner, _ agent.Emitter,
 		_ func() agent.Interjection, _ func(string, []string)) (agent.Result, error) {
 		return agent.Result{}, nil
@@ -110,7 +110,7 @@ func TestNaturalEndStillResendsAQueuedMessage(t *testing.T) {
 	m := newTestModel()
 	m.ctx = context.Background()
 	m.state = stateRunning
-	m.run = func(ctx context.Context, prompt string, _ []anthropic.BetaMessageParam,
+	m.run = func(ctx context.Context, prompt string, _ []tools.ResultImage, _ []anthropic.BetaMessageParam,
 		_ agent.Approver, _ tools.Asker, _ tools.Planner, _ agent.Emitter,
 		_ func() agent.Interjection, _ func(string, []string)) (agent.Result, error) {
 		return agent.Result{}, nil

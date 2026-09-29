@@ -38,8 +38,10 @@ import (
 )
 
 // RunFunc drives one user turn against the agent core, threading conversation
-// history and using the supplied approver, asker, and emitter.
-type RunFunc func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, interject func() agent.Interjection, beforeEdit func(string, []string)) (agent.Result, error)
+// history and using the supplied approver, asker, and emitter. images carries
+// any "@image.png" attachments the prompt referenced (see atfile.go); it is nil
+// for a turn with none.
+type RunFunc func(ctx context.Context, prompt string, images []tools.ResultImage, history []anthropic.BetaMessageParam, approver agent.Approver, asker tools.Asker, planner tools.Planner, emit agent.Emitter, interject func() agent.Interjection, beforeEdit func(string, []string)) (agent.Result, error)
 
 // Session is mutable state shared between the TUI and the RunFunc closure, so
 // slash commands like /model can change settings for subsequent turns. The
@@ -955,7 +957,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loopRemaining > 0 || m.loopWrapUp {
 			if next := m.loopNext(msg.res, msg.err); next != "" {
 				m.setState(stateRunning)
-				return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
+				return m, tea.Batch(m.waitForEvent(), m.startTurn(next, nil), stopSW)
 			}
 		}
 		// A queued message becomes the next turn. Two sources, in priority
@@ -973,8 +975,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendLine(userStyle.Render("› ") + q)
 			m.setState(stateRunning)
 			// q is the chip form (kept short for the queued hint and ↑ recall);
-			// expand it only on the way to the model.
-			next := m.pastes.expand(q)
+			// expand it only on the way to the model — pastes first, then @file
+			// references (contents inlined, images attached).
+			next, images := m.expandAtRefs(m.pastes.expand(q))
 			// An interrupt kills the foreground command but leaves managed
 			// background jobs running (they are session-scoped). The model was
 			// mid-task when cut off, so tell it what is still up and let it
@@ -984,7 +987,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					next = note + "\n\n" + next
 				}
 			}
-			return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(next, images), stopSW)
 		}
 		m.setState(stateIdle)
 		m.input.Focus()
@@ -1130,6 +1133,20 @@ func (m *Model) onPaste(text string) (tea.Model, tea.Cmd) {
 // which is the whole point of chipping.
 func (m *Model) promptValue() string {
 	return m.pastes.expand(m.input.Value())
+}
+
+// expandAtRefs turns "@path" references in a submitted prompt into the payload
+// the model receives: text files inlined behind a delimiter, images returned as
+// attachments to hang on the user message (atfile.go). It runs at submit, not
+// while typing, so the transcript keeps the short "@path" the user wrote. Any
+// reference that could not be expanded (missing / oversized / binary) is
+// surfaced as a faint note in the terminal, not sent to the model.
+func (m *Model) expandAtRefs(text string) (string, []tools.ResultImage) {
+	res := expandAtFiles(text, m.rootDir())
+	for _, note := range res.Notes {
+		m.appendLine(hintStyle.Render("  " + note))
+	}
+	return res.Prompt, res.Images
 }
 
 func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1432,11 +1449,15 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		m.setState(stateRunning)
+		// Expand any @file references now, on the way to the model: contents are
+		// inlined and images become attachments, while the transcript keeps the
+		// short @path already echoed above.
+		prompt, images := m.expandAtRefs(in.Prompt)
 		// Do NOT arm another waitForEvent here: exactly one channel reader must
 		// be outstanding (Init armed it; each channel-event handler re-arms it).
 		// A second reader would race and deliver streamed deltas out of order.
 		// startTurn returns only spinner/stopwatch ticks (separate cmd loops).
-		return m, m.startTurn(in.Prompt)
+		return m, m.startTurn(prompt, images)
 	}
 
 	return m, m.updateInput(msg)
@@ -1708,7 +1729,7 @@ func (m *Model) startGoalLoop(args []string) (tea.Model, tea.Cmd) {
 
 	prompt := m.prepareFirstLoopTurn(specPath, n)
 	m.setState(stateRunning)
-	return m, m.startTurn(prompt)
+	return m, m.startTurn(prompt, nil)
 }
 
 // prepareFirstLoopTurn selects the first turn's prompt for /goal run: either
@@ -2225,7 +2246,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			rendered := sk.Render(strings.Join(args, " "))
 			m.appendLine(bannerStyle.Render("Running skill /" + sk.Name))
 			m.setState(stateRunning)
-			return m, m.startTurn(rendered)
+			return m, m.startTurn(rendered, nil)
 		}
 		m.appendLine(errStyle.Render("Unknown command " + cmd + ". Try /help."))
 	}
@@ -2745,7 +2766,7 @@ func (m *Model) hostReportCount() int {
 // and returns the command that drives the spinner + elapsed stopwatch. The turn
 // runs under a cancellable context so Esc can interrupt it. A standing /goal is
 // re-stated to the model each turn (Ralph-style).
-func (m *Model) startTurn(prompt string) tea.Cmd {
+func (m *Model) startTurn(prompt string, images []tools.ResultImage) tea.Cmd {
 	// Belt-and-braces: zero the per-turn live tally so a path that skipped
 	// doneMsg can't poison the next reconcile. The normal path also resets
 	// these on doneMsg, so this is just a guard.
@@ -2796,7 +2817,7 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.turnCancel = cancel
 	go func() {
-		res, err := m.run(ctx, prompt, m.history, approver, asker, planner, emit, m.steer.drain, m.beforeEdit)
+		res, err := m.run(ctx, prompt, images, m.history, approver, asker, planner, emit, m.steer.drain, m.beforeEdit)
 		m.events <- doneMsg{res: res, err: err}
 	}()
 	return tea.Batch(m.spin.Tick, m.sw.Reset(), m.sw.Start())
