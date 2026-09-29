@@ -202,7 +202,18 @@ func ConnectCommand(ctx context.Context, name string, cfg ServerConfig) (*Server
 	for k, v := range cfg.Env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
-	return ConnectTransport(ctx, name, &mcpsdk.CommandTransport{Command: cmd})
+	stderr := newServerStderr(name)
+	cmd.Stderr = stderr
+	srv, err := ConnectTransport(ctx, name, &mcpsdk.CommandTransport{Command: cmd})
+	if err != nil {
+		// A failed connect has closed the transport and waited for the child,
+		// so its stderr has been drained: what it said is why it failed.
+		if tail := strings.TrimSpace(stderr.Tail()); tail != "" {
+			return nil, fmt.Errorf("%w — stderr:\n%s", err, tail)
+		}
+		return nil, err
+	}
+	return srv, nil
 }
 
 // ConnectTransport connects to a server over an arbitrary transport (used by
