@@ -29,7 +29,7 @@ type Emitter func(event Event)
 
 // Event is a streaming event emitted during a run (stream-json mode).
 type Event struct {
-	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_progress" | "tool_result" | "usage" | "compaction"
+	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_progress" | "tool_result" | "usage" | "compaction" | "warning"
 	Text      string `json:"text,omitempty"`        // assistant text
 	ToolName  string `json:"tool_name,omitempty"`   // tool_use / tool_result
 	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use / tool_result
@@ -186,11 +186,26 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	failures := map[string]int{}
 	errStreaks := map[string]errStreak{}
 
+	// rec records a message and says so, once per run, when the transcript
+	// cannot be written. The error used to be discarded: a full disk or a
+	// removed sessions directory lost the session without a word, and the
+	// user found out only when --continue had nothing to resume.
+	recordWarned := false
+	rec := func(role string, msg any) {
+		if err := record(opts.Recorder, role, msg); err != nil && !recordWarned {
+			recordWarned = true
+			if emit != nil {
+				emit(Event{Type: "warning", Content: fmt.Sprintf(
+					"the session transcript could not be written (%v) — this conversation will not be resumable until that is fixed", err)})
+			}
+		}
+	}
+
 	messages := append([]anthropic.BetaMessageParam{}, opts.InitialMessages...)
 	if opts.Prompt != "" {
 		userMsg := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(opts.Prompt))
 		messages = append(messages, userMsg)
-		record(opts.Recorder, "user", userMsg)
+		rec("user", userMsg)
 	}
 
 	var res Result
@@ -209,7 +224,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		if in := pollInterjection(opts); !in.Empty() {
 			if msg, ok := steerMessage(in); ok {
 				messages = append(messages, msg)
-				record(opts.Recorder, "user", msg)
+				rec("user", msg)
 				if emit != nil {
 					emit(Event{Type: "steer", Content: in.Text})
 				}
@@ -305,7 +320,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// every later request 400s on it. sanitizeMessages repairs that shape on
 		// the way out (servertool.go, orphanServerToolUseIDs).
 		if assistant.StopReason == "pause_turn" {
-			record(opts.Recorder, "assistant", assistant)
+			rec("assistant", assistant)
 			continue
 		}
 
@@ -313,7 +328,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		toolUses := toolUseBlocks(assistant)
 		if len(toolUses) == 0 {
 			// Final (tool-less) answer: structurally fine on its own, record now.
-			record(opts.Recorder, "assistant", assistant)
+			rec("assistant", assistant)
 			res.Messages = messages
 			if halted {
 				res.StopReason = "user_halt"
@@ -324,7 +339,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			// The wrap-up request came back wanting to do more work. The user
 			// asked it to stop; honour that rather than let it carry on with a
 			// polite acknowledgement.
-			record(opts.Recorder, "assistant", assistant)
+			rec("assistant", assistant)
 			res.StopReason = "user_halt"
 			res.Messages = messages
 			return res, nil
@@ -361,8 +376,8 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// between them is microseconds (two Recorder.Record calls), whereas the
 		// dispatch above can be seconds-to-minutes — that gap is where orphans
 		// used to land in the transcript.
-		record(opts.Recorder, "assistant", assistant)
-		record(opts.Recorder, "user", toolResultMsg)
+		rec("assistant", assistant)
+		rec("user", toolResultMsg)
 
 		// The second poll point. Between the tool results and the next request
 		// is the other place a user message can be appended without splitting a
@@ -371,7 +386,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		if in := pollInterjection(opts); !in.Empty() {
 			if msg, ok := steerMessage(in); ok {
 				messages = append(messages, msg)
-				record(opts.Recorder, "user", msg)
+				rec("user", msg)
 				if emit != nil {
 					emit(Event{Type: "steer", Content: in.Text})
 				}
@@ -994,10 +1009,11 @@ func splitSchema(raw json.RawMessage) (properties any, required []string) {
 	return properties, s.Required
 }
 
-// record marshals a message param and hands it to the recorder (best effort).
-func record(r Recorder, role string, msg any) {
+// record marshals a message param and hands it to the recorder, returning
+// the recorder's error.
+func record(r Recorder, role string, msg any) error {
 	if r == nil {
-		return
+		return nil
 	}
 	// A response BetaMessage must be converted to its request param before it
 	// is marshalled. The SDK's *response* union types carry no MarshalJSON, so
@@ -1015,9 +1031,11 @@ func record(r Recorder, role string, msg any) {
 	if m, ok := msg.(anthropic.BetaMessage); ok {
 		msg = m.ToParam()
 	}
-	if b, err := json.Marshal(msg); err == nil {
-		_ = r.Record(role, b)
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return err
 	}
+	return r.Record(role, b)
 }
 
 // toolUseBlocks returns the tool_use blocks in an assistant message.

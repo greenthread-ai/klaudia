@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	"github.com/greenthread-ai/klaudia/internal/agent"
 )
 
 // OutputFormat selects how headless results are rendered to stdout.
@@ -92,4 +94,12 @@ func (r *Renderer) writeJSONLine(v any) error {
 	}
 	_, err = fmt.Fprintln(r.w, string(b))
 	return err
+}
+
+// warnOn writes a warning event to stderr for the formats that show no
+// events (text and json); stream-json carries it as an event line already.
+func warnOn(w io.Writer, format OutputFormat, ev agent.Event) {
+	if ev.Type == "warning" && format != FormatStreamJSON {
+		fmt.Fprintln(w, "warning:", ev.Content)
+	}
 }
