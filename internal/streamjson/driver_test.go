@@ -111,3 +111,50 @@ func waitForRequestID(out *lineSink) string {
 	}
 	return ""
 }
+
+// TestDriverSeedsResumedHistoryAndAnnouncesInit pins the resume contract of the
+// embedding channel: the first line is system/init carrying the session id, and
+// the first turn runs with the resumed session's history (it used to start
+// empty, so a --resume appended to the transcript while the model remembered
+// nothing).
+func TestDriverSeedsResumedHistoryAndAnnouncesInit(t *testing.T) {
+	out := &lineSink{}
+	d := NewDriver(out)
+	d.SessionID = "sess-7"
+	d.History = []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("earlier question")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("earlier answer")}},
+	}
+	d.Init = &Init{CWD: "/w", Model: "m", PermissionMode: "dontAsk", ResumedFrom: "sess-7"}
+
+	var seen [][]anthropic.BetaMessageParam
+	runFn := func(_ context.Context, _ string, history []anthropic.BetaMessageParam, _ agent.Approver, _ agent.Emitter) (agent.Result, error) {
+		seen = append(seen, history)
+		next := append(append([]anthropic.BetaMessageParam(nil), history...),
+			anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("q")),
+			anthropic.BetaMessageParam{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("a")}})
+		return agent.Result{Text: "a", Messages: next}, nil
+	}
+	in := strings.NewReader(`{"type":"user","message":{"role":"user","content":"one"}}` + "\n" +
+		`{"type":"user","message":{"role":"user","content":"two"}}` + "\n")
+	if err := d.Run(context.Background(), in, runFn); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 2 || len(seen[0]) != 2 || len(seen[1]) != 4 {
+		t.Fatalf("history lengths per turn = %v, want [2 4]", func() []int {
+			n := []int{}
+			for _, h := range seen {
+				n = append(n, len(h))
+			}
+			return n
+		}())
+	}
+	var first map[string]any
+	if err := json.Unmarshal([]byte(out.snapshot()[0]), &first); err != nil {
+		t.Fatal(err)
+	}
+	if first["type"] != "system" || first["subtype"] != "init" || first["session_id"] != "sess-7" ||
+		first["resumed"] != true || first["resumed_from"] != "sess-7" || first["history_messages"] != float64(2) {
+		t.Fatalf("first line = %v, want system/init for a resumed sess-7", first)
+	}
+}

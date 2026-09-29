@@ -243,6 +243,8 @@ channel for editor/SDK integrations (no terminal needed):
 ./klaudia --continue                 # explicitly resume the most recent session here
 ./klaudia -r <session-id>            # resume a specific session
 ./klaudia -r <session-id> --full     # replay the whole transcript (not the summary)
+./klaudia --session-id <id> …        # record under an id you choose (must be new)
+./klaudia -r <old> --session-id <new> # fork <old> into a new session <new>
 ```
 
 Auto-resume is an interactive convenience: headless (`-p`) and embedding
@@ -254,6 +256,15 @@ Sessions are JSONL transcripts under `~/.klaudia/sessions/<encoded-cwd>/`
 transcripts from `~/.klaudia/projects/<encoded-cwd>/` during migration. When a
 session has a persisted compaction summary, resume seeds from it (token-saving)
 unless `--full`.
+
+`-r <id>` finds the transcript by id anywhere under the sessions root, not only
+in the current directory's project dir, and keeps appending to the file it was
+found in. An embedder can therefore pin the id with `--session-id`, stop the
+process, move the sessions root (for example to another host, pointed at with
+`KLAUDIA_CONFIG_DIR`) and resume from a different working directory. A session
+id is letters, digits, `-` and `_` (at most 128). In embedding mode the first
+output line is `{"type":"system","subtype":"init","session_id":…,"resumed":…,
+"history_messages":…}`, so the peer learns the id before it sends a turn.
 
 ## Long-running commands, logs, and your shell
 

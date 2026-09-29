@@ -21,10 +21,21 @@ func localLegacySummaryPath(cwd, sessionID string) string {
 	return filepath.Join(cwd, ".klaudia", "sessions", sessionID+".summary.md")
 }
 
+// SummaryPathFor returns the summary file that sits beside a transcript file.
+func SummaryPathFor(transcriptPath string) string {
+	return strings.TrimSuffix(transcriptPath, ".jsonl") + ".summary.md"
+}
+
 // WriteSummary persists a compaction summary for a session, stamped with the
 // time and (when available) the current git commit. Last write wins.
 func WriteSummary(cwd, sessionID, summary, gitCommit string) error {
-	if err := os.MkdirAll(filepath.Dir(SummaryPath(cwd, sessionID)), 0o755); err != nil {
+	return WriteSummaryAt(SummaryPath(cwd, sessionID), sessionID, summary, gitCommit)
+}
+
+// WriteSummaryAt is WriteSummary to an explicit summary file (SummaryPathFor
+// a located transcript).
+func WriteSummaryAt(path, sessionID, summary, gitCommit string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	var b strings.Builder
@@ -36,14 +47,23 @@ func WriteSummary(cwd, sessionID, summary, gitCommit string) error {
 	b.WriteString("_\n\n")
 	b.WriteString(strings.TrimSpace(summary))
 	b.WriteString("\n")
-	return os.WriteFile(SummaryPath(cwd, sessionID), []byte(b.String()), 0o644)
+	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
 
 // ReadSummary returns the persisted summary body for a session, or ("", false)
 // if none exists. The stamped header line is stripped so the body can seed a
 // resumed conversation directly.
 func ReadSummary(cwd, sessionID string) (string, bool) {
-	data, err := os.ReadFile(SummaryPath(cwd, sessionID))
+	var data []byte
+	err := os.ErrNotExist
+	// A session located outside cwd's project dir keeps its summary beside
+	// its transcript; read that one first.
+	if tp, ok := Locate(cwd, sessionID); ok {
+		data, err = os.ReadFile(SummaryPathFor(tp))
+	}
+	if err != nil {
+		data, err = os.ReadFile(SummaryPath(cwd, sessionID))
+	}
 	if err != nil {
 		data, err = os.ReadFile(legacySummaryPath(cwd, sessionID))
 		if err != nil {

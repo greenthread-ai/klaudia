@@ -534,6 +534,7 @@ type options struct {
 	newSession       bool   // --new-session
 	forkSession      bool   // --fork-session
 	fullResume       bool   // --full (replay entire transcript, not the summary)
+	sessionID        string // --session-id <id>: the id to record under (embedders)
 
 	allowedTools    []string
 	disallowedTools []string
@@ -543,7 +544,6 @@ type options struct {
 	maxIterations   int    // --max-iterations: outer-loop cap for --loop
 }
 
-// resolveResumeID selects the prior session to seed from, if any.
 // resolveResumeID selects the prior session to seed from, if any. An explicit
 // --resume/--continue is honored in any mode; the implicit "pick up the most
 // recent project session" is an interactive convenience only, so headless (-p)
@@ -561,12 +561,50 @@ func resolveResumeID(cwd string, opts options, interactive bool) (string, error)
 		}
 		return "", fmt.Errorf("--continue: no previous session found in this directory")
 	}
-	if interactive && !opts.newSession {
+	// A pinned --session-id names a new session, so it opts out of the
+	// implicit pick-up just as --new-session does.
+	if interactive && !opts.newSession && opts.sessionID == "" {
 		if id, ok := session.MostRecent(cwd); ok {
 			return id, nil
 		}
 	}
 	return "", nil
+}
+
+// resumeTranscript is the transcript file to read a resumed session from: the
+// located copy (which may live under another working directory's project dir),
+// else the cwd path, whose read error then names the missing file.
+func resumeTranscript(cwd, resumeID string) string {
+	if p, ok := session.Locate(cwd, resumeID); ok {
+		return p
+	}
+	return session.ExistingPath(cwd, resumeID)
+}
+
+// chooseSessionID returns the id this run records under and, when it continues
+// an existing transcript, that transcript's path (empty for a new file at the
+// default location).
+//
+//   - resuming, no fork: the resumed id, appending to the file it was found in
+//     (so a session resumed from another cwd stays in one transcript);
+//   - --session-id X: X, which must not name an existing session — unless it
+//     is the id being resumed, which is the same as a plain resume;
+//   - --resume A --session-id B, or --fork-session: a new id (B, or minted)
+//     seeded from A, leaving A untouched;
+//   - otherwise a freshly minted id.
+func chooseSessionID(cwd string, opts options, resumeID string) (string, string, error) {
+	fork := opts.forkSession || (opts.sessionID != "" && opts.sessionID != resumeID)
+	if resumeID != "" && !fork {
+		p, _ := session.Locate(cwd, resumeID)
+		return resumeID, p, nil
+	}
+	if opts.sessionID == "" {
+		return uuid.NewString(), "", nil
+	}
+	if p, exists := session.Locate(cwd, opts.sessionID); exists {
+		return "", "", usageErrorf("--session-id %s: a session with this id already exists (%s); use --resume %s to continue it", opts.sessionID, p, opts.sessionID)
+	}
+	return opts.sessionID, "", nil
 }
 
 // NewRootCommand builds the top-level `klaudia` command.
@@ -614,6 +652,7 @@ func NewRootCommand() *cobra.Command {
 	f.BoolVar(&opts.newSession, "new-session", false, "Start a fresh session instead of auto-resuming the most recent session in this directory")
 	f.BoolVar(&opts.forkSession, "fork-session", false, "When resuming, start a new session ID (preserves the original)")
 	f.BoolVar(&opts.fullResume, "full", false, "When resuming, replay the entire transcript instead of the compacted summary")
+	f.StringVar(&opts.sessionID, "session-id", "", "Use this id for the session instead of minting one (must not exist yet; with --resume of another id, forks into it)")
 	f.StringSliceVar(&opts.allowedTools, "allowedTools", nil, "Auto-allow tool rules, e.g. 'Edit' or 'Bash(git status:*)' (repeatable, comma-separated)")
 	f.StringSliceVar(&opts.disallowedTools, "disallowedTools", nil, "Deny tool rules (same format as --allowedTools)")
 	f.BoolVar(&opts.partialMessages, "include-partial-messages", false, "Include partial message chunks as they arrive (only with --print and --output-format=stream-json)")
@@ -669,6 +708,12 @@ func run(cmd *cobra.Command, opts *options) error {
 	// project session by default, or start new when requested/no prior session.
 	// --fork-session writes to a fresh id while preserving the original.
 	var initialMessages []anthropic.BetaMessageParam
+	if opts.resume != "" && !session.ValidID(opts.resume) {
+		return usageErrorf("--resume %q: not a valid session id", opts.resume)
+	}
+	if opts.sessionID != "" && !session.ValidID(opts.sessionID) {
+		return usageErrorf("--session-id %q: use letters, digits, '-' and '_' (at most 128)", opts.sessionID)
+	}
 	resumeID, err := resolveResumeID(cwd, *opts, interactive)
 	if err != nil {
 		return err
@@ -680,14 +725,17 @@ func run(cmd *cobra.Command, opts *options) error {
 	// is the user asking for that session by name, so it is honoured.
 	autoResume := resumeID != "" && opts.resume == "" && !opts.continueSession
 	if autoResume {
-		if entries, rerr := session.Read(session.ExistingPath(cwd, resumeID)); rerr == nil && session.LastTurnRefused(entries) {
+		if entries, rerr := session.Read(resumeTranscript(cwd, resumeID)); rerr == nil && session.LastTurnRefused(entries) {
 			fmt.Fprintln(cmd.ErrOrStderr(),
 				"Last session ended in a model refusal — starting fresh. Its history is left on disk; --resume "+resumeID+" to see it.")
 			resumeID = ""
 		}
 	}
 
-	sessionID := uuid.NewString()
+	sessionID, transcriptPath, err := chooseSessionID(cwd, *opts, resumeID)
+	if err != nil {
+		return err
+	}
 	if resumeID != "" {
 		// Token-saving resume: if a persisted compaction summary exists and the
 		// user didn't ask for a --full replay, seed from the summary instead of
@@ -699,7 +747,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			}
 			fmt.Fprintln(cmd.ErrOrStderr(), "resuming from compacted summary (--full for the entire transcript)")
 		} else {
-			entries, rerr := session.Read(session.ExistingPath(cwd, resumeID))
+			entries, rerr := session.Read(resumeTranscript(cwd, resumeID))
 			if rerr != nil {
 				return fmt.Errorf("resume %s: %w", resumeID, rerr)
 			}
@@ -707,9 +755,6 @@ func run(cmd *cobra.Command, opts *options) error {
 			if rerr != nil {
 				return fmt.Errorf("resume %s: %w", resumeID, rerr)
 			}
-		}
-		if !opts.forkSession {
-			sessionID = resumeID // continue appending to the same transcript
 		}
 	}
 
@@ -966,6 +1011,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		Version:        version.Version,
 		GitBranch:      gitBranch(cwd),
 		PermissionMode: string(mode),
+		Path:           transcriptPath,
 	}); terr == nil {
 		defer func() { _ = tr.Close() }()
 		recorder = tr
@@ -975,6 +1021,10 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Persist compaction summaries for token-saving resume (a Klaudia divergence).
 	onSummary := func(summary string) {
+		if transcriptPath != "" {
+			_ = session.WriteSummaryAt(session.SummaryPathFor(transcriptPath), sessionID, summary, gitCommit(cwd))
+			return
+		}
 		_ = session.WriteSummary(cwd, sessionID, summary, gitCommit(cwd))
 	}
 
@@ -1075,6 +1125,16 @@ func run(cmd *cobra.Command, opts *options) error {
 	// surfaced as control_request and answered by the peer.
 	if opts.inputFormat == "stream-json" {
 		driver := streamjson.NewDriver(cmd.OutOrStdout())
+		driver.SessionID = sessionID
+		// A resumed session carries its history into the first turn; without
+		// this the transcript was appended to but the model saw none of it.
+		driver.History = initialMessages
+		driver.Init = &streamjson.Init{
+			CWD:            cwd,
+			Model:          model,
+			PermissionMode: string(mode),
+			ResumedFrom:    resumeID,
+		}
 		runFn := func(ctx context.Context, prompt string, history []anthropic.BetaMessageParam, ap agent.Approver, emit agent.Emitter) (agent.Result, error) {
 			return loop.Run(ctx, agent.Options{
 				WorkingDir:      cwd,

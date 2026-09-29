@@ -23,12 +23,19 @@ type Meta struct {
 	GitBranch      string
 	PermissionMode string
 	UserType       string // defaults to "external"
+	// Path, when set, is the transcript file to append to instead of the
+	// default Path(CWD, SessionID): a resumed session keeps writing to the
+	// file it was located in.
+	Path string
 }
 
 // NewTranscript opens the transcript for a session and returns a recorder.
 func NewTranscript(meta Meta) (*Transcript, error) {
 	if meta.UserType == "" {
 		meta.UserType = "external"
+	}
+	if meta.Path != "" {
+		return &Transcript{w: NewWriterAt(meta.Path), meta: meta}, nil
 	}
 	w, err := NewWriter(meta.CWD, meta.SessionID)
 	if err != nil {
