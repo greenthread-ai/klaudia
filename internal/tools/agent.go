@@ -16,6 +16,7 @@ import (
 type Spawner interface {
 	// progress, when non-nil, is called with short display lines as the child
 	// works, so the frontend can show what it is doing instead of a bare spinner.
+	// With an error, the string may still carry the child's partial work.
 	Spawn(ctx context.Context, subagentType, prompt string, progress func(line string)) (string, error)
 }
 
@@ -107,7 +108,11 @@ func (a *Agent) Execute(ctx context.Context, tctx Context, raw json.RawMessage) 
 	}
 	result, err := a.spawner.Spawn(ctx, in.SubagentType, in.Prompt, tctx.Progress)
 	if err != nil {
-		return []Result{{Content: fmt.Sprintf("Sub-agent failed: %v", err), IsError: true}}, nil
+		msg := fmt.Sprintf("Sub-agent failed: %v", err)
+		if result != "" {
+			msg += "\n\n" + result
+		}
+		return []Result{{Content: msg, IsError: true}}, nil
 	}
 	return []Result{{Content: result}}, nil
 }
