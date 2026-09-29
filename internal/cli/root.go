@@ -56,13 +56,17 @@ type agentWiring struct {
 
 // withAgentTool returns a registry that is the base tools plus the Agent tool,
 // wired to a sub-agent spawner that draws from the base tools.
-func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *agent.HostGate) (*agentWiring, error) {
+func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *agent.HostGate, types []subagent.Type) (*agentWiring, error) {
+	if len(types) == 0 {
+		types = subagent.Builtin()
+	}
 	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).
 		WithWorkingDir(workingDir).
-		WithHostGate(host)
+		WithHostGate(host).
+		WithTypes(types)
 
 	infos := make([]tools.AgentTypeInfo, 0)
-	for _, t := range subagent.Builtin() {
+	for _, t := range types {
 		infos = append(infos, tools.AgentTypeInfo{Name: t.Name, Description: t.Description})
 	}
 	agentTool, err := tools.NewAgent(spawner, infos)
@@ -199,8 +203,7 @@ func themeOrWarn(theme string, warn func(string)) string {
 
 // tuiAgents adapts the built-in sub-agent types into the TUI's AgentInfo for
 // the /agents command.
-func tuiAgents() []tui.AgentInfo {
-	bs := subagent.Builtin()
+func tuiAgents(bs []subagent.Type) []tui.AgentInfo {
 	out := make([]tui.AgentInfo, 0, len(bs))
 	for _, t := range bs {
 		out = append(out, tui.AgentInfo{Name: t.Name, Description: t.Description})
@@ -911,7 +914,8 @@ func run(cmd *cobra.Command, opts *options) error {
 	// refused with the flag that would permit them, so the output says what to
 	// do rather than only what failed.
 	approver := agent.HeadlessApprover(opts.allowHostChanges)
-	wiring, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd, hostGate)
+	agentTypes := subagent.Load(cwd, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
+	wiring, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd, hostGate, agentTypes)
 	if err != nil {
 		return err
 	}
@@ -1010,7 +1014,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			SandboxMode:         sandboxMode(cfg.Sandbox),
 			CWD:                 cwd,
 			GitBranch:           gitBranch(cwd),
-			Agents:              tuiAgents(),
+			Agents:              tuiAgents(agentTypes),
 			ContextWindow:       ctxLimit,
 			ContextWindowSource: ctxSource,
 			Compact: func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
