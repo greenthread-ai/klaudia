@@ -31,6 +31,7 @@ Use `go install` when you mean to try the change.
 - **skill** - User-defined skills (`.klaudia/skills`)
 - **memory** - Auto-memory store
 - **doctor** - `/doctor` environment diagnostics
+- **gitprobe** - Klaudia's own read-only git calls, guarded against repo config
 - **streamjson** - Bidirectional stream-json frontend
 - **tui** - Terminal UI (Bubble Tea)
 - **prompt** - Prompt construction

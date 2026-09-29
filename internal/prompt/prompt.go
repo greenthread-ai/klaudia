@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/greenthread-ai/klaudia/internal/gitprobe"
 )
 
 // securityClause mirrors the JS constant V44 (05-app-core.js:65659).
@@ -150,9 +152,7 @@ func gitInfo(cwd string) (bool, string) {
 }
 
 func runGit(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := gitprobe.Command(dir, args...).Output()
 	return string(out), err
 }
 

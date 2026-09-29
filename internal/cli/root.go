@@ -21,6 +21,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/browser"
 	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/doctor"
+	"github.com/greenthread-ai/klaudia/internal/gitprobe"
 	"github.com/greenthread-ai/klaudia/internal/lsp"
 	"github.com/greenthread-ai/klaudia/internal/mcp"
 	"github.com/greenthread-ai/klaudia/internal/memory"
@@ -426,9 +427,7 @@ func (n *mcpReloadNotifier) emit(ev tui.MCPReloadEvent) {
 
 // gitBranch returns the current git branch for dir, or "" if not a repo.
 func gitBranch(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := gitprobe.Command(dir, "rev-parse", "--abbrev-ref", "HEAD").Output()
 	if err != nil {
 		return ""
 	}
@@ -437,9 +436,7 @@ func gitBranch(dir string) string {
 
 // gitCommit returns the short HEAD commit hash, or "" outside a repo.
 func gitCommit(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := gitprobe.Command(dir, "rev-parse", "--short", "HEAD").Output()
 	if err != nil {
 		return ""
 	}
