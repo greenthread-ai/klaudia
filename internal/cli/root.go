@@ -254,7 +254,7 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		return api.New(cred, os.Getenv("KLAUDIA_CUSTOM_ENDPOINT")), cfg.Model, nil
+		return api.New(cred, api.ResolveAnthropicBaseURL(cfg.BaseURL)), cfg.Model, nil
 	}
 }
 
@@ -620,6 +620,8 @@ func NewRootCommand() *cobra.Command {
 	f.StringVar(&opts.createConfig, "create-config", "", "Create a starter TOML config and exit: global (~/.klaudia/config.toml) or local (./.klaudia/config.toml)")
 	f.BoolVar(&opts.loop, "loop", false, "Autonomous loop: iterate against the goal spec (PRD.md or .klaudia/GOAL.md) until complete or --max-iterations. Requires --dangerously-skip-permissions.")
 	f.IntVar(&opts.maxIterations, "max-iterations", 0, "Max iterations for --loop (0 = default 10, hard cap 50)")
+
+	cmd.AddCommand(newLoginCommand())
 
 	return cmd
 }
