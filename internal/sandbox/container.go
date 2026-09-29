@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 )
 
 // Container runs commands inside a container via the docker/podman CLI. It is
@@ -21,6 +22,9 @@ type Container struct {
 	MountCWD bool   // bind-mount the working directory at the same path
 	ReadOnly bool   // mount the working directory read-only
 	Network  string // docker --network value; "none" isolates fully ("" = default)
+	// Memory caps the container's RAM in bytes (0 = no limit). Swap is held to
+	// the same figure, so the limit stops the command rather than paging it.
+	Memory int64
 }
 
 // NewContainer builds a container executor. runtime defaults to "docker".
@@ -48,6 +52,10 @@ func (c *Container) buildArgs(req Request) []string {
 	args := []string{"run", "--rm", "-i"}
 	if c.Network != "" {
 		args = append(args, "--network", c.Network)
+	}
+	if c.Memory > 0 {
+		m := strconv.FormatInt(c.Memory, 10)
+		args = append(args, "--memory", m, "--memory-swap", m)
 	}
 	if c.MountCWD && req.WorkingDir != "" {
 		mount := req.WorkingDir + ":" + req.WorkingDir
