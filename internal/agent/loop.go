@@ -744,6 +744,24 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		return errResult(l.unknownToolMsg(tu.Name))
 	}
 
+	// Validate the arguments FIRST — before the host gate and the approval
+	// step. An obviously-malformed call (bad or missing arguments) cannot run
+	// whatever the gate or the user decides, so rejecting it here spares the
+	// host gate the work and, more importantly, spares the user an approval
+	// prompt for a call that was never viable. This returns the same
+	// errResult(...) it did when it ran later, so the failure counters and
+	// loop-breakers see an identical bump; only its position moved.
+	if err := tool.ValidateInput(raw); err != nil {
+		msg := fmt.Sprintf("Input validation error: %v", err)
+		// Tell the model what the tool actually accepts. Smaller models hallucinate
+		// param names ("line_start" instead of "offset") and keep retrying with the
+		// same wrong shape — listing the real fields lets them self-correct.
+		if fields := schemaFieldList(tool.InputSchema()); fields != "" {
+			msg += fmt.Sprintf(" — %s accepts: %s.", tu.Name, fields)
+		}
+		return errResult(msg)
+	}
+
 	// The host gate runs BEFORE the allow/deny rules, not after. An allow rule
 	// says a command prefix is fine; it does not say that anything sharing that
 	// prefix may change the machine. Checking rules first would let one launder
@@ -798,17 +816,6 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 			}
 			return errResult(msg)
 		}
-	}
-
-	if err := tool.ValidateInput(raw); err != nil {
-		msg := fmt.Sprintf("Input validation error: %v", err)
-		// Tell the model what the tool actually accepts. Smaller models hallucinate
-		// param names ("line_start" instead of "offset") and keep retrying with the
-		// same wrong shape — listing the real fields lets them self-correct.
-		if fields := schemaFieldList(tool.InputSchema()); fields != "" {
-			msg += fmt.Sprintf(" — %s accepts: %s.", tu.Name, fields)
-		}
-		return errResult(msg)
 	}
 
 	if opts.BeforeEdit != nil {
