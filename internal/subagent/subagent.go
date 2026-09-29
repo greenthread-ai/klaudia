@@ -26,6 +26,9 @@ type Type struct {
 	// system prompt. An instruction not to write is a request; this is the
 	// registry the sub-agent is handed.
 	ReadOnlyMCP bool
+	// Model, when set, is the model this sub-agent runs on (an alias or a
+	// full id); empty uses the parent's.
+	Model string
 }
 
 // readOnlyTool is implemented by tools that can state they only read. MCP tools
@@ -73,14 +76,10 @@ func Builtin() []Type {
 	}
 }
 
-// Lookup returns the built-in type with the given name.
+// Lookup returns the built-in type with the given name, ignoring case and
+// separators.
 func Lookup(name string) (Type, bool) {
-	for _, t := range Builtin() {
-		if t.Name == name {
-			return t, true
-		}
-	}
-	return Type{}, false
+	return Find(Builtin(), name)
 }
 
 // Filter returns a new registry containing only the tools this type may use,

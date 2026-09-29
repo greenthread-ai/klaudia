@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -19,6 +20,7 @@ type Spawner struct {
 	provider   api.Provider
 	base       *tools.Registry
 	model      anthropic.Model
+	types      []subagent.Type // selectable types; nil means the built-ins
 	permission permission.Context
 	approver   Approver
 	maxTurns   int
@@ -105,10 +107,15 @@ const defaultSubagentMaxTurns = 50
 // progress, when non-nil, receives a short line per child tool call. Passing
 // nil (as headless callers do) restores the previous silent behaviour.
 func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progress func(string)) (string, error) {
-	t, ok := subagent.Lookup(subagentType)
+	types := s.types
+	if len(types) == 0 {
+		types = subagent.Builtin()
+	}
+	t, ok := subagent.Find(types, subagentType)
 	if !ok {
 		return "", fmt.Errorf("unknown subagent_type %q", subagentType)
 	}
+	model := subagentModel(s.model, t.Model)
 	childTools := t.Filter(s.base)
 
 	// Relay the child's activity upward. Without an emitter the child ran
@@ -130,12 +137,12 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 	// Give the child the model's real window. Leaving this 0 fell back to the
 	// 200k compaction default, so a sub-agent on a 1M model summarised its
 	// history at a fifth of the room it actually had.
-	ctxWindow, _ := api.ContextWindow(string(s.model), 0)
+	ctxWindow, _ := api.ContextWindow(string(model), 0)
 
 	loop := New(s.provider, childTools)
 	res, err := loop.Run(ctx, Options{
 		Prompt:        prompt,
-		Model:         s.model,
+		Model:         model,
 		System:        t.SystemPrompt,
 		MaxTurns:      maxTurns,
 		Permission:    s.permission,
@@ -177,4 +184,26 @@ func filterDeferred(deferred map[string]bool, registry *tools.Registry) map[stri
 		return nil
 	}
 	return out
+}
+
+// WithTypes sets the sub-agent types Spawn can run (see subagent.Load).
+func (s *Spawner) WithTypes(types []subagent.Type) *Spawner {
+	s.types = types
+	return s
+}
+
+// subagentModel is the model a sub-agent runs on: its own when it names one,
+// else the parent's. Agent files written for Claude Code say "sonnet" or
+// "opus"; on an OpenAI-compatible endpoint those resolve to Claude ids the
+// endpoint does not serve, so a non-Claude parent keeps its own model unless
+// the agent names a non-Claude one.
+func subagentModel(parent anthropic.Model, own string) anthropic.Model {
+	if strings.TrimSpace(own) == "" {
+		return parent
+	}
+	m := api.ResolveModel(own)
+	if !strings.HasPrefix(string(parent), "claude-") && strings.HasPrefix(string(m), "claude-") {
+		return parent
+	}
+	return m
 }
