@@ -165,6 +165,7 @@ single tool with an `operation` enum:
 | `by_tag`     | `tag`                        | detail notes whose frontmatter tags contain `tag` |
 | `promote`    | `name`                       | copy detail body to KNOWLEDGE.md, mark source superseded |
 | `supersede`  | `name`, `replacement`        | record the supersession link |
+| `remove`     | `query` or `name`            | delete the one session bullet `query` matches (refuses when several do), or detail note `name` and its pointer |
 
 Durations accept Go's `time.ParseDuration` syntax plus an `Nd` (days)
 suffix so the model can say `7d` instead of `168h`. The same shape
@@ -323,11 +324,15 @@ backend is just the substrate.
   history.
 - **KNOWLEDGE.md grows unbounded** under repeated Promote. Documented;
   pgmarkdown will solve this server-side via the supersession graph.
-- **No length budget on the system-prompt-injected MEMORY.md.** If
-  memory grows past the model's context window, the model sees
-  truncation errors. Mitigation today: prune detail notes via Stale +
-  manual archive. Future: pgmarkdown can score-rank the index so only
-  the salient bullets get injected.
+- **The system-prompt-injected MEMORY.md is cut to a fixed budget**
+  (200 lines or 25,000 bytes, at a line boundary; `internal/prompt`),
+  closing with a line that says how many lines were left out and where
+  they are. The cut keeps the head of the index — the oldest bullets —
+  so a long index loses its newest bullets and the linked-memory
+  section from the prompt first; they stay reachable through `search`
+  and Read. Pruning (`remove`, Stale + manual archive) keeps the index
+  under budget. Future: pgmarkdown can score-rank the index so only the
+  salient bullets get injected.
 - **`Disabled().SyncLinks()` returns nil**, not `ErrDisabled`. The
   startup call in `internal/cli/root.go` (on the real store, just before
   the system prompt is built) is for side effect and treats errors as
