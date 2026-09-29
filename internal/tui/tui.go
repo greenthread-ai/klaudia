@@ -1349,8 +1349,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if host {
 				return m, nil
 			}
-			rule := permission.Rule{Tool: m.pendingReq.ToolName, Specifier: m.pendingReq.Specifier}
-			m.rememberPermission("allow", rule)
+			m.rememberAllow(m.pendingReq)
 			m.answer(permission.Decision{Behavior: permission.Allow})
 		case "n":
 			msg := "denied by user"
@@ -2684,6 +2683,21 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// rememberAllow persists the "always allow" rule(s) for req. A Bash line that
+// runs several commands supplies one specifier per command (req.RuleSpecifiers)
+// so each command is allowed under every-command rule matching, not only the
+// first; every other request, and any Bash line that could not be cleanly
+// reduced, saves the single Specifier as before.
+func (m *Model) rememberAllow(req agent.ApprovalRequest) {
+	specs := req.RuleSpecifiers
+	if len(specs) == 0 {
+		specs = []string{req.Specifier}
+	}
+	for _, spec := range specs {
+		m.rememberPermission("allow", permission.Rule{Tool: req.ToolName, Specifier: spec})
+	}
 }
 
 // rememberPermission records a permission rule for the current UI session and,

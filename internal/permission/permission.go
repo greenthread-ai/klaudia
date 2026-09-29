@@ -177,6 +177,16 @@ type PermissionRequest struct {
 	// Specifier is the rule-matchable description of the action (e.g. a file
 	// path for Edit, the command for Bash). May be empty.
 	Specifier string
+
+	// RuleSpecifiers, when set, is the set of specifiers to persist when the
+	// user chooses "always allow" — one saved allow rule per entry, in place of
+	// a single rule built from Specifier. A Bash line that runs several commands
+	// (chained or piped) uses this to save one short-form rule per command, so
+	// that under every-command rule matching each command in the line is
+	// individually allowed rather than only the first. Empty means "save the
+	// single Specifier", the behaviour for every other tool and for a lone
+	// command. It does not affect matching (Check reads only Specifier).
+	RuleSpecifiers []string
 }
 
 // matches reports whether rule r applies to tool name with the given specifier.
