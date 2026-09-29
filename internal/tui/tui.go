@@ -71,6 +71,12 @@ type Session struct {
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
 	Compact CompactFunc
+	// Rewind, if set, drops the last n message entries from the persisted
+	// transcript so a resume matches the rewound in-memory history. Backs the
+	// transcript half of /rewind. Nil when there is no transcript (e.g. a
+	// transcript-open failure at startup), in which case /rewind still edits the
+	// in-memory conversation.
+	Rewind func(dropMessages int) error
 	// Doctor, if set, returns a rendered environment diagnostic. Backs /doctor.
 	Doctor func() string
 	// ListModels, if set, enumerates the models the configured provider serves,
@@ -1455,6 +1461,7 @@ var commandList = []cmdInfo{
 	{"/stop", "", "Ask Klaudia to finish the current step and stop, keeping what it has done"},
 	{"/changes", "", "Show the working tree split into your changes and Klaudia's"},
 	{"/undo", "", "Undo Klaudia's last change, leaving anything you also touched alone"},
+	{"/rewind", "[N]", "Drop the last N exchanges from the conversation (default 1) so you can back out recent turns"},
 	{"/jobs", "", "List background jobs: what's running, on what port, and where"},
 	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation"},
 	{"/restart", "<job>", "Restart a background job in place, keeping its name and log"},
@@ -2070,6 +2077,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.changesCommand()
 	case "/undo":
 		m.undoCommand()
+	case "/rewind":
+		m.rewindCommand(args)
 	case "/jobs":
 		m.jobsCommand()
 	case "/logs":
