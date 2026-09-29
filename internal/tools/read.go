@@ -2,13 +2,21 @@ package tools
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/greenthread-ai/klaudia/internal/native/pdf"
 	"github.com/greenthread-ai/klaudia/internal/permission"
@@ -28,25 +36,36 @@ func readPDF(path string) ([]Result, error) {
 	return []Result{{Content: fmt.Sprintf("[PDF: %d page(s)]\n\n%s", pages, text)}}, nil
 }
 
-func readImage(path string) ([]Result, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-	mediaType := ""
-	switch ext {
-	case ".png":
-		mediaType = "image/png"
-	case ".jpg", ".jpeg":
-		mediaType = "image/jpeg"
-	case ".gif":
-		mediaType = "image/gif"
-	case ".webp":
-		mediaType = "image/webp"
-	default:
-		return []Result{{Content: fmt.Sprintf("Unsupported image type: %s", ext), IsError: true}}, nil
-	}
+// Limits the API applies to an image block. An image over them is rejected,
+// and because it stays in the conversation it is rejected again with every
+// later request, so it is refused here instead.
+const (
+	maxImageBytes = 5 << 20
+	maxImageSide  = 8000
+)
 
+func readImage(path string) ([]Result, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Error reading image: %v", err), IsError: true}}, nil
+	}
+	if len(data) == 0 {
+		return []Result{{Content: fmt.Sprintf("%s is empty (0 bytes); there is no image to show.", path), IsError: true}}, nil
+	}
+	// The type comes from the bytes, not the name. A ".png" that is really a
+	// JPEG was sent labelled image/png and rejected; one that is not an image
+	// at all (an HTML error page saved with the wrong name) was sent anyway.
+	mediaType := http.DetectContentType(data)
+	switch mediaType {
+	case "image/png", "image/jpeg", "image/gif", "image/webp":
+	default:
+		return []Result{{Content: fmt.Sprintf("%s is named like an image but its content is %s, which cannot be shown as one.", path, mediaType), IsError: true}}, nil
+	}
+	if len(data) > maxImageBytes {
+		return []Result{{Content: fmt.Sprintf("%s is %d bytes, over the %d-byte limit for an image; resize or compress it first (e.g. with ImageMagick: convert in.png -resize 50%% out.png).", path, len(data), maxImageBytes), IsError: true}}, nil
+	}
+	if cfg, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil && (cfg.Width > maxImageSide || cfg.Height > maxImageSide) {
+		return []Result{{Content: fmt.Sprintf("%s is %dx%d pixels, over the %d-pixel limit on a side; resize it first.", path, cfg.Width, cfg.Height, maxImageSide), IsError: true}}, nil
 	}
 
 	return []Result{{
@@ -168,32 +187,74 @@ func (r *Read) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	}
 
 	var b strings.Builder
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	br := bufio.NewReaderSize(f, 64*1024)
 	lineNo := 0
 	emitted := 0
-	for sc.Scan() {
+	for emitted < limit {
+		line, more, err := readCappedLine(br, readMaxLineLen)
+		if err != nil && line == nil {
+			if err == io.EOF {
+				break
+			}
+			return []Result{{Content: fmt.Sprintf("Error reading file: %v", err), IsError: true}}, nil
+		}
 		lineNo++
 		if lineNo < start {
 			continue
 		}
-		if emitted >= limit {
-			break
-		}
-		line := sc.Text()
-		if len(line) > readMaxLineLen {
-			line = line[:readMaxLineLen]
+		text := string(line)
+		if more > 0 {
+			text += fmt.Sprintf("… [line truncated: %d more bytes]", more)
 		}
 		// cat -n format: line number right-aligned in a 6-wide field, then a tab.
-		fmt.Fprintf(&b, "%6d\t%s\n", lineNo, line)
+		fmt.Fprintf(&b, "%6d\t%s\n", lineNo, text)
 		emitted++
-	}
-	if err := sc.Err(); err != nil {
-		return []Result{{Content: fmt.Sprintf("Error reading file: %v", err), IsError: true}}, nil
+		if err == io.EOF {
+			break
+		}
 	}
 
 	if emitted == 0 {
 		return []Result{{Content: "<file is empty or offset is past end of file>"}}, nil
 	}
 	return []Result{{Content: b.String()}}, nil
+}
+
+// readCappedLine reads one line and returns at most max bytes of it, cut on a
+// rune boundary, and how many bytes of the line were left out. The rest of a
+// long line is read and discarded without being held.
+//
+// A bufio.Scanner with a 1 MB limit failed the whole read with "token too
+// long" on a single long line (minified JavaScript, a data dump), and the
+// byte slice line[:2000] could split a UTF-8 character.
+func readCappedLine(br *bufio.Reader, max int) (line []byte, more int, err error) {
+	total := 0
+	for {
+		chunk, rerr := br.ReadSlice('\n')
+		if rerr == nil {
+			chunk = chunk[:len(chunk)-1] // the delimiter itself
+		}
+		if room := max - len(line); room > 0 {
+			line = append(line, chunk[:min(room, len(chunk))]...)
+		}
+		total += len(chunk)
+		if rerr == bufio.ErrBufferFull {
+			continue
+		}
+		if rerr == io.EOF && total == 0 {
+			return nil, 0, io.EOF
+		}
+		err = rerr
+		break
+	}
+	more = total - len(line)
+	if more == 0 {
+		line = bytes.TrimSuffix(line, []byte("\r"))
+		return line, 0, err
+	}
+	for len(line) > 0 && !utf8.Valid(line) {
+		line = line[:len(line)-1]
+		more++
+	}
+	return line, more, err
 }
