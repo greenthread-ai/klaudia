@@ -47,7 +47,7 @@ func TestReadOffsetLimit(t *testing.T) {
 	r := mustRead(t)
 	raw, _ := json.Marshal(ReadInput{FilePath: path, Offset: 2, Limit: 2})
 	res, _ := r.Execute(context.Background(), Context{}, raw)
-	want := "     2\tb\n     3\tc\n"
+	want := "     2\tb\n     3\tc\n\n(showing lines 2–3 of 5; pass offset=4 to continue)\n"
 	if res[0].Content != want {
 		t.Errorf("content = %q, want %q", res[0].Content, want)
 	}

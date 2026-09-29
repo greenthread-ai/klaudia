@@ -2,10 +2,12 @@ package tools
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,7 +103,9 @@ func (r *Read) Description(context.Context) (string, error) {
 	return "Reads a file from the local filesystem. file_path may be absolute or relative " +
 		"to the working directory. " +
 		"Text files return up to 2000 lines in cat -n format (line numbers from 1); use " +
-		"offset and limit to window a large file. PDF files are returned as extracted text. " +
+		"offset and limit to window a large file; when lines remain past the window, the " +
+		"result ends with a note giving the offset to continue from. Binary files are " +
+		"reported by size, not shown. PDF files are returned as extracted text. " +
 		"Image files (png, jpg, jpeg, gif, webp) are returned as viewable image blocks — use " +
 		"Read to look at an image; do not assume you cannot see it.", nil
 }
@@ -161,6 +165,12 @@ func (r *Read) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	}
 	defer f.Close()
 
+	// A binary file read as lines is noise that costs context and tells the
+	// model nothing; say what it is instead.
+	if size, binary := sniffBinary(f); binary {
+		return []Result{{Content: fmt.Sprintf("<binary file, %d bytes; not shown as text>", size)}}, nil
+	}
+
 	start := max(in.Offset, 1)
 	limit := in.Limit
 	if limit <= 0 {
@@ -195,5 +205,68 @@ func (r *Read) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	if emitted == 0 {
 		return []Result{{Content: "<file is empty or offset is past end of file>"}}, nil
 	}
+	// Stopping at the limit silently let the model take the first 2,000 lines
+	// for the whole file. Counting is a second pass, paid only when the limit
+	// was reached.
+	if emitted == limit {
+		last := start + emitted - 1
+		if total, err := countLines(f); err == nil && total > last {
+			fmt.Fprintf(&b, "\n(showing lines %d–%d of %d; pass offset=%d to continue)\n", start, last, total, last+1)
+		}
+	}
 	return []Result{{Content: b.String()}}, nil
+}
+
+// readSniffLen is how much of a file sniffBinary looks at: the same 8 KB
+// window, and NUL-byte test, that Grep uses to skip binary files.
+const readSniffLen = 8192
+
+// sniffBinary reports the file's size and whether its first readSniffLen bytes
+// hold a NUL, then rewinds f. A file that cannot be sniffed is treated as text,
+// so the line reader reports any error itself.
+func sniffBinary(f *os.File) (int64, bool) {
+	buf := make([]byte, readSniffLen)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return 0, false
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return 0, false
+	}
+	if bytes.IndexByte(buf[:n], 0) < 0 {
+		return 0, false
+	}
+	var size int64
+	if info, err := f.Stat(); err == nil {
+		size = info.Size()
+	}
+	return size, true
+}
+
+// countLines counts f's lines from its start the way the line reader splits
+// them: one per newline, plus a final line that has none.
+func countLines(f *os.File) (int, error) {
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return 0, err
+	}
+	buf := make([]byte, 64*1024)
+	lines := 0
+	last := byte('\n')
+	for {
+		n, err := f.Read(buf)
+		if n > 0 {
+			lines += bytes.Count(buf[:n], []byte{'\n'})
+			last = buf[n-1]
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return 0, err
+		}
+	}
+	if last != '\n' {
+		lines++
+	}
+	return lines, nil
 }
