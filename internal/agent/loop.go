@@ -14,6 +14,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -148,7 +149,21 @@ type Result struct {
 type Loop struct {
 	provider api.Provider
 	tools    *tools.Registry
+
+	// compactFailures counts automatic compactions that failed in a row. After
+	// maxCompactFailures the threshold-driven compaction stops trying — each
+	// attempt is a model call that fails the same way — until one succeeds; a
+	// forced compaction (the request has already overflowed) always tries.
+	compactFailures atomic.Int32
 }
+
+// maxCompactFailures is how many automatic compactions may fail in a row
+// before the threshold-driven one stops being attempted.
+const maxCompactFailures = 3
+
+// maxSummaryShrinks bounds how many times a summary request that is itself
+// too long is made smaller and retried.
+const maxSummaryShrinks = 3
 
 // New builds a Loop over a model provider (Anthropic, OpenAI-compatible, …).
 func New(provider api.Provider, registry *tools.Registry) *Loop {
@@ -416,7 +431,8 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 	// force is set when the provider has already rejected the request for
 	// size: the threshold is moot, we are over it by definition.
 	if os.Getenv("DISABLE_AUTO_COMPACT") == "" &&
-		(force || compaction.ShouldAutocompact(calib.Scale(compaction.EstimateTokens(messages)), opts.ContextWindow)) {
+		(force || (l.compactFailures.Load() < maxCompactFailures &&
+			compaction.ShouldAutocompact(calib.Scale(compaction.EstimateTokens(messages)), opts.ContextWindow))) {
 		// Autocompact is a model call that runs silently (emit=nil), so signal
 		// its start with a contentless "compaction" event — the frontend shows
 		// "compacting…" for the duration. Microcompact above is instant and
@@ -424,7 +440,20 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 		if emit != nil {
 			emit(Event{Type: "compaction"})
 		}
-		if out, ok := l.autocompact(ctx, messages, opts); ok {
+		out, err := l.autocompact(ctx, messages, opts)
+		if err != nil {
+			// Say so: a silent failure here is what made a session that had
+			// outgrown its window look merely stuck.
+			n := l.compactFailures.Add(1)
+			if emit != nil {
+				msg := fmt.Sprintf("autocompact failed: %v", err)
+				if n >= maxCompactFailures {
+					msg += fmt.Sprintf(" — %d failures in a row, so automatic compaction is paused until /compact succeeds", n)
+				}
+				emit(Event{Type: "compaction", Content: msg})
+			}
+		} else {
+			l.compactFailures.Store(0)
 			messages = out
 			if emit != nil {
 				emit(Event{Type: "compaction", Content: "autocompact: summarized prior conversation"})
@@ -439,36 +468,70 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 // command (the loop's own autocompact runs automatically near the context
 // limit). Returns an error if the summary call fails or yields no text.
 func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model) ([]anthropic.BetaMessageParam, string, error) {
-	req := compaction.BuildSummaryRequest(messages, model, 4096)
-	req.Betas = api.DefaultBetas
-	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+	summary, err := l.summarize(ctx, messages, model, 0)
 	if err != nil {
 		return nil, "", err
 	}
-	summary := finalAssistantText(assistant)
-	if summary == "" {
-		return nil, "", fmt.Errorf("compaction produced no summary")
-	}
+	l.compactFailures.Store(0)
 	return compaction.ReplaceWithSummary(summary), summary, nil
 }
 
-// autocompact summarizes the conversation via the model and replaces history
-// with the summary. Returns (messages, false) if the summary call fails.
-func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options) ([]anthropic.BetaMessageParam, bool) {
-	req := compaction.BuildSummaryRequest(messages, opts.Model, 4096)
-	req.Betas = api.DefaultBetas
-	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+// autocompact summarizes the conversation via the model and returns the
+// replacement history, or the error that stopped it.
+func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options) ([]anthropic.BetaMessageParam, error) {
+	summary, err := l.summarize(ctx, messages, opts.Model, int(opts.MaxTokens))
 	if err != nil {
-		return messages, false
-	}
-	summary := finalAssistantText(assistant)
-	if summary == "" {
-		return messages, false
+		return nil, err
 	}
 	if opts.OnSummary != nil {
 		opts.OnSummary(summary)
 	}
-	return compaction.ReplaceWithSummary(summary), true
+	return compaction.ReplaceWithSummary(summary), nil
+}
+
+// summarize asks the model for a summary of messages. The request is
+// sanitized like any other, since the history is sent as it stands. When the
+// summary request is itself too long — the case that matters most, since
+// compaction is forced by the conversation overflowing — it is made smaller
+// (compaction.ShrinkForSummary) and retried, and the summary then says that
+// the oldest part of the conversation is not in it.
+func (l *Loop) summarize(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model, maxTokens int) (string, error) {
+	dropped := 0
+	for attempt := 0; ; attempt++ {
+		req := compaction.BuildSummaryRequest(sanitizeMessages(messages), model, summaryMaxTokens(model, maxTokens))
+		req.Betas = api.DefaultBetas
+		assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+		if err != nil {
+			if !api.IsContextOverflow(err) || attempt == maxSummaryShrinks {
+				return "", err
+			}
+			smaller, n, ok := compaction.ShrinkForSummary(messages)
+			if !ok {
+				return "", err
+			}
+			messages, dropped = smaller, dropped+n
+			continue
+		}
+		summary := finalAssistantText(assistant)
+		if summary == "" {
+			return "", fmt.Errorf("compaction produced no summary")
+		}
+		if dropped > 0 {
+			summary = fmt.Sprintf("(The oldest %d messages were too long to include in this summary and are not reflected in it.)\n\n%s", dropped, summary)
+		}
+		return summary, nil
+	}
+}
+
+// summaryMaxTokens is the output budget for a summary: the session's own cap
+// or the model's, bounded to [4096, 16384]. A fixed 4096 was thin for a long
+// session's summary, which is all that survives it.
+func summaryMaxTokens(model anthropic.Model, configured int) int64 {
+	n := configured
+	if n <= 0 {
+		n = api.MaxOutputTokens(string(model))
+	}
+	return int64(min(max(n, 4096), 16384))
 }
 
 // streamTurn issues one streaming request via the provider, emitting

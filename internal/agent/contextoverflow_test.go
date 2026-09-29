@@ -25,12 +25,9 @@ func (p *overflowThenOKProvider) StreamTurn(_ context.Context, params anthropic.
 	if p.calls == 1 {
 		return anthropic.BetaMessage{}, errors.New("prompt is too long: 1000464 tokens > 1000000 maximum")
 	}
-	return anthropic.BetaMessage{
-		StopReason: "end_turn",
-		Content: []anthropic.BetaContentBlockUnion{{
-			Type: "text", Text: "recovered",
-		}},
-	}, nil
+	// Built from JSON so the summary call reads real text; a struct literal
+	// reads back empty through AsText, and compaction then quietly failed.
+	return textMessage("recovered"), nil
 }
 
 // Reported failure: a four-day session crossed the window, and because every
