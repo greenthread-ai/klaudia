@@ -38,11 +38,18 @@ const (
 // clampOutput trims out to the head+tail budget. It returns the trimmed text
 // and the number of bytes removed from the middle (0 when nothing was cut).
 func clampOutput(out string) (string, int) {
-	if len(out) <= bashMaxOutput {
+	return clampSplit(out, bashHeadBytes, bashTailBytes)
+}
+
+// clampSplit is clampOutput with the head/tail split chosen by the caller.
+// Bash output is head-heavy; a background job's output is tail-heavy, because
+// what a job printed most recently is what the model is asking about.
+func clampSplit(out string, headBytes, tailBytes int) (string, int) {
+	if len(out) <= headBytes+tailBytes {
 		return out, 0
 	}
-	head := cutAfterLastLine(out[:bashHeadBytes])
-	tail := cutBeforeFirstLine(out[len(out)-bashTailBytes:])
+	head := cutAfterLastLine(out[:headBytes])
+	tail := cutBeforeFirstLine(out[len(out)-tailBytes:])
 	elided := len(out) - len(head) - len(tail)
 	return head + "\n" + elisionMarker(elided) + "\n" + tail, elided
 }

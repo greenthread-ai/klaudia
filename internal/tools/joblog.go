@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,9 +102,11 @@ func (l *jobLog) ReadFrom(offset int64) (string, int64) {
 	if _, err := f.Seek(offset, 0); err != nil {
 		return "", size
 	}
+	// ReadFull, and a cursor advanced only past what was read: a single Read may
+	// return short, and reporting size then would skip the unread bytes forever.
 	buf := make([]byte, size-offset)
-	n, _ := f.Read(buf)
-	return string(buf[:n]), size
+	n, _ := io.ReadFull(f, buf)
+	return string(buf[:n]), offset + int64(n)
 }
 
 // Size is the number of bytes written so far.

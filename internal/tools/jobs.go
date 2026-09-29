@@ -205,6 +205,11 @@ type ShellOutput struct {
 	Output   string
 	Running  bool
 	ExitCode int
+	// LogPath is the job's log file ("" when the log is memory-only), and
+	// From/To the byte range of the log this read returned, so a caller that
+	// trims Output can say where the untrimmed text is.
+	LogPath  string
+	From, To int64
 }
 
 // Read returns output produced since the last read, advancing the cursor.
@@ -226,6 +231,7 @@ func (s *JobStore) Read(ref string) (ShellOutput, bool) {
 	out := ShellOutput{
 		ID: j.ID, Name: j.Name, Command: j.Command, Output: data,
 		Running: !j.exited, ExitCode: j.exitCode,
+		LogPath: log.Path(), From: newOffset - int64(len(data)), To: newOffset,
 	}
 	s.mu.Unlock()
 	return out, true
