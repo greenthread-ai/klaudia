@@ -36,7 +36,8 @@ func (t *BashOutput) Name() string { return "BashOutput" }
 func (t *BashOutput) Description(context.Context) (string, error) {
 	return "Read new output from a background job started by Bash with run_in_background. " +
 		"Accepts the job's id (bash_1) or its name (dev, api). Returns only output produced " +
-		"since the last read, plus whether the job is still running.", nil
+		"since the last read, plus whether the job is still running. A long read keeps its " +
+		"start and its most recent output and names the job's log file for the rest.", nil
 }
 
 func (t *BashOutput) InputSchema() json.RawMessage { return t.schema.Raw }
@@ -84,18 +85,53 @@ func (t *BashOutput) Execute(_ context.Context, _ Context, raw json.RawMessage) 
 	if in.Filter != "" {
 		body = filterLines(body, in.Filter)
 	}
-	var b strings.Builder
-	if body == "" {
-		b.WriteString("[no new output]")
-	} else {
-		b.WriteString(body)
-	}
+	model, full := clampJobRead(body, out)
+	var status string
 	if out.Running {
-		fmt.Fprintf(&b, "\n[job %s running]", out.Name)
+		status = fmt.Sprintf("\n[job %s running]", out.Name)
 	} else {
-		fmt.Fprintf(&b, "\n[job %s exited, code %d]", out.Name, out.ExitCode)
+		status = fmt.Sprintf("\n[job %s exited, code %d]", out.Name, out.ExitCode)
 	}
-	return []Result{{Content: b.String()}}, nil
+	if full != "" {
+		full += status
+	}
+	return []Result{{Content: model + status, Full: full}}, nil
+}
+
+// A background job's read is capped at the same total as Bash output, but split
+// the other way: what the job printed last is what the model is asking about
+// (the error after a reload, the request that just failed), so the tail gets
+// two thirds and the head keeps only the start of what came since the last read.
+const (
+	jobReadHeadBytes = 10000
+	jobReadTailBytes = bashMaxOutput - jobReadHeadBytes
+)
+
+// clampJobRead trims one BashOutput read to the cap. It returns the text for
+// the model and, when something was cut, the untrimmed text for local display.
+//
+// Without it, a read returned everything written since the previous one, so a
+// chatty dev server left alone for a few turns could flood the context in one
+// call. The cut is never a loss: the notice names the job's own log file and
+// the byte range this read covered, so the model can Read or grep the middle.
+// Only a memory-only log (no file could be opened) is spilled to a new file.
+func clampJobRead(body string, out ShellOutput) (model, full string) {
+	if body == "" {
+		return "[no new output]", ""
+	}
+	clamped, elided := clampSplit(body, jobReadHeadBytes, jobReadTailBytes)
+	if elided == 0 {
+		return body, ""
+	}
+	switch {
+	case out.LogPath != "":
+		clamped += fmt.Sprintf("\n[full log: %s — this read is bytes %d–%d of it]", out.LogPath, out.From, out.To)
+	default:
+		if path, ok := spillOutput(body); ok {
+			clamped += "\n" + spillMarker + path + "]"
+		}
+	}
+	return clamped, body
 }
 
 // filterLines keeps only lines matching the (already-validated) regex.
