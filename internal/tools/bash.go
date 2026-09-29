@@ -164,7 +164,8 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 	}
 
 	model, full := formatBashOutput(resp, in.Command)
-	return []Result{{Content: model, Full: full, IsError: resp.ExitCode != 0}}, nil
+	failed := resp.ExitCode != 0 && !noMatchExit(in.Command, resp)
+	return []Result{{Content: model, Full: full, IsError: failed}}, nil
 }
 
 // selfBackgrounded reports whether a command detaches a long-running service
@@ -318,6 +319,8 @@ func formatBashOutput(resp sandbox.Response, command string) (model, full string
 		status = "\n[interrupted by the user before it finished — this was not a timeout and not a " +
 			"failure of the command. Anything it had already done still took effect; check the " +
 			"current state before re-running it.]"
+	} else if noMatchExit(command, resp) {
+		status = "\n[exit code 1: no match / differences found — not an error]"
 	} else if resp.ExitCode != 0 {
 		status = fmt.Sprintf("\n[exit code %d]", resp.ExitCode)
 	}
@@ -330,4 +333,31 @@ func formatBashOutput(resp sandbox.Response, command string) (model, full string
 		return "[no output]", ""
 	}
 	return out, full
+}
+
+// answerExit1 are programs whose exit status 1 is an answer, not a failure:
+// grep and friends found no match, diff and cmp found a difference, test
+// found its condition false. (2 and above still mean an error.)
+var answerExit1 = map[string]bool{
+	"grep": true, "egrep": true, "fgrep": true, "rg": true, "ag": true,
+	"diff": true, "cmp": true, "test": true, "[": true,
+}
+
+// noMatchExit reports whether a command's exit 1 came from such a program,
+// judged by the last command in the line — the one whose status the shell
+// returns (without pipefail).
+//
+// Every non-zero exit used to be an error result, and error results feed
+// the loop's repeat-failure steering: a model grepping for something that is
+// correctly absent was nudged as if it kept making the same mistake.
+func noMatchExit(command string, resp sandbox.Response) bool {
+	if resp.ExitCode != 1 || resp.TimedOut || resp.Canceled {
+		return false
+	}
+	a, err := bashparser.Parse(command)
+	if err != nil || len(a.Commands) == 0 {
+		return false
+	}
+	last := a.Commands[len(a.Commands)-1]
+	return answerExit1[bashparser.Base(last.Name)]
 }
