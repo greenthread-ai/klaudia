@@ -178,6 +178,9 @@ func (a Analysis) ShellPayloads() []string {
 	return out
 }
 
+// Base strips any directory from a program name (exported form of base).
+func Base(name string) string { return base(name) }
+
 // base strips any directory from a program name, so /usr/bin/sudo and sudo
 // are recognised alike.
 func base(name string) string {
