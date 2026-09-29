@@ -2004,6 +2004,26 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 				}})
 			}
 		}
+		var down []string
+		for _, s := range servers {
+			if !s.Connected {
+				down = append(down, s.Name)
+			}
+		}
+		if len(down) > 1 {
+			items = append([]choiceItem{{label: fmt.Sprintf("Reconnect all disconnected (%d)", len(down)), apply: func() string {
+				var failed []string
+				for _, name := range down {
+					if err := m.sess.MCP.Reconnect(name); err != nil {
+						failed = append(failed, name+": "+err.Error())
+					}
+				}
+				if len(failed) > 0 {
+					return fmt.Sprintf("Reconnected %d of %d; failed: %s", len(down)-len(failed), len(down), strings.Join(failed, "; "))
+				}
+				return fmt.Sprintf("Reconnected %d servers", len(down))
+			}}}, items...)
+		}
 		m.appendLine(bannerStyle.Render(b.String()))
 		m.startChoice("Manage MCP servers (Esc to leave as-is):", items)
 		return m, nil

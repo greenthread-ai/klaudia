@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -55,6 +56,8 @@ type mcpTool struct {
 	inputSchema   json.RawMessage
 	server        *Server
 	readOnly      bool
+	// reconnect re-establishes the server's session (Manager.Reconnect).
+	reconnect func() error
 }
 
 func (t *mcpTool) Name() string                                { return t.qualifiedName }
@@ -101,7 +104,21 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 	if sess == nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP server %q is disconnected; reconnect it with /mcp.", t.server.Name), IsError: true}}, nil
 	}
-	res, err := sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args})
+	params := &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args}
+	res, err := sess.CallTool(ctx, params)
+	// A session that is gone - the connection closed, or a remote server
+	// that restarted and no longer knows it - used to leave the server
+	// "connected" and every call failing until someone ran /mcp. Neither
+	// error means the call ran (it was not sent, or the server had no session
+	// to run it in), so reconnect once and send it again.
+	if err != nil && ctx.Err() == nil && t.reconnect != nil &&
+		(errors.Is(err, mcpsdk.ErrConnectionClosed) || errors.Is(err, mcpsdk.ErrSessionMissing)) {
+		if rerr := t.reconnect(); rerr == nil {
+			if fresh := t.server.sess(); fresh != nil {
+				res, err = fresh.CallTool(ctx, params)
+			}
+		}
+	}
 	if err != nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP call failed: %v", err), IsError: true}}, nil
 	}
@@ -141,6 +158,7 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 				inputSchema:   schema,
 				server:        srv,
 				readOnly:      readOnly,
+				reconnect:     func() error { return m.Reconnect(srv.Name) },
 			})
 		}
 	}
