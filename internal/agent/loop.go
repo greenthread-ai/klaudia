@@ -14,6 +14,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -345,15 +346,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// user saw as a cryptic schema error and a retry loop). Return an
 		// actionable result instead so the model shortens or continues.
 		truncID, wasTruncated := truncatedToolUseID(assistant)
-		resultBlocks := make([]anthropic.BetaContentBlockParamUnion, 0, len(toolUses))
-		for _, tu := range toolUses {
-			if wasTruncated && tu.ID == truncID {
-				resultBlocks = append(resultBlocks, shortCircuit(emit, tu, truncatedToolNote(maxTokens)))
-				continue
-			}
-			block := l.dispatch(ctx, tu, opts, emit, reveal, failures, errStreaks)
-			resultBlocks = append(resultBlocks, block)
-		}
+		resultBlocks := l.dispatchToolUses(ctx, toolUses, truncID, wasTruncated, maxTokens, opts, emit, reveal, failures, errStreaks)
 		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
 		messages = append(messages, toolResultMsg)
 
@@ -675,7 +668,188 @@ func shortCircuit(emit Emitter, tu anthropic.BetaToolUseBlock, msg string) anthr
 	return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
 }
 
+// readOnlyConcurrency bounds how many read-only tool Execute calls run at once
+// within a single turn's batch. It is deliberately small: the win here is
+// overlapping I/O-bound latency (file reads, directory greps, LSP round-trips),
+// not saturating the CPU, and a turn that emits dozens of reads should not spawn
+// dozens of goroutines — and, for Grep/Glob, dozens of concurrent filesystem
+// walks — at once.
+const readOnlyConcurrency = 8
+
+// readOnlyForConcurrency reports whether a tool is safe to run concurrently with
+// other read-only tools in the same turn: it neither changes the machine nor
+// touches shared loop/registry state, so overlapping its Execute with a
+// sibling's cannot reorder any observable side effect. Kept next to dispatch
+// (like editedPaths) because "which tools may run in parallel" is a property of
+// the loop, not of any one tool.
+//
+// This is a deliberate allowlist, not a reuse of the permission classification.
+// allowAlways() — the read-only permission decision — is ALSO returned by tools
+// that have side effects or shared state (TaskCreate/TaskUpdate, KillShell,
+// RestartJob, Memory, TodoWrite, Skill, Agent, ToolSearch), so it is not a safe
+// concurrency signal. Bash is intentionally excluded: a shell command is not
+// read-only in general (it can write files, kill processes, reach the network),
+// so it always runs sequentially and in order. Edit/Write/NotebookEdit are
+// mutating and likewise absent. ToolSearch is absent because its Execute calls
+// Reveal(), which mutates the loop's shared `revealed` map. The listed tools
+// (verified not to use tctx.Progress or tctx.Reveal) only read.
+func readOnlyForConcurrency(name string) bool {
+	switch name {
+	case "Read", "Grep", "Glob", "Diagnostics", "Definition", "References":
+		return true
+	default:
+		return false
+	}
+}
+
+// dispatchToolUses runs a turn's tool_use blocks and returns their tool_result
+// blocks in the SAME order as toolUses, so each result pairs with its call.
+//
+// A maximal run of two or more consecutive read-only tools is executed
+// concurrently to overlap their latency; a lone read-only tool and every
+// non-read-only tool are dispatched sequentially and in order, exactly as
+// before (so a single-tool turn is byte-for-byte the old behavior). A
+// mutating/side-effecting tool ends the current read-only run: the run before it
+// is fully joined before it is dispatched, so observable side effects never
+// reorder. A truncated tool_use (arguments cut off by the output-token limit) is
+// never run and never joins a group.
+func (l *Loop) dispatchToolUses(ctx context.Context, toolUses []anthropic.BetaToolUseBlock, truncID string, wasTruncated bool, maxTokens int64, opts Options, emit Emitter, reveal func(...string), failures map[string]int, errStreaks map[string]errStreak) []anthropic.BetaContentBlockParamUnion {
+	out := make([]anthropic.BetaContentBlockParamUnion, len(toolUses))
+	truncated := func(tu anthropic.BetaToolUseBlock) bool { return wasTruncated && tu.ID == truncID }
+
+	i := 0
+	for i < len(toolUses) {
+		tu := toolUses[i]
+		if truncated(tu) {
+			out[i] = shortCircuit(emit, tu, truncatedToolNote(maxTokens))
+			i++
+			continue
+		}
+		// Extend a maximal run of consecutive, non-truncated read-only tools.
+		j := i
+		for j < len(toolUses) && readOnlyForConcurrency(toolUses[j].Name) && !truncated(toolUses[j]) {
+			j++
+		}
+		if j-i > 1 {
+			l.dispatchReadOnlyGroup(ctx, toolUses[i:j], out[i:j], opts, emit, reveal, failures, errStreaks)
+			i = j
+			continue
+		}
+		out[i] = l.dispatch(ctx, tu, opts, emit, reveal, failures, errStreaks)
+		i++
+	}
+	return out
+}
+
+// dispatchReadOnlyGroup handles a run of read-only tools: it gates each call in
+// order on THIS goroutine (loop-breakers, host gate, permission, validation —
+// all fast, and all reading and writing the shared failures/errStreaks maps),
+// runs the surviving Execute calls concurrently (bounded by readOnlyConcurrency),
+// then finalizes results in order (updating the shared maps and emitting
+// tool_result). Only Execute overlaps; every access to shared loop state stays
+// on this single goroutine, so no locking is needed and `go test -race` is
+// clean. out is the destination slice (same length/order as group).
+func (l *Loop) dispatchReadOnlyGroup(ctx context.Context, group []anthropic.BetaToolUseBlock, out []anthropic.BetaContentBlockParamUnion, opts Options, emit Emitter, reveal func(...string), failures map[string]int, errStreaks map[string]errStreak) {
+	prepared := make([]*preparedCall, len(group))
+	for k := range group {
+		p, done := l.prepareCall(ctx, group[k], opts, emit, reveal, failures, errStreaks)
+		if done != nil {
+			out[k] = *done
+			continue
+		}
+		prepared[k] = p
+	}
+
+	type execOutcome struct {
+		results []tools.Result
+		err     error
+	}
+	outcomes := make([]execOutcome, len(group))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, readOnlyConcurrency)
+	for k := range prepared {
+		p := prepared[k]
+		if p == nil {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(k int, p *preparedCall) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			r, err := p.tool.Execute(ctx, p.tctx, p.raw)
+			outcomes[k] = execOutcome{results: r, err: err}
+		}(k, p)
+	}
+	wg.Wait()
+
+	for k := range prepared {
+		p := prepared[k]
+		if p == nil {
+			continue
+		}
+		out[k] = l.finalizeCall(p, outcomes[k].results, outcomes[k].err, emit, failures, errStreaks)
+	}
+}
+
+// preparedCall is a tool_use that has cleared every per-call gate and is ready
+// to Execute. It is produced on the loop goroutine; only its Execute may then be
+// run off-goroutine (concurrent read-only group).
+type preparedCall struct {
+	tu     anthropic.BetaToolUseBlock
+	tool   tools.Tool
+	tctx   tools.Context
+	raw    json.RawMessage
+	key    string // failures-map key: name + NUL + raw input
+	rawStr string // raw input JSON, for errStreak input-varied tracking
+}
+
+// dispatch runs one tool_use sequentially: gate (prepareCall) → Execute →
+// finalize (finalizeCall), returning the tool_result block to append to the
+// conversation. The concurrent read-only path reuses these same three steps, so
+// a call behaves identically whichever way it is dispatched.
 func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), failures map[string]int, errStreaks map[string]errStreak) anthropic.BetaContentBlockParamUnion {
+	p, done := l.prepareCall(ctx, tu, opts, emit, reveal, failures, errStreaks)
+	if done != nil {
+		return *done
+	}
+	results, err := p.tool.Execute(ctx, p.tctx, p.raw)
+	return l.finalizeCall(p, results, err, emit, failures, errStreaks)
+}
+
+// recordFailure registers a failed or refused call: it bumps this exact call's
+// retry count and — unless the host gate refused it — the tool's same-shape
+// error streak, emits an error tool_result, and returns the block. It mutates
+// the shared maps, so it is only ever called on the loop goroutine (prepareCall
+// gating and finalizeCall), never from a concurrent Execute.
+//
+// A refusal by the host gate is a decision, not a malfunction. Its text is
+// identical whatever the command was, so feeding it to the same-shape streak
+// makes two unrelated refused commands look like proof the environment is
+// wedged, and loop-breaker B then latches the tool for the rest of the Run — a
+// latch nothing can clear, because the only reset is a successful execution and
+// B is what prevents one. Count the exact call (breaker A still stops a literal
+// retry) but leave the shape streak out of it.
+func recordFailure(tu anthropic.BetaToolUseBlock, key, rawStr, msg string, hostBlocked bool, emit Emitter, failures map[string]int, errStreaks map[string]errStreak) anthropic.BetaContentBlockParamUnion {
+	failures[key]++
+	if !hostBlocked {
+		bumpErrStreak(errStreaks, tu.Name, msg, rawStr)
+	}
+	if emit != nil {
+		emit(Event{
+			Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID,
+			Content: msg, IsError: true, HostBlocked: hostBlocked,
+		})
+	}
+	return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
+}
+
+// prepareCall runs the per-call gating (emit tool_use, loop-breakers, host gate,
+// permission/approval, validation, BeforeEdit) and returns either a ready-to-run
+// preparedCall (done == nil) or a finished tool_result block that short-circuits
+// the call (p == nil). It runs on the loop goroutine only: it reads and writes
+// the shared failures/errStreaks maps and must stay serialized.
+func (l *Loop) prepareCall(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), failures map[string]int, errStreaks map[string]errStreak) (*preparedCall, *anthropic.BetaContentBlockParamUnion) {
 	raw, _ := json.Marshal(tu.Input)
 	if emit != nil {
 		emit(Event{Type: "tool_use", ToolName: tu.Name, ToolUseID: tu.ID, Input: tu.Input})
@@ -683,29 +857,9 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 
 	key := tu.Name + "\x00" + string(raw)
 	rawStr := string(raw)
-	errResultTagged := func(msg string, hostBlocked bool) anthropic.BetaContentBlockParamUnion {
-		failures[key]++
-		// A refusal by the host gate is a decision, not a malfunction. Its text
-		// is identical whatever the command was, so feeding it to the same-shape
-		// streak makes two unrelated refused commands look like proof the
-		// environment is wedged, and loop-breaker B then latches the tool for
-		// the rest of the Run — a latch nothing can clear, because the only
-		// reset is a successful execution and B is what prevents one. Count the
-		// exact call (breaker A still stops a literal retry) but leave the shape
-		// streak out of it.
-		if !hostBlocked {
-			bumpErrStreak(errStreaks, tu.Name, msg, rawStr)
-		}
-		if emit != nil {
-			emit(Event{
-				Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID,
-				Content: msg, IsError: true, HostBlocked: hostBlocked,
-			})
-		}
-		return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
-	}
-	errResult := func(msg string) anthropic.BetaContentBlockParamUnion {
-		return errResultTagged(msg, false)
+	errResult := func(msg string) *anthropic.BetaContentBlockParamUnion {
+		b := recordFailure(tu, key, rawStr, msg, false, emit, failures, errStreaks)
+		return &b
 	}
 
 	// Loop-breaker A: this exact call has already failed repeatedly. Don't run
@@ -714,7 +868,8 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	// fail, and recording our own refusal as a failure would let A feed B until
 	// B latches the tool outright.
 	if failures[key] >= repeatFailureLimit {
-		return shortCircuit(emit, tu, repeatedFailureMsg(tu.Name, failures[key]))
+		b := shortCircuit(emit, tu, repeatedFailureMsg(tu.Name, failures[key]))
+		return nil, &b
 	}
 	// Loop-breaker B: the same tool has produced the same KIND of error for
 	// `repeatFailureLimit` consecutive calls. Two cases — identical inputs (the
@@ -736,12 +891,13 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		// keeps failing gets the directive again after another
 		// repeatFailureLimit failures — without making the tool unusable.
 		delete(errStreaks, tu.Name)
-		return shortCircuit(emit, tu, msg)
+		b := shortCircuit(emit, tu, msg)
+		return nil, &b
 	}
 
 	tool, ok := l.tools.Lookup(tu.Name)
 	if !ok {
-		return errResult(l.unknownToolMsg(tu.Name))
+		return nil, errResult(l.unknownToolMsg(tu.Name))
 	}
 
 	// The host gate runs BEFORE the allow/deny rules, not after. An allow rule
@@ -755,10 +911,12 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		hd := opts.Host.Check(tu.Name, raw, opts.WorkingDir)
 		switch {
 		case hd.Refuse != "":
-			return errResultTagged(hd.Refuse, true)
+			b := recordFailure(tu, key, rawStr, hd.Refuse, true, emit, failures, errStreaks)
+			return nil, &b
 		case len(hd.Ask) > 0:
 			if !l.approveHostChange(ctx, tu, raw, opts, hd) {
-				return errResultTagged(hostDeclinedMsg(hd), true)
+				b := recordFailure(tu, key, rawStr, hostDeclinedMsg(hd), true, emit, failures, errStreaks)
+				return nil, &b
 			}
 			// Approval is new information about the tool's prospects. Anything
 			// it was carrying from earlier refusals — this call's own count and
@@ -777,7 +935,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		if msg == "" {
 			msg = fmt.Sprintf("Permission denied for tool %s", tu.Name)
 		}
-		return errResult(msg)
+		return nil, errResult(msg)
 	case permission.Ask:
 		// Delegate the decision to the frontend's Approver.
 		approver := opts.Approver
@@ -796,7 +954,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 			if msg == "" {
 				msg = fmt.Sprintf("Permission denied for tool %s", tu.Name)
 			}
-			return errResult(msg)
+			return nil, errResult(msg)
 		}
 	}
 
@@ -808,7 +966,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		if fields := schemaFieldList(tool.InputSchema()); fields != "" {
 			msg += fmt.Sprintf(" — %s accepts: %s.", tu.Name, fields)
 		}
-		return errResult(msg)
+		return nil, errResult(msg)
 	}
 
 	if opts.BeforeEdit != nil {
@@ -819,7 +977,9 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 
 	// Progress is only wired when someone is listening. A long-running tool (the
 	// Agent tool, which runs a whole child loop) reports through this so the
-	// frontend can show movement instead of an unexplained pause.
+	// frontend can show movement instead of an unexplained pause. No tool in the
+	// concurrent read-only allowlist uses it, so it is never called off the loop
+	// goroutine.
 	var progress func(string)
 	if emit != nil {
 		progress = func(line string) {
@@ -831,16 +991,32 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 			})
 		}
 	}
-	results, err := tool.Execute(ctx, tools.Context{
-		WorkingDir: opts.WorkingDir,
-		Ask:        opts.Asker,
-		Plan:       opts.Planner,
-		Reveal:     reveal,
-		HostChange: hostChangeFor(opts),
-		Progress:   progress,
-	}, raw)
+
+	return &preparedCall{
+		tu:   tu,
+		tool: tool,
+		tctx: tools.Context{
+			WorkingDir: opts.WorkingDir,
+			Ask:        opts.Asker,
+			Plan:       opts.Planner,
+			Reveal:     reveal,
+			HostChange: hostChangeFor(opts),
+			Progress:   progress,
+		},
+		raw:    raw,
+		key:    key,
+		rawStr: rawStr,
+	}, nil
+}
+
+// finalizeCall turns an Execute outcome into a tool_result block: it collapses
+// the result text/images, updates the shared failure counters, and emits the
+// tool_result event. It mutates the shared maps, so it is only ever called on
+// the loop goroutine (after the concurrent group has joined).
+func (l *Loop) finalizeCall(p *preparedCall, results []tools.Result, err error, emit Emitter, failures map[string]int, errStreaks map[string]errStreak) anthropic.BetaContentBlockParamUnion {
+	tu := p.tu
 	if err != nil {
-		return errResult(fmt.Sprintf("Tool execution error: %v", err))
+		return recordFailure(tu, p.key, p.rawStr, fmt.Sprintf("Tool execution error: %v", err), false, emit, failures, errStreaks)
 	}
 
 	// Collapse the result text, and collect any image blocks (vision). `full`
@@ -866,13 +1042,13 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		images = append(images, r.Images...)
 	}
 	if isErr {
-		failures[key]++
-		bumpErrStreak(errStreaks, tu.Name, content, rawStr)
+		failures[p.key]++
+		bumpErrStreak(errStreaks, tu.Name, content, p.rawStr)
 	} else {
 		// A clean run resets both counters: this exact call's retry count and
 		// the per-tool same-shape streak (the tool clearly isn't fundamentally
 		// broken for the caller).
-		delete(failures, key)
+		delete(failures, p.key)
 		delete(errStreaks, tu.Name)
 	}
 	if emit != nil {
