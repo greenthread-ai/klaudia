@@ -39,16 +39,22 @@ func (e *envelopeRecorder) Record(role string, message json.RawMessage) error {
 
 // multiRecorder fans a Record call out to several recorders (e.g. the transcript
 // writer plus the stream-json envelope emitter). A nil entry is skipped.
+//
+// Every recorder is written even when an earlier one fails, and the first
+// error is returned. Stopping at the first failure meant a full disk under
+// the transcript also cut off the stream-json envelope an embedder reads,
+// which is on stdout and has nothing to do with the disk.
 type multiRecorder []agent.Recorder
 
 func (m multiRecorder) Record(role string, message json.RawMessage) error {
+	var first error
 	for _, r := range m {
 		if r == nil {
 			continue
 		}
-		if err := r.Record(role, message); err != nil {
-			return err
+		if err := r.Record(role, message); err != nil && first == nil {
+			first = err
 		}
 	}
-	return nil
+	return first
 }

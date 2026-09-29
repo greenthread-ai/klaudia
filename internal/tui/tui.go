@@ -2929,6 +2929,9 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.noteNav(kind, ev.ToolName+toolSummary(ev.ToolName, ev.Input)+" → "+oneline(s, 60), "", seq)
 		m.activeToolName = ""
 		m.phase = "thinking"
+	case "warning":
+		m.flushAssistant()
+		m.appendLine(errStyle.Render("⚠ " + ev.Content))
 	case "compaction":
 		m.flushAssistant()
 		if ev.Content == "" {

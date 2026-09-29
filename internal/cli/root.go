@@ -1121,7 +1121,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// message envelopes (assistant/user) via an envelope recorder alongside the
 	// transcript; the simplified delta events are not used in that mode.
 	runRecorder := agent.Recorder(recorder)
-	emit := func(ev agent.Event) { _ = r.Event(ev) }
+	emit := func(ev agent.Event) { _ = r.Event(ev); warnOn(cmd.ErrOrStderr(), format, ev) }
 	var partial func(anthropic.BetaRawMessageStreamEventUnion)
 	if format == FormatStreamJSON {
 		// Serialize envelope + partial writes to the same stream.
