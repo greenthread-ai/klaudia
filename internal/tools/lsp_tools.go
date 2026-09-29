@@ -199,3 +199,111 @@ func (t *lspLocTool) Execute(ctx context.Context, tctx Context, raw json.RawMess
 	}
 	return []Result{{Content: strings.TrimRight(b.String(), "\n")}}, nil
 }
+
+// --- WorkspaceSymbol ---
+
+// maxWorkspaceSymbols caps the lines returned; a short query can match
+// thousands of symbols in a large workspace.
+const maxWorkspaceSymbols = 100
+
+type WorkspaceSymbolInput struct {
+	Query string `json:"query" jsonschema:"description=Symbol name or fragment to search for (servers match fuzzily, e.g. 'NewPool' or 'pool')"`
+	File  string `json:"file,omitempty" jsonschema:"description=Optional source file whose language server should answer. Omit to search every language whose project file (go.mod, Cargo.toml, package.json, ...) is at the workspace root"`
+}
+
+// WorkspaceSymbol finds a symbol by name across the project via the language
+// server's workspace/symbol request — for when the model knows a name but not
+// the file it lives in.
+type WorkspaceSymbol struct {
+	schema *schema.Schema
+	pool   *lsp.Pool
+}
+
+func NewWorkspaceSymbol(pool *lsp.Pool) (*WorkspaceSymbol, error) {
+	s, err := schema.For[WorkspaceSymbolInput]()
+	if err != nil {
+		return nil, fmt.Errorf("workspacesymbol: build schema: %w", err)
+	}
+	return &WorkspaceSymbol{schema: s, pool: pool}, nil
+}
+
+func (t *WorkspaceSymbol) Name() string { return "WorkspaceSymbol" }
+
+func (t *WorkspaceSymbol) Description(context.Context) (string, error) {
+	return "Find where a symbol (function, type, method, variable, ...) is declared anywhere in the project " +
+		"by name, via the language server's workspace symbol index. Use this when you know a name but not " +
+		"which file defines it; it returns each match's kind and file:line:column, which you can pass to " +
+		"Definition, References or Read. Matching is fuzzy and server-defined.", nil
+}
+
+func (t *WorkspaceSymbol) InputSchema() json.RawMessage { return t.schema.Raw }
+
+func (t *WorkspaceSymbol) ValidateInput(raw json.RawMessage) error {
+	if err := t.schema.Validate(raw); err != nil {
+		return err
+	}
+	var in WorkspaceSymbolInput
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return err
+	}
+	if strings.TrimSpace(in.Query) == "" {
+		return fmt.Errorf("query is required")
+	}
+	return nil
+}
+
+func (t *WorkspaceSymbol) PermissionRequest(json.RawMessage) permission.PermissionRequest {
+	return permission.PermissionRequest{}
+}
+
+// WorkspaceSymbol is read-only analysis via a local dev tool.
+func (t *WorkspaceSymbol) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
+	return allowAlways(pctx)
+}
+
+func (t *WorkspaceSymbol) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
+	var in WorkspaceSymbolInput
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return nil, err
+	}
+	if t.pool == nil {
+		return []Result{{Content: "language servers are not available", IsError: true}}, nil
+	}
+	path := ""
+	if strings.TrimSpace(in.File) != "" {
+		path = resolvePath(tctx, in.File)
+	}
+	syms, err := t.pool.WorkspaceSymbol(ctx, strings.TrimSpace(in.Query), path)
+	if err != nil && len(syms) == 0 {
+		return []Result{{Content: "Error: " + err.Error(), IsError: true}}, nil
+	}
+	return []Result{{Content: formatSymbols(syms, err)}}, nil
+}
+
+// formatSymbols renders matches one per line as `name  kind  path:line:col`,
+// with the container (receiver, class, package) when the server gives one. A
+// non-nil err is a partial failure — some servers answered, some did not — and
+// is appended as a note so the model knows the list may be incomplete.
+func formatSymbols(syms []lsp.Symbol, err error) string {
+	var b strings.Builder
+	if len(syms) == 0 {
+		b.WriteString("No symbols matched.\n")
+	}
+	for i, s := range syms {
+		if i == maxWorkspaceSymbols {
+			fmt.Fprintf(&b, "... %d more; refine the query\n", len(syms)-maxWorkspaceSymbols)
+			break
+		}
+		fmt.Fprintf(&b, "%s  %s  %s:%d:%d", s.Name, lsp.SymbolKindName(s.Kind),
+			lsp.URIPath(s.Location.URI), s.Location.Range.Start.Line+1, s.Location.Range.Start.Character+1)
+		if s.ContainerName != "" {
+			fmt.Fprintf(&b, "  (in %s)", s.ContainerName)
+		}
+		b.WriteString("\n")
+	}
+	if err != nil {
+		fmt.Fprintf(&b, "\nNote: some language servers failed, so results may be incomplete: %s",
+			strings.ReplaceAll(err.Error(), "\n", "; "))
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
