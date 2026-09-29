@@ -1374,6 +1374,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	//
 	// Deferred tool loading: MCP tools can be numerous, so withhold them from
 	// the initial request behind a ToolSearch tool that loads them on demand.
+	// tools.DeferredBuiltins are withheld the same way.
 	buildTools := func() ([]tools.Tool, map[string]bool) {
 		all := append([]tools.Tool(nil), staticTools...)
 		all = append(all, mcpMgr.Tools(ctx)...)
@@ -1382,7 +1383,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 		deferred := map[string]bool{}
 		for _, t := range all {
-			if strings.HasPrefix(t.Name(), "mcp__") {
+			if strings.HasPrefix(t.Name(), "mcp__") || tools.DeferredBuiltins[t.Name()] {
 				deferred[t.Name()] = true
 			}
 		}

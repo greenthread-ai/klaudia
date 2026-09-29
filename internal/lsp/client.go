@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/textproto"
@@ -12,6 +13,11 @@ import (
 	"sync"
 	"time"
 )
+
+// ErrNotSupported is returned when the language server for a file does not
+// advertise the requested capability (e.g. a server with no rename support).
+// Callers report this to the model as "not supported" rather than an error.
+var ErrNotSupported = errors.New("capability not supported by this language server")
 
 // Client is a minimal LSP client speaking JSON-RPC 2.0 over a server's stdio
 // with Content-Length framing. It tracks diagnostics pushed by the server.
@@ -27,7 +33,20 @@ type Client struct {
 	pending map[int]chan rpcResponse   // id -> response waiter
 	diags   map[string][]Diagnostic    // uri -> latest diagnostics
 	diagCh  map[string][]chan struct{} // uri -> waiters for the next publish
+	caps    map[string]bool            // capability name -> advertised by the server
 	closed  bool
+}
+
+// supports reports whether the server advertised the named capability during
+// initialize (e.g. "hoverProvider"). Before initialize completes caps is nil,
+// in which case we optimistically allow the request and let the server answer.
+func (c *Client) supports(capability string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.caps == nil {
+		return true
+	}
+	return c.caps[capability]
 }
 
 type rpcResponse struct {

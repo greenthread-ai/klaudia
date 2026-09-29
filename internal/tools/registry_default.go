@@ -41,6 +41,15 @@ func WithPlanStore(s *plan.Store) RegOption { return func(o *regOptions) { o.pla
 // are not registered.
 func WithLSP(p *lsp.Pool) RegOption { return func(o *regOptions) { o.lsp = p } }
 
+// DeferredBuiltins are built-in tools that are registered but, like MCP
+// tools, withheld from the initial request behind ToolSearch. They are the
+// narrower code-intelligence lookups: useful when wanted, but four more
+// definitions in every request otherwise. Diagnostics, Definition and
+// References stay loaded; they are the edit-check-fix loop.
+var DeferredBuiltins = map[string]bool{
+	"Implementation": true, "Hover": true, "DocumentSymbols": true, "Rename": true,
+}
+
 // DefaultRegistry builds the registry of all implemented local tools, with the
 // Bash tool wired to the given executor (local host, or a container sandbox).
 // New tools are added here as they are ported. Pass WithBrowserEngine /
@@ -101,13 +110,19 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 		{"BrowserSnapshot", func() (Tool, error) { return NewBrowserSnapshot(engine) }},
 	}
 	// LSP code-intel tools are registered only when a language-server pool is
-	// supplied (i.e. the interactive/headless CLI, not bare tests).
+	// supplied (i.e. the interactive/headless CLI, not bare tests). The ones
+	// in DeferredBuiltins are registered but withheld from requests until
+	// ToolSearch reveals them.
 	if cfg.lsp != nil {
 		pool := cfg.lsp
 		ctors = append(ctors,
 			ctor{"Diagnostics", func() (Tool, error) { return NewDiagnostics(pool) }},
 			ctor{"Definition", func() (Tool, error) { return NewDefinition(pool) }},
 			ctor{"References", func() (Tool, error) { return NewReferences(pool) }},
+			ctor{"Implementation", func() (Tool, error) { return NewImplementation(pool) }},
+			ctor{"Hover", func() (Tool, error) { return NewHover(pool) }},
+			ctor{"DocumentSymbols", func() (Tool, error) { return NewDocumentSymbols(pool) }},
+			ctor{"Rename", func() (Tool, error) { return NewRename(pool) }},
 		)
 	}
 
