@@ -62,7 +62,8 @@ Choose one:
   3. OpenAI-compatible provider config:
      klaudia --create-config=global   # writes ~/.klaudia/config.toml
      # or: klaudia --create-config=local  # writes ./.klaudia/config.toml
-     # edit provider/baseURL/model/apiKeyEnv, export that env var, then run klaudia
+     # uncomment the OpenAI-compatible block in place of provider = "anthropic",
+     # export the env var its apiKeyEnv names, then run klaudia
 
 Global config (~/.klaudia/config.toml) is loaded automatically; local project config
 (./.klaudia/config.toml) overlays it when present.
