@@ -66,7 +66,8 @@ func (g *Grep) Description(context.Context) (string, error) {
 		"\"count\" shows per-file match counts. Filter files with glob or type (e.g. type=go), ignore case with -i. " +
 		"In content mode, -A/-B/-C add lines of context (context lines use '-' where matches use ':'). " +
 		"head_limit caps how many results are shown; the rest are counted. " +
-		"A relative path is taken from the working directory.", nil
+		"A relative path is taken from the working directory. " +
+		"Skips files ignored by .gitignore/.ignore and hidden (dot) files unless the path or glob names them.", nil
 }
 
 func (g *Grep) InputSchema() json.RawMessage { return g.schema.Raw }

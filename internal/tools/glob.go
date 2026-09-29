@@ -38,7 +38,9 @@ func (g *Glob) ConcurrencySafe() bool { return true }
 
 func (g *Glob) Description(context.Context) (string, error) {
 	return "Fast file pattern matching. Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\". " +
-		"Returns matching file paths sorted by modification time (newest first).", nil
+		"Returns matching file paths sorted by modification time (newest first). " +
+		"Skips files ignored by .gitignore/.ignore and hidden (dot) files unless the pattern " +
+		"or path names them (e.g. \".github/**/*.yml\", \"dist/*.js\", \".env*\").", nil
 }
 
 func (g *Glob) InputSchema() json.RawMessage { return g.schema.Raw }
