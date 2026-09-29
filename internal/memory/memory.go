@@ -134,14 +134,39 @@ func (s *fsStore) Search(query string) ([]string, error) {
 // memory/*.md detail notes.
 const linkedSectionHeader = "## Linked memory"
 
-// Add appends a timestamped bullet to MEMORY.md (creating the directory and a
-// header on first write), then refreshes the linked-memory section. Empty
-// (whitespace-only) text is rejected.
+// memoryHeader opens a brand-new MEMORY.md.
+const memoryHeader = "# Memory\n\n"
+
+// Add adds a timestamped bullet to MEMORY.md (creating the directory and a
+// header on first write) and refreshes the linked-memory section, in one write.
+// Empty (whitespace-only) text is rejected.
+//
+// The bullet goes at the end of the index body, above the linked section. It
+// cannot simply be appended to the file: once a detail note exists the file
+// ends with that section, and a bullet appended there is part of the section,
+// which the refresh then rebuilds without it (#97).
 func (s *fsStore) Add(text string) error {
-	if err := appendBullet(s.Path(), "# Memory\n\n", text); err != nil {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ErrEmpty
+	}
+
+	existing, err := os.ReadFile(s.Path())
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return s.SyncLinks()
+	body := stripLinkedSection(string(existing))
+	if strings.TrimSpace(body) == "" {
+		body = memoryHeader
+	} else if !strings.HasSuffix(body, "\n") {
+		body += "\n"
+	}
+	body += bulletLine(text)
+
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(s.Path(), []byte(withLinkedSection(body, s.FilePointers())), 0o644)
 }
 
 // SyncLinks rewrites the "## Linked memory" section of MEMORY.md so it lists
@@ -158,15 +183,7 @@ func (s *fsStore) SyncLinks() error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	body := stripLinkedSection(string(existing))
-
-	updated := body
-	if len(pointers) > 0 {
-		if strings.TrimSpace(body) == "" {
-			body = "# Memory\n\n" // a brand-new index needs a header
-		}
-		updated = strings.TrimRight(body, "\n") + "\n\n" + linkedSectionHeader + "\n\n" + strings.Join(pointers, "\n") + "\n"
-	}
+	updated := withLinkedSection(stripLinkedSection(string(existing)), pointers)
 
 	if updated == string(existing) {
 		return nil // already current — no write
@@ -178,6 +195,19 @@ func (s *fsStore) SyncLinks() error {
 		return err
 	}
 	return os.WriteFile(s.Path(), []byte(updated), 0o644)
+}
+
+// withLinkedSection returns body (MEMORY.md without its linked section) with a
+// fresh "## Linked memory" section listing pointers at the end. With no
+// pointers it returns body unchanged.
+func withLinkedSection(body string, pointers []string) string {
+	if len(pointers) == 0 {
+		return body
+	}
+	if strings.TrimSpace(body) == "" {
+		body = memoryHeader // a brand-new index needs a header
+	}
+	return strings.TrimRight(body, "\n") + "\n\n" + linkedSectionHeader + "\n\n" + strings.Join(pointers, "\n") + "\n"
 }
 
 // stripLinkedSection removes the "## Linked memory" section (its header through
@@ -286,6 +316,11 @@ func appendBullet(path, header, text string) error {
 		}
 	}
 
-	_, err = file.WriteString("- " + time.Now().Format(time.RFC3339) + " " + text + "\n")
+	_, err = file.WriteString(bulletLine(text))
 	return err
+}
+
+// bulletLine formats text as a timestamped index bullet, newline included.
+func bulletLine(text string) string {
+	return "- " + time.Now().Format(time.RFC3339) + " " + text + "\n"
 }

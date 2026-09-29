@@ -269,6 +269,47 @@ func TestSearchIncludesDetailFiles(t *testing.T) {
 	}
 }
 
+// Regression for #97: once a detail note exists, MEMORY.md ends with the linked
+// section, so a bullet appended at end of file landed inside it and the next
+// SyncLinks stripped it. Every Add after the first was silently lost.
+func TestAddKeepsBulletsWhenDetailNoteExists(t *testing.T) {
+	dir := t.TempDir()
+	store := New(dir)
+	memDir := filepath.Join(dir, "memory")
+	if err := os.MkdirAll(memDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "tools.md"), []byte("# Preferred tools\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	addNotes(t, store, "first", "second", "third")
+
+	contents, err := store.Index()
+	if err != nil {
+		t.Fatal(err)
+	}
+	section := strings.Index(contents, linkedSectionHeader)
+	if section == -1 {
+		t.Fatalf("Index() = %q, missing linked section", contents)
+	}
+	for _, want := range []string{"first", "second", "third"} {
+		at := strings.Index(contents, want)
+		if at == -1 {
+			t.Fatalf("Index() = %q, lost bullet %q", contents, want)
+		}
+		if at > section {
+			t.Fatalf("Index() = %q, bullet %q is inside the linked section", contents, want)
+		}
+	}
+	if got := strings.Count(contents, linkedSectionHeader); got != 1 {
+		t.Fatalf("linked section appears %d times, want 1: %q", got, contents)
+	}
+	if !strings.HasSuffix(contents, "- [tools](memory/tools.md) — Preferred tools\n") {
+		t.Fatalf("Index() = %q, want the linked section last", contents)
+	}
+}
+
 func addNotes(t *testing.T, store Store, notes ...string) {
 	t.Helper()
 	for _, note := range notes {
