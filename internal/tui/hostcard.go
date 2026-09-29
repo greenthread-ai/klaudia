@@ -129,7 +129,7 @@ func hostPrompt(hc *agent.HostChange) string {
 // what was agreed to and not merely that something was.
 func hostAnswerLine(hc *agent.HostChange, allowed, redirect bool) string {
 	if redirect {
-		return "declined — say what you'd like instead, and it lands before Klaudia's next step"
+		return redirectAnswerLine
 	}
 	if !allowed {
 		return "declined — Klaudia will carry on without it"

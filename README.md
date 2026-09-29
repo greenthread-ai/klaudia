@@ -328,9 +328,10 @@ as `⊘ changes this machine: writes /dev/null — trying another way` rather th
 a failure. You are asked only when the work genuinely cannot proceed otherwise,
 and then **(s)omething else** sits beside yes and no — declining usually means
 "not like that" rather than "give up", so it keeps the turn alive and lets you
-redirect. Anything blocked and never approved is named in the completion block
-under `Not done — needs your agreement`, so giving up quietly is not an option
-available to it.
+redirect. Every other permission ask offers it too, and each prompt notes that
+Esc cancels the whole turn. Anything blocked and never approved is named in the
+completion block under `Not done — needs your agreement`, so giving up quietly
+is not an option available to it.
 
 **This is a guardrail against well-intentioned mistakes, not a security
 boundary.** It reads command lines and tool inputs; it does not watch what
