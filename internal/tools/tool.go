@@ -92,6 +92,10 @@ type Context struct {
 	// twenty minutes looked indistinguishable from a hang. It is a plain string
 	// callback rather than an event type because tools must not import agent.
 	Progress func(line string)
+	// Hidden, if non-nil, reports whether an absolute path is covered by a
+	// Read deny rule. Grep and Glob leave such paths out of what they walk,
+	// so a search started above a denied directory does not read into it.
+	Hidden func(abs string) bool
 }
 
 // Tool is the contract implemented by every local tool (Read, Write, Bash, …).

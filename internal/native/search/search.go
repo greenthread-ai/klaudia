@@ -38,6 +38,25 @@ type GlobOptions struct {
 	Root    string // base directory to search (defaults to ".")
 	Pattern string // glob pattern, e.g. "**/*.go"; empty means all files
 	Hidden  bool   // include dotfiles/dotdirs
+	// Skip, when set, excludes a file or directory (given its absolute path)
+	// from the walk; Skipped counts how many it excluded.
+	Skip    func(abs string) bool
+	Skipped *int
+}
+
+// skipped reports whether skip excludes path, counting it when it does.
+func skipped(skip func(string) bool, count *int, path string) bool {
+	if skip == nil {
+		return false
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil || !skip(abs) {
+		return false
+	}
+	if count != nil {
+		*count++
+	}
+	return true
 }
 
 // Glob returns files under Root matching Pattern, sorted by modification time
@@ -56,6 +75,12 @@ func Glob(opts GlobOptions) ([]string, error) {
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // skip unreadable entries
+		}
+		if skipped(opts.Skip, opts.Skipped, path) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if d.IsDir() {
 			if path != root && shouldSkipDir(d.Name(), opts.Hidden) {
@@ -114,6 +139,9 @@ type GrepOptions struct {
 	Multiline  bool   // '.' matches newlines; pattern may span lines
 	Glob       string // optional file filter (e.g. "*.go")
 	Hidden     bool
+	// Skip and Skipped are as for GlobOptions.
+	Skip    func(abs string) bool
+	Skipped *int
 }
 
 // GrepMatch is one matching line.
@@ -163,12 +191,20 @@ func Grep(opts GrepOptions) ([]GrepMatch, error) {
 	}
 
 	if !info.IsDir() {
-		visit(root)
+		if !skipped(opts.Skip, opts.Skipped, root) {
+			visit(root)
+		}
 		return matches, nil
 	}
 
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			return nil
+		}
+		if skipped(opts.Skip, opts.Skipped, path) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if d.IsDir() {

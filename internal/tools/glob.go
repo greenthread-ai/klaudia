@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/native/search"
@@ -42,9 +43,16 @@ func (g *Glob) InputSchema() json.RawMessage { return g.schema.Raw }
 
 func (g *Glob) ValidateInput(raw json.RawMessage) error { return g.schema.Validate(raw) }
 
-// PermissionRequest: Glob is read-only.
-func (g *Glob) PermissionRequest(json.RawMessage) permission.PermissionRequest {
-	return permission.PermissionRequest{}
+// PermissionRequest names the search root — the path, or the fixed directory
+// at the front of an absolute pattern — so Read deny rules apply to it.
+func (g *Glob) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
+	var in GlobInput
+	_ = json.Unmarshal(raw, &in)
+	root := firstNonEmptyPath(in.Path, ".")
+	if filepath.IsAbs(in.Pattern) {
+		root = globBase(in.Pattern)
+	}
+	return pathRequest(root)
 }
 
 func (g *Glob) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
@@ -60,12 +68,13 @@ func (g *Glob) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	if root == "" {
 		root = tctx.WorkingDir
 	}
-	files, err := search.Glob(search.GlobOptions{Root: root, Pattern: in.Pattern})
+	hidden := 0
+	files, err := search.Glob(search.GlobOptions{Root: root, Pattern: in.Pattern, Skip: tctx.Hidden, Skipped: &hidden})
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil
 	}
 	if len(files) == 0 {
-		return []Result{{Content: "No files found"}}, nil
+		return []Result{{Content: "No files found" + hiddenNote(hidden)}}, nil
 	}
-	return []Result{{Content: strings.Join(files, "\n")}}, nil
+	return []Result{{Content: strings.Join(files, "\n") + hiddenNote(hidden)}}, nil
 }

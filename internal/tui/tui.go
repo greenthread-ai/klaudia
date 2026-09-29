@@ -839,11 +839,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// nginx?" — that is exactly the laundering the gate ordering prevents
 		// in the agent loop, and it would be pointless to reintroduce here.
 		if msg.req.HostChange == nil {
-			if permission.MatchAny(m.sessionDeny, msg.req.ToolName, msg.req.Specifier) {
+			preq := permission.PermissionRequest{Specifier: msg.req.Specifier, Commands: msg.req.Commands, Opaque: msg.req.Opaque}
+			if permission.DeniedBy(m.sessionDeny, msg.req.ToolName, preq) {
 				msg.reply <- permission.Decision{Behavior: permission.Deny, Message: "denied by session rule"}
 				return m, m.waitForEvent()
 			}
-			if permission.MatchAny(m.sessionAllow, msg.req.ToolName, msg.req.Specifier) {
+			if permission.AllowedBy(m.sessionAllow, msg.req.ToolName, preq) {
 				msg.reply <- permission.Decision{Behavior: permission.Allow}
 				return m, m.waitForEvent()
 			}

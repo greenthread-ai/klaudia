@@ -122,9 +122,12 @@ func (r *Read) ValidateInput(raw json.RawMessage) error {
 	return nil
 }
 
-// PermissionRequest: Read needs no specifier (read-only, always allowed).
-func (r *Read) PermissionRequest(json.RawMessage) permission.PermissionRequest {
-	return permission.PermissionRequest{}
+// PermissionRequest names the file, so a deny rule such as Read(~/.ssh/**)
+// can apply. Read is otherwise always allowed.
+func (r *Read) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
+	var in ReadInput
+	_ = json.Unmarshal(raw, &in)
+	return pathRequest(in.FilePath)
 }
 
 // CheckPermissions: Read is read-only and always allowed.

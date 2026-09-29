@@ -72,7 +72,7 @@ func (n *NotebookEdit) ValidateInput(raw json.RawMessage) error {
 func (n *NotebookEdit) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
 	var in NotebookEditInput
 	_ = json.Unmarshal(raw, &in)
-	return permission.PermissionRequest{Specifier: in.NotebookPath}
+	return pathRequest(in.NotebookPath)
 }
 
 // CheckPermissions: NotebookEdit mutates a file (edit-class).
