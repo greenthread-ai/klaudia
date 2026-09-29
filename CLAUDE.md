@@ -36,6 +36,7 @@ Use `go install` when you mean to try the change.
 - **prompt** - Prompt construction
 - **cli** - CLI entry point and wiring
 - **native** - Pure-Go search / bash-parsing / PDF
+- **textsafe** - Cleaning text from files and servers before the model sees it
 - **sandbox** - Local / OS-confined / container Bash execution
 - **schema** - Type/schema definitions
 - **version** - Version info

@@ -55,7 +55,7 @@ func TestAgentExecuteDelegatesToSpawner(t *testing.T) {
 	if sp.gotType != "Explore" || sp.gotPrompt != "find the bug" {
 		t.Errorf("spawner got type=%q prompt=%q", sp.gotType, sp.gotPrompt)
 	}
-	if res[0].Content != "sub-agent findings" {
+	if res[0].Content != subagentResultHeader+"sub-agent findings" {
 		t.Errorf("result = %q", res[0].Content)
 	}
 }
