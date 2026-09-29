@@ -85,9 +85,13 @@ Each of these produces a permanent 400 on every later turn. S for all three:
   `assistant.ToParam()` is appended without filtering. Upstream 2.1.92/229/251/277.
 - **Tool names longer than 200 characters** remain in history.
   Upstream 2.1.281.
-- **Stale thinking blocks after `/model` switches.** Models that think by
-  default return thinking blocks even though Klaudia never requests them.
-  Upstream 2.1.152/156.
+- ~~**Stale thinking blocks after `/model` switches.**~~ *Withdrawn.* Upstream
+  2.1.152/156 stripped them, but the current Claude API guidance is the
+  opposite: pass thinking blocks back unchanged when switching models. The
+  API drops what the target model can't read, at no cost, and stripping them
+  yourself can cause ordering or signature 400s. The related real risk is
+  preserved thinking on Fable 5.1 and Opus 5.5, where editing earlier turns
+  invalidates their blocks (Vogt WI-578).
 
 ### Compaction
 
