@@ -1191,6 +1191,25 @@ func (l *Loop) dispatchCall(ctx context.Context, tu anthropic.BetaToolUseBlock, 
 		return errBadCall(l.unknownToolMsg(tu.Name))
 	}
 
+	// Validation runs first: before the host gate and before the permission
+	// check and its approval prompt. A call with malformed arguments cannot run
+	// whatever the gate or the user decides, so asking either about it is
+	// wasted work at best and an approval prompt for nothing at worst. It is
+	// safe to run ahead of the gate because ValidateInput is pure: it reads the
+	// arguments, never the filesystem, so nothing about the machine is learnt
+	// from a call the gate would have refused. The order is therefore
+	// validation, host gate, permission check, PreToolUse hooks.
+	if err := tool.ValidateInput(raw); err != nil {
+		msg := fmt.Sprintf("Input validation error: %v", err)
+		// Tell the model what the tool actually accepts. Smaller models hallucinate
+		// param names ("line_start" instead of "offset") and keep retrying with the
+		// same wrong shape — listing the real fields lets them self-correct.
+		if fields := schemaFieldList(tool.InputSchema()); fields != "" {
+			msg += fmt.Sprintf(" — %s accepts: %s.", tu.Name, fields)
+		}
+		return errBadCall(msg)
+	}
+
 	// The host gate runs BEFORE the permission check, not after. The check is
 	// per-tool and mode-driven, and in autonomous — the default — it allows
 	// everything, so a gate running second would never see the calls that most
@@ -1245,24 +1264,13 @@ func (l *Loop) dispatchCall(ctx context.Context, tu anthropic.BetaToolUseBlock, 
 		}
 	}
 
-	if err := tool.ValidateInput(raw); err != nil {
-		msg := fmt.Sprintf("Input validation error: %v", err)
-		// Tell the model what the tool actually accepts. Smaller models hallucinate
-		// param names ("line_start" instead of "offset") and keep retrying with the
-		// same wrong shape — listing the real fields lets them self-correct.
-		if fields := schemaFieldList(tool.InputSchema()); fields != "" {
-			msg += fmt.Sprintf(" — %s accepts: %s.", tu.Name, fields)
-		}
-		return errBadCall(msg)
-	}
-
 	if opts.BeforeEdit != nil {
 		if paths := editedPaths(tu.Name, raw); len(paths) > 0 {
 			opts.BeforeEdit(tu.Name, paths)
 		}
 	}
 
-	// PreToolUse. Last, after the gate, the permission check and validation, so
+	// PreToolUse. Last, after validation, the gate and the permission check, so
 	// a hook is only ever asked about a call Klaudia was otherwise going to
 	// make — it can narrow, never widen. See hooks.go.
 	//
