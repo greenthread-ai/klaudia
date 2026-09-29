@@ -42,6 +42,21 @@ baseURL = "https://x/v1"
 	}
 }
 
+func TestLoadFallbackModelProjectOverridesHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, `fallbackModel = "haiku"`)
+
+	if cfg := Load(t.TempDir()); cfg.FallbackModel != "haiku" {
+		t.Errorf("fallbackModel = %q, want haiku (from home)", cfg.FallbackModel)
+	}
+	cwd := t.TempDir()
+	writeConfig(t, cwd, `fallbackModel = "sonnet"`)
+	if cfg := Load(cwd); cfg.FallbackModel != "sonnet" {
+		t.Errorf("fallbackModel = %q, want sonnet (project wins)", cfg.FallbackModel)
+	}
+}
+
 func TestLoadThemeProjectOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -2943,6 +2943,11 @@ func (m *Model) renderEvent(ev agent.Event) {
 			m.appendLine(bannerStyle.Render("· " + ev.Content))
 			m.phase = "thinking"
 		}
+	case "notice":
+		// How the turn is being served (e.g. moved to the fallback model) —
+		// said in the scrollback, not in the reply.
+		m.flushAssistant()
+		m.appendLine(bannerStyle.Render("· " + ev.Content))
 	case "usage":
 		// One inner LLM call's usage. Update both the session counters and the
 		// per-turn tally so doneMsg's reconciliation knows what we already

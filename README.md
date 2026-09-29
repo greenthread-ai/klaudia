@@ -390,6 +390,12 @@ apiKeyEnv = "MY_API_KEY"
 # ones). Set this when your provider's limit differs from that fallback.
 # maxTokens = 32000
 
+# Optional: a model to fall back to. When the model is overloaded (529/503,
+# after the usual retries) the request is retried once on this model; when the
+# provider says the model does not exist, the rest of the session uses this
+# model. Unset, either error ends the turn. --fallback-model overrides it.
+# fallbackModel = "sonnet"
+
 # Optional: what the Return key does at the prompt. "send" (default) submits
 # and ctrl+j / alt+Return insert a newline; "newline" swaps them. See
 # "Return, and multi-line input" above — ctrl+Return is not a value, because
@@ -402,7 +408,12 @@ Create a commented starter config with `./klaudia --create-config=global` for
 `~/.klaudia/config.toml`, or `./klaudia --create-config=local` for
 `./.klaudia/config.toml`.
 
-`--model haiku|sonnet|opus` (or a full model ID) overrides per-run. The
+`--model haiku|sonnet|opus` (or a full model ID) overrides per-run, and
+`--fallback-model` sets the fallback the same way. A switch to the fallback is
+announced in the TUI, and on stderr (`note: …`) in `-p` runs. It is never made
+once part of the reply has been shown — a second request would show it twice —
+and it covers sub-agents and compaction summaries too, since they go through
+the same provider. The
 OpenAI-compatible provider translates the Anthropic message shape to Chat
 Completions (including image tool-results → `image_url`).
 

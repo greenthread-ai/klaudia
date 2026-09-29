@@ -18,15 +18,24 @@ import (
 // incremental assistant text deltas — the TUI uses this for its single-reader
 // rendering. OnRawEvent carries the raw Anthropic stream events, used to emit
 // stream-json partial messages behind --include-partial-messages; the TUI
-// leaves it nil so its single-reader invariant is untouched.
+// leaves it nil so its single-reader invariant is untouched. OnNotice carries
+// a one-line message for the user about how the turn is being served — today,
+// that it moved to the fallback model — which is not part of the reply.
 type StreamSink struct {
 	OnText     func(string)
 	OnRawEvent func(anthropic.BetaRawMessageStreamEventUnion)
+	OnNotice   func(string)
 }
 
 func (s StreamSink) text(d string) {
 	if s.OnText != nil {
 		s.OnText(d)
+	}
+}
+
+func (s StreamSink) notice(msg string) {
+	if s.OnNotice != nil {
+		s.OnNotice(msg)
 	}
 }
 

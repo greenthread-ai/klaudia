@@ -24,6 +24,10 @@ type Config struct {
 	Provider string `toml:"provider,omitempty"`
 	// Model is the default model (e.g. "openai/gpt-5.5"); --model overrides it.
 	Model string `toml:"model,omitempty"`
+	// FallbackModel is tried when the model is overloaded (once, for that
+	// request) or not found (for the rest of the session); --fallback-model
+	// overrides it. "" means no fallback: the error ends the turn.
+	FallbackModel string `toml:"fallbackModel,omitempty"`
 	// Theme is the TUI theme for Markdown + chrome (e.g. "nord", "dracula").
 	// "" uses the default; /theme overrides it for the current session.
 	Theme string `toml:"theme,omitempty"`
@@ -264,6 +268,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Model != "" {
 		dst.Model = src.Model
+	}
+	if src.FallbackModel != "" {
+		dst.FallbackModel = src.FallbackModel
 	}
 	if src.Theme != "" {
 		dst.Theme = src.Theme
