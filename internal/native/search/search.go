@@ -6,6 +6,8 @@ package search
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -38,6 +40,8 @@ type GlobOptions struct {
 	Root    string // base directory to search (defaults to ".")
 	Pattern string // glob pattern, e.g. "**/*.go"; empty means all files
 	Hidden  bool   // include dotfiles/dotdirs
+	// Ctx, when set, stops the walk once it is done (an interrupted turn).
+	Ctx context.Context
 }
 
 // Glob returns files under Root matching Pattern, sorted by modification time
@@ -54,6 +58,9 @@ func Glob(opts GlobOptions) ([]string, error) {
 	var out []ent
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if cerr := ctxErr(opts.Ctx); cerr != nil {
+			return cerr
+		}
 		if err != nil {
 			return nil // skip unreadable entries
 		}
@@ -114,6 +121,23 @@ type GrepOptions struct {
 	Multiline  bool   // '.' matches newlines; pattern may span lines
 	Glob       string // optional file filter (e.g. "*.go")
 	Hidden     bool
+	// Limit, when positive, stops the search once more than Limit matches
+	// are found (Limit+1 are returned, so the caller can tell it stopped).
+	// Without it a broad pattern over a large tree held every match in
+	// memory before anything could be trimmed.
+	Limit int
+	// Ctx, when set, stops the search once it is done (an interrupted turn).
+	Ctx context.Context
+}
+
+// errLimit ends a walk that has found enough.
+var errLimit = errors.New("search limit reached")
+
+func ctxErr(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Err()
 }
 
 // GrepMatch is one matching line.
@@ -139,6 +163,7 @@ func Grep(opts GrepOptions) ([]GrepMatch, error) {
 	if err != nil {
 		return nil, err
 	}
+	full := func() bool { return opts.Limit > 0 && len(matches) > opts.Limit }
 	visit := func(path string) {
 		data, rerr := os.ReadFile(path)
 		if rerr != nil || isBinary(data) {
@@ -153,7 +178,7 @@ func Grep(opts GrepOptions) ([]GrepMatch, error) {
 		sc := bufio.NewScanner(bytes.NewReader(data))
 		sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 		n := 0
-		for sc.Scan() {
+		for sc.Scan() && !full() {
 			n++
 			line := sc.Text()
 			if re.MatchString(line) {
@@ -168,6 +193,12 @@ func Grep(opts GrepOptions) ([]GrepMatch, error) {
 	}
 
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if cerr := ctxErr(opts.Ctx); cerr != nil {
+			return cerr
+		}
+		if full() {
+			return errLimit
+		}
 		if err != nil {
 			return nil
 		}
@@ -186,6 +217,9 @@ func Grep(opts GrepOptions) ([]GrepMatch, error) {
 		visit(path)
 		return nil
 	})
+	if errors.Is(walkErr, errLimit) {
+		walkErr = nil
+	}
 	return matches, walkErr
 }
 

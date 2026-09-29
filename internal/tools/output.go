@@ -77,6 +77,27 @@ func cutBeforeFirstLine(s string) string {
 	return s
 }
 
+// CapResult applies the Bash output cap to any tool's result: text over the
+// cap keeps its head and tail, the whole text is spilled to a file the model
+// can Read, and Full carries it for local display. It was applied only to
+// Bash, so an MCP server, a Grep or a Glob could put megabytes into the
+// context in one call.
+func CapResult(r Result) Result {
+	clamped, elided := clampOutput(r.Content)
+	if elided == 0 {
+		return r
+	}
+	full := r.Content
+	r.Content = clamped
+	if path, ok := spillOutput(full); ok {
+		r.Content += "\n" + spillMarker + path + "]"
+	}
+	if r.Full == "" {
+		r.Full = full
+	}
+	return r
+}
+
 // spillDir is where full command output is kept.
 func spillDir() string { return filepath.Join(session.ConfigRoot(), "outputs") }
 
