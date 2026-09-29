@@ -401,7 +401,13 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 		return messages
 	}
 
-	if os.Getenv("DISABLE_MICROCOMPACT") == "" {
+	// Microcompact rewrites tool results the model has already seen. A model
+	// with preserved thinking bound every later thinking block to those bytes,
+	// so the rewrite fails the check on every following request (a 400 on
+	// enforced accounts) — and no append-only form of pruning exists. On those
+	// models the conversation runs unpruned until autocompact replaces it
+	// with a summary, which the check does accept.
+	if os.Getenv("DISABLE_MICROCOMPACT") == "" && !api.PreservesThinking(string(opts.Model)) {
 		if out, res := compaction.Microcompact(messages); res.Compacted {
 			messages = out
 			if emit != nil {

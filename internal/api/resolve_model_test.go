@@ -64,3 +64,26 @@ func TestContextWindowResolution(t *testing.T) {
 		})
 	}
 }
+
+func TestPreservesThinking(t *testing.T) {
+	for _, tc := range []struct {
+		model string
+		want  bool
+	}{
+		{"claude-fable-5-1", true},
+		{"claude-opus-5-5", true},
+		{"claude-opus-5-5-20261001", true}, // a dated snapshot of a listed model
+		{"Claude-Fable-5-1", true},
+		{"claude-opus-5", false}, // a prefix of claude-opus-5-5, not a snapshot of it
+		{"claude-fable-5", false},
+		{"claude-mythos-5-1", false}, // reads the blocks, runs no check
+		{"opus", false},              // aliases resolve first; they are still on 5.0
+		{"fable", false},
+		{"", false},
+		{"openai/gpt-oss-120b", false},
+	} {
+		if got := PreservesThinking(tc.model); got != tc.want {
+			t.Errorf("PreservesThinking(%q) = %v, want %v", tc.model, got, tc.want)
+		}
+	}
+}
