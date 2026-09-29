@@ -68,12 +68,13 @@ func (g *Glob) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	if root == "" {
 		root = tctx.WorkingDir
 	}
-	files, err := search.Glob(search.GlobOptions{Root: root, Pattern: in.Pattern})
+	hidden := 0
+	files, err := search.Glob(search.GlobOptions{Root: root, Pattern: in.Pattern, Skip: tctx.Hidden, Skipped: &hidden})
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil
 	}
 	if len(files) == 0 {
-		return []Result{{Content: "No files found"}}, nil
+		return []Result{{Content: "No files found" + hiddenNote(hidden)}}, nil
 	}
-	return []Result{{Content: strings.Join(files, "\n")}}, nil
+	return []Result{{Content: strings.Join(files, "\n") + hiddenNote(hidden)}}, nil
 }

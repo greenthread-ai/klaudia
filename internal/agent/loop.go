@@ -840,6 +840,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		Reveal:     reveal,
 		HostChange: hostChangeFor(opts),
 		Progress:   progress,
+		Hidden:     readDenied(opts.Permission.Deny),
 	}, raw)
 	if err != nil {
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))
@@ -1042,4 +1043,15 @@ func finalAssistantText(m anthropic.BetaMessage) string {
 		}
 	}
 	return s
+}
+
+// readDenied reports, for tools that walk directories, whether a path is
+// covered by a Read deny rule. Nil when there are no deny rules.
+func readDenied(deny []permission.Rule) func(string) bool {
+	if len(deny) == 0 {
+		return nil
+	}
+	return func(abs string) bool {
+		return permission.DeniedBy(deny, "Read", permission.PermissionRequest{Commands: [][]string{{abs}}})
+	}
 }
