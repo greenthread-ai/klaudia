@@ -30,6 +30,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/api"
 	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/internal/config"
+	"github.com/greenthread-ai/klaudia/internal/gitprobe"
 	"github.com/greenthread-ai/klaudia/internal/goal"
 	"github.com/greenthread-ai/klaudia/internal/memory"
 	"github.com/greenthread-ai/klaudia/internal/permission"
@@ -554,7 +555,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	// apart.
 	m.base = newBaseline()
 	if sess.CWD != "" {
-		if status, err := gitOutput(sess.CWD, "status", "--porcelain"); err == nil {
+		if status, err := gitProbe(sess.CWD, "status", "--porcelain"); err == nil {
 			m.base.capture(status)
 		}
 	}
@@ -2144,7 +2145,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(bannerStyle.Render(m.sess.Doctor()))
 		}
 	case "/diff":
-		out, err := gitOutput(m.sess.CWD, append([]string{"diff"}, args...)...)
+		out, err := gitProbe(m.sess.CWD, append([]string{"diff"}, args...)...)
 		switch {
 		case err != nil:
 			m.appendLine(errStyle.Render("git diff: " + err.Error()))
@@ -2169,7 +2170,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			break
 		}
 		message := strings.Join(args, " ")
-		status, err := gitOutput(m.sess.CWD, "status", "--short")
+		status, err := gitProbe(m.sess.CWD, "status", "--short")
 		if err != nil {
 			m.appendLine(errStyle.Render("git: " + err.Error()))
 			break
@@ -2267,6 +2268,14 @@ func (m *Model) renderAgents() string {
 }
 
 // renderContext shows the working directory, git branch, and model.
+
+// gitProbe is gitOutput for the read-only lookups Klaudia makes by itself
+// (status at startup, /diff, branch names): the repository's config cannot run
+// a program through them. See package gitprobe.
+func gitProbe(dir string, args ...string) (string, error) {
+	out, err := gitprobe.Command(dir, args...).CombinedOutput()
+	return string(out), err
+}
 
 // gitOutput runs `git <args>` in dir and returns combined output. A non-zero
 // exit returns the output plus the error so callers can surface git's message.
