@@ -7,8 +7,14 @@ CLI agent that helps users with software engineering tasks.
 ```bash
 CGO_ENABLED=0 go install ./cmd/klaudia   # updates the `klaudia` on your PATH
 CGO_ENABLED=0 go build ./...             # compile check only — writes no binary
-go test ./internal/...
+go test ./internal/...                   # unit tests
+go test ./e2e/...                        # the binary against a scripted model
+make check                               # every hermetic layer — what CI runs
 ```
+
+Testing is layered (static, unit, hermetic, e2e, live); `docs/testing.md` says
+what each layer is for and where a new test belongs. Unit tests must not read
+the real `$HOME` — `make hermetic` runs them against a poisoned one.
 
 `go build ./...` with multiple packages compiles and *discards* the results: it
 is a build check, not an install. `go build ./cmd/klaudia` does write a binary,
@@ -40,12 +46,17 @@ Use `go install` when you mean to try the change.
 - **schema** - Type/schema definitions
 - **version** - Version info
 
+`e2e/` (outside `internal/`) holds the end-to-end tests. `internal/fakeapi` is
+the scripted Anthropic API they and the `internal/cli` tests share — test
+support, imported by nothing in the product.
+
 ## Design record
 
 `docs/ux-spec.md` is the authoritative record of the two terminal-UX specs and
 where the implementation deliberately differs from them — read it before
 "fixing" something that looks unimplemented. `docs/trust.md`, `docs/jobs.md` and
-`docs/working-tree.md` cover the three subsystems in detail.
+`docs/working-tree.md` cover the three subsystems in detail. `docs/testing.md`
+covers the test layers.
 
 ## Rules
 
