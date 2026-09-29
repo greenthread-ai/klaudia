@@ -6,12 +6,14 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +53,9 @@ type ServerConfig struct {
 	// word taken. False is how an operator declines to take it, without giving
 	// up the server for the main agent, which still asks before every call.
 	ReadOnly *bool `json:"readOnly,omitempty"`
+	// Timeout bounds one tool call on this server, in seconds. Unset uses
+	// KLAUDIA_MCP_TOOL_TIMEOUT, or ten minutes.
+	Timeout int `json:"timeout,omitempty"`
 }
 
 // Config is the .mcp.json shape: a map of server name → launch config.
@@ -229,26 +234,71 @@ type Manager struct {
 // Connect launches and connects every server in cfg. Servers that fail to
 // connect are skipped (with their error collected), so one bad server does not
 // abort startup.
+//
+// Servers connect in parallel, each under connectTimeout. They used to connect
+// one after another with no deadline, so one server that never answered its
+// initialize held up startup indefinitely, and every server's start-up time
+// added to Klaudia's.
 func Connect(ctx context.Context, cfg Config) (*Manager, []error) {
 	m := &Manager{cfg: cfg, ctx: ctx}
-	var errs []error
 	// Deterministic order for stable tool lists.
 	names := make([]string, 0, len(cfg.MCPServers))
 	for n := range cfg.MCPServers {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	for _, name := range names {
-		srv, err := connectServer(ctx, name, cfg.MCPServers[name])
-		if err != nil {
-			errs = append(errs, err)
+	servers := make([]*Server, len(names))
+	errs := make([]error, len(names))
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			servers[i], errs[i] = connectWithDeadline(ctx, name, cfg.MCPServers[name])
+		}()
+	}
+	wg.Wait()
+	var failed []error
+	for i, name := range names {
+		if errs[i] != nil {
+			failed = append(failed, errs[i])
 			// Keep a disconnected placeholder so it can be reconnected later.
 			m.servers = append(m.servers, &Server{Name: name})
 			continue
 		}
-		m.servers = append(m.servers, srv)
+		m.servers = append(m.servers, servers[i])
 	}
-	return m, errs
+	return m, failed
+}
+
+// connectWithDeadline is connectServer bounded by connectTimeout. The session
+// outlives the deadline: it bounds the handshake, not the connection.
+func connectWithDeadline(ctx context.Context, name string, cfg ServerConfig) (*Server, error) {
+	cctx, cancel := context.WithTimeout(ctx, connectTimeout())
+	defer cancel()
+	srv, err := connectServer(cctx, name, cfg)
+	if err != nil && errors.Is(cctx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+		return nil, fmt.Errorf("mcp %q: no answer within %s of starting (KLAUDIA_MCP_CONNECT_TIMEOUT): %w", name, connectTimeout(), err)
+	}
+	return srv, err
+}
+
+// connectTimeout is how long a server has to complete its handshake.
+func connectTimeout() time.Duration { return envSeconds("KLAUDIA_MCP_CONNECT_TIMEOUT", 30*time.Second) }
+
+// toolTimeout is how long one tool call may take on a server with cfg.
+func toolTimeout(cfg ServerConfig) time.Duration {
+	if cfg.Timeout > 0 {
+		return time.Duration(cfg.Timeout) * time.Second
+	}
+	return envSeconds("KLAUDIA_MCP_TOOL_TIMEOUT", 10*time.Minute)
+}
+
+func envSeconds(name string, def time.Duration) time.Duration {
+	if v, err := strconv.Atoi(strings.TrimSpace(os.Getenv(name))); err == nil && v > 0 {
+		return time.Duration(v) * time.Second
+	}
+	return def
 }
 
 // Add registers an already-connected server (used by tests).
@@ -375,7 +425,7 @@ func (m *Manager) Reload(ctx context.Context, cfg Config) []error {
 				_ = s.Close()
 			}
 		}
-		fresh, err := connectServer(ctx, name, sc)
+		fresh, err := connectWithDeadline(ctx, name, sc)
 		if err != nil {
 			errs = append(errs, err)
 			// Keep a disconnected placeholder, so /mcp can retry it by hand.

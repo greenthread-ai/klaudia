@@ -3,8 +3,10 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -55,6 +57,7 @@ type mcpTool struct {
 	inputSchema   json.RawMessage
 	server        *Server
 	readOnly      bool
+	timeout       time.Duration
 }
 
 func (t *mcpTool) Name() string                                { return t.qualifiedName }
@@ -101,8 +104,20 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 	if sess == nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP server %q is disconnected; reconnect it with /mcp.", t.server.Name), IsError: true}}, nil
 	}
-	res, err := sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args})
+	// Bounded: a server that stops answering mid-call (a dropped HTTP or SSE
+	// connection) used to hold the turn until the user interrupted it, and a
+	// headless run forever.
+	timeout := t.timeout
+	if timeout <= 0 {
+		timeout = toolTimeout(ServerConfig{})
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	res, err := sess.CallTool(cctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args})
 	if err != nil {
+		if errors.Is(cctx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			return []tools.Result{{Content: fmt.Sprintf("MCP call to %s timed out after %s — the server may be stuck; /mcp can reconnect it. Set \"timeout\" (seconds) on the server in .mcp.json, or KLAUDIA_MCP_TOOL_TIMEOUT, if the tool is just slow.", t.qualifiedName, timeout), IsError: true}}, nil
+		}
 		return []tools.Result{{Content: fmt.Sprintf("MCP call failed: %v", err), IsError: true}}, nil
 	}
 	return []tools.Result{{Content: textOf(res.Content), IsError: res.IsError}}, nil
@@ -141,6 +156,7 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 				inputSchema:   schema,
 				server:        srv,
 				readOnly:      readOnly,
+				timeout:       toolTimeout(cfg),
 			})
 		}
 	}
