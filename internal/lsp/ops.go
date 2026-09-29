@@ -31,6 +31,9 @@ func (c *Client) Initialize(ctx context.Context, root string) error {
 				"definition":         map[string]any{},
 				"references":         map[string]any{},
 			},
+			"workspace": map[string]any{
+				"symbol": map[string]any{},
+			},
 		},
 	}
 	if err := c.call(ctx, "initialize", params, nil); err != nil {
@@ -137,4 +140,36 @@ func parseLocations(raw json.RawMessage) []Location {
 		return []Location{one}
 	}
 	return nil
+}
+
+// WorkspaceSymbol asks the server for symbols matching query across the whole
+// workspace. It opens no document: the server answers from its own index.
+func (c *Client) WorkspaceSymbol(ctx context.Context, query string) ([]Symbol, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	var raw json.RawMessage
+	if err := c.call(ctx, "workspace/symbol", map[string]any{"query": query}, &raw); err != nil {
+		return nil, err
+	}
+	return parseSymbols(raw), nil
+}
+
+// parseSymbols decodes a workspace/symbol result: an array of
+// SymbolInformation or WorkspaceSymbol, or null. Entries without a URI are
+// dropped, since they cannot be pointed at.
+func parseSymbols(raw json.RawMessage) []Symbol {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var arr []Symbol
+	if json.Unmarshal(raw, &arr) != nil {
+		return nil
+	}
+	out := arr[:0]
+	for _, s := range arr {
+		if s.Location.URI != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

@@ -819,7 +819,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	jobStore := tools.NewJobStore(ctx, sessionID)
 	defer jobStore.KillAll()
 	// Lazy language-server pool for code-intel tools (Diagnostics/Definition/
-	// References). Servers are detected on PATH + toolchain dirs, spawned on
+	// References/WorkspaceSymbol). Servers are detected on PATH + toolchain dirs, spawned on
 	// first use, and shut down at session end. Not downloaded.
 	lspPool := lsp.NewPool(ctx, cwd, cfg.LSP.Disabled, nil)
 	defer lspPool.Close()

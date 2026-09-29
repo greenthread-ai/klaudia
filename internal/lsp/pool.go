@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -38,11 +39,16 @@ func NewPool(parent context.Context, root string, disabled []string, override ma
 
 // serverFor resolves the spec handling a file (override → builtin), or false.
 func (p *Pool) serverFor(path string) (ServerSpec, string, bool) {
-	ext := filepath.Ext(path)
-	spec, ok := specForExt(ext)
+	spec, ok := specForExt(filepath.Ext(path))
 	if !ok {
 		return ServerSpec{}, "", false
 	}
+	return p.resolve(spec)
+}
+
+// resolve applies config to a builtin spec: a disabled language resolves to
+// nothing, and an override replaces the command. It reports the binary found.
+func (p *Pool) resolve(spec ServerSpec) (ServerSpec, string, bool) {
 	if p.disabled[spec.Language] {
 		return ServerSpec{}, "", false
 	}
@@ -62,25 +68,32 @@ func (p *Pool) clientFor(path string) (*Client, ServerSpec, error) {
 	if spec.Language == "" {
 		return nil, spec, fmt.Errorf("no language server configured for %q files", filepath.Ext(path))
 	}
+	c, err := p.clientForSpec(spec, bin, found)
+	return c, spec, err
+}
+
+// clientForSpec returns the running client for a resolved spec, spawning and
+// initializing one on first use.
+func (p *Pool) clientForSpec(spec ServerSpec, bin string, found bool) (*Client, error) {
 	if !found {
-		return nil, spec, fmt.Errorf("no %s language server found (install %q and ensure it's on PATH or a standard toolchain dir)", spec.Language, spec.Bin)
+		return nil, fmt.Errorf("no %s language server found (install %q and ensure it's on PATH or a standard toolchain dir)", spec.Language, spec.Bin)
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if c := p.clients[spec.Language]; c != nil {
-		return c, spec, nil
+		return c, nil
 	}
 	c, err := NewClient(p.parent, bin, spec.Args...)
 	if err != nil {
-		return nil, spec, err
+		return nil, err
 	}
 	if err := c.Initialize(p.parent, p.root); err != nil {
 		c.Close()
-		return nil, spec, fmt.Errorf("initialize %s: %w", spec.Bin, err)
+		return nil, fmt.Errorf("initialize %s: %w", spec.Bin, err)
 	}
 	p.clients[spec.Language] = c
-	return c, spec, nil
+	return c, nil
 }
 
 // Diagnostics returns the server's diagnostics for a file.
@@ -108,6 +121,67 @@ func (p *Pool) References(ctx context.Context, path string, pos Position) ([]Loc
 		return nil, err
 	}
 	return c.References(ctx, path, spec.LanguageID, pos)
+}
+
+// WorkspaceSymbol searches the workspace for symbols matching query. With a
+// path, the server for that file's language answers. Without one, every
+// language that is already running or whose project marker (go.mod,
+// Cargo.toml, …) sits at the workspace root is asked, and the matches are
+// concatenated in that order. Servers that fail are reported in the error
+// alongside whatever the others found, so a partial answer is not lost.
+func (p *Pool) WorkspaceSymbol(ctx context.Context, query, path string) ([]Symbol, error) {
+	if path != "" {
+		c, _, err := p.clientFor(path)
+		if err != nil {
+			return nil, err
+		}
+		return c.WorkspaceSymbol(ctx, query)
+	}
+	specs := p.workspaceSpecs()
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("no language detected at the workspace root; pass a file in the language to search")
+	}
+	var (
+		all  []Symbol
+		errs []error
+	)
+	for _, spec := range specs {
+		resolved, bin, found := p.resolve(spec)
+		c, err := p.clientForSpec(resolved, bin, found)
+		if err == nil {
+			var syms []Symbol
+			syms, err = c.WorkspaceSymbol(ctx, query)
+			all = append(all, syms...)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", spec.Language, err))
+		}
+	}
+	return all, errors.Join(errs...)
+}
+
+// workspaceSpecs lists the builtin languages a file-less workspace search
+// should ask: those not disabled that already have a running server or whose
+// project marker is at the root. Detection of the binary is left to the caller
+// so a missing server is reported rather than silently skipped.
+func (p *Pool) workspaceSpecs() []ServerSpec {
+	p.mu.Lock()
+	running := make(map[string]bool, len(p.clients))
+	for lang := range p.clients {
+		running[lang] = true
+	}
+	p.mu.Unlock()
+
+	var specs []ServerSpec
+	for _, spec := range builtinServers {
+		if p.disabled[spec.Language] {
+			continue
+		}
+		if running[spec.Language] || (p.root != "" && hasAnyMarker(p.root, spec.Markers)) {
+			specs = append(specs, spec)
+		}
+	}
+	return specs
 }
 
 // Close shuts down all spawned servers.
