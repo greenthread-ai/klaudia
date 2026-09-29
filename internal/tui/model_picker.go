@@ -104,3 +104,23 @@ func (m *Model) setModel(id string, contextWindow int) string {
 	}
 	return msg + ". Applies to the next turn."
 }
+
+// unlistedModelWarning checks a typed /model id against the list the provider
+// reported the last time /model fetched it, and returns a warning when the id
+// is not in it. It never fetches: a /model <id> that waited on the network
+// would be slower than finding out on the next turn, and when nothing has been
+// fetched yet there is nothing to say. It warns rather than refuses, because
+// an endpoint can serve ids it does not list (aliases, dated snapshots).
+func (m *Model) unlistedModelWarning(id string) string {
+	if len(m.knownModels) == 0 {
+		return ""
+	}
+	id = strings.TrimSpace(id)
+	resolved := string(api.ResolveModel(id))
+	for _, mi := range m.knownModels {
+		if mi.ID == id || mi.ID == resolved {
+			return ""
+		}
+	}
+	return "  " + id + " is not in the list this endpoint reported; if the next turn says the model was not found, run /model to pick one it lists."
+}

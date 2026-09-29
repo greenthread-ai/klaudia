@@ -20,7 +20,33 @@ func FriendlyError(err error) string {
 		return ""
 	}
 	if status, ok := apiStatus(err); ok {
+		// Before the status switch: an unknown model arrives as a 404 from
+		// most hosts and as a 400 carrying the model_not_found code from
+		// some, and either way the raw body ("openai endpoint 404:
+		// {…model_not_found…}") says nothing about how to recover. Other 400s
+		// that merely mention a model ("invalid model parameter") keep the
+		// Bad request message below, which already quotes the provider: they
+		// can be a malformed value rather than an unknown one, and "not
+		// found" would be a guess.
+		if IsModelNotFound(err) && (status == 404 || hasModelNotFoundCode(err)) {
+			return modelNotFoundMessage(err)
+		}
 		switch status {
+		case 404:
+			// A 404 that does not mention a model is the endpoint not serving
+			// the path at all — almost always a baseURL missing or doubling
+			// its /v1 suffix.
+			out := "Not found (404)"
+			if _, endpoint := requestContext(err); endpoint != "" {
+				out += " at " + endpoint
+			}
+			if detail := notFoundDetail(err); detail != "" {
+				out += ": " + detail + "."
+			} else {
+				out += "."
+			}
+			return out + " Check the baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml " +
+				"(OpenAI-compatible endpoints usually end in /v1)."
 		case 429:
 			// OpenAI: 429 is BOTH transient throttling and "insufficient_quota"
 			// (billing). They need very different advice and the provider's own
@@ -306,4 +332,145 @@ func IsContextOverflow(err error) bool {
 		return true
 	}
 	return isContextOverflow(err.Error())
+}
+
+// IsModelNotFound reports whether err is the provider rejecting the request's
+// model as unknown. Anthropic answers a 404 not_found_error with the message
+// "model: <id>"; OpenAI-compatible hosts send a 404 (sometimes a 400) with a
+// model_not_found code or "The model `<id>` does not exist". A 404 that does
+// not mention a model — a wrong baseURL path, say — is not matched: switching
+// models would not fix it.
+//
+// The body is the same as the detection in the fallback-model change (#170),
+// which declares this function in fallback.go: whichever of the two lands
+// second deletes one copy, and the duplicate declaration fails the build
+// until it does.
+func IsModelNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	status, ok := apiStatus(err)
+	if !ok || (status != 404 && status != 400) {
+		return false
+	}
+	if oai := openAIPayload(err); oai != nil && codeIs(oai.Code, "model_not_found") {
+		return true
+	}
+	detail := strings.ToLower(providerDetail(err))
+	if detail == "" {
+		var oai *OpenAIError
+		if errors.As(err, &oai) {
+			detail = strings.ToLower(oai.Body) // plain-text error bodies
+		}
+	}
+	if !strings.Contains(detail, "model") {
+		return false
+	}
+	if errType, _ := anthropicPayload(err); errType == "not_found_error" {
+		return true
+	}
+	for _, s := range []string{"model_not_found", "not found", "not_found", "does not exist", "invalid model", "unknown model"} {
+		if strings.Contains(detail, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasModelNotFoundCode reports whether an OpenAI-compatible error carries the
+// explicit model_not_found code, the one unambiguous signal a 400 can give.
+func hasModelNotFoundCode(err error) bool {
+	oai := openAIPayload(err)
+	return oai != nil && codeIs(oai.Code, "model_not_found")
+}
+
+// notFoundDetail is providerDetail, falling back to an OpenAI-compatible
+// host's plain-text body ("model not found", "404 page not found") when there
+// is no JSON envelope to read a message from.
+func notFoundDetail(err error) string {
+	if d := providerDetail(err); d != "" {
+		return d
+	}
+	var oai *OpenAIError
+	if errors.As(err, &oai) {
+		return strings.TrimSpace(oai.Body)
+	}
+	return ""
+}
+
+// modelNotFoundMessage names the model and the endpoint that refused it and
+// the two ways to choose another: /model in the TUI, --model on the command
+// line. The provider's own wording is kept at the end, since some hosts add
+// something useful ("…or you do not have access to it").
+func modelNotFoundMessage(err error) string {
+	model, endpoint := requestContext(err)
+	if model == "" {
+		model = anthropicNotFoundModel(err)
+	}
+	out := "Model not found: "
+	if model != "" {
+		out += model + " isn't served by "
+	} else {
+		out += "the model isn't served by "
+	}
+	if endpoint != "" {
+		out += endpoint
+	} else {
+		out += "this endpoint"
+	}
+	out += ". Run /model to pick from the models it lists, or pass --model <id> (or set `model` in .klaudia/config.toml)."
+	if detail := notFoundDetail(err); detail != "" {
+		out += " The provider said: " + detail
+	}
+	return out
+}
+
+// anthropicNotFoundModel reads the model id out of Anthropic's 404 body,
+// whose message is exactly "model: <id>". Used only when the error was not
+// annotated with the request's model.
+func anthropicNotFoundModel(err error) string {
+	_, msg := anthropicPayload(err)
+	if id, ok := strings.CutPrefix(strings.TrimSpace(msg), "model:"); ok {
+		return strings.TrimSpace(id)
+	}
+	return ""
+}
+
+// requestError annotates a provider error with the model and endpoint the
+// request went to. Neither the Anthropic SDK's error nor OpenAIError carries
+// the model, and a "model not found" that does not say which model, or where,
+// leaves the user guessing whether the typo is in the id or the baseURL.
+// Error() is the inner error's text unchanged, and Unwrap keeps every
+// errors.As classification working through it.
+type requestError struct {
+	model    string
+	endpoint string
+	err      error
+}
+
+func (e *requestError) Error() string { return e.err.Error() }
+func (e *requestError) Unwrap() error { return e.err }
+
+// annotateNotFound wraps err with the request's model and endpoint when it is
+// a 404 or a model-not-found rejection — the errors whose message needs them.
+// Every other error is returned unchanged.
+func annotateNotFound(err error, model, endpoint string) error {
+	if err == nil {
+		return nil
+	}
+	status, ok := apiStatus(err)
+	if !ok || (status != 404 && !IsModelNotFound(err)) {
+		return err
+	}
+	return &requestError{model: model, endpoint: endpoint, err: err}
+}
+
+// requestContext returns the model and endpoint annotateNotFound attached to
+// err, or empty strings when it was not annotated.
+func requestContext(err error) (model, endpoint string) {
+	var re *requestError
+	if errors.As(err, &re) {
+		return re.model, re.endpoint
+	}
+	return "", ""
 }

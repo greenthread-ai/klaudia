@@ -113,7 +113,8 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	// breakpoint so each turn doesn't re-pay full price for the whole history.
 	applyCacheControl(&params)
 
-	return c.streamRetrying(ctx, params, sink, streamIdleTimeout())
+	msg, err := c.streamRetrying(ctx, params, sink, streamIdleTimeout())
+	return msg, annotateNotFound(err, string(params.Model), c.endpoint())
 }
 
 // streamRetrying runs streamOnce under the stall-retry policy. Split out from
