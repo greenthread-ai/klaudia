@@ -3,8 +3,11 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/greenthread-ai/klaudia/internal/api"
+	"io"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/spf13/cobra"
@@ -35,6 +38,30 @@ type loopRun struct {
 	recorder   agent.Recorder
 	onSummary  func(string)
 	render     *Renderer
+}
+
+// goalRetryBackoff is how long the goal loop waits before each retry of an
+// iteration that failed transiently. A var so tests need not wait.
+var goalRetryBackoff = []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute}
+
+// retryTransient runs turn, and runs it again after each goalRetryBackoff
+// pause while it fails transiently (api.IsTransient). A goal run is often
+// hours long, and one overloaded response used to end all of it; an iteration
+// re-reads the spec and git, so repeating one is safe. Other errors, and a
+// cancelled ctx, return at once.
+func retryTransient(ctx context.Context, errOut io.Writer, what string, turn func() (agent.Result, error)) (agent.Result, error) {
+	res, err := turn()
+	for retry := 0; err != nil && api.IsTransient(err) && retry < len(goalRetryBackoff); retry++ {
+		wait := goalRetryBackoff[retry]
+		fmt.Fprintf(errOut, "  %s failed (%v); retrying in %s (%d/%d)\n", what, err, wait, retry+1, len(goalRetryBackoff))
+		select {
+		case <-ctx.Done():
+			return res, ctx.Err()
+		case <-time.After(wait):
+		}
+		res, err = turn()
+	}
+	return res, err
 }
 
 // runGoalLoop drives the headless Ralph loop: it iterates against the goal spec,
@@ -101,7 +128,9 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 	stalls := 0
 	for i := 1; i <= iters; i++ {
 		fmt.Fprintf(errOut, "↻ iteration %d/%d\n", i, iters)
-		res, err := runTurn(goal.IterationPrompt(specPath))
+		res, err := retryTransient(ctx, errOut, fmt.Sprintf("iteration %d", i), func() (agent.Result, error) {
+			return runTurn(goal.IterationPrompt(specPath))
+		})
 		if err != nil {
 			return err
 		}

@@ -307,3 +307,35 @@ func IsContextOverflow(err error) bool {
 	}
 	return isContextOverflow(err.Error())
 }
+
+// IsTransient reports whether err is a failure that the same request may
+// succeed on later: a rate limit (429), a server error or overload (5xx, 529,
+// or an overloaded/api error event mid-stream), a stalled stream, or a network
+// error. A cancelled context, a request the API rejected (400, 401, 403, 404,
+// 413) and a context overflow are not: repeating them fails the same way.
+func IsTransient(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, ErrStreamStalled) {
+		return true
+	}
+	// Status first: a context overflow is a 400, so it is already not
+	// transient here, and the text check below needs no API error's Error().
+	if status, ok := apiStatus(err); ok {
+		if status == 429 || status >= 500 {
+			return true
+		}
+		if status == 200 { // an error event after the response began
+			t, _ := anthropicPayload(err)
+			return t == "overloaded_error" || t == "api_error"
+		}
+		return false
+	}
+	if IsContextOverflow(err) {
+		return false
+	}
+	var netErr net.Error
+	var opErr *net.OpError
+	return errors.As(err, &netErr) || errors.As(err, &opErr)
+}
