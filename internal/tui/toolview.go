@@ -6,6 +6,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -78,6 +80,35 @@ func toolSummary(name string, input any) string {
 		}
 	}
 	return ""
+}
+
+// visible renders s for an approval: nothing is cut and nothing is hidden.
+// Control characters (a raw ESC or CR can redraw the terminal), format
+// characters (zero-width, bidi overrides, tag characters) and look-alike
+// spaces are shown as \u{XXXX} escapes, and tabs as \t, so what the user
+// approves is what will run. Newlines are kept, and continuation lines are
+// indented to sit under the first.
+//
+// oneline is not safe here: it cut commands at 220 runes, so a dangerous tail
+// could be padded out of view, and it passed invisible characters through.
+func visible(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\n':
+			b.WriteString("\n    ")
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r == ' ':
+			b.WriteRune(r)
+		case unicode.IsControl(r), unicode.Is(unicode.Cf, r), unicode.IsSpace(r),
+			unicode.Is(unicode.Zl, r), unicode.Is(unicode.Zp, r), r == utf8.RuneError:
+			fmt.Fprintf(&b, `\u{%04X}`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // oneline collapses whitespace/newlines and truncates to n runes.

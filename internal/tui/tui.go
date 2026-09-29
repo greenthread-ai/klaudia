@@ -2612,10 +2612,10 @@ func (m *Model) permissionSummary(req agent.ApprovalRequest) string {
 		}
 	case "Bash":
 		if desc := stringField(req.Input, "description"); desc != "" {
-			return "run command — " + desc
+			return "run command — " + visible(desc)
 		}
 		if target := firstNonEmpty(req.Specifier, stringField(req.Input, "command")); target != "" {
-			return "run command " + target
+			return "run command " + visible(target)
 		}
 	}
 	return label
@@ -2642,7 +2642,7 @@ func permissionDetail(req agent.ApprovalRequest) string {
 		}
 	case "Bash":
 		if cmd := stringField(req.Input, "command"); cmd != "" {
-			return "command: " + oneline(cmd, 220)
+			return "command: " + visible(cmd)
 		}
 	}
 	if req.Suggestion != "" {
