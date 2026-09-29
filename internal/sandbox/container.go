@@ -1,7 +1,6 @@
 package sandbox
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -80,9 +79,9 @@ func (c *Container) Run(ctx context.Context, req Request) (Response, error) {
 
 	cmd := exec.CommandContext(ctx, c.Runtime, c.buildArgs(req)...)
 	cmd.WaitDelay = postCancelWait // bound post-cancel I/O drain — see runArgv comment
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout, stderr := newHeadTailBuffer(streamKeep), newHeadTailBuffer(streamKeep)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 	resp := Response{Stdout: stdout.String(), Stderr: stderr.String()}
