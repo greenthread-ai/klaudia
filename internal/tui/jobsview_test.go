@@ -204,3 +204,64 @@ func TestJobsWithoutAStoreSaysSo(t *testing.T) {
 		t.Errorf("output = %s", out)
 	}
 }
+
+// /restart and /stopjob with no argument and no single running job show the
+// jobs, like /logs does, rather than a bare usage line.
+func TestJobCommandsListJobsWhenAmbiguous(t *testing.T) {
+	for _, cmd := range []func(m *Model){
+		func(m *Model) { m.restartCommand(nil) },
+		func(m *Model) { m.stopJobCommand(nil) },
+		func(m *Model) { m.logsCommand(nil) },
+	} {
+		f := &fakeJobs{jobs: []tools.JobStatus{
+			{ID: "bash_1", Name: "dev", Running: true},
+			{ID: "bash_2", Name: "api", Running: true},
+		}}
+		m := jobsModel(t, f)
+		cmd(m)
+		out := stripANSI(m.transcript.String())
+		if !strings.Contains(out, "dev") || !strings.Contains(out, "api") || !strings.Contains(out, "usage:") {
+			t.Errorf("ambiguous job command should list jobs and usage:\n%s", out)
+		}
+		if len(f.killed)+len(f.restarts) != 0 {
+			t.Errorf("an ambiguous command acted anyway: killed %v restarted %v", f.killed, f.restarts)
+		}
+	}
+}
+
+// A name that matches nothing is answered with the names that would have.
+func TestUnknownJobListsNames(t *testing.T) {
+	f := &fakeJobs{jobs: []tools.JobStatus{
+		{ID: "bash_1", Name: "dev", Running: true},
+		{ID: "bash_2", Name: "build", Running: false, ExitCode: 2},
+	}}
+	for _, run := range []func(m *Model){
+		func(m *Model) { m.restartCommand([]string{"nope"}) },
+		func(m *Model) { m.stopJobCommand([]string{"nope"}) },
+		func(m *Model) { m.logsCommand([]string{"nope"}) },
+	} {
+		m := jobsModel(t, f)
+		run(m)
+		out := stripANSI(m.transcript.String())
+		if !strings.Contains(out, "no job nope") || !strings.Contains(out, "dev (running)") || !strings.Contains(out, "build (exited 2)") {
+			t.Errorf("unknown job not answered with the valid names:\n%s", out)
+		}
+	}
+	if len(f.killed)+len(f.restarts) != 0 {
+		t.Errorf("an unknown job was acted on: killed %v restarted %v", f.killed, f.restarts)
+	}
+}
+
+// Stopping a job that already exited says so instead of claiming to stop it.
+func TestStopJobAlreadyExited(t *testing.T) {
+	f := &fakeJobs{jobs: []tools.JobStatus{{ID: "bash_1", Name: "build", Running: false, ExitCode: 1}}}
+	m := jobsModel(t, f)
+	m.stopJobCommand([]string{"build"})
+	out := stripANSI(m.transcript.String())
+	if !strings.Contains(out, "already exited (code 1)") {
+		t.Errorf("stopping an exited job should say it already exited:\n%s", out)
+	}
+	if len(f.killed) != 0 {
+		t.Errorf("an exited job was killed again: %v", f.killed)
+	}
+}
