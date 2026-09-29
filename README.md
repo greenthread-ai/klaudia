@@ -672,10 +672,13 @@ Two complementary modes for working toward an objective:
 - **Auto-memory** — the `Memory` tool stores and recalls notes. `.klaudia/MEMORY.md`
   is the index (session bullets); longer notes live as `.klaudia/memory/*.md`
   detail files. The index keeps a `## Linked memory` section pointing at those
-  files (name + one-line hook), kept in sync automatically. Only the index is
-  recalled into the prompt — cheap as memory grows — and the model opens a
-  detail note on demand. `Memory` search spans both the index and the detail
-  notes (a hit is tagged with its filename).
+  files (name + one-line hook: the note's frontmatter `description`, else its
+  first line after any frontmatter), kept in sync automatically. Only the index
+  is recalled into the prompt — capped at 200 lines / 25 KB, with a line saying
+  how much was left out — and the model opens a detail note on demand. `Memory`
+  search spans both the index and the detail notes (a hit is tagged with its
+  filename); `remove` forgets one session note (by `query`) or a detail note
+  (by `name`).
 - **Project knowledge** — `.klaudia/KNOWLEDGE.md` (curated, durable lessons) is
   injected into the system prompt when present.
 

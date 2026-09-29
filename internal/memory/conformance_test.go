@@ -46,6 +46,8 @@ func RunStoreSuite(t *testing.T, name string, factory func(t *testing.T) Store, 
 			t.Run("AddEmptyReturnsErrEmpty", func(t *testing.T) { testAddEmpty(t, factory(t)) })
 			t.Run("PromoteMissingReturnsErrNotFound", func(t *testing.T) { testPromoteMissing(t, factory(t)) })
 			t.Run("SupersedeMissingReturnsErrNotFound", func(t *testing.T) { testSupersedeMissing(t, factory(t)) })
+			t.Run("RemoveRoundTrips", func(t *testing.T) { testRemoveRoundTrips(t, factory(t)) })
+			t.Run("RemoveMissingReturnsErrNotFound", func(t *testing.T) { testRemoveMissing(t, factory(t)) })
 		} else {
 			t.Run("WritesReturnErrDisabled", func(t *testing.T) { testWritesReturnErrDisabled(t, factory(t)) })
 		}
@@ -161,6 +163,28 @@ func testSupersedeMissing(t *testing.T, s Store) {
 	}
 }
 
+func testRemoveRoundTrips(t *testing.T, s Store) {
+	if err := s.Add("forget me"); err != nil {
+		t.Fatalf("Add err = %v", err)
+	}
+	removed, err := s.Remove("forget")
+	if err != nil || len(removed) != 1 || !strings.Contains(removed[0], "forget me") {
+		t.Fatalf("Remove = (%q, %v), want the one note", removed, err)
+	}
+	if entries, _ := s.Entries(); len(entries) != 0 {
+		t.Errorf("Entries after Remove = %q, want none", entries)
+	}
+}
+
+func testRemoveMissing(t *testing.T, s Store) {
+	if _, err := s.Remove("nothing here"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Remove(missing) err = %v, want ErrNotFound", err)
+	}
+	if err := s.RemoveNote("ghost"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("RemoveNote(missing) err = %v, want ErrNotFound", err)
+	}
+}
+
 func testWritesReturnErrDisabled(t *testing.T, s Store) {
 	if err := s.Add("x"); !errors.Is(err, ErrDisabled) {
 		t.Errorf("Add err = %v, want ErrDisabled", err)
@@ -170,6 +194,12 @@ func testWritesReturnErrDisabled(t *testing.T, s Store) {
 	}
 	if err := s.Supersede("a", "b"); !errors.Is(err, ErrDisabled) {
 		t.Errorf("Supersede err = %v, want ErrDisabled", err)
+	}
+	if _, err := s.Remove("x"); !errors.Is(err, ErrDisabled) {
+		t.Errorf("Remove err = %v, want ErrDisabled", err)
+	}
+	if err := s.RemoveNote("x"); !errors.Is(err, ErrDisabled) {
+		t.Errorf("RemoveNote err = %v, want ErrDisabled", err)
 	}
 }
 

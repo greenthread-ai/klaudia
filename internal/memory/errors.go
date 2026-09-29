@@ -17,3 +17,11 @@ var ErrNotFound = errors.New("memory: note not found")
 // Reads on Disabled() return zero values, not this error — the read path
 // is intentionally branchless.
 var ErrDisabled = errors.New("memory: backend disabled")
+
+// ErrAmbiguous is returned by Remove when the query matches more than one
+// session note. Nothing is removed; the caller narrows the query.
+var ErrAmbiguous = errors.New("memory: query matches more than one note")
+
+// ErrInvalidName is returned by RemoveNote for a name that is not a plain
+// note name (empty, or containing a path separator or "..").
+var ErrInvalidName = errors.New("memory: invalid note name")

@@ -101,7 +101,38 @@ func recalledMemory(cwd string) string {
 	// index under .klaudia/memory/MEMORY.md.
 	parts = append(parts, readMarkdownFiles(filepath.Join(klaudiaDir, "memory", "MEMORY.md"))...)
 
-	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+	return capMemoryIndex(strings.TrimSpace(strings.Join(parts, "\n\n")), memoryIndexMaxLines, memoryIndexMaxBytes)
+}
+
+// The recalled index is cut to this budget: it rides in every request's system
+// prompt, and nothing else bounds it — a long-lived project's MEMORY.md grows
+// with every Add. 200 lines is Claude Code's cap on its own MEMORY.md; the byte
+// cap (about 6k tokens) catches an index of few but very long lines.
+const (
+	memoryIndexMaxLines = 200
+	memoryIndexMaxBytes = 25_000
+)
+
+// capMemoryIndex returns index cut to at most maxLines lines and maxBytes
+// bytes, at a line boundary, with a closing line saying how many lines were
+// left out and where to find them. An index within budget is returned as is.
+func capMemoryIndex(index string, maxLines, maxBytes int) string {
+	lines := strings.Split(index, "\n")
+	keep, size := 0, 0
+	for keep < len(lines) && keep < maxLines {
+		n := len(lines[keep]) + 1 // the newline
+		if size+n > maxBytes {
+			break
+		}
+		size += n
+		keep++
+	}
+	if keep == len(lines) {
+		return index
+	}
+	omitted := len(lines) - keep
+	kept := strings.TrimRight(strings.Join(lines[:keep], "\n"), "\n")
+	return kept + fmt.Sprintf("\n\n(%d more lines — open .klaudia/MEMORY.md, or use the Memory tool's search, for the rest)", omitted)
 }
 
 func readMarkdownFiles(paths ...string) []string {

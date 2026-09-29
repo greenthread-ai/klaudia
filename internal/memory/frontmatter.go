@@ -18,6 +18,10 @@ type frontmatter struct {
 	Status       string    `yaml:"status"`
 	Supersedes   string    `yaml:"supersedes"`
 	SupersededBy string    `yaml:"superseded_by"`
+	// Description is a one-line summary of the note, the key Claude Code's
+	// memory files carry. When set it is the note's hook in the index.
+	// omitempty keeps the rewritten shape of notes that have none.
+	Description string `yaml:"description,omitempty"`
 }
 
 // fmFence is the literal YAML-frontmatter delimiter. Hugo / Jekyll /

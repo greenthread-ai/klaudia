@@ -117,5 +117,6 @@ func isFrontmatterNonZero(m frontmatter) bool {
 		!m.Updated.IsZero() ||
 		m.Status != "" ||
 		m.Supersedes != "" ||
-		m.SupersededBy != ""
+		m.SupersededBy != "" ||
+		m.Description != ""
 }

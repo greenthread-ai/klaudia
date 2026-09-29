@@ -36,6 +36,8 @@ func (disabledStore) Stale(time.Duration) ([]Entry, error)  { return nil, nil }
 func (disabledStore) ByTag(string) ([]Entry, error)         { return nil, nil }
 func (disabledStore) Promote(string) error                  { return ErrDisabled }
 func (disabledStore) Supersede(string, string) error        { return ErrDisabled }
+func (disabledStore) Remove(string) ([]string, error)       { return nil, ErrDisabled }
+func (disabledStore) RemoveNote(string) error               { return ErrDisabled }
 
 type disabledKnowledge struct{}
 

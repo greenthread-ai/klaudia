@@ -71,6 +71,20 @@ type Store interface {
 	// idempotently — calling twice has no further effect. ErrNotFound if
 	// either name doesn't exist.
 	Supersede(oldName, newName string) error
+
+	// Remove forgets one session bullet: the one whose entry (timestamp and
+	// text) matches every whitespace-separated term of query, case-
+	// insensitively, as Search matches. It returns the matching entries —
+	// the one removed, or, with ErrAmbiguous and nothing removed, every
+	// candidate. ErrNotFound when nothing matches, ErrEmpty for a blank
+	// query. Pointers in the linked-memory section are not bullets and are
+	// never matched; a detail note is removed with RemoveNote.
+	Remove(query string) ([]string, error)
+
+	// RemoveNote deletes the detail note name (without .md) and refreshes the
+	// linked-memory section. ErrNotFound when it does not exist,
+	// ErrInvalidName when name is not a plain note name.
+	RemoveNote(name string) error
 }
 
 // New returns the default filesystem-backed Store rooted at dir (typically
