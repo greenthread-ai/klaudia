@@ -163,35 +163,3 @@ func osVersion() string {
 	}
 	return runtime.GOOS
 }
-
-// loadProjectInstructions concatenates CLAUDE.md from the user global config,
-// the git root, and cwd (closest last so it takes precedence in the reader's
-// mind). Missing files are skipped; duplicates are de-duplicated.
-func loadProjectInstructions(cwd string) string {
-	var paths []string
-	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, filepath.Join(home, ".claude", "CLAUDE.md"))
-	}
-	if root, err := runGit(cwd, "rev-parse", "--show-toplevel"); err == nil {
-		paths = append(paths, filepath.Join(strings.TrimSpace(root), "CLAUDE.md"))
-	}
-	paths = append(paths, filepath.Join(cwd, "CLAUDE.md"))
-
-	seen := map[string]bool{}
-	var parts []string
-	for _, p := range paths {
-		abs, err := filepath.Abs(p)
-		if err != nil || seen[abs] {
-			continue
-		}
-		seen[abs] = true
-		data, err := os.ReadFile(abs)
-		if err != nil {
-			continue
-		}
-		if s := strings.TrimSpace(string(data)); s != "" {
-			parts = append(parts, s)
-		}
-	}
-	return strings.Join(parts, "\n\n")
-}
