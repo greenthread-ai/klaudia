@@ -125,6 +125,9 @@ type Sandbox struct {
 	ReadOnly bool `toml:"readOnly,omitempty"`
 	// Network is the container's --network value (e.g. "none" to isolate).
 	Network string `toml:"network,omitempty"`
+	// FailIfUnavailable refuses to start when the configured sandbox cannot
+	// be used, instead of warning and running commands unconfined.
+	FailIfUnavailable bool `toml:"failIfUnavailable,omitempty"`
 }
 
 // Browser engines.
@@ -303,6 +306,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Sandbox.Network != "" {
 		dst.Sandbox.Network = src.Sandbox.Network
+	}
+	if src.Sandbox.FailIfUnavailable {
+		dst.Sandbox.FailIfUnavailable = true
 	}
 	if len(src.Sandbox.WriteRoots) > 0 {
 		dst.Sandbox.WriteRoots = append(dst.Sandbox.WriteRoots, src.Sandbox.WriteRoots...)
