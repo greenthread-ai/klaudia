@@ -62,6 +62,34 @@ var modelAliases = map[string]string{
 	"fable":  "claude-fable-5",
 }
 
+// preservedThinkingModels run the API's "preserved thinking" check. A thinking
+// block's signature records the conversation that produced it: the system
+// prompt, the tool set, and every message before the block. When the block is
+// replayed, the API recomputes that record from the request and requires a
+// match, so a request whose earlier turns were edited since fails with a 400
+// (enforced by default for accounts created on or after 2026-08-31) or has the
+// reasoning after the edit dropped. Mythos 5.1 reads the blocks but runs no
+// such check, so it is not listed. The list is the documented one as of
+// 2026-09; Anthropic says later models will enforce the check for everyone.
+var preservedThinkingModels = []string{
+	"claude-fable-5-1",
+	"claude-opus-5-5",
+}
+
+// PreservesThinking reports whether model binds its thinking blocks to the
+// conversation that produced them, so that Klaudia must keep already-sent
+// history append-only when talking to it. Aliases resolve first; a dated
+// snapshot of a listed model ("claude-opus-5-5-20261001") counts as the model.
+func PreservesThinking(model string) bool {
+	id := strings.ToLower(string(ResolveModel(model)))
+	for _, m := range preservedThinkingModels {
+		if id == m || strings.HasPrefix(id, m+"-") {
+			return true
+		}
+	}
+	return false
+}
+
 // modelContextWindows is the offline fallback for the input-token limit, used
 // before (or instead of) a live answer from the provider's models endpoint —
 // which is authoritative and is what /model now records when you pick a model.

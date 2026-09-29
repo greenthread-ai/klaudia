@@ -37,6 +37,9 @@ the saving is worthwhile, so it's cheap and rarely disruptive.
 | `MinTokensToSave` | 20000 | Minimum saving before eliding |
 | `EstimatedTokensPerImage` | 2000 | Flat estimate per image/document |
 
+Microcompact is skipped on models with preserved thinking (Claude Fable 5.1,
+Claude Opus 5.5; `api.PreservesThinking`) — see below.
+
 ## Autocompact
 
 When the estimated token count exceeds the compaction threshold, Klaudia asks
@@ -51,6 +54,30 @@ blockingLimit    = effectiveWindow - 3000            // hard ceiling
 ```
 
 `DefaultContextWindow` (200000) is assumed when the model's window is unknown.
+
+The summary request is sent without the conversation's system prompt and tools,
+so it also goes out without the conversation's thinking blocks
+(`BuildSummaryRequest`). The live history keeps them. After the summary replaces
+the history, no earlier turn is sent again.
+
+## Preserved thinking
+
+On Claude Fable 5.1 and Claude Opus 5.5, a thinking block's signature records
+the system prompt, the tool set and every message before it. If any of those
+changes after the block is produced, the API rejects the next request that
+replays the block. The rejection is a 400 for accounts created on or after
+2026-08-31. Other accounts can choose to drop the stale reasoning instead. So on
+these models, history that has already been sent must only grow, never change.
+
+| Edit | On these models |
+| --- | --- |
+| Microcompact elides old tool results | Skipped. Pruning has no append-only form |
+| Autocompact summary request | Sent without thinking blocks. Removing every block is always accepted |
+| Autocompact replaces the history with the summary | Allowed. No earlier turn or thinking is replayed |
+| `sanitizeMessages` repairs | Deterministic in the stored history. Not yet measured against the API |
+
+Klaudia does not yet use server-side context editing (`clear_tool_uses`) or
+on-demand compaction (`compact-2026-09-04`). The API accepts those edits.
 
 ### Divergence: persisted summaries
 
