@@ -841,6 +841,14 @@ func run(cmd *cobra.Command, opts *options) error {
 	if mcpCfgErr != nil {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning: mcp config:", mcpCfgErr)
 	}
+	// Servers log to stderr. Headless and embedded runs forward it, prefixed
+	// with the server name, to Klaudia's own stderr (which an embedder drains);
+	// the TUI owns the terminal, so interactive runs do not.
+	// KLAUDIA_MCP_STDERR=<dir> also keeps a per-server log in any mode.
+	if !interactive {
+		mcp.SetStderr(cmd.ErrOrStderr())
+		defer mcp.SetStderr(nil)
+	}
 	mcpMgr, mcpErrs := mcp.Connect(ctx, mcpCfg)
 	defer mcpMgr.Close()
 	for _, e := range mcpErrs {
