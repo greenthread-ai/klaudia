@@ -110,6 +110,7 @@ func TestLoadProjectOverlaysHome(t *testing.T) {
 }
 
 func TestLoadDirSkillLayout(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	skills := filepath.Join(dir, ".klaudia", "skills")
 	mustMkdir(t, filepath.Join(skills, "deploy"))
@@ -137,6 +138,7 @@ Deploy the service. $ARGUMENTS`)
 }
 
 func TestLoadDirWarnsOnSkillDirWithoutDefinition(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	skills := filepath.Join(dir, ".klaudia", "skills")
 	mustMkdir(t, filepath.Join(skills, "halfdone"))
@@ -154,6 +156,7 @@ func TestLoadDirWarnsOnSkillDirWithoutDefinition(t *testing.T) {
 }
 
 func TestLoadDirFrontmatterNameStillWins(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	skills := filepath.Join(dir, ".klaudia", "skills")
 	mustMkdir(t, filepath.Join(skills, "folder-name"))
@@ -169,6 +172,14 @@ body`)
 	}
 }
 
+// isolateHome points HOME at an empty directory. Load reads ~/.claude/skills and
+// ~/.klaudia/skills, so a test that doesn't pin HOME sees whatever skills the
+// developer has installed and passes or fails depending on the machine.
+func isolateHome(t *testing.T) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+}
+
 func mustMkdir(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -177,6 +188,7 @@ func mustMkdir(t *testing.T, dir string) {
 }
 
 func TestLoadReadsClaudeDirectories(t *testing.T) {
+	isolateHome(t)
 	dir := t.TempDir()
 	// What a skills installer leaves behind for Claude Code.
 	write(t, filepath.Join(dir, ".claude", "skills", "frontend-design", "SKILL.md"), `---
