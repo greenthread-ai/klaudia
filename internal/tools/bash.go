@@ -78,6 +78,10 @@ func (b *Bash) ValidateInput(raw json.RawMessage) error {
 
 // PermissionRequest derives a rule specifier from the command via the bash
 // parser (e.g. "git status"), falling back to the raw command on parse error.
+//
+// RuleSpecifiers carries the per-command specifiers to persist on "always
+// allow" (see bashRuleSpecifiers) so a compound line saves a rule for every
+// command it runs, not only the first.
 func (b *Bash) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
 	var in BashInput
 	_ = json.Unmarshal(raw, &in)
@@ -87,7 +91,87 @@ func (b *Bash) PermissionRequest(raw json.RawMessage) permission.PermissionReque
 			spec = p
 		}
 	}
-	return permission.PermissionRequest{Specifier: spec}
+	return permission.PermissionRequest{
+		Specifier:      spec,
+		RuleSpecifiers: bashRuleSpecifiers(in.Command),
+	}
+}
+
+// bashRuleSpecifiers returns the allow-rule specifiers to persist when the user
+// chooses "always allow" for command.
+//
+// A single simple command yields exactly one specifier equal to Prefix() — the
+// same string saved before this change — so a lone command's saved rule is
+// unchanged. A compound line (chained or piped) yields one "program subcommand"
+// short form per distinct command, so that under every-command rule matching
+// (PR #16) each command in the line is individually allowed rather than only
+// the first. Saving a single first-command rule either over-permitted (the old
+// first-command-only matching) or, once rules must match every command, would
+// silently fail to allow the same line next time.
+//
+// It returns nil — the caller then falls back to the single Specifier, the
+// prior behaviour — whenever the line cannot be reduced to a clean set of named
+// commands: a parse error, any parameter expansion or command substitution
+// (its text is not the whole command, so a rule built from it could both
+// over-permit and miss the substituted command), or an inline shell / eval
+// whose payload commands are not enumerated here. In those cases guessing a
+// rule set risks over-permitting and would not reliably allow the line anyway,
+// so the conservative single-rule fallback is preferred.
+func bashRuleSpecifiers(command string) []string {
+	a, err := bashparser.Parse(command)
+	if err != nil || len(a.Commands) == 0 {
+		return nil
+	}
+	// An expansion anywhere means at least one word is not the whole story;
+	// refuse the line rather than name a command from partial text.
+	if a.HasExpansion {
+		return nil
+	}
+	var specs []string
+	seen := make(map[string]bool)
+	for _, c := range a.Commands {
+		// A program that is an expansion, or an inline shell whose script this
+		// pass does not read, cannot be named by a clean rule.
+		if c.Name == "" || !c.NameWord.Literal || isInlineShellCommand(c.Name) {
+			return nil
+		}
+		spec := commandShortForm(c.Name, c.Args)
+		if spec == "" {
+			return nil
+		}
+		if !seen[spec] {
+			seen[spec] = true
+			specs = append(specs, spec)
+		}
+	}
+	return specs
+}
+
+// commandShortForm is a command's "program subcommand" specifier: the program
+// name plus its first non-flag argument ("git status"), or the name alone. It
+// matches the form bashparser.Prefix gives the first command, applied per
+// command.
+func commandShortForm(name string, args []string) string {
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "-") {
+			return name + " " + arg
+		}
+	}
+	return name
+}
+
+// isInlineShellCommand reports whether name is a shell or eval that runs a
+// script passed as an argument — bash -c '…', eval '…' — whose inner commands
+// this pass does not enumerate, so the line is not cleanly reducible to rules.
+func isInlineShellCommand(name string) bool {
+	if i := strings.LastIndexByte(name, '/'); i >= 0 {
+		name = name[i+1:]
+	}
+	switch name {
+	case "sh", "bash", "zsh", "dash", "ksh", "eval":
+		return true
+	}
+	return false
 }
 
 // CheckPermissions: Bash is a command-executing (exec-class) tool.

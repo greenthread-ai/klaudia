@@ -785,11 +785,12 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 			approver = DenyAll
 		}
 		ad := approver.Approve(ctx, ApprovalRequest{
-			ToolName:   tu.Name,
-			ToolUseID:  tu.ID,
-			Input:      raw,
-			Specifier:  req.Specifier,
-			Suggestion: decision.Message,
+			ToolName:       tu.Name,
+			ToolUseID:      tu.ID,
+			Input:          raw,
+			Specifier:      req.Specifier,
+			RuleSpecifiers: req.RuleSpecifiers,
+			Suggestion:     decision.Message,
 		})
 		if ad.Behavior != permission.Allow {
 			msg := ad.Message

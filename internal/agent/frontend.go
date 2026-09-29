@@ -23,6 +23,12 @@ type ApprovalRequest struct {
 	ToolUseID string
 	Input     json.RawMessage
 	Specifier string
+	// RuleSpecifiers, when set, is the set of specifiers a frontend persists on
+	// "always allow" — one saved rule per entry, in place of a single rule from
+	// Specifier. A compound Bash line uses it to save one rule per command it
+	// runs (so every command is allowed next time, not only the first); empty
+	// means "save the single Specifier". Mirrors permission.PermissionRequest.
+	RuleSpecifiers []string
 	// Suggestion is the message from the intrinsic check (may be empty).
 	Suggestion string
 	// HostChange, when set, means this approval is about a change to the
