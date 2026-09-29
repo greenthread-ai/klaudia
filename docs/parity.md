@@ -88,7 +88,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | MCP reconnect/disconnect (`/mcp`) | — | `mcp.Manager` + `tui` | 🔀 divergent | Interactive `/mcp` picker; reconnect swaps the live session into the existing tool wrappers so a crashed server's tools resume. |
 | MCP HTTP/SSE transports | 07-app-features | `mcp/mcp.go` | ✅ done | A server with `url` uses the streamable HTTP transport (or `type:"sse"`); `command` stays stdio. Custom auth headers are a growth point. |
 | Built-in sub-agents | 07-app-features | `subagent/` | ✅ done | |
-| Sub-agent tool allowlists (`Type.Filter`) | 07-app-features | `subagent/` | ✅ done | Explore/Plan are restricted to read-only Read/Glob/Grep; general-purpose gets the full toolset by design. |
+| Sub-agent tool allowlists (`Type.Filter`) | 07-app-features | `subagent/` | ✅ done | Explore/Plan are restricted to read-only Read/Glob/Grep; general-purpose gets the full toolset by design, less AskUserQuestion, with TodoWrite on a store of its own. |
 
 ## TUI & frontends
 
