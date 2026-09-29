@@ -500,7 +500,7 @@ func createConfig(scope, cwd string) (string, error) {
 	case "local":
 		path = config.ProjectPath(cwd)
 	default:
-		return "", fmt.Errorf("--create-config must be global or local")
+		return "", usageErrorf("--create-config must be global or local")
 	}
 	if _, err := os.Stat(path); err == nil {
 		return "", fmt.Errorf("config already exists: %s", path)
@@ -550,7 +550,7 @@ type options struct {
 // and embedding (stream-json) runs stay stateless unless asked.
 func resolveResumeID(cwd string, opts options, interactive bool) (string, error) {
 	if opts.newSession && (opts.resume != "" || opts.continueSession) {
-		return "", fmt.Errorf("--new-session cannot be combined with --resume or --continue")
+		return "", usageErrorf("--new-session cannot be combined with --resume or --continue")
 	}
 	if opts.resume != "" {
 		return opts.resume, nil
@@ -630,7 +630,7 @@ func NewRootCommand() *cobra.Command {
 func run(cmd *cobra.Command, opts *options) error {
 	format, err := ParseOutputFormat(opts.outputFormat)
 	if err != nil {
-		return err
+		return usageErrorf("%s", err)
 	}
 
 	cwd, _ := os.Getwd()
@@ -739,8 +739,14 @@ func run(cmd *cobra.Command, opts *options) error {
 	// The host gate. extraDirs is read at check time rather than captured, so a
 	// directory added mid-session with /add-dir counts as project work on the
 	// next tool call.
+	//
+	// Only rules from config count as legacy here. Starting in observe is the
+	// migration path for a config written for the per-command model
+	// (docs/trust.md); --allowedTools on one command line has nothing to
+	// migrate, and letting it switch the guardrail off made
+	// `--allowedTools Read --permission-mode autonomous` a usage error.
 	hostPolicy, hostNotice := agent.ResolveHostPolicy(
-		cfg.Trust.Mode, len(allowRules) > 0 || len(denyRules) > 0)
+		cfg.Trust.Mode, len(cfg.Permissions.Allow) > 0 || len(cfg.Permissions.Deny) > 0)
 
 	// Resolve the permission mode: --permission-mode flag wins, else the config
 	// default ([permissions] mode), else autonomous — but only when the host

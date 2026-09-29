@@ -138,6 +138,9 @@ func (c *Client) dispatch(msg wireMessage) {
 	}
 }
 
+// failAll runs when the read loop ends — the server exited or its stdout broke.
+// Pending requests fail with the cause, and Diagnostics waiters are released so
+// they return at once instead of sitting out diagnosticsWait on a dead server.
 func (c *Client) failAll(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -146,6 +149,20 @@ func (c *Client) failAll(err error) {
 		ch <- rpcResponse{err: &rpcError{Message: err.Error()}}
 		delete(c.pending, id)
 	}
+	for uri, waiters := range c.diagCh {
+		for _, w := range waiters {
+			close(w)
+		}
+		delete(c.diagCh, uri)
+	}
+}
+
+// Alive reports whether the server is still connected. It turns false once the
+// read loop has ended, which is how the pool notices a server that crashed.
+func (c *Client) Alive() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return !c.closed
 }
 
 // call sends a request and waits for the response (bounded by ctx).
@@ -210,13 +227,31 @@ func mustJSON(v any) json.RawMessage {
 	return b
 }
 
-// Close shuts the server down gracefully, then kills the process.
+// closeGrace is how long Close gives a server to exit on its own after the
+// exit notification before killing it.
+const closeGrace = 2 * time.Second
+
+// Close shuts the server down gracefully, then kills the process if it hasn't
+// exited within closeGrace. Killing it straight after sending exit — as Close
+// used to — meant a server that hadn't yet read the notification never got to
+// exit cleanly.
 func (c *Client) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	_ = c.call(ctx, "shutdown", nil, nil)
 	_ = c.notify("exit", nil)
 	_ = c.stdin.Close()
+
+	exited := make(chan struct{})
+	go func() {
+		_ = c.cmd.Wait()
+		close(exited)
+	}()
+	select {
+	case <-exited:
+	case <-time.After(closeGrace):
+		c.cancel()
+		<-exited
+	}
 	c.cancel()
-	_ = c.cmd.Wait()
 }

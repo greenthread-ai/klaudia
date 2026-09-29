@@ -106,12 +106,14 @@ Pure Go, no CGO, no system libraries:
 
 ```bash
 CGO_ENABLED=0 go install ./cmd/klaudia   # or: go build -o klaudia ./cmd/klaudia
-go test ./internal/...
+make check   # static checks, unit (race), hermetic, and e2e — what CI runs
 ```
 
 The result is one self-contained binary (Linux + macOS).
 
-Two end-to-end rigs go beyond the unit tests (both need a working credential):
+Testing is layered; see [docs/testing.md](docs/testing.md). `go test ./e2e/...`
+drives the real binary against a scripted model — no credential, no network.
+Two live rigs go further (both need a working credential):
 `scripts/smoke.sh` drives the real agent loop across modes, the client-side
 tools and the resume path on `haiku`; `scripts/torture.sh` runs the spec's
 agent-loop torture test — one task needing 20+ file inspections, edits, a dev

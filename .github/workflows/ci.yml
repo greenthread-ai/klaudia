@@ -8,24 +8,45 @@ on:
 permissions:
   contents: read
 
+# The layers are described in docs/testing.md. Everything here is hermetic: no
+# credential, no network beyond module download. The live-model layers
+# (scripts/smoke.sh, scripts/torture.sh) are run by hand.
 jobs:
-  build-test:
+  static:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
           check-latest: true
           cache: true
-
       # Pure Go: the build must stay CGO_ENABLED=0-clean (no cgo, no system libs).
-      - name: Build
-        run: CGO_ENABLED=0 go build ./...
+      - name: gofmt, vet, build
+        run: make static
 
-      - name: Vet
-        run: go vet ./...
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: true
+          cache: true
+      - name: Unit tests (race)
+        run: make unit
+      - name: Unit tests against a poisoned HOME
+        run: make hermetic
 
-      - name: Test
-        run: go test ./internal/... -count=1
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: true
+          cache: true
+      - name: Binary against a scripted model
+        run: make e2e

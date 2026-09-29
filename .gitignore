@@ -15,3 +15,6 @@
 # does not need to be. See .mcp.json.example. Commit a secret-free team config
 # with `git add -f .mcp.json` if you want one.
 /.mcp.json
+
+# scripts/cover.sh output
+/coverage/

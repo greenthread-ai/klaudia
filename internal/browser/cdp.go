@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,9 +66,21 @@ func New(parent context.Context, opts Options) (*Browser, error) {
 	}
 }
 
+// errNoChromeOutput marks a launch where Chrome exited before chromedp read any
+// of its output. chromedp calls cmd.Wait concurrently with reading the output
+// pipe, and Wait closes the pipe, so a Chrome that exits quickly can have its
+// last words discarded unread. That is typically the ProcessSingleton line of
+// a busy profile — so the profile retry can't depend on seeing it.
+var errNoChromeOutput = errors.New("chrome exited without any output that could be read")
+
 func newLaunched(parent context.Context, opts Options) (*Browser, error) {
 	b, err := newLaunchedWithOptions(parent, opts)
-	if err == nil || opts.UserDataDir == "" || !isProfileInUseError(err) {
+	if err == nil || opts.UserDataDir == "" {
+		return b, err
+	}
+	// A throwaway profile costs nothing, so retry whenever the profile could be
+	// the reason — including when the output that would say so was lost.
+	if !isProfileInUseError(err) && !errors.Is(err, errNoChromeOutput) {
 		return b, err
 	}
 
@@ -106,6 +119,9 @@ func newLaunchedWithOptions(parent context.Context, opts Options) (*Browser, err
 	if err := chromedp.Run(ctx); err != nil {
 		cancel()
 		allocCancel()
+		if strings.TrimSpace(err.Error()) == "chrome failed to start:" {
+			err = fmt.Errorf("chrome failed to start: %w", errNoChromeOutput)
+		}
 		return nil, plog.annotate(fmt.Errorf("launch chrome: %w", err))
 	}
 	return &Browser{allocCancel: allocCancel, ctx: ctx, cancel: cancel, plog: plog}, nil

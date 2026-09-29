@@ -63,8 +63,14 @@ func TestDetectFindsInCandidateDir(t *testing.T) {
 }
 
 // TestGoplsDiagnosticsLive exercises the whole pipeline against a real gopls.
-// Skipped when gopls isn't installed.
+// Opt-in with KLAUDIA_LIVE_LSP=1: it depends on what is installed on the
+// machine, which the unit layer must not (docs/testing.md), and gopls's
+// wording is not ours to pin. The fake server in fakeserver_test.go covers the
+// client; this checks it still talks to the real thing.
 func TestGoplsDiagnosticsLive(t *testing.T) {
+	if os.Getenv("KLAUDIA_LIVE_LSP") != "1" {
+		t.Skip("live gopls test; set KLAUDIA_LIVE_LSP=1 to run it")
+	}
 	goSpec, ok := func() (ServerSpec, bool) {
 		for _, s := range builtinServers {
 			if s.Language == "go" {
