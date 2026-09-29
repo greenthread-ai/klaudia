@@ -70,6 +70,26 @@ func TestGateStopsHostChanges(t *testing.T) {
 	}
 }
 
+// A path held in a variable is refused because it cannot be read, not because
+// it is known to be the host, so the refusal says how to make it readable.
+func TestGateRefusalSuggestsTheLiteralPath(t *testing.T) {
+	g, proj := gateFixture(t)
+	g.DeclareTool = "RequestHostChange"
+	for _, cmd := range []string{`rm -rf "$BUILD_DIR"`, `cat > "$OUT"`} {
+		d := g.Check("Bash", bashInput(cmd), proj)
+		if d.Allow {
+			t.Fatalf("%s was allowed", cmd)
+		}
+		if !strings.Contains(d.Refuse, "re-run with the literal path") {
+			t.Errorf("%s: refusal does not suggest the literal path: %q", cmd, d.Refuse)
+		}
+	}
+	d := g.Check("Bash", bashInput("sudo systemctl restart nginx"), proj)
+	if strings.Contains(d.Refuse, "literal path") {
+		t.Errorf("a known host change should not be told to spell out a path: %q", d.Refuse)
+	}
+}
+
 // Without a declaration tool the gate has to fall back to asking the user
 // directly, or a frontend that has not wired one up would refuse host changes
 // forever with instructions it cannot follow.

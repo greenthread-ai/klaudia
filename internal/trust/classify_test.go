@@ -129,6 +129,90 @@ var corpus = []corpusCase{
 	// --- a local write dressed as remote work ------------------------------
 	{cmd: "rsync -av deploy@staging:/etc/nginx/ /etc/nginx/", ask: true, want: "writes"},
 	{cmd: "docker cp api:/etc/nginx.conf /etc/nginx.conf", ask: true, want: "writes"},
+
+	// --- flag-driven package managers (#114) --------------------------------
+	// The operation is a flag, so the first operand is a package, not a verb.
+	{cmd: "sudo pacman -S nginx", ask: true, want: "installs package pacman:nginx"},
+	{cmd: "pacman -S --needed --noconfirm nginx", ask: true, want: "installs package pacman:nginx"},
+	{cmd: "sudo pacman -Syu", ask: true, want: "installs package"},
+	{cmd: "sudo pacman --sync --refresh --sysupgrade", ask: true, want: "installs package"},
+	{cmd: "sudo pacman -U ./pkg.tar.zst", ask: true, want: "installs package"},
+	{cmd: "sudo pacman -Rns nginx", ask: true, want: "removes package pacman:nginx"},
+	{cmd: "pacman -Ss nginx"},
+	{cmd: "pacman -Si nginx"},
+	{cmd: "pacman -Qi nginx"},
+	{cmd: "pacman -Ql nginx"},
+	{cmd: "sudo pacman -Sy"},
+	{cmd: "sudo rpm -ivh ./x.rpm", ask: true, want: "installs package"},
+	{cmd: "sudo rpm -e nginx", ask: true, want: "removes package rpm:nginx"},
+	{cmd: "rpm -qa"},
+	{cmd: "rpm -qi nginx"},
+	{cmd: "sudo dpkg -i ./x.deb", ask: true, want: "installs package"},
+	{cmd: "sudo dpkg --purge nginx", ask: true, want: "removes package dpkg:nginx"},
+	{cmd: "dpkg -l nginx"},
+	{cmd: "nix-env -iA nixpkgs.hello", ask: true, want: "installs package"},
+	{cmd: "nix-env -q"},
+
+	// --- `update` refreshes an index for some managers, upgrades for others -
+	{cmd: "brew update"},
+	{cmd: "sudo apt-get update"},
+	{cmd: "sudo apt update && sudo apt install -y nginx", ask: true, want: "installs package apt:nginx"},
+	{cmd: "brew upgrade", ask: true, want: "installs package"},
+	{cmd: "sudo dnf update", ask: true, want: "installs package"},
+
+	// --- global installs spelled as subcommands (#114) ----------------------
+	{cmd: "yarn global add typescript", ask: true, want: "installs package"},
+	{cmd: "yarn global remove typescript", ask: true, want: "removes package"},
+	{cmd: "yarn global list"},
+	{cmd: "yarn add lodash"},
+	{cmd: "npm install"},
+
+	// --- git config outside the repository (#114) ---------------------------
+	{cmd: "git config --global user.name Klaudia", ask: true, want: "writes {HOME}/.gitconfig"},
+	{cmd: "git config --global --unset core.editor", ask: true, want: "writes {HOME}/.gitconfig"},
+	{cmd: "git -C ./sub config --global core.autocrlf input", ask: true, want: "writes {HOME}/.gitconfig"},
+	{cmd: "git config set --global user.email k@example.com", ask: true, want: "writes {HOME}/.gitconfig"},
+	{cmd: "sudo git config --system core.autocrlf input", ask: true, want: "gitconfig"},
+	{cmd: "git config --global user.name"},
+	{cmd: "git config --global --get user.email"},
+	{cmd: "git config --global --list"},
+	{cmd: "git config get --global user.name"},
+	{cmd: "git config user.name Klaudia"},
+	{cmd: "git config --local core.hooksPath .githooks"},
+	{cmd: "git config -f .gitmodules submodule.x.url https://example.com/x.git"},
+	{cmd: "git clone https://example.com/x.git ./x"},
+	{cmd: "git log --oneline -5"},
+
+	// --- installs into the system interpreter or prefix (#114) --------------
+	{cmd: "sudo pip install requests", ask: true, want: "installs package pip:requests"},
+	{cmd: "sudo pip3 uninstall requests", ask: true, want: "removes package pip:requests"},
+	{cmd: "sudo python3 -m pip install requests", ask: true, want: "installs package pip:requests"},
+	{cmd: "sudo make install", ask: true, want: "installs package make install"},
+	{cmd: "sudo make -j4 PREFIX=/usr/local install", ask: true, want: "installs package make install"},
+	{cmd: "sudo ninja -C build install", ask: true, want: "installs package ninja install"},
+	{cmd: "sudo cmake --install build", ask: true, want: "installs package cmake install"},
+	{cmd: "pip install --user requests"},
+	{cmd: "pip install -r requirements.txt"},
+	{cmd: "python3 -m pip install -e ."},
+	{cmd: "python3 ./scripts/gen.py"},
+	{cmd: "make install"},
+	{cmd: "make -j8 test"},
+	{cmd: "sudo make"},
+	{cmd: "go install ./cmd/klaudia"},
+	{cmd: "cargo install ripgrep"},
+	{cmd: "docker run --rm alpine true"},
+
+	// --- ln writes the link, not its target (#114) --------------------------
+	{cmd: "ln -s $(pwd)/tool {HOME}/.local/bin/tool"},
+	{cmd: "ln -sf \"$SRC\" ./bin/tool"},
+	{cmd: "ln -s /opt/homebrew/bin/tool"},
+	{cmd: "sudo ln -s $(pwd)/tool /usr/local/bin/tool", ask: true, want: "writes /usr/local/bin/tool"},
+	{cmd: "ln -s ./tool \"$DEST\"", ask: true, want: "does not determine statically"},
+
+	// --- a path held in a variable says what it would have done -------------
+	{cmd: "rm -rf \"$BUILD_DIR\"", ask: true, want: "recursively deletes a path it does not determine statically"},
+	{cmd: "rm -f \"$OUT\"", ask: true, want: "deletes a path it does not determine statically"},
+	{cmd: "cat > \"$OUT\"", ask: true, want: "writes a path it does not determine statically"},
 }
 
 func TestClassificationCorpus(t *testing.T) {
@@ -144,9 +228,9 @@ func TestClassificationCorpus(t *testing.T) {
 				t.Fatalf("ask = %v, want %v\ncommand: %s\nzone: %s\nsummary: %q\neffects: %s",
 					ask, tc.ask, cmd, as.Zone(), as.Summary(), dumpEffects(as))
 			}
-			if tc.ask && tc.want != "" && !strings.Contains(as.Summary(), tc.want) {
+			if want := rep.Replace(tc.want); tc.ask && want != "" && !strings.Contains(as.Summary(), want) {
 				t.Fatalf("summary %q does not mention %q\ncommand: %s\neffects: %s",
-					as.Summary(), tc.want, cmd, dumpEffects(as))
+					as.Summary(), want, cmd, dumpEffects(as))
 			}
 		})
 	}

@@ -251,6 +251,15 @@ func (g *HostGate) refusal(as trust.Assessment, drift []trust.Effect, hadGrants 
 	if hadGrants {
 		b.WriteString("That is outside the scope the user approved. ")
 	}
+	for _, e := range drift {
+		if e.UnknownPath() {
+			// The commonest cause is a variable, and the fix is cheap: spell the
+			// path out so it can be checked, rather than declaring a host change
+			// for what is probably a directory inside the project.
+			b.WriteString("The path comes from a variable or command substitution; if you know it, re-run with the literal path so it can be checked. ")
+			break
+		}
+	}
 	b.WriteString("Take another route if one exists. ")
 	b.WriteString(fmt.Sprintf(
 		"If it has to be done this way, call %s to describe the whole operation and why.",

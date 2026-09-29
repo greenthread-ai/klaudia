@@ -75,7 +75,13 @@ Some consequences worth being explicit about:
   destroys a disk and asks.
 - **`sudo` is not itself the trigger.** `sudo -u deploy ./scripts/deploy.sh`
   inside the project is project work. Treating every `sudo` as a host change is
-  how a protection gets switched off.
+  how a protection gets switched off. It does decide the cases a command line
+  cannot: `sudo pip install` and `sudo make install` write the system
+  interpreter and prefix, while the same commands unprivileged are usually a
+  virtualenv or a prefix you own, and do not ask.
+- **Refreshing a package index is not installing.** `brew update` and
+  `apt-get update` change nothing that runs; `dnf update` and `brew upgrade`
+  do, and ask.
 
 ## MCP tools
 
