@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/greenthread-ai/klaudia/internal/textsafe"
 )
 
 // securityClause mirrors the JS constant V44 (05-app-core.js:65659).
@@ -59,16 +61,19 @@ func System(cwd, model string) string {
 	}
 	b.WriteString("\n\n")
 	b.WriteString(envBlock(cwd))
-	if instr := loadProjectInstructions(cwd); instr != "" {
+	// Instructions, memory and knowledge are files a checkout or an earlier
+	// session wrote; invisible characters in them are stripped, so the model
+	// reads what a person reviewing the file would see.
+	if instr := textsafe.StripInvisible(loadProjectInstructions(cwd)); instr != "" {
 		b.WriteString("\n\n# Project instructions (from CLAUDE.md)\n")
 		b.WriteString(instr)
 	}
-	if mem := recalledMemory(cwd); mem != "" {
+	if mem := textsafe.StripInvisible(recalledMemory(cwd)); mem != "" {
 		b.WriteString("\n\n# Recalled memory\n")
 		b.WriteString("These are notes you saved in earlier sessions. Use the Memory tool to search for more or to add new ones.\n\n")
 		b.WriteString(mem)
 	}
-	if kn := recalledKnowledge(cwd); kn != "" {
+	if kn := textsafe.StripInvisible(recalledKnowledge(cwd)); kn != "" {
 		b.WriteString("\n\n# Project knowledge\n")
 		b.WriteString("Curated, durable lessons about this project (from .klaudia/KNOWLEDGE.md). Treat these as established facts.\n\n")
 		b.WriteString(kn)
