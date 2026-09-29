@@ -58,7 +58,10 @@ func (g *Grep) CheckPermissions(pctx permission.Context, _ permission.Permission
 	return allowAlways(pctx)
 }
 
-func (g *Grep) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
+// maxSearchResults bounds what Grep and Glob collect before formatting.
+const maxSearchResults = 20000
+
+func (g *Grep) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in GrepInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
@@ -74,6 +77,8 @@ func (g *Grep) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 		IgnoreCase: in.IgnoreCase,
 		Multiline:  in.Multiline,
 		Glob:       in.Glob,
+		Limit:      maxSearchResults,
+		Ctx:        ctx,
 	})
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil
@@ -82,14 +87,21 @@ func (g *Grep) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 		return []Result{{Content: "No matches found"}}, nil
 	}
 
+	var note string
+	if len(matches) > maxSearchResults {
+		matches = matches[:maxSearchResults]
+		note = fmt.Sprintf("\n(stopped after %d matches — narrow the pattern, path or glob to see the rest)", maxSearchResults)
+	}
+	var out string
 	switch in.OutputMode {
 	case "content":
-		return []Result{{Content: formatContent(matches, in.LineNum)}}, nil
+		out = formatContent(matches, in.LineNum)
 	case "count":
-		return []Result{{Content: formatCount(matches)}}, nil
+		out = formatCount(matches)
 	default: // files_with_matches
-		return []Result{{Content: formatFiles(matches)}}, nil
+		out = formatFiles(matches)
 	}
+	return []Result{CapResult(Result{Content: out + note})}, nil
 }
 
 // formatFiles returns the distinct matching files, in stable order.
