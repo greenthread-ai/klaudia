@@ -11,6 +11,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
 // bashDefaultTimeout is applied when the model doesn't specify one.
@@ -78,16 +79,97 @@ func (b *Bash) ValidateInput(raw json.RawMessage) error {
 
 // PermissionRequest derives a rule specifier from the command via the bash
 // parser (e.g. "git status"), falling back to the raw command on parse error.
+// The specifier names the request in prompts and in "always allow" rules; the
+// rules themselves are checked against every command in the line (Commands).
 func (b *Bash) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
 	var in BashInput
 	_ = json.Unmarshal(raw, &in)
-	spec := in.Command
+	req := permission.PermissionRequest{Specifier: in.Command}
 	if a, err := bashparser.Parse(in.Command); err == nil {
 		if p := a.Prefix(); p != "" {
-			spec = p
+			req.Specifier = p
 		}
 	}
-	return permission.PermissionRequest{Specifier: spec}
+	req.Commands, req.Opaque = bashRuleCommands(in.Command, 0)
+	return req
+}
+
+const (
+	// maxRuleCommandLen is the longest command line allow rules may approve.
+	// Past it, a line is asked about whatever the rules say: a prompt cannot
+	// usefully show it, and length is how a tail gets hidden.
+	maxRuleCommandLen = 10000
+	// maxPayloadDepth bounds the recursion into `bash -c` and eval scripts.
+	maxPayloadDepth = 3
+)
+
+// bashRuleCommands lists the commands a Bash line runs, each with the forms a
+// permission rule may name it by (see permission.PermissionRequest.Commands).
+// opaque is true when some command could not be read.
+func bashRuleCommands(line string, depth int) (cmds [][]string, opaque bool) {
+	if len(line) > maxRuleCommandLen || depth > maxPayloadDepth {
+		return nil, true
+	}
+	a, err := bashparser.Parse(line)
+	if err != nil {
+		return nil, true
+	}
+	for _, c := range a.Commands {
+		if !c.NameWord.Literal {
+			opaque = true // `$CMD rm -rf x` names no program a rule can match
+			continue
+		}
+		forms := commandForms(c.Name, c.Args, nil)
+		name, args, ok := trust.Unwrapped(c)
+		if !ok {
+			opaque = true // a wrapper around an expansion: `sudo "$X" …`
+			cmds = append(cmds, forms)
+			continue
+		}
+		cmds = append(cmds, commandForms(name, args, forms))
+		// The script of `bash -c` or eval — found after unwrapping, so
+		// `sudo bash -c '…'` is read too — runs commands of its own, each
+		// checked like the rest. One that is an expansion cannot be read.
+		if payload, isShell := bashparser.ShellPayload(name, args); isShell {
+			if hasExpansion(c.ArgWords) {
+				opaque = true
+				continue
+			}
+			inner, innerOpaque := bashRuleCommands(payload, depth+1)
+			cmds = append(cmds, inner...)
+			opaque = opaque || innerOpaque
+		}
+	}
+	return cmds, opaque
+}
+
+// hasExpansion reports whether any word is an expansion rather than literal.
+func hasExpansion(words []bashparser.Word) bool {
+	for _, w := range words {
+		if !w.Literal {
+			return true
+		}
+	}
+	return false
+}
+
+// commandForms appends to forms, without duplicates, the ways a rule may name
+// a command: in full and in short form, by the program as written and by its
+// base name, so `Bash(rm:*)` also covers `/bin/rm -rf x`.
+func commandForms(name string, args []string, forms []string) []string {
+	add := func(f string) {
+		for _, have := range forms {
+			if have == f {
+				return
+			}
+		}
+		forms = append(forms, f)
+	}
+	for _, n := range []string{name, bashparser.Base(name)} {
+		add(strings.TrimSpace(n + " " + strings.Join(args, " ")))
+		add(bashparser.ShortForm(n, args))
+	}
+	return forms
 }
 
 // CheckPermissions: Bash is a command-executing (exec-class) tool.

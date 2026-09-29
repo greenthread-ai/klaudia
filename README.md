@@ -355,7 +355,14 @@ working, but they create nothing new and `/allow`/`/deny` are no longer listed
 in `/help`. `/trust` grants by what an operation *does* rather than by matching
 command text, and shows any surviving rules alongside its own. A config that
 already has permission rules starts in observe mode until you run
-`/trust upgrade`.
+`/trust upgrade`. A Bash rule is checked against every command in the line —
+including `$(…)`, subshells, `bash -c` scripts, and the command behind a
+wrapper such as `sudo` or `env` — so a deny applies if any of them matches, and
+an allow only if all of them do. File rules (`Read`, `Edit`, and the tools they
+cover) are path patterns: `~` is your home, a relative pattern is relative to
+the project, `**` crosses directories, and a path is matched after resolving
+symlinks. A `Read` deny also covers Glob and Grep, and an `Edit` deny covers
+Write and NotebookEdit.
 
 Full detail, including the zone table and what is deliberately *not* protected:
 [docs/trust.md](docs/trust.md).

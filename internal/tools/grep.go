@@ -49,9 +49,11 @@ func (g *Grep) InputSchema() json.RawMessage { return g.schema.Raw }
 
 func (g *Grep) ValidateInput(raw json.RawMessage) error { return g.schema.Validate(raw) }
 
-// PermissionRequest: Grep is read-only.
-func (g *Grep) PermissionRequest(json.RawMessage) permission.PermissionRequest {
-	return permission.PermissionRequest{}
+// PermissionRequest names the search root, so Read deny rules apply to it.
+func (g *Grep) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
+	var in GrepInput
+	_ = json.Unmarshal(raw, &in)
+	return pathRequest(firstNonEmptyPath(in.Path, "."))
 }
 
 func (g *Grep) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {

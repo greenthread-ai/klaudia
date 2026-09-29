@@ -61,7 +61,7 @@ func (w *Write) ValidateInput(raw json.RawMessage) error {
 func (w *Write) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
 	var in WriteInput
 	_ = json.Unmarshal(raw, &in)
-	return permission.PermissionRequest{Specifier: in.FilePath}
+	return pathRequest(in.FilePath)
 }
 
 // CheckPermissions: Write is a file-mutating (edit-class) tool.
