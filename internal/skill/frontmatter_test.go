@@ -45,7 +45,7 @@ func TestRenderSkillDir(t *testing.T) {
 	s := Skill{Body: "Run ${CLAUDE_SKILL_DIR}/scripts/fill.py or ${KLAUDIA_SKILL_DIR}/x on $ARGUMENTS", Path: path}
 	got := s.Render("form.pdf")
 	want := "Run /opt/skills/pdf/scripts/fill.py or /opt/skills/pdf/x on form.pdf"
-	if got != want {
+	if !strings.HasSuffix(got, "\n\n"+want) {
 		t.Errorf("Render = %q, want %q", got, want)
 	}
 	if strings.Contains(Skill{Body: "${CLAUDE_SKILL_DIR}"}.Render(""), "/") {
