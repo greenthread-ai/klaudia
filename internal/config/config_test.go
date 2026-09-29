@@ -60,6 +60,24 @@ func TestLoadThemeProjectOverridesHome(t *testing.T) {
 	}
 }
 
+func TestLoadTUINotifyOverridesHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, home, "[tui]\nnotify = \"bell\"\n")
+
+	// Global-only: inherited.
+	if cfg := Load(t.TempDir()); cfg.TUI.Notify != "bell" {
+		t.Errorf("tui.notify = %q, want bell (from home)", cfg.TUI.Notify)
+	}
+
+	// Project overrides global.
+	cwd := t.TempDir()
+	writeConfig(t, cwd, "[tui]\nnotify = \"off\"\n")
+	if cfg := Load(cwd); cfg.TUI.Notify != "off" {
+		t.Errorf("tui.notify = %q, want off (project wins)", cfg.TUI.Notify)
+	}
+}
+
 func TestLoadPermissionModeOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -486,6 +486,10 @@ apiKeyEnv = "MY_API_KEY"
 # mode = "autonomous" # autonomous | plan | bypassPermissions
 # allow = ["Bash(go test:*)"]
 # deny = ["Bash(rm:*)"]
+#
+# [tui]
+# notify = "bell" # attention when a turn finishes / a prompt waits: comma list
+#                 # of bell | osc9 | osc777, or "all" / "off". Default: bell.
 `
 
 func createConfig(scope, cwd string) (string, error) {
@@ -1002,6 +1006,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Theme:               themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
 			PermissionMode:      string(mode),
 			EnterInserts:        tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
+			Notify:              tui.ParseNotify(cfg.TUI.Notify, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 			Memory:              memStore,
 			MCP:                 mcpController{mgr: mcpMgr, ctx: ctx},
 			OnMCPReload:         mcpReloads.register,

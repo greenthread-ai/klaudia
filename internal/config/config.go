@@ -62,6 +62,25 @@ type Config struct {
 	Trust Trust `toml:"trust,omitempty"`
 	// Input configures the prompt's key handling.
 	Input Input `toml:"input,omitempty"`
+	// TUI configures terminal-UI behaviour.
+	TUI TUI `toml:"tui,omitempty"`
+}
+
+// TUI configures the terminal UI.
+type TUI struct {
+	// Notify selects how Klaudia gets your attention when it needs you while you
+	// are looking elsewhere — a turn has finished, or a permission/approval
+	// prompt is waiting. It is a comma-separated list of mechanisms:
+	//
+	//   "bell"   — the terminal bell (\a); the most widely supported.
+	//   "osc9"   — an OSC 9 desktop notification (iTerm2, kitty, WezTerm, …).
+	//   "osc777" — an OSC 777 desktop notification (rxvt/urxvt and others).
+	//
+	// "all" enables every mechanism; "off"/"none"/"false" stays silent. Unset
+	// defaults to "bell", the least intrusive and most portable choice. When
+	// the terminal reports focus, the notification is emitted only while the
+	// window is unfocused.
+	Notify string `toml:"notify,omitempty"`
 }
 
 // Input configures how the prompt treats the Return key.
@@ -337,6 +356,9 @@ func merge(dst *Config, src Config) {
 	dst.Permissions.Deny = append(dst.Permissions.Deny, src.Permissions.Deny...)
 	if src.Trust.Mode != "" {
 		dst.Trust.Mode = src.Trust.Mode
+	}
+	if src.TUI.Notify != "" {
+		dst.TUI.Notify = src.TUI.Notify
 	}
 	// Disabled LSP languages accumulate (union of home + project).
 	dst.LSP.Disabled = append(dst.LSP.Disabled, src.LSP.Disabled...)
