@@ -56,6 +56,46 @@ func TestRegistryNamesAreStableAndSorted(t *testing.T) {
 	}
 }
 
+// The deferred set must name the Browser* and Task* tools (revealed on demand
+// via ToolSearch), every deferred tool must still be registered so it works
+// once revealed, and the common core (edit/read/bash/search + TodoWrite) must
+// stay eager — the whole point is to trim the standing list without losing a
+// capability.
+func TestDefaultDeferredTools(t *testing.T) {
+	deferred := DefaultDeferredTools()
+	want := []string{
+		"BrowserSearch", "BrowserFetch", "BrowserNavigate", "BrowserSnapshot",
+		"TaskCreate", "TaskList", "TaskGet", "TaskUpdate",
+	}
+	if !slices.Equal(append([]string(nil), deferred...), want) {
+		t.Errorf("DefaultDeferredTools() = %v, want %v", deferred, want)
+	}
+
+	reg, err := DefaultRegistry(nil)
+	if err != nil {
+		t.Fatalf("DefaultRegistry: %v", err)
+	}
+	// Every deferred tool is still registered — deferral withholds it from the
+	// request, it does not remove it — so ToolSearch can reveal a working tool.
+	for _, name := range deferred {
+		if _, ok := reg.Lookup(name); !ok {
+			t.Errorf("deferred tool %q is not registered; ToolSearch could not reveal it", name)
+		}
+	}
+
+	// The commonly-used core stays eager: it must never appear in the deferred
+	// set. Paying a ToolSearch round-trip to reach Read or Bash would be a loss.
+	deferredSet := make(map[string]bool, len(deferred))
+	for _, name := range deferred {
+		deferredSet[name] = true
+	}
+	for _, core := range []string{"Read", "Write", "Edit", "Glob", "Grep", "Bash", "BashOutput", "TodoWrite"} {
+		if deferredSet[core] {
+			t.Errorf("core tool %q must stay eager, but it is in the deferred set", core)
+		}
+	}
+}
+
 func mustWrite(t *testing.T) *Write {
 	t.Helper()
 	w, err := NewWrite()

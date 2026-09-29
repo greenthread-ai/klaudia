@@ -876,9 +876,20 @@ func run(cmd *cobra.Command, opts *options) error {
 			all = append(all, rts...)
 		}
 		deferred := map[string]bool{}
+		present := map[string]bool{}
 		for _, t := range all {
+			present[t.Name()] = true
 			if strings.HasPrefix(t.Name(), "mcp__") {
 				deferred[t.Name()] = true
+			}
+		}
+		// Defer the rarely-used local tools (Browser*, Task*) too, so a session
+		// with no MCP servers still trims its standing tool list. Guarded by
+		// presence: a tool the registry did not build (e.g. dropped by an
+		// option) is not marked deferred.
+		for _, name := range tools.DefaultDeferredTools() {
+			if present[name] {
+				deferred[name] = true
 			}
 		}
 		if len(deferred) > 0 {
