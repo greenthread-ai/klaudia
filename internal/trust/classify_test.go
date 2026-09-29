@@ -96,6 +96,11 @@ var corpus = []corpusCase{
 	{cmd: "sudo dd if=./img.iso of=/dev/disk2", ask: true, want: "writes"},
 	{cmd: "echo 'export PATH=$PATH:/x' >> {HOME}/.zshrc", ask: true, want: "writes"},
 	{cmd: "crontab -e", ask: true, want: "machine environment"},
+	// The sandbox's terminal check lets these run (they need no terminal);
+	// the host gate must still ask, since they replace or remove the table.
+	{cmd: "crontab -r", ask: true, want: "machine environment"},
+	{cmd: "crontab ./jobs.txt", ask: true, want: "machine environment"},
+	{cmd: "echo '* * * * * true' | crontab -", ask: true, want: "machine environment"},
 
 	// --- wrappers and nesting ----------------------------------------------
 	{cmd: "sh -c 'echo x > /etc/hosts'", ask: true, want: "writes"},
