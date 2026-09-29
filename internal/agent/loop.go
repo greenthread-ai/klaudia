@@ -29,12 +29,12 @@ type Emitter func(event Event)
 
 // Event is a streaming event emitted during a run (stream-json mode).
 type Event struct {
-	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_progress" | "tool_result" | "usage" | "compaction"
+	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_progress" | "tool_result" | "usage" | "compaction" | "notice"
 	Text      string `json:"text,omitempty"`        // assistant text
 	ToolName  string `json:"tool_name,omitempty"`   // tool_use / tool_result
 	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use / tool_result
 	Input     any    `json:"input,omitempty"`       // tool_use input
-	Content   string `json:"content,omitempty"`     // tool_result content (what the model sees)
+	Content   string `json:"content,omitempty"`     // tool_result content (what the model sees); compaction/notice text
 	IsError   bool   `json:"is_error,omitempty"`    // tool_result error flag
 	// HostBlocked marks a tool_result that the host gate stopped, as distinct
 	// from a tool that failed. The two look identical to the model — both are
@@ -483,6 +483,11 @@ func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewPa
 			}
 		},
 		OnRawEvent: rawSink,
+		OnNotice: func(msg string) {
+			if emit != nil {
+				emit(Event{Type: "notice", Content: msg})
+			}
+		},
 	}
 	assistant, err := l.provider.StreamTurn(ctx, params, sink)
 	if err != nil {

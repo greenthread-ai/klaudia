@@ -471,6 +471,10 @@ apiKeyEnv = "MY_API_KEY"
 # 32768, 128000.
 # contextWindow = 8192
 
+# Model to fall back to when the model is overloaded (retried once) or not
+# found (used for the rest of the session). --fallback-model overrides it.
+# fallbackModel = "openai/gpt-5.5-mini"
+
 # TUI theme (Markdown + chrome). /theme switches it for a session.
 # theme = "nord" # dracula | gruvbox | tokyo-night | nord | catppuccin
 
@@ -522,6 +526,7 @@ type options struct {
 	print            bool
 	prompt           string
 	model            string
+	fallbackModel    string
 	outputFormat     string
 	inputFormat      string
 	permissionMode   string
@@ -602,6 +607,7 @@ func NewRootCommand() *cobra.Command {
 	f := cmd.Flags()
 	f.BoolVarP(&opts.print, "print", "p", false, "Non-interactive mode: print result to stdout and exit")
 	f.StringVar(&opts.model, "model", "", "Model alias (haiku|sonnet|opus) or full model ID")
+	f.StringVar(&opts.fallbackModel, "fallback-model", "", "Model to use when the model is overloaded (retried once) or not found (for the rest of the session); overrides config fallbackModel")
 	f.StringVar(&opts.outputFormat, "output-format", "text", "Output format: text|json|stream-json")
 	f.StringVar(&opts.inputFormat, "input-format", "text", "Input format: text|stream-json (stream-json drives a persistent agent over stdin)")
 	f.StringVar(&opts.permissionMode, "permission-mode", "", "Permission mode: autonomous|plan|bypassPermissions (default: config [permissions] mode, else autonomous)")
@@ -726,6 +732,13 @@ func run(cmd *cobra.Command, opts *options) error {
 		modelStr = providerModel
 	}
 	model := api.ResolveModel(modelStr)
+
+	// The model enumeration is the backend's own; take it before the
+	// fallback wrapper, which does not list models.
+	listModels := modelLister(provider)
+	// --fallback-model overrides config fallbackModel; neither set leaves the
+	// provider unwrapped.
+	provider = api.WithFallback(provider, firstNonEmpty(opts.fallbackModel, cfg.FallbackModel))
 
 	// Build allow/deny rules from config (.klaudia) + CLI flags.
 	allowRules, err := permission.ParseRules(append(append([]string{}, cfg.Permissions.Allow...), opts.allowedTools...))
@@ -1024,7 +1037,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			},
 			// Nil unless the provider can enumerate its models; /model falls
 			// back to type-the-id when it is.
-			ListModels: modelLister(provider),
+			ListModels: listModels,
 			Trust:      tui.NewTrustController(hostGate),
 			Jobs:       jobStore,
 			Executor:   executor,
@@ -1133,6 +1146,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			partial = newPartialEmitter(out, sessionID, &writeMu).emit
 		}
 	}
+	emit = withNotices(emit, cmd.ErrOrStderr())
 	res, err := loop.Run(ctx, agent.Options{
 		WorkingDir:      cwd,
 		Prompt:          opts.prompt,

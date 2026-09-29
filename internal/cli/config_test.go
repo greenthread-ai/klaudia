@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/config"
 )
 
@@ -117,5 +118,22 @@ func TestStarterConfigRoundtripsContextWindow(t *testing.T) {
 	cfg := config.Load(cwd)
 	if cfg.ContextWindow != 8192 {
 		t.Errorf("ContextWindow = %d, want 8192 (toml tag mismatch?)", cfg.ContextWindow)
+	}
+}
+
+func TestWithNoticesWritesNoticesToStderr(t *testing.T) {
+	var stderr strings.Builder
+	var passed []string
+	emit := withNotices(func(ev agent.Event) { passed = append(passed, ev.Type) }, &stderr)
+	emit(agent.Event{Type: "assistant", Text: "hello"})
+	emit(agent.Event{Type: "notice", Content: "Model x is overloaded; retrying this request on fallback model y."})
+
+	if got := stderr.String(); got != "note: Model x is overloaded; retrying this request on fallback model y.\n" {
+		t.Errorf("stderr = %q", got)
+	}
+	// The wrapped emitter still sees every event, so stream-json output is
+	// unchanged.
+	if len(passed) != 2 {
+		t.Errorf("wrapped emitter saw %v, want both events", passed)
 	}
 }
