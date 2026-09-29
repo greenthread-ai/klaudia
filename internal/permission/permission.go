@@ -13,7 +13,13 @@
 // then mode logic, then the tool's own intrinsic check.
 package permission
 
-import "strings"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/bmatcuk/doublestar/v4"
+)
 
 // Mode is the user's stance for the session.
 type Mode string
@@ -199,19 +205,37 @@ type PermissionRequest struct {
 }
 
 // DeniedBy reports whether a deny rule in rules applies to req for tool.
+//
+// A deny rule for Read also covers Glob and Grep, and one for Edit covers
+// Write and NotebookEdit: `Read(~/.ssh/**)` means the files are not to be
+// read, not that one tool of three may not read them. Allow rules are not
+// widened this way.
 func DeniedBy(rules []Rule, tool string, req PermissionRequest) bool {
-	if anyMatch(rules, tool, req.Specifier) {
-		return true
+	names := []string{tool}
+	if alias, ok := denyAlias[tool]; ok {
+		names = append(names, alias)
 	}
-	for _, forms := range req.Commands {
-		for _, f := range forms {
-			if anyMatch(rules, tool, f) {
-				return true
+	for _, name := range names {
+		if anyMatch(rules, name, req.Specifier) {
+			return true
+		}
+		for _, forms := range req.Commands {
+			for _, f := range forms {
+				if anyMatch(rules, name, f) {
+					return true
+				}
 			}
 		}
 	}
 	return false
 }
+
+// denyAlias maps a tool to the tool whose deny rules also apply to it.
+var denyAlias = map[string]string{"Glob": "Read", "Grep": "Read", "Write": "Edit", "NotebookEdit": "Edit"}
+
+// pathTools take a file path as their specifier; their rules are path
+// patterns.
+var pathTools = map[string]bool{"Read": true, "Glob": true, "Grep": true, "Edit": true, "Write": true, "NotebookEdit": true}
 
 // AllowedBy reports whether allow rules in rules cover req for tool. With
 // Commands set, every command must be matched by some rule; an Opaque request
@@ -248,6 +272,9 @@ func (r Rule) matches(tool, specifier string) bool {
 		return true
 	}
 	pat := r.Specifier
+	if pathTools[r.Tool] && pathMatch(pat, specifier) {
+		return true
+	}
 	if strings.HasSuffix(pat, ":*") {
 		return strings.HasPrefix(specifier, strings.TrimSuffix(pat, ":*"))
 	}
@@ -291,4 +318,53 @@ func Check(pctx Context, tool IntrinsicChecker, req PermissionRequest) Decision 
 		return Decision{Behavior: Allow}
 	}
 	return tool.CheckPermissions(pctx, req)
+}
+
+// pathMatch reports whether a file rule's pattern covers an absolute path.
+//
+// File rules used to be compared as strings: exact, or a prefix before a
+// trailing "*". Against the path as the model happened to write it, that made
+// `Edit(src/**)` a prefix "src/*" that never matched, left `~` unexpanded, and
+// let "./secrets/x" and "/abs/secrets/x" disagree. Patterns now work the way
+// they read:
+//   - "~" and "~/…" are the home directory;
+//   - a relative pattern is relative to the working directory;
+//   - "*", "?", "[…]", "{…}" and "**" are globs (doublestar), "**" crossing
+//     directories; a trailing "/" means everything beneath;
+//   - a pattern with no glob covers that path and everything beneath it.
+//
+// The old string comparison still runs after this, so existing rules keep
+// matching what they matched.
+func pathMatch(pat, path string) bool {
+	if !filepath.IsAbs(path) {
+		return false
+	}
+	p := pat
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return false
+		}
+		p = home + p[1:]
+	}
+	if !filepath.IsAbs(p) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return false
+		}
+		p = filepath.Join(cwd, p)
+	}
+	beneath := strings.HasSuffix(pat, "/")
+	p = filepath.Clean(p)
+	if !strings.ContainsAny(p, "*?[{") {
+		return path == p || strings.HasPrefix(path, p+string(filepath.Separator))
+	}
+	if ok, _ := doublestar.Match(filepath.ToSlash(p), filepath.ToSlash(path)); ok {
+		return true
+	}
+	if beneath {
+		ok, _ := doublestar.Match(filepath.ToSlash(p)+"/**", filepath.ToSlash(path))
+		return ok
+	}
+	return false
 }
