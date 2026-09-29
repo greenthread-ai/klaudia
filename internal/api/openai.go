@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -121,6 +123,15 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 	idle := streamIdleTimeout()
 	for attempt := 0; ; attempt++ {
 		acc, delivered, stalled, serr := p.streamAttempt(ctx, body, string(params.Model), sink, idle)
+		if !stalled && errors.Is(serr, errIncomplete) && ctx.Err() == nil {
+			if !delivered && attempt < maxStreamStallRetries {
+				continue
+			}
+			if delivered {
+				return acc, fmt.Errorf("%w (%w): %w", ErrStreamInterrupted, errStallMidStream, serr)
+			}
+			return acc, fmt.Errorf("%w: %w", ErrStreamInterrupted, serr)
+		}
 		if !stalled {
 			return acc, serr
 		}
@@ -406,33 +417,63 @@ func (e *OpenAIError) Payload() *OpenAIErrorPayload {
 func (p *OpenAIProvider) doWithRetry(req *http.Request, bodyBytes []byte) (*http.Response, error) {
 	max := maxRetries()
 	var lastErr error
+	var wait time.Duration
 	for attempt := 0; attempt <= max; attempt++ {
 		if attempt > 0 {
 			select {
 			case <-req.Context().Done():
 				return nil, req.Context().Err()
-			case <-time.After(backoff(attempt)):
+			case <-time.After(wait):
 			}
 		}
 		clone := req.Clone(req.Context())
 		clone.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		clone.ContentLength = int64(len(bodyBytes))
 
+		wait = backoff(attempt + 1)
 		resp, err := p.http.Do(clone)
 		if err != nil {
 			lastErr = err
 			continue // connection error → retry
 		}
-		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
-			if attempt < max {
-				_ = resp.Body.Close()
-				lastErr = &OpenAIError{StatusCode: resp.StatusCode}
-				continue
+		if (resp.StatusCode == 429 || resp.StatusCode >= 500) && attempt < max {
+			if w, told := retryAfter(resp.Header.Get("Retry-After"), time.Now()); told {
+				// A server asking for a long wait is answered now, not after
+				// minutes of silence: its error says when to try again.
+				if w > maxRetryAfter {
+					return resp, nil
+				}
+				wait = w
 			}
+			_ = resp.Body.Close()
+			lastErr = &OpenAIError{StatusCode: resp.StatusCode}
+			continue
 		}
 		return resp, nil
 	}
 	return nil, lastErr
+}
+
+// maxRetryAfter is the longest Retry-After the provider waits out itself.
+const maxRetryAfter = 60 * time.Second
+
+// retryAfter parses a Retry-After value — delay-seconds or an HTTP date —
+// into a wait from now. The comment on doWithRetry always said it honoured
+// the header; it never read it, so five retries finished in about fifteen
+// seconds against a server asking for a minute. told is false when the header
+// is absent or unparseable.
+func retryAfter(v string, now time.Time) (wait time.Duration, told bool) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0, false
+	}
+	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
+		return time.Duration(secs) * time.Second, true
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return max(t.Sub(now), 0), true
+	}
+	return 0, false
 }
 
 // backoff returns an exponential delay for the given (1-based) attempt.

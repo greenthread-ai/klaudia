@@ -127,6 +127,16 @@ func FriendlyError(err error) string {
 	// The stall wraps DeadlineExceeded, so check it first: the connection went
 	// idle mid-stream (flaky network/proxy/VPN), which is unrelated to the
 	// baseURL the generic timeout branch below points at.
+	if errors.Is(err, ErrStreamInterrupted) {
+		if errors.Is(err, errStallMidStream) {
+			return "The model's reply was cut off partway (the stream ended or the service reported an " +
+				"error before the response finished), so the partial answer above is incomplete. It was " +
+				"not retried automatically — that would repeat what you already saw. Send your message " +
+				"again.\nDetails: " + err.Error()
+		}
+		return "The model's reply was interrupted before it began and retries did not succeed. Send your " +
+			"message again.\nDetails: " + err.Error()
+	}
 	if errors.Is(err, ErrStreamStalled) {
 		// Two shapes, and saying "auto-retried" for both was a lie: a stall
 		// after output has been delivered is never retried, because a fresh
