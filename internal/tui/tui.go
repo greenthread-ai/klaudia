@@ -1188,7 +1188,12 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case action == actionSubmit:
 			in := m.readInput()
-			if strings.HasPrefix(in.Display, "/") {
+			// A "/…" line that is really a prompt (a path, or the "//" escape)
+			// is queued like any other text. The queued display keeps what was
+			// typed, so ↑ recall and a resubmit route the same way again.
+			if routed, ok := m.slashAsPrompt(in); ok {
+				in.Prompt = routed.Prompt
+			} else if strings.HasPrefix(in.Display, "/") {
 				m.input.Reset()
 				m.pushHistory(in.Display)
 				m.appendLine(userStyle.Render("› ") + in.Display)
@@ -1422,12 +1427,16 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.input.Reset()
+		// History keeps what was typed, so ↑ and Enter route the same way again
+		// ("//" included); the transcript shows what is actually sent.
 		m.pushHistory(in.Display)
+		routed, isPrompt := m.slashAsPrompt(in)
+		in = routed
 		m.appendLine(userStyle.Render("› ") + in.Display)
 		m.noteNav(navUser, in.Display, in.Prompt, 0)
 
 		// Slash commands are handled locally, not sent to the model.
-		if strings.HasPrefix(in.Display, "/") {
+		if !isPrompt && strings.HasPrefix(in.Display, "/") {
 			return m.handleSlash(in.Prompt)
 		}
 
@@ -2227,7 +2236,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.setState(stateRunning)
 			return m, m.startTurn(rendered)
 		}
-		m.appendLine(errStyle.Render("Unknown command " + cmd + ". Try /help."))
+		m.appendLine(errStyle.Render(m.unknownSlashMessage(cmd)))
 	}
 	return m, nil
 }

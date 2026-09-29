@@ -130,6 +130,11 @@ A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
 type-ahead, fuzzy `@path` file completion (Tab, Tab again to cycle), input
 history (↑/↓), and `Esc` to interrupt a turn. Type `/help` for the full list.
 
+A line that starts with `/` but is not a command is sent as a message when its
+first word is a path (`/etc/nginx/nginx.conf fails to parse`) or is followed by
+more text. A lone unknown `/word` is reported with the nearest commands. Start a
+line with `//` to always send it as a message, minus one slash.
+
 ### Return, and multi-line input
 
 `Return` sends; `Ctrl+J` and `Alt+Return` insert a newline. To swap them:
