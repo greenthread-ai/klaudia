@@ -32,6 +32,16 @@ func TestRunAuthAndConfig(t *testing.T) {
 	}
 }
 
+func TestRunReportsBuild(t *testing.T) {
+	c, ok := find(Run(Input{Build: "abcdef123456+dirty (go1.26.8)"}), "version")
+	if !ok || c.Status != StatusInfo || !strings.Contains(c.Detail, "2.1.66-klaudia") || !strings.Contains(c.Detail, "abcdef123456+dirty") {
+		t.Errorf("version = %+v", c)
+	}
+	if c, _ := find(Run(Input{}), "version"); !strings.Contains(c.Detail, "build unknown") {
+		t.Errorf("version without a build = %+v", c)
+	}
+}
+
 func TestRunNoAuthWarns(t *testing.T) {
 	checks := Run(Input{AuthOK: false})
 	if c, _ := find(checks, "auth"); c.Status != StatusWarn {

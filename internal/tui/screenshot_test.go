@@ -38,6 +38,9 @@ const (
 	shotModel   = "claude-opus-5"
 	shotBranch  = "main"
 	shotTagline = "your overqualified rubber duck"
+	// The build is left out: a real commit would churn the image on every
+	// commit, and a made-up one would put a fake version in the README.
+	shotBuild = ""
 )
 
 func TestScreenshotIsCurrent(t *testing.T) {
@@ -72,7 +75,7 @@ func screenshotFrame() string {
 	defer applyChromeTheme(defaultChromePalette)
 
 	var b strings.Builder
-	b.WriteString(intro(shotModel, shotBranch, shotTagline, nil))
+	b.WriteString(intro(shotModel, shotBranch, shotTagline, shotBuild, nil))
 	b.WriteString("\n")
 	b.WriteString(userStyle.Render("› /help"))
 	b.WriteString("\n")

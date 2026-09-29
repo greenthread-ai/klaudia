@@ -35,6 +35,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/internal/version"
 )
 
 // RunFunc drives one user turn against the agent core, threading conversation
@@ -290,15 +291,22 @@ func skillNames(sess *Session) []string {
 // introSkillsShown caps the names listed before the line becomes noise.
 const introSkillsShown = 4
 
-func intro(model, branch, tagline string, skills []string) string {
+// build is the short build name (version.Info.Short) — a commit, "+dirty"
+// when the tree was, or a release — so a screenshot or a pasted session says
+// which binary produced it. Empty leaves it out.
+func intro(model, branch, tagline, build string, skills []string) string {
 	logo := logoStyle.Render("✦ Klaudia")
 	tag := bannerStyle.Render(" " + tagline)
 	var meta string
-	if model != "" {
-		meta = "\n" + bannerStyle.Render("  model: "+model)
-	}
-	if branch != "" {
-		meta += bannerStyle.Render("   ⎇ " + branch)
+	for _, part := range []string{"model: " + model, "⎇ " + branch, "build " + build} {
+		if strings.HasSuffix(part, " ") { // that fact is unknown
+			continue
+		}
+		if meta == "" {
+			meta = "\n" + bannerStyle.Render("  "+part)
+		} else {
+			meta += bannerStyle.Render("   " + part)
+		}
 	}
 	// Skills were the thing nobody could tell was working: with none loaded
 	// there is no Skill tool to ask about, and with some loaded the only
@@ -3257,7 +3265,7 @@ func (m *Model) resize(w, h int) {
 }
 
 func (m *Model) introText() string {
-	return intro(m.introModel, m.introBranch, m.introTagline, skillNames(m.sess))
+	return intro(m.introModel, m.introBranch, m.introTagline, version.Get().Short(), skillNames(m.sess))
 }
 
 // View draws only the live region. Everything finished has already been printed

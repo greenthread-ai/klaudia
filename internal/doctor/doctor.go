@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/greenthread-ai/klaudia/internal/version"
 )
 
 // Status values for a Check.
@@ -46,6 +48,10 @@ type Input struct {
 	// MissingLSPHints are actionable suggestions for languages present in the
 	// project but lacking a server (e.g. "install gopls for go support").
 	MissingLSPHints []string
+	// Build names the running binary's build (version.Info.Summary): the
+	// commit and whether the tree was dirty, so a report can tell a stale
+	// installed binary from the one just built.
+	Build string
 }
 
 // Skill is one loaded user-defined skill, for the /doctor report.
@@ -71,6 +77,11 @@ func Run(in Input) []Check {
 		checks = append(checks, Check{Name: name, Status: status, Detail: detail})
 	}
 
+	build := in.Build
+	if build == "" {
+		build = "unknown"
+	}
+	add("version", StatusInfo, version.Version+" — build "+build)
 	add("platform", StatusInfo, runtime.GOOS+"/"+runtime.GOARCH)
 
 	// Skills are invisible when none are defined: with zero skills the Skill

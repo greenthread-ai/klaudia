@@ -247,8 +247,8 @@ func TestMarkdownAndFlush(t *testing.T) {
 }
 
 func TestIntro(t *testing.T) {
-	got := intro("openai/gpt-5.5", "go-port", "your preferred coding agent", nil)
-	for _, want := range []string{"Klaudia", "your preferred coding agent", "openai/gpt-5.5", "go-port", "Esc to interrupt"} {
+	got := intro("openai/gpt-5.5", "go-port", "your preferred coding agent", "abcdef123456+dirty", nil)
+	for _, want := range []string{"Klaudia", "your preferred coding agent", "openai/gpt-5.5", "go-port", "build abcdef123456+dirty", "Esc to interrupt"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("intro missing %q", want)
 		}
@@ -261,8 +261,13 @@ func TestIntro(t *testing.T) {
 		}
 	}
 	// No model/branch → still renders the logo + tagline + tip.
-	if bare := intro("", "", "the better coding agent", nil); !strings.Contains(bare, "Klaudia") {
+	if bare := intro("", "", "the better coding agent", "", nil); !strings.Contains(bare, "Klaudia") || strings.Contains(bare, "build") {
 		t.Errorf("bare intro = %q", bare)
+	}
+	// Without a model the remaining facts still start their own line rather
+	// than running on from the tagline.
+	if got := intro("", "", "tagline", "v1.2.3", nil); !strings.Contains(got, "\n") || strings.Contains(strings.SplitN(got, "\n", 2)[0], "v1.2.3") {
+		t.Errorf("build should sit on the meta line: %q", got)
 	}
 }
 
@@ -352,7 +357,7 @@ func TestTruncatedTurnKeepsItsPartialAnswer(t *testing.T) {
 func TestIntroListsLoadedSkills(t *testing.T) {
 	// Three sessions in a row could not tell whether skills were working,
 	// because the only evidence was asking the model. The banner is the answer.
-	got := intro("claude-opus-5", "", "tagline", []string{"frontend-design", "review"})
+	got := intro("claude-opus-5", "", "tagline", "", []string{"frontend-design", "review"})
 	for _, want := range []string{"skills:", "frontend-design", "review"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("intro missing %q:\n%s", want, got)
@@ -361,12 +366,12 @@ func TestIntroListsLoadedSkills(t *testing.T) {
 
 	// Nothing loaded: no line at all, rather than an empty "skills:" that
 	// looks like breakage.
-	if bare := intro("claude-opus-5", "", "tagline", nil); strings.Contains(bare, "skills:") {
+	if bare := intro("claude-opus-5", "", "tagline", "", nil); strings.Contains(bare, "skills:") {
 		t.Errorf("intro should omit the line when no skills load:\n%s", bare)
 	}
 
 	many := []string{"a", "b", "c", "d", "e", "f"}
-	long := intro("m", "", "t", many)
+	long := intro("m", "", "t", "", many)
 	if !strings.Contains(long, "+2 more") {
 		t.Errorf("intro should summarise a long list:\n%s", long)
 	}

@@ -20,6 +20,7 @@ type Meta struct {
 	SessionID      string
 	CWD            string
 	Version        string
+	Build          string // Klaudia's own build, stamped as "klaudiaBuild"
 	GitBranch      string
 	PermissionMode string
 	UserType       string // defaults to "external"
@@ -52,6 +53,7 @@ func (t *Transcript) Record(role string, message json.RawMessage) error {
 		IsSidechain: false,
 		UserType:    t.meta.UserType,
 		Version:     t.meta.Version,
+		Build:       t.meta.Build,
 		Message:     message,
 	}
 	if role == "user" {
