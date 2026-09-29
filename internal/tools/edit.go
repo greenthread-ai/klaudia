@@ -38,7 +38,7 @@ func (e *Edit) Name() string { return "Edit" }
 
 func (e *Edit) Description(context.Context) (string, error) {
 	return "Performs an exact string replacement in a file. file_path may be absolute or " +
-		"relative to the working directory. old_string must match exactly (including " +
+		"relative to the working directory. old_string must be non-empty and match exactly (including " +
 		"whitespace) and be unique in the file, unless replace_all is true. new_string " +
 		"must differ from old_string.", nil
 }
@@ -55,6 +55,11 @@ func (e *Edit) ValidateInput(raw json.RawMessage) error {
 	}
 	if strings.TrimSpace(in.FilePath) == "" {
 		return fmt.Errorf("file_path is required")
+	}
+	// An empty old_string matches between every rune: replace_all would splice
+	// new_string all through the file, and a single edit fails as "not unique".
+	if in.OldString == "" {
+		return fmt.Errorf("old_string must not be empty; use Write to create a file or replace its whole content")
 	}
 	if in.OldString == in.NewString {
 		return fmt.Errorf("old_string and new_string must differ")
