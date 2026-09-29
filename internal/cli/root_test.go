@@ -137,3 +137,13 @@ func TestCompactAndPersistSkipsSummaryOnError(t *testing.T) {
 		t.Fatalf("err = %v, want boom", err)
 	}
 }
+
+func TestResolveResumeIDPinnedSessionIDSkipsAutoResume(t *testing.T) {
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	cwd := "/work/proj"
+	seedSession(t, cwd, "project-session")
+
+	if got, err := resolveResumeID(cwd, options{sessionID: "pinned"}, true); err != nil || got != "" {
+		t.Fatalf("resolveResumeID = %q, %v; want no auto-resume for a pinned id", got, err)
+	}
+}

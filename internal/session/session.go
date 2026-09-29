@@ -91,6 +91,52 @@ func ExistingPath(cwd, sessionID string) string {
 	}
 }
 
+// validID is the shape of a session id an embedder may choose: a single safe
+// filename component. Minted ids are UUIDs, which match.
+var validID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
+
+// ValidID reports whether id is usable as a session id. The id becomes a file
+// name under the sessions root, so anything that could name another path
+// ("..", a separator, a dot-suffix like ".summary") is rejected.
+func ValidID(id string) bool { return validID.MatchString(id) }
+
+// Locate finds the transcript for a session id. The copy for cwd is preferred
+// (as ExistingPath chooses it); failing that, every project dir under the
+// sessions root and the legacy projects root is searched, so a session can be
+// resumed from a different working directory — or on another host, once its
+// sessions root has been copied under KLAUDIA_CONFIG_DIR. When several dirs
+// hold the id, the most recently written copy wins. It returns ("", false)
+// when no transcript exists for the id, or the id is not ValidID.
+func Locate(cwd, sessionID string) (string, bool) {
+	if !ValidID(sessionID) {
+		return "", false
+	}
+	if p := ExistingPath(cwd, sessionID); fileExists(p) {
+		return p, true
+	}
+	var matches []string
+	for _, root := range []string{SessionsRoot(), legacyProjectsRoot()} {
+		m, _ := filepath.Glob(filepath.Join(root, "*", sessionID+".jsonl"))
+		matches = append(matches, m...)
+	}
+	best, bestMod := "", time.Time{}
+	for _, m := range matches {
+		st, err := os.Stat(m)
+		if err != nil || !st.Mode().IsRegular() {
+			continue
+		}
+		if best == "" || st.ModTime().After(bestMod) {
+			best, bestMod = m, st.ModTime()
+		}
+	}
+	return best, best != ""
+}
+
+func fileExists(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.Mode().IsRegular()
+}
+
 // Entry is one transcript line. Field names/tags match the JS schema; optional
 // fields are omitted when empty so output stays close to the reference.
 type Entry struct {
@@ -133,6 +179,13 @@ type Writer struct {
 // constructing a writer (and never appending) never leaves a file on disk.
 func NewWriter(cwd, sessionID string) (*Writer, error) {
 	return &Writer{path: Path(cwd, sessionID)}, nil
+}
+
+// NewWriterAt prepares a transcript writer that appends to an explicit path —
+// the located transcript of a session resumed from another directory, so its
+// history stays in one file rather than splitting across project dirs.
+func NewWriterAt(path string) *Writer {
+	return &Writer{path: path}
 }
 
 // open creates the parent dir and opens the file for append on first use.

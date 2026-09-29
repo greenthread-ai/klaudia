@@ -60,6 +60,28 @@ type Driver struct {
 	out     io.Writer
 	mu      sync.Mutex // serializes writes to out
 	pending sync.Map   // request_id -> chan permission.Decision
+	// SessionID is stamped on the system/init line so a peer can tell which
+	// conversation it is driving. The CLI sets it to the transcript's id.
+	SessionID string
+
+	// History seeds the conversation the first turn runs with: the messages
+	// of a resumed session. Nil starts empty.
+	History []anthropic.BetaMessageParam
+
+	// Init, when set, is announced as the first output line,
+	// {"type":"system","subtype":"init","session_id":...}, so a peer learns
+	// the session id (and whether it resumed) before any turn is sent.
+	Init *Init
+}
+
+// Init describes the session in the system/init line.
+type Init struct {
+	CWD            string
+	Model          string
+	PermissionMode string
+	// ResumedFrom is the session id whose history was loaded; empty for a
+	// fresh session. It differs from SessionID for a fork.
+	ResumedFrom string
 }
 
 // NewDriver builds a Driver writing to w.
@@ -92,8 +114,25 @@ func (d *Driver) Run(ctx context.Context, r io.Reader, run RunFunc) error {
 		}
 	}()
 
+	if d.Init != nil {
+		line := map[string]any{
+			"type":             "system",
+			"subtype":          "init",
+			"session_id":       d.SessionID,
+			"cwd":              d.Init.CWD,
+			"model":            d.Init.Model,
+			"permissionMode":   d.Init.PermissionMode,
+			"resumed":          d.Init.ResumedFrom != "",
+			"history_messages": len(d.History),
+		}
+		if d.Init.ResumedFrom != "" {
+			line["resumed_from"] = d.Init.ResumedFrom
+		}
+		d.write(line)
+	}
+
 	approver := &controlApprover{driver: d}
-	var history []anthropic.BetaMessageParam
+	history := d.History
 	for {
 		select {
 		case <-ctx.Done():
