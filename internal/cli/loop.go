@@ -25,6 +25,8 @@ type loopRun struct {
 	cwd        string
 	mode       permission.Mode
 	model      anthropic.Model
+	effort     string
+	thinking   string
 	system     string
 	maxTurns   int
 	iterations int
@@ -85,6 +87,8 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 			WorkingDir:    p.cwd,
 			Prompt:        prompt,
 			Model:         p.model,
+			Effort:        p.effort,
+			Thinking:      p.thinking,
 			System:        p.system,
 			MaxTurns:      p.maxTurns,
 			Permission:    p.permCtx,

@@ -48,6 +48,7 @@ type Session struct {
 	SessionID      string         // transcript/session id used by --resume
 	Model          string         // model alias or full ID ("" = default)
 	ResolvedModel  string         // concrete model id for display
+	Effort         string         // reasoning effort ("" = the model's default); /effort changes it
 	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
 	Memory         memory.Store   // backs /memory; never nil — set to memory.Disabled() when unavailable
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
@@ -1449,6 +1450,7 @@ type cmdInfo struct{ name, args, desc string }
 var commandList = []cmdInfo{
 	{"/help", "", "Show this help"},
 	{"/model", "[name]", "Pick a model from the provider (no arg), or set one by alias/ID"},
+	{"/effort", "[level|default]", "Show or set reasoning effort: low, medium, high, xhigh, max"},
 	{"/theme", "[name]", "Change Markdown render theme (no arg = picker)"},
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
 	{"!<command>", "", "Run a shell command directly; its output becomes context for Klaudia"},
@@ -1858,6 +1860,33 @@ func (m *Model) appendMergeHint() {
 	}
 }
 
+// handleEffort backs /effort: no argument reports the current level, a level
+// sets it for the rest of the session, and "default" clears it so the model's
+// own default applies. It is read when a turn starts, as /model is, so a
+// change made while Klaudia is working applies from the next turn.
+func (m *Model) handleEffort(args []string) {
+	if len(args) == 0 {
+		m.appendLine(bannerStyle.Render("Effort: " + effortLabel(m.sess.Effort) +
+			" — /effort <" + strings.Join(api.EffortLevels, "|") + "|default> to change it"))
+		return
+	}
+	level, err := api.ParseEffort(args[0])
+	if err != nil {
+		m.appendLine(errStyle.Render(err.Error()))
+		return
+	}
+	m.sess.Effort = level
+	m.appendLine(bannerStyle.Render("Effort: " + effortLabel(level)))
+}
+
+// effortLabel names an effort setting for display.
+func effortLabel(level string) string {
+	if level == "" {
+		return "default"
+	}
+	return level
+}
+
 // handleSlash dispatches a slash command. Commands run locally and never reach
 // the model. Most are safe to run while a turn is in flight; the destructive
 // ones guard with busyGuard.
@@ -1919,6 +1948,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		m.appendLine(bannerStyle.Render("Model: " + cur + " — fetching available models…"))
 		return m, m.fetchModels()
+	case "/effort":
+		m.handleEffort(args)
 	case "/theme":
 		if len(args) == 0 {
 			if m.state == stateRunning {
@@ -2039,8 +2070,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		if m.sess.SessionID != "" {
 			resume = "\nresume: klaudia --resume " + m.sess.SessionID
 		}
-		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  permissions=%s  messages=%d%s",
-			model, m.currentMode().Label(), len(m.history), resume)))
+		m.appendLine(bannerStyle.Render(fmt.Sprintf("model=%s  effort=%s  permissions=%s  messages=%d%s",
+			model, effortLabel(m.sess.Effort), m.currentMode().Label(), len(m.history), resume)))
 	case "/mode":
 		if len(args) > 0 {
 			want := permission.Mode(args[0])
