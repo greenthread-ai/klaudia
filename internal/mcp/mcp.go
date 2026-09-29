@@ -84,6 +84,29 @@ func ConfigPaths(dir string) []string {
 	return out
 }
 
+// LoadGlobalConfig reads only the global ~/.klaudia/.mcp.json (honouring
+// KLAUDIA_CONFIG_DIR). Used by --safe-mode, which starts no server a project
+// file names.
+func LoadGlobalConfig() (Config, error) {
+	cfg := Config{MCPServers: map[string]ServerConfig{}}
+	p := filepath.Join(session.ConfigRoot(), ".mcp.json")
+	data, err := os.ReadFile(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return cfg, nil
+		}
+		return cfg, err
+	}
+	var c Config
+	if err := json.Unmarshal(stripJSONComments(data), &c); err != nil {
+		return cfg, fmt.Errorf("%s: %w", p, err)
+	}
+	for name, sc := range c.MCPServers {
+		cfg.MCPServers[name] = sc
+	}
+	return cfg, nil
+}
+
 // LoadConfig reads the .mcp.json files that apply to dir (see ConfigPaths), in
 // increasing precedence. A missing file yields an empty config (not an error);
 // later files override earlier ones per server name, so a project can redefine

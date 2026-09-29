@@ -539,6 +539,7 @@ type options struct {
 	disallowedTools []string
 	partialMessages bool   // --include-partial-messages
 	createConfig    string // --create-config global|local
+	safeMode        bool   // --safe-mode: load nothing the project supplies
 	loop            bool   // --loop: autonomous goal-spec iteration
 	maxIterations   int    // --max-iterations: outer-loop cap for --loop
 }
@@ -617,6 +618,7 @@ func NewRootCommand() *cobra.Command {
 	f.StringSliceVar(&opts.allowedTools, "allowedTools", nil, "Auto-allow tool rules, e.g. 'Edit' or 'Bash(git status:*)' (repeatable, comma-separated)")
 	f.StringSliceVar(&opts.disallowedTools, "disallowedTools", nil, "Deny tool rules (same format as --allowedTools)")
 	f.BoolVar(&opts.partialMessages, "include-partial-messages", false, "Include partial message chunks as they arrive (only with --print and --output-format=stream-json)")
+	f.BoolVar(&opts.safeMode, "safe-mode", false, "Start without anything this project supplies: its .klaudia/config.toml, .mcp.json servers, skills, CLAUDE.md, memory and knowledge. For opening an unfamiliar repository or getting past a broken project config")
 	f.StringVar(&opts.createConfig, "create-config", "", "Create a starter TOML config and exit: global (~/.klaudia/config.toml) or local (./.klaudia/config.toml)")
 	f.BoolVar(&opts.loop, "loop", false, "Autonomous loop: iterate against the goal spec (PRD.md or .klaudia/GOAL.md) until complete or --max-iterations. Requires --dangerously-skip-permissions.")
 	f.IntVar(&opts.maxIterations, "max-iterations", 0, "Max iterations for --loop (0 = default 10, hard cap 50)")
@@ -715,6 +717,10 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Select the model provider (.klaudia/config.toml: anthropic | openai).
 	cfg := config.Load(cwd)
+	if opts.safeMode {
+		cfg = config.LoadHome()
+		fmt.Fprintln(cmd.ErrOrStderr(), "safe mode: this project's .klaudia/config.toml, .mcp.json, skills, CLAUDE.md and memory are not loaded")
+	}
 	provider, providerModel, err := buildProvider(cfg)
 	if err != nil {
 		return err
@@ -803,6 +809,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Assemble the full system prompt (base instructions + env context +
 	// CLAUDE.md) once for this run.
 	sysPrompt := prompt.System(cwd, string(model))
+	if opts.safeMode {
+		sysPrompt = prompt.SafeSystem(cwd, string(model))
+	}
 
 	// Build the tool registry. Sub-agents draw from the base tools (incl. any
 	// MCP tools); the top-level registry adds the Agent tool.
@@ -837,7 +846,13 @@ func run(cmd *cobra.Command, opts *options) error {
 	// A .mcp.json that does not parse yields no servers at all. Discarding
 	// that error made the session look like one with no MCP configured — the
 	// model reports the server is down, and nothing says why.
-	mcpCfg, mcpCfgErr := mcp.LoadConfig(cwd)
+	loadMCP := func() (mcp.Config, error) {
+		if opts.safeMode {
+			return mcp.LoadGlobalConfig()
+		}
+		return mcp.LoadConfig(cwd)
+	}
+	mcpCfg, mcpCfgErr := loadMCP()
 	if mcpCfgErr != nil {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning: mcp config:", mcpCfgErr)
 	}
@@ -856,7 +871,11 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// User-defined skills (~/.klaudia/skills overlaid by .klaudia/skills) become a
 	// single Skill tool the model can invoke; the TUI also dispatches /<skill>.
-	skills := skill.Load(cwd, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
+	skillWarn := func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }
+	skills := skill.Load(cwd, skillWarn)
+	if opts.safeMode {
+		skills = skill.LoadUser(skillWarn)
+	}
 	skillInfos := skillToolInfos(skills)
 	if skillTool, serr := tools.NewSkill(skillInfos); serr == nil && skillTool != nil {
 		staticTools = append(staticTools, skillTool)
@@ -932,7 +951,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// working one.
 	mcpReloads := &mcpReloadNotifier{}
 	stopWatch, werr := mcp.Watch(cwd, func() {
-		cfg, lerr := mcp.LoadConfig(cwd)
+		cfg, lerr := loadMCP()
 		if lerr != nil {
 			mcpReloads.emit(tui.MCPReloadEvent{ConfigErr: lerr.Error()})
 			return
