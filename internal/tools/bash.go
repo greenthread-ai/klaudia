@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -170,12 +172,17 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 // selfBackgrounded reports whether a command detaches a long-running service
 // with the shell rather than asking for a job, and what to do instead.
 //
-// Deliberately narrow: it fires only when the command *both* backgrounds
-// something *and* looks like a service. `sleep 1 &` in a test script is nobody's
+// Deliberately narrow: it fires only when a command that is *itself*
+// backgrounded looks like a service. `sleep 1 &` in a test script is nobody's
 // business; `go run ./cmd/api &` is a dev server that should have a name, a log
 // and a way to be restarted.
+//
+// The line is parsed rather than scanned, which is what keeps it narrow: `&>`
+// and `&>>` are redirections, not backgrounding; `go test ./server/... &` is
+// not `serve`; and `a & b & wait` detaches nothing, because the shell does not
+// return until both finish.
 func selfBackgrounded(command string) (reason string, blocked bool) {
-	if !looksLongRunning(command) || !hasBackgroundOperator(command) {
+	if !detachesLongRunning(command, 0) {
 		return "", false
 	}
 	return "This backgrounds a long-running process with the shell, which leaves it untracked: " +
@@ -188,82 +195,166 @@ func selfBackgrounded(command string) (reason string, blocked bool) {
 		"If this really is short-lived, just run it in the foreground.", true
 }
 
-// looksLongRunning is looksLikeService plus the shapes that are only ever
-// backgrounded because they do not return.
+// detachesLongRunning is selfBackgrounded's test. depth bounds the descent
+// into `bash -c '…'` payloads.
 //
-// Broader than the timeout nudge on purpose. There, a false positive adds an
-// unhelpful sentence to a failure; here it costs one retry, and the guidance
+// A line that does not parse is let through: bash will refuse it on its own,
+// and guessing at its structure is how `&>` came to be read as `&`.
+func detachesLongRunning(command string, depth int) bool {
+	if depth > 3 {
+		return false
+	}
+	a, err := bashparser.Parse(command)
+	if err != nil {
+		return false
+	}
+	for i, c := range a.Commands {
+		payloads := bashparser.Analysis{Commands: []bashparser.Command{c}}.ShellPayloads()
+		for _, p := range payloads {
+			if detachesLongRunning(p, depth+1) {
+				return true
+			}
+		}
+
+		words, wrapper := unwrapDetacher(commandWords(c))
+		if !c.Background && wrapper == "" {
+			continue
+		}
+		long := wordsLongRunning(words, a.HasPipe)
+		for _, p := range payloads {
+			long = long || looksLongRunning(p)
+		}
+		if !long {
+			continue
+		}
+		// `a & b & wait` returns only when a and b have: nothing outlives the
+		// command. setsid is exempt from the exemption — it can fork a child
+		// that wait never sees.
+		if c.Background && wrapper != "setsid" && waitsLater(a.Commands[i+1:]) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// unwrapDetacher strips nohup / setsid (and setsid's flags) from the front of
+// a command, returning what they run and the last wrapper seen. Either one
+// detaches by intent even without a trailing `&`.
+func unwrapDetacher(words []string) (rest []string, wrapper string) {
+	for len(words) > 0 && (words[0] == "nohup" || words[0] == "setsid") {
+		wrapper = words[0]
+		words = words[1:]
+		for len(words) > 0 && strings.HasPrefix(words[0], "-") {
+			words = words[1:]
+		}
+	}
+	return words, wrapper
+}
+
+// waitsLater reports whether a `wait` follows, which holds the shell until its
+// background children finish.
+func waitsLater(rest []bashparser.Command) bool {
+	for _, c := range rest {
+		if filepath.Base(c.Name) == "wait" && !c.Background {
+			return true
+		}
+	}
+	return false
+}
+
+// commandWords is a command as lowercase words, program name first and
+// stripped of its directory (so ./node_modules/.bin/vite is vite).
+func commandWords(c bashparser.Command) []string {
+	if c.Name == "" {
+		return nil
+	}
+	words := make([]string, 0, len(c.Args)+1)
+	words = append(words, strings.ToLower(filepath.Base(c.Name)))
+	for _, a := range c.Args {
+		words = append(words, strings.ToLower(a))
+	}
+	return words
+}
+
+// runHints are the shapes that are only ever backgrounded because they do not
+// return. Broader than serviceHints on purpose, and used only by
+// selfBackgrounded: there a false positive costs one retry, and the guidance
 // says exactly what to do — so erring toward catching `go run ./cmd/api &` is
 // worth the occasional `go run ./cmd/oneshot &` being told to pick a lane.
-func looksLongRunning(command string) bool {
-	if looksLikeService(command) {
-		return true
-	}
-	c := strings.ToLower(command)
-	for _, h := range []string{
-		"go run ", "cargo run", "dotnet run", "bootrun",
-		"rails s", "flask ", "php -s", "caddy run", "nginx",
-	} {
-		if strings.Contains(c, h) {
-			return true
-		}
-	}
-	return false
-}
+var runHints = hintWords(
+	"go run", "cargo run", "dotnet run", "bootrun",
+	"rails s", "flask", "php -s", "caddy run", "nginx",
+)
 
-// hasBackgroundOperator finds a shell `&` that detaches, ignoring `&&`, `>&`
-// and `2>&1`.
-func hasBackgroundOperator(command string) bool {
-	if strings.Contains(command, "nohup ") || strings.Contains(command, "setsid ") {
-		return true
-	}
-	inSingle, inDouble := false, false
-	for i := 0; i < len(command); i++ {
-		c := command[i]
-		switch {
-		case c == '\'' && !inDouble:
-			inSingle = !inSingle
-		case c == '"' && !inSingle:
-			inDouble = !inDouble
-		case c == '&' && !inSingle && !inDouble:
-			if i+1 < len(command) && command[i+1] == '&' {
-				i++ // logical AND
-				continue
-			}
-			if i > 0 && (command[i-1] == '&' || command[i-1] == '>' || command[i-1] == '<') {
-				continue // the tail of &&, or a >& / <& redirection
-			}
-			// A digit before it is a fd redirection like 2>&1, already covered
-			// by the '>' case above. Anything else detaches.
-			return true
-		}
-	}
-	return false
-}
-
-// serviceHints are the shapes of a command that does not intend to finish.
-// Matched loosely and only used to add a suggestion to a timeout, so a false
-// positive costs one unhelpful sentence rather than a wrong decision.
-var serviceHints = []string{
+// serviceHints are the shapes of a command that does not intend to finish,
+// each a run of whole words: `serve` matches `npx serve` and not `server`,
+// `vite` matches `npx vite` and not `vitest`, `air` is the program and not a
+// fragment of `repair`.
+var serviceHints = hintWords(
 	"run dev", "run start", "run serve", "run watch", "start:dev",
 	"npm start", "yarn start", "pnpm start", "bun run dev",
 	"compose up", "docker run", "serve", "http.server", "runserver",
-	"tail -f", "watch ", "nodemon", "vite", "webpack-dev-server",
+	"tail -f", "watch", "nodemon", "vite", "webpack-dev-server",
 	"rails s", "flask run", "uvicorn", "gunicorn", "air", "reflex",
 	"ng serve", "next dev", "nuxt dev", "remix dev", "astro dev",
 	"make dev", "make run", "make serve", "cargo watch", "mvn spring-boot:run",
+)
+
+func hintWords(hints ...string) [][]string {
+	out := make([][]string, len(hints))
+	for i, h := range hints {
+		out[i] = strings.Fields(h)
+	}
+	return out
 }
 
-func looksLikeService(command string) bool {
-	c := strings.ToLower(command)
-	// A pipeline that ends somewhere is not a service, even if it starts with
-	// one: `tail -f log | head -20` terminates.
-	if strings.Contains(c, "|") {
+// looksLongRunning is looksLikeService plus runHints, for a whole line.
+func looksLongRunning(command string) bool {
+	a, err := bashparser.Parse(command)
+	if err != nil {
 		return false
 	}
-	for _, h := range serviceHints {
-		if strings.Contains(c, h) {
+	for _, c := range a.Commands {
+		if wordsLongRunning(commandWords(c), a.HasPipe) {
 			return true
+		}
+	}
+	return false
+}
+
+// wordsLongRunning matches one command's words against runHints, and against
+// serviceHints unless the line is a pipeline.
+func wordsLongRunning(words []string, piped bool) bool {
+	return matchesHint(words, runHints) || (!piped && matchesHint(words, serviceHints))
+}
+
+// looksLikeService reports whether any command in the line matches a service
+// hint. Only used to add a suggestion to a timeout, so a false positive costs
+// one unhelpful sentence rather than a wrong decision.
+func looksLikeService(command string) bool {
+	a, err := bashparser.Parse(command)
+	// A pipeline that ends somewhere is not a service, even if it starts with
+	// one: `tail -f log | head -20` terminates.
+	if err != nil || a.HasPipe {
+		return false
+	}
+	for _, c := range a.Commands {
+		if matchesHint(commandWords(c), serviceHints) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesHint reports whether any hint appears in words as a contiguous run of
+// whole words.
+func matchesHint(words []string, hints [][]string) bool {
+	for _, h := range hints {
+		for i := 0; i+len(h) <= len(words); i++ {
+			if slices.Equal(words[i:i+len(h)], h) {
+				return true
+			}
 		}
 	}
 	return false

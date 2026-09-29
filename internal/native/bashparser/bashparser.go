@@ -33,6 +33,11 @@ type Command struct {
 	// callers that must not confuse a partial expansion for a real path.
 	NameWord Word
 	ArgWords []Word
+
+	// Background reports that the command runs asynchronously: its statement,
+	// or one enclosing it, ends in `&` — `a &`, `(a; b) &`, `(a &)`, `a | b &`.
+	// `&&` and the redirections `&>`, `>&`, `2>&1` are not backgrounding.
+	Background bool
 }
 
 // Redirect is an output redirection target. Only writing redirections are
@@ -68,7 +73,20 @@ func Parse(input string) (Analysis, error) {
 	}
 
 	var a Analysis
+	// bg is a stack parallel to the walk: whether the node being visited sits
+	// under a backgrounded statement. Walk calls f(nil) after a node's
+	// children, which is where its entry is popped.
+	bg := []bool{false}
 	syntax.Walk(prog, func(node syntax.Node) bool {
+		if node == nil {
+			bg = bg[:len(bg)-1]
+			return true
+		}
+		inBg := bg[len(bg)-1]
+		if s, ok := node.(*syntax.Stmt); ok && s.Background {
+			inBg = true
+		}
+		bg = append(bg, inBg)
 		switch n := node.(type) {
 		case *syntax.BinaryCmd:
 			if n.Op == syntax.Pipe || n.Op == syntax.PipeAll {
@@ -118,10 +136,11 @@ func Parse(input string) (Analysis, error) {
 				args = append(args, w.Text)
 			}
 			a.Commands = append(a.Commands, Command{
-				Name:     ws[0].Text,
-				Args:     args,
-				NameWord: ws[0],
-				ArgWords: ws[1:],
+				Name:       ws[0].Text,
+				Args:       args,
+				NameWord:   ws[0],
+				ArgWords:   ws[1:],
+				Background: inBg,
 			})
 		}
 		return true
