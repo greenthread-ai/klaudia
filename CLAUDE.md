@@ -28,7 +28,7 @@ Use `go install` when you mean to try the change.
 - **compaction** - Context/history compression (micro + auto)
 - **mcp** - Model Context Protocol support
 - **subagent** - Built-in sub-agent types
-- **skill** - User-defined skills (`.klaudia/skills`)
+- **skill** - Bundled skills (`skill/bundled/*.md`) + user-defined skills (`.klaudia/skills`)
 - **memory** - Auto-memory store
 - **doctor** - `/doctor` environment diagnostics
 - **streamjson** - Bidirectional stream-json frontend

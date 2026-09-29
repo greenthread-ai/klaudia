@@ -28,9 +28,10 @@ type SkillInput struct {
 	Arguments string `json:"arguments,omitempty" jsonschema:"description=Free-form arguments substituted into the skill's $ARGUMENTS"`
 }
 
-// Skill lets the model invoke a named, user-defined skill: the rendered skill
-// body is returned as a tool_result (injected instructions the model then
-// follows). Skills are discovered from ~/.klaudia/skills and <cwd>/.klaudia/skills.
+// Skill lets the model invoke a named skill: the rendered skill body is
+// returned as a tool_result (injected instructions the model then follows).
+// Skills are the bundled ones plus those found in the skill directories (see
+// package skill).
 type Skill struct {
 	schema *schema.Schema
 	byName map[string]SkillInfo
@@ -61,7 +62,7 @@ func (t *Skill) Name() string { return "Skill" }
 
 func (t *Skill) Description(context.Context) (string, error) {
 	var b strings.Builder
-	b.WriteString("Invoke a user-defined skill: a reusable, named set of instructions. ")
+	b.WriteString("Invoke a skill: a reusable, named set of instructions. ")
 	b.WriteString("Call this when a request matches one of the available skills. Available skills:\n")
 	for _, n := range t.names {
 		fmt.Fprintf(&b, "- %s: %s\n", n, t.byName[n].Description)

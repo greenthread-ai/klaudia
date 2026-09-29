@@ -1,9 +1,9 @@
 // Package skill loads reusable prompt/command skills from Markdown files with
-// YAML frontmatter. Skills are read from ~/.claude/skills, ~/.klaudia/skills,
-// <cwd>/.claude/skills and <cwd>/.klaudia/skills, in that order of increasing
-// precedence — the same user-then-project overlay as config.Load and
-// mcp.LoadConfig, extended to the directories the wider ecosystem installs
-// into.
+// YAML frontmatter. The skills bundled into the binary come first, then
+// ~/.claude/skills, ~/.klaudia/skills, <cwd>/.claude/skills and
+// <cwd>/.klaudia/skills, in that order of increasing precedence — the same
+// user-then-project overlay as config.Load and mcp.LoadConfig, extended to the
+// directories the wider ecosystem installs into.
 //
 // A skill file looks like:
 //
@@ -41,7 +41,8 @@ type Skill struct {
 	Type        string   // TypePrompt (default) | TypeCommand
 	Tools       []string // optional tool allowlist (growth point; unused in v1)
 	Body        string   // template body; supports $ARGUMENTS
-	Path        string   // source file, for diagnostics
+	Path        string   // source file, for diagnostics ("bundled:<file>" for a bundled skill)
+	Bundled     bool     // compiled into the binary rather than read from disk
 }
 
 // frontmatter is the YAML header schema.
@@ -65,11 +66,15 @@ func (s Skill) Render(args string) string {
 	return strings.TrimRight(s.Body, "\n") + "\n\n" + args
 }
 
-// Load reads skills from ~/.klaudia/skills then overlays <cwd>/.klaudia/skills
-// (project skills win on name collision). Malformed files are skipped, reporting
-// the reason to warn (warn may be nil). The result is sorted by name.
+// Load starts from the bundled skills, overlays the user directories, then the
+// project ones (a later layer wins on name collision). Malformed files are
+// skipped, reporting the reason to warn (warn may be nil). The result is sorted
+// by name.
 func Load(cwd string, warn func(string)) []Skill {
 	byName := map[string]Skill{}
+	for _, sk := range Bundled() {
+		byName[sk.Name] = sk
+	}
 
 	// Searched in increasing precedence. ~/.claude and .claude are read for
 	// the same reason prompt.go reads ~/.claude/CLAUDE.md: that is where the
