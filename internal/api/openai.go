@@ -85,13 +85,16 @@ type oaToolCall struct {
 }
 
 type oaRequest struct {
-	Model               string        `json:"model"`
-	Messages            []oaMessage   `json:"messages"`
-	Tools               []oaTool      `json:"tools,omitempty"`
-	Temperature         *float64      `json:"temperature,omitempty"` // optional per OpenAI spec; omitted when nil
-	MaxCompletionTokens int64         `json:"max_completion_tokens,omitempty"`
-	Stream              bool          `json:"stream"`
-	StreamOptions       *oaStreamOpts `json:"stream_options,omitempty"`
+	Model               string      `json:"model"`
+	Messages            []oaMessage `json:"messages"`
+	Tools               []oaTool    `json:"tools,omitempty"`
+	Temperature         *float64    `json:"temperature,omitempty"` // optional per OpenAI spec; omitted when nil
+	MaxCompletionTokens int64       `json:"max_completion_tokens,omitempty"`
+	// ReasoningEffort carries output_config.effort (see openAIReasoningEffort).
+	// Omitted when no effort is configured: non-reasoning models reject it.
+	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
+	Stream          bool          `json:"stream"`
+	StreamOptions   *oaStreamOpts `json:"stream_options,omitempty"`
 }
 
 type oaStreamOpts struct {
@@ -187,6 +190,7 @@ func (p *OpenAIProvider) translateRequest(params anthropic.BetaMessageNewParams)
 		Model:               string(params.Model),
 		Temperature:         p.temperature,
 		MaxCompletionTokens: params.MaxTokens,
+		ReasoningEffort:     openAIReasoningEffort(params.OutputConfig.Effort),
 		Stream:              true,
 		StreamOptions:       &oaStreamOpts{IncludeUsage: true},
 	}

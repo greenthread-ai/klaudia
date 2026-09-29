@@ -200,6 +200,10 @@ them as a picker — Anthropic and OpenAI-compatible endpoints both answer at
 full ID). Picking from the list also records that model's real context window,
 which is what the status bar's `ctx N%` measures against.
 
+`/effort <level>` sets the reasoning effort for the rest of the session
+(`low`, `medium`, `high`, `xhigh`, `max`; `default` returns to the model's own);
+with no argument it reports the current level. It applies from the next turn.
+
 `/theme` switches the colour theme (Markdown + chrome) for the session; set a
 durable default with `theme = "nord"` in `.klaudia/config.toml` (dracula |
 gruvbox | tokyo-night | nord | light | catppuccin). `NO_COLOR` is honoured.
@@ -390,6 +394,19 @@ apiKeyEnv = "MY_API_KEY"
 # ones). Set this when your provider's limit differs from that fallback.
 # maxTokens = 32000
 
+# Optional: reasoning effort (low | medium | high | xhigh | max). Unset sends
+# none and the model uses its own default. --effort and /effort override it.
+# Anthropic receives it as output_config.effort; OpenAI-compatible endpoints as
+# reasoning_effort, with xhigh and max sent as high. A level the model doesn't
+# support is lowered to its highest (or dropped, on Haiku 4.5 / Sonnet 4.5).
+# effort = "xhigh"
+
+# Optional (Anthropic): "adaptive" or "disabled". Unset sends no thinking
+# parameter, so each model runs its default — adaptive on Opus 5, Sonnet 5 and
+# Fable, none on Opus 4.8 and older. "disabled" is ignored where the model
+# cannot turn thinking off (Fable, Opus 5.5, Opus 5 at xhigh/max).
+# thinking = "adaptive"
+
 # Optional: what the Return key does at the prompt. "send" (default) submits
 # and ctrl+j / alt+Return insert a newline; "newline" swaps them. See
 # "Return, and multi-line input" above — ctrl+Return is not a value, because
@@ -402,7 +419,7 @@ Create a commented starter config with `./klaudia --create-config=global` for
 `~/.klaudia/config.toml`, or `./klaudia --create-config=local` for
 `./.klaudia/config.toml`.
 
-`--model haiku|sonnet|opus` (or a full model ID) overrides per-run. The
+`--model haiku|sonnet|opus` (or a full model ID) overrides per-run, as `--effort` does for `effort`. The
 OpenAI-compatible provider translates the Anthropic message shape to Chat
 Completions (including image tool-results → `image_url`).
 

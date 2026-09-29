@@ -46,6 +46,16 @@ type Config struct {
 	// raise or lower the cap explicitly — e.g. an OpenAI-compatible model whose
 	// output limit the table doesn't know.
 	MaxTokens int `toml:"maxTokens,omitempty"`
+	// Effort is the default reasoning effort: low | medium | high | xhigh | max.
+	// Unset sends none and the model uses its own default. Sent to Anthropic
+	// as output_config.effort and to OpenAI-compatible endpoints as
+	// reasoning_effort (xhigh and max become high there). --effort and
+	// /effort override it.
+	Effort string `toml:"effort,omitempty"`
+	// Thinking is "adaptive" or "disabled". Unset sends no thinking
+	// parameter, so each model runs its default (adaptive on Opus 5, Sonnet 5
+	// and Fable; off on Opus 4.8 and older). Anthropic provider only.
+	Thinking string `toml:"thinking,omitempty"`
 	// APIKey is the bearer token. Prefer APIKeyEnv to keep secrets out of files.
 	APIKey string `toml:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable holding the key.
@@ -285,6 +295,12 @@ func merge(dst *Config, src Config) {
 	}
 	if src.MaxTokens != 0 {
 		dst.MaxTokens = src.MaxTokens
+	}
+	if src.Effort != "" {
+		dst.Effort = src.Effort
+	}
+	if src.Thinking != "" {
+		dst.Thinking = src.Thinking
 	}
 	if src.Sandbox.Mode != "" {
 		dst.Sandbox.Mode = src.Sandbox.Mode

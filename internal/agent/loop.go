@@ -116,6 +116,12 @@ type Options struct {
 	// ContextWindow is the model's context size, used for autocompact
 	// thresholds. 0 uses the package default.
 	ContextWindow int
+	// Effort is output_config.effort ("low" … "max"); "" sends none, which
+	// leaves the model at its default. Thinking is api.ThinkingAdaptive,
+	// api.ThinkingDisabled, or "" to send no thinking parameter. Both are
+	// adjusted per model by api.ApplyReasoning.
+	Effort   string
+	Thinking string
 	// PartialMessages, if set, receives raw model stream events during the main
 	// answer turn (not compaction summaries). The CLI wires this to a
 	// stream_event emitter when --include-partial-messages is set. Nil by
@@ -245,6 +251,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			Tools:     toolParams,
 			Betas:     betas,
 		}
+		api.ApplyReasoning(&params, opts.Effort, opts.Thinking)
 
 		estimateAtSend := compaction.EstimateTokens(messages)
 		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages)
