@@ -136,7 +136,7 @@ func TestSubmitEchoesChipButSendsPayload(t *testing.T) {
 	sent := make(chan string, 1)
 	m.ctx = context.Background()
 	m.events = make(chan tea.Msg, 8)
-	m.run = func(_ context.Context, prompt string, _ []anthropic.BetaMessageParam,
+	m.run = func(_ context.Context, prompt string, _ []tools.ResultImage, _ []anthropic.BetaMessageParam,
 		_ agent.Approver, _ tools.Asker, _ tools.Planner, _ agent.Emitter, _ func() agent.Interjection, _ func(string, []string)) (agent.Result, error) {
 		sent <- prompt
 		return agent.Result{}, nil

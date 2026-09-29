@@ -50,6 +50,32 @@ OSC 52 with glamour's document padding stripped at commit time, long output
 recoverable through `$PAGER`, and a two-press Ctrl+C so a reflexive "stop the
 running thing" cannot destroy the session.
 
+**`@file` references (`atfile.go`).** Tab-completing `@path` (see the
+completion note above) inserts a short token; at *submit* time — not while
+typing, so the transcript stays readable — the token is expanded into what the
+model actually receives:
+
+- `@path` — the whole text file, inlined behind a `===== path =====` delimiter.
+- `@path:START-END` — lines START..END, 1-based and inclusive. `@path:LINE` is
+  the single-line case. The colon form is the one compilers and stack traces
+  already print; a range only adds the `-END` half, and an END past the file is
+  clamped rather than refused.
+- `@image.{png,jpg,jpeg,gif,webp}` — attached as a base64 image content block on
+  the user message (the same block shape a Read of an image produces), not
+  dumped as bytes. Pasting or typing a path to a saved screenshot is how a
+  pasted image is attached.
+
+A token that does not resolve to a real file is left exactly as typed —
+existence is the disambiguator, so `@handle` and an email survive — but a token
+that plainly meant a file (a slash or an extension) and is missing earns a note.
+Bounds keep the request sane: a whole-file text reference over 256 KiB, an image
+over 5 MiB, and a non-image binary are each refused with a faint note in the
+terminal (never sent to the model). Expansion runs on the first submit and on a
+message queued while Klaudia is working; a mid-turn steering interjection is
+text-only, and clipboard-image paste (bytes straight off the system clipboard,
+without a file) is a deliberate follow-up rather than something a v1 bubbletea
+paste event exposes.
+
 ## Phase 2 — Agent loop, shell integration and trust
 
 ### §1–8 Trust — [docs/trust.md](trust.md)

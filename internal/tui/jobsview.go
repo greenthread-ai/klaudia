@@ -133,7 +133,7 @@ func (m *Model) promoteErrors(ref, text string) tea.Cmd {
 	m.appendLine(errStyle.Render(fmt.Sprintf("From %s's log (%d error lines):", ref, len(lines))))
 	m.appendLine(toolStyle.Render("  " + strings.ReplaceAll(body, "\n", "\n  ")))
 	return m.startTurn(fmt.Sprintf(
-		"Errors from the log of job %q:\n\n```\n%s\n```\n\nWhat is going wrong?", ref, body))
+		"Errors from the log of job %q:\n\n```\n%s\n```\n\nWhat is going wrong?", ref, body), nil)
 }
 
 // errorPatterns are the shapes a failure takes in a server log. Deliberately
