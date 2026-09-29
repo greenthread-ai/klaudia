@@ -960,6 +960,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Open the transcript for this session (best effort: a transcript failure
 	// should not abort the run).
 	var recorder agent.Recorder
+	var transcript *session.Transcript
 	if tr, terr := session.NewTranscript(session.Meta{
 		SessionID:      sessionID,
 		CWD:            cwd,
@@ -969,9 +970,22 @@ func run(cmd *cobra.Command, opts *options) error {
 	}); terr == nil {
 		defer func() { _ = tr.Close() }()
 		recorder = tr
+		transcript = tr
 	}
 
 	loop := agent.New(provider, registry)
+
+	// rewindFn is defined inline so the closure is nil when no transcript was
+	// opened, which is how tui.Session.Rewind signals "in-memory only".
+	rewindFn := func(tr *session.Transcript) func(int) error {
+		if tr == nil {
+			return nil
+		}
+		return func(dropMessages int) error {
+			_, err := tr.DropLastMessages(dropMessages)
+			return err
+		}
+	}
 
 	// Persist compaction summaries for token-saving resume (a Klaudia divergence).
 	onSummary := func(summary string) {
@@ -1018,6 +1032,9 @@ func run(cmd *cobra.Command, opts *options) error {
 					return loop.Compact(ctx, history, api.ResolveModel(modelStr))
 				}, onSummary)
 			},
+			// Nil unless a transcript was opened; /rewind then edits only the
+			// in-memory conversation.
+			Rewind: rewindFn(transcript),
 
 			Doctor: func() string {
 				return doctor.Format(doctor.Run(buildDoctorInput(cfg, model, cwd, len(mcpCfg.MCPServers))))
