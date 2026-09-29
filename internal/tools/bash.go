@@ -51,6 +51,17 @@ func (b *Bash) Name() string { return "Bash" }
 func (b *Bash) Description(context.Context) (string, error) {
 	return "Executes a shell command and returns its combined output. Commands run via bash. " +
 		"Provide an optional timeout in milliseconds (default 120000, max 600000). " +
+		// Each call is a fresh `bash -c` in the project directory. A model
+		// that assumes a persistent shell runs `cd sub` in one call and a
+		// relative command in the next, in the wrong place.
+		"Each call runs in a new shell started in the project directory: `cd`, exported variables " +
+		"and shell functions do not carry over to the next call, so chain dependent steps with && " +
+		"or use absolute paths. " +
+		// The torture test found the job system invisible: a model that knows
+		// `&` uses `&`. Name the alternative where the model decides.
+		"For anything that does not finish on its own (dev servers, watchers, tails), set " +
+		"run_in_background: it becomes a managed job with a name and a log — read new output with " +
+		"BashOutput and stop it with KillShell — instead of blocking until the timeout. " +
 		"Prefer the Read/Glob/Grep tools over cat/find/grep where possible. " +
 		// Observed in a real session: the model appended `; echo \"EXIT_STATUS: $?\"`
 		// to capture a status that was already being reported, and in doing so
@@ -164,7 +175,26 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 	}
 
 	model, full := formatBashOutput(resp, in.Command)
+	if resp.TimedOut {
+		// "timed out" alone leaves the model to guess the limit and whether
+		// raising it is allowed; both answers are cheap to give.
+		note := timeoutNote(timeout)
+		model += note
+		if full != "" {
+			full += note
+		}
+	}
 	return []Result{{Content: model, Full: full, IsError: resp.ExitCode != 0}}, nil
+}
+
+// timeoutNote states the limit a command hit and the two ways past it.
+func timeoutNote(limit time.Duration) string {
+	if limit >= 10*time.Minute {
+		return fmt.Sprintf("\n[the limit was %s, the maximum. If this command never ends by itself, "+
+			"run it with run_in_background; otherwise split it into shorter steps.]", limit)
+	}
+	return fmt.Sprintf("\n[the limit was %s. If the command only needs longer, pass a larger "+
+		"timeout (up to 600000 ms); if it never ends by itself, run it with run_in_background.]", limit)
 }
 
 // selfBackgrounded reports whether a command detaches a long-running service
