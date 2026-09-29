@@ -3,6 +3,8 @@
 package sandbox
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"os"
 	"os/exec"
@@ -33,12 +35,35 @@ const killGrace = 2 * time.Second
 
 // applyProcGroup puts cmd in a new process group and routes cancellation
 // through the group rather than the single child.
+//
+// The command's environment also carries a tag unique to it. A process that
+// leaves the group - `setsid`, or a daemon that double-forks - escapes the
+// group signal, but not its environment: on cancel, whatever still carries the
+// tag is signalled too (where the platform lets us find it; see tagged_*.go).
 func applyProcGroup(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Setpgid = true
-	cmd.Cancel = func() error { return terminateGroup(cmd.Process) }
+	tag := newProcTag()
+	if cmd.Env == nil {
+		cmd.Env = os.Environ()
+	}
+	cmd.Env = append(cmd.Env, procTagVar+"="+tag)
+	cmd.Cancel = func() error {
+		err := terminateGroup(cmd.Process)
+		terminateTagged(tag)
+		return err
+	}
+}
+
+// procTagVar names the environment variable that tags a command's processes.
+const procTagVar = "KLAUDIA_PROC_TAG"
+
+func newProcTag() string {
+	var b [8]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
 
 // terminateGroup sends SIGTERM to the process's group, then SIGKILL after
