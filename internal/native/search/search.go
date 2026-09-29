@@ -11,42 +11,28 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 )
-
-// ignoredDirs are skipped during traversal (matches the JS/ripgrep defaults).
-var ignoredDirs = map[string]bool{
-	".git": true, "node_modules": true, "__pycache__": true,
-	".svn": true, ".hg": true, "vendor": true,
-}
-
-// shouldSkipDir reports whether a directory should be pruned from traversal.
-func shouldSkipDir(name string, hidden bool) bool {
-	if ignoredDirs[name] {
-		return true
-	}
-	if !hidden && strings.HasPrefix(name, ".") {
-		return true
-	}
-	return false
-}
 
 // GlobOptions configures Glob.
 type GlobOptions struct {
 	Root    string // base directory to search (defaults to ".")
 	Pattern string // glob pattern, e.g. "**/*.go"; empty means all files
-	Hidden  bool   // include dotfiles/dotdirs
+	Hidden  bool   // include dotfiles/dotdirs even when Pattern does not name them
 }
 
 // Glob returns files under Root matching Pattern, sorted by modification time
-// (newest first) — matching the JS Glob tool's ordering.
+// (newest first) — matching the JS Glob tool's ordering. The walk honours
+// .gitignore and .ignore files and skips hidden entries the pattern does not
+// name (see walkFilter).
 func Glob(opts GlobOptions) ([]string, error) {
 	root := opts.Root
 	if root == "" {
 		root = "."
 	}
+	root = filepath.Clean(root)
+	filter := newWalkFilter(root, opts.Hidden, opts.Pattern)
 	type ent struct {
 		path string
 		mod  int64
@@ -57,13 +43,13 @@ func Glob(opts GlobOptions) ([]string, error) {
 		if err != nil {
 			return nil // skip unreadable entries
 		}
-		if d.IsDir() {
-			if path != root && shouldSkipDir(d.Name(), opts.Hidden) {
+		if filter.skip(path, d) {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if !opts.Hidden && strings.HasPrefix(d.Name(), ".") {
+		if d.IsDir() {
 			return nil
 		}
 		if opts.Pattern != "" && !matchGlob(root, path, opts.Pattern) {
@@ -166,18 +152,20 @@ func Grep(opts GrepOptions) ([]GrepMatch, error) {
 		visit(root)
 		return matches, nil
 	}
+	root = filepath.Clean(root)
+	filter := newWalkFilter(root, opts.Hidden, opts.Glob)
 
 	walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if d.IsDir() {
-			if path != root && shouldSkipDir(d.Name(), opts.Hidden) {
+		if filter.skip(path, d) {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if !opts.Hidden && strings.HasPrefix(d.Name(), ".") {
+		if d.IsDir() {
 			return nil
 		}
 		if opts.Glob != "" && !matchGlob(root, path, opts.Glob) {

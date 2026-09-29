@@ -42,7 +42,8 @@ func (g *Grep) Name() string { return "Grep" }
 func (g *Grep) Description(context.Context) (string, error) {
 	return "Search file contents with a regular expression. output_mode controls results: " +
 		"\"files_with_matches\" (default) lists matching files, \"content\" shows matching lines, " +
-		"\"count\" shows per-file match counts. Filter files with glob, ignore case with -i.", nil
+		"\"count\" shows per-file match counts. Filter files with glob, ignore case with -i. " +
+		"Skips files ignored by .gitignore/.ignore and hidden (dot) files unless the path or glob names them.", nil
 }
 
 func (g *Grep) InputSchema() json.RawMessage { return g.schema.Raw }
