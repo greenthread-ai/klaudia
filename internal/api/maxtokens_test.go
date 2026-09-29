@@ -4,7 +4,7 @@ import "testing"
 
 func TestMaxOutputTokens(t *testing.T) {
 	// 1M-context Claude models generate up to 128k output tokens.
-	for _, id := range []string{"claude-opus-5", "claude-opus-4-8", "claude-sonnet-5", "claude-fable-5", "claude-sonnet-4-6"} {
+	for _, id := range []string{"claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "claude-opus-5", "claude-opus-4-8", "claude-sonnet-5", "claude-fable-5", "claude-sonnet-4-6"} {
 		if got := MaxOutputTokens(id); got != 128000 {
 			t.Errorf("%s = %d, want 128000", id, got)
 		}
