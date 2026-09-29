@@ -1,6 +1,11 @@
 package tools
 
-import "github.com/greenthread-ai/klaudia/internal/permission"
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/greenthread-ai/klaudia/internal/permission"
+)
 
 // editClassDecision is the intrinsic permission decision for file-mutating
 // tools (Write, Edit, NotebookEdit): auto-accepted under acceptEdits, blocked
@@ -61,4 +66,48 @@ func networkClassDecision(pctx permission.Context) permission.Decision {
 	default:
 		return permission.Decision{Behavior: permission.Ask}
 	}
+}
+
+// execGrantingDirs and execGrantingFiles are project paths whose contents run
+// later without anyone running them on purpose: git hooks and config (hooks,
+// fsmonitor, filter drivers), agent and editor config that launches servers or
+// tasks, and shell/package-manager rc files that execute on cd or install.
+// Writing one is how an edit becomes code execution, so they are asked about
+// even where edits are otherwise auto-accepted.
+var (
+	execGrantingDirs  = map[string]bool{".git": true, ".husky": true, ".klaudia": true, ".claude": true, ".devcontainer": true, ".vscode": true}
+	execGrantingFiles = map[string]bool{".mcp.json": true, ".envrc": true, ".npmrc": true, ".yarnrc": true, ".yarnrc.yml": true, ".pre-commit-config.yaml": true, "bunfig.toml": true, ".bazelrc": true}
+)
+
+// execGranting reports whether writing path would write one of those files. A
+// symlinked parent is resolved, so "hooks -> .git/hooks" is caught too.
+func execGranting(path string) bool {
+	if path == "" {
+		return false
+	}
+	candidates := []string{filepath.Clean(path)}
+	if real, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+		candidates = append(candidates, filepath.Join(real, filepath.Base(path)))
+	}
+	for _, p := range candidates {
+		if execGrantingFiles[filepath.Base(p)] {
+			return true
+		}
+		for _, part := range strings.Split(filepath.ToSlash(p), "/") {
+			if execGrantingDirs[part] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// editPathDecision is editClassDecision for a write to path: where edits are
+// auto-accepted, an exec-granting path is asked about instead.
+func editPathDecision(pctx permission.Context, path string) permission.Decision {
+	d := editClassDecision(pctx)
+	if d.Behavior == permission.Allow && execGranting(path) {
+		return permission.Decision{Behavior: permission.Ask, Message: path + " can make code run later (hooks, tasks, server or shell config), so it is not auto-approved"}
+	}
+	return d
 }

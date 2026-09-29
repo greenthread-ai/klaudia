@@ -76,8 +76,8 @@ func (n *NotebookEdit) PermissionRequest(raw json.RawMessage) permission.Permiss
 }
 
 // CheckPermissions: NotebookEdit mutates a file (edit-class).
-func (n *NotebookEdit) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
-	return editClassDecision(pctx)
+func (n *NotebookEdit) CheckPermissions(pctx permission.Context, req permission.PermissionRequest) permission.Decision {
+	return editPathDecision(pctx, req.Specifier)
 }
 
 func (in NotebookEditInput) editMode() string {
