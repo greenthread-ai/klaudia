@@ -146,6 +146,13 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		DeferredTools: filterDeferred(s.deferred(), childTools),
 	}, emit)
 	if err != nil {
+		// What the sub-agent had already worked out is not lost with it: the
+		// last reply it completed goes back with the error, marked as partial.
+		// Returning "" threw away everything it found before a stream error
+		// or an overload ended its run.
+		if res.Text != "" {
+			return fmt.Sprintf("[Sub-agent failed after %d turn(s); its last completed reply follows and may be incomplete.]\n\n%s", res.NumTurns, res.Text), err
+		}
 		return "", err
 	}
 	// Say so rather than passing back a truncated answer as if it were complete.

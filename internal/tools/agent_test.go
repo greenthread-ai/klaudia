@@ -3,12 +3,15 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 )
 
 type fakeSpawner struct {
 	gotType, gotPrompt string
 	result             string
+	err                error
 	gotProgress        func(string) // captured so a test can assert it was forwarded
 }
 
@@ -17,7 +20,7 @@ func (f *fakeSpawner) Spawn(_ context.Context, subagentType, prompt string, prog
 	if progress != nil {
 		progress("Read main.go") // a child tool call, as the real spawner relays
 	}
-	return f.result, nil
+	return f.result, f.err
 }
 
 func newTestAgent(t *testing.T, sp Spawner) *Agent {
@@ -79,4 +82,16 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+// A failed sub-agent's partial work reaches the model with the error.
+func TestAgentFailureCarriesPartialWork(t *testing.T) {
+	a := newTestAgent(t, &fakeSpawner{result: "[partial] found the config", err: errors.New("overloaded")})
+	res, err := a.Execute(context.Background(), Context{}, json.RawMessage(`{"subagent_type":"Explore","prompt":"p","description":"d"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res[0].IsError || !strings.Contains(res[0].Content, "overloaded") || !strings.Contains(res[0].Content, "found the config") {
+		t.Errorf("result = %+v, want the error and the partial work", res[0])
+	}
 }
