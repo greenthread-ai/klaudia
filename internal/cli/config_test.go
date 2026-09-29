@@ -51,9 +51,11 @@ func TestCreateConfig(t *testing.T) {
 			}
 			body := string(data)
 			for _, want := range []string{
-				`provider = "openai"`,
-				`baseURL = "https://api.example.com/v1"`,
-				`apiKeyEnv = "MY_API_KEY"`,
+				"\nprovider = \"anthropic\"\n", // active, uncommented
+				`#   provider = "openai"`,      // the alternative stays commented out
+				`#   baseURL = "https://api.example.com/v1"`,
+				`#   apiKeyEnv = "MY_API_KEY"`,
+				`bypassPermissions | dontAsk`,
 				`# Klaudia config`,
 				`# contextWindow = 8192`, // commented example for OpenAI-compatible hosts
 			} {

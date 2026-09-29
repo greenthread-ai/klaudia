@@ -51,8 +51,11 @@ klaudia --create-config=global   # ~/.klaudia/config.toml  (your default)
 klaudia --create-config=local    # ./.klaudia/config.toml  (project override)
 ```
 
-Both commands refuse to overwrite an existing config (so you can't accidentally
-clobber settings); delete the file first if you want a fresh starter.
+The starter selects the Anthropic provider, so it works as written with
+`ANTHROPIC_API_KEY` set; the OpenAI-compatible settings are in it, commented
+out. Both commands refuse to overwrite an existing config (so you can't
+accidentally clobber settings); delete the file first if you want a fresh
+starter.
 
 ### Authentication
 
@@ -77,7 +80,9 @@ klaudia
 
 **OpenAI-compatible provider**
 
-Edit the config you just generated and set the provider block:
+In the config you just generated, replace `provider = "anthropic"` with the
+commented OpenAI-compatible block (delete the leading `#` from each line) and
+fill in your endpoint:
 
 ```toml
 # ~/.klaudia/config.toml  (comments are supported)

@@ -450,25 +450,40 @@ const starterConfig = `# Klaudia config
 # Global: ~/.klaudia/config.toml
 # Local:  ./.klaudia/config.toml (overrides global settings)
 
-provider = "openai"
-model = "openai/gpt-5.5"
-baseURL = "https://api.example.com/v1"
+# Provider: "anthropic" (the default) or "openai" (any OpenAI-compatible
+# endpoint — see the block below). Anthropic reads its key from the
+# environment, never from this file:
+#   export ANTHROPIC_API_KEY="sk-ant-..."   # or ANTHROPIC_AUTH_TOKEN
+# In a local config, delete this line to keep the provider set globally.
+provider = "anthropic"
 
-# apiKeyEnv is the NAME of the environment variable that holds your API key:
-# pick any name, then export a variable of that name, e.g. for the value below:
-#   export MY_API_KEY="sk-..."
-# Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
-apiKeyEnv = "MY_API_KEY"
+# Default model; --model overrides it per run. Unset uses Klaudia's default.
+# model = "sonnet" # haiku | sonnet | opus, or a full model ID
 
-# Temperature for the model. Omitted by default (server picks its own default).
-# Some providers reject this field; remove the line to omit it from the request.
+# To use an OpenAI-compatible endpoint instead, replace the provider line
+# above with these lines (delete the leading "#" from each), then export the
+# variable named in apiKeyEnv. The model here replaces the one above.
+#
+#   provider = "openai"
+#   model = "openai/gpt-5.5"
+#   baseURL = "https://api.example.com/v1"
+#
+#   # apiKeyEnv is the NAME of the environment variable that holds your key:
+#   # pick any name, then export a variable of that name, e.g. for this one:
+#   #   export MY_API_KEY="sk-..."
+#   # Or set apiKey = "sk-..." inline — but the env form keeps secrets out
+#   # of files.
+#   apiKeyEnv = "MY_API_KEY"
+
+# Temperature (OpenAI-compatible provider only). Omitted by default, so the
+# server picks its own; some providers reject the field.
 # temperature = 1.0
 
 # Context window in tokens — drives autocompaction so long sessions don't
 # overflow the model upstream ("max_tokens must be at least 1, got -N" or
-# "context length exceeded"). Defaults to 200000 (Anthropic-sized); set this
-# to the actual window your provider/model exposes. Common values: 8192, 16384,
-# 32768, 128000.
+# "context length exceeded"). Defaults to 200000, which fits Claude; for an
+# OpenAI-compatible model set the window it actually exposes. Common values:
+# 8192, 16384, 32768, 128000.
 # contextWindow = 8192
 
 # TUI theme (Markdown + chrome). /theme switches it for a session.
@@ -482,8 +497,10 @@ apiKeyEnv = "MY_API_KEY"
 # searchEngine = "ddg" # ddg | google
 # headless = true
 #
+# dontAsk runs allow-listed tools and denies the rest without prompting —
+# the mode for headless and embedded runs.
 # [permissions]
-# mode = "autonomous" # autonomous | plan | bypassPermissions
+# mode = "autonomous" # autonomous | plan | bypassPermissions | dontAsk
 # allow = ["Bash(go test:*)"]
 # deny = ["Bash(rm:*)"]
 `
