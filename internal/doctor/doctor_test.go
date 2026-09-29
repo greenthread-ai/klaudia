@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"encoding/json"
 	"runtime"
 	"strings"
 	"testing"
@@ -142,6 +143,63 @@ func TestFormatTokens(t *testing.T) {
 	for _, tc := range tests {
 		if got := formatTokens(tc.in); got != tc.want {
 			t.Errorf("formatTokens(%d) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestCriticalOnlyForMissingCredential(t *testing.T) {
+	// No credential → critical (klaudia can't reach a model at all).
+	if !Critical(Run(Input{AuthOK: false})) {
+		t.Error("missing credential should be critical")
+	}
+	// A credential resolves → not critical, even with other warnings present
+	// (e.g. an OS-sandbox binary missing on this platform, or no LSPs).
+	checks := Run(Input{AuthOK: true, AuthKind: "api-key", SandboxMode: "os"})
+	if Critical(checks) {
+		t.Errorf("a resolved credential should not be critical: %+v", checks)
+	}
+}
+
+func TestNewReportOKMirrorsCritical(t *testing.T) {
+	if r := NewReport(Run(Input{AuthOK: false})); r.OK {
+		t.Error("report OK should be false when a critical check failed")
+	}
+	if r := NewReport(Run(Input{AuthOK: true, AuthKind: "oauth"})); !r.OK {
+		t.Error("report OK should be true when no critical check failed")
+	}
+}
+
+func TestReportJSONMarshaling(t *testing.T) {
+	report := NewReport([]Check{
+		{Name: "auth", Status: StatusOK, Detail: "credential resolved (oauth)"},
+		{Name: "lsp", Status: StatusWarn, Detail: "install gopls"},
+	})
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	// Round-trip and check the lowercased json keys are present and stable.
+	var got struct {
+		Checks []map[string]string `json:"checks"`
+		OK     bool                `json:"ok"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !got.OK {
+		t.Errorf("ok = false, want true; json: %s", data)
+	}
+	if len(got.Checks) != 2 {
+		t.Fatalf("checks = %d, want 2; json: %s", len(got.Checks), data)
+	}
+	first := got.Checks[0]
+	if first["name"] != "auth" || first["status"] != StatusOK || !strings.Contains(first["detail"], "oauth") {
+		t.Errorf("first check = %v", first)
+	}
+	// Field names must be the lowercased json tags, not the Go field names.
+	for _, k := range []string{"name", "status", "detail"} {
+		if _, ok := first[k]; !ok {
+			t.Errorf("json check missing key %q: %s", k, data)
 		}
 	}
 }
