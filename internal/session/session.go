@@ -4,7 +4,9 @@ package session
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -187,22 +189,41 @@ func Read(path string) ([]Entry, error) {
 	defer f.Close()
 
 	var entries []Entry
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for sc.Scan() {
-		line := sc.Bytes()
-		if len(line) == 0 {
-			continue
-		}
+	err = eachLine(f, func(line []byte) bool {
 		var e Entry
 		if err := json.Unmarshal(line, &e); err != nil {
-			continue // tolerate malformed/unknown lines
+			return true // tolerate malformed/unknown lines
 		}
 		if e.Type == "user" || e.Type == "assistant" {
 			entries = append(entries, e)
 		}
+		return true
+	})
+	return entries, err
+}
+
+// eachLine calls fn with each non-empty line of r until fn returns false.
+//
+// It has no line-length limit. A bufio.Scanner capped at 16 MB stopped at the
+// first longer line — one image tool result is enough — and Read returned the
+// history up to that point, so a resumed session quietly lost everything after
+// it.
+func eachLine(r io.Reader, fn func([]byte) bool) error {
+	br := bufio.NewReaderSize(r, 64*1024)
+	for {
+		line, err := br.ReadBytes('\n')
+		if trimmed := bytes.TrimRight(line, "\r\n"); len(trimmed) > 0 {
+			if !fn(trimmed) {
+				return nil
+			}
+		}
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
 	}
-	return entries, sc.Err()
 }
 
 // MostRecent returns the session ID of the most recently modified transcript in
@@ -238,7 +259,7 @@ func MostRecent(cwd string) (string, bool) {
 	// mtime. Auto-resuming that would silently drop the user's real history
 	// ("resumed but no memory"), so skip to the newest one with messages.
 	for _, f := range files {
-		if hasMessages(f.path) {
+		if hasMessagesFrom(f.path, cwd) {
 			name := filepath.Base(f.path)
 			return strings.TrimSuffix(name, ".jsonl"), true
 		}
@@ -246,29 +267,35 @@ func MostRecent(cwd string) (string, bool) {
 	return "", false
 }
 
-// hasMessages reports whether a transcript holds at least one user/assistant
-// message, scanning only until the first match so large transcripts stay cheap.
-// A file with only non-message lines (or none) is treated as contentless.
-func hasMessages(path string) bool {
+// hasMessagesFrom reports whether a transcript holds a user/assistant message
+// and was recorded in cwd, scanning only to the first message so large
+// transcripts stay cheap. A file with only non-message lines (or none) is
+// treated as contentless.
+//
+// The cwd check is needed because EncodePath maps every non-alphanumeric
+// character to "-": /a/my_proj, /a/my-proj and /a/my.proj share one directory.
+// Auto-resume picked the newest transcript there, so starting Klaudia in one
+// of them resumed a conversation from another. A message with no recorded cwd
+// (older transcripts, imports) is accepted, as it was before.
+func hasMessagesFrom(path, cwd string) bool {
 	f, err := os.Open(path)
 	if err != nil {
 		return false
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for sc.Scan() {
-		if len(sc.Bytes()) == 0 {
-			continue
-		}
+	found := false
+	_ = eachLine(f, func(line []byte) bool {
 		var e struct {
 			Type string `json:"type"`
+			CWD  string `json:"cwd"`
 		}
-		if json.Unmarshal(sc.Bytes(), &e) == nil && (e.Type == "user" || e.Type == "assistant") {
+		if json.Unmarshal(line, &e) != nil || (e.Type != "user" && e.Type != "assistant") {
 			return true
 		}
-	}
-	return false
+		found = e.CWD == "" || filepath.Clean(e.CWD) == filepath.Clean(cwd)
+		return false
+	})
+	return found
 }
 
 // LastTurnRefused reports whether the transcript's final assistant turn was a
