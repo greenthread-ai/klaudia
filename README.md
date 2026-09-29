@@ -291,6 +291,10 @@ result, so it can end its turn and be told. Jobs get a name, a port and a log fi
 # Print the final result and exit
 klaudia -p "What files are in this directory?"
 
+# Piped stdin is the prompt, or is appended to one given as an argument
+echo "What files are in this directory?" | ./klaudia -p
+git diff | ./klaudia -p "Review this change"
+
 # Unattended, including changes to this machine
 klaudia -p "Install and configure nginx" --allow-host-changes
 
