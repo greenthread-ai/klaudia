@@ -679,6 +679,38 @@ Two complementary modes for working toward an objective:
 - **Project knowledge** — `.klaudia/KNOWLEDGE.md` (curated, durable lessons) is
   injected into the system prompt when present.
 
+## Environment variables
+
+Every `KLAUDIA_*` and `ANTHROPIC_*` variable Klaudia reads. Where a
+`.klaudia/config.toml` key covers the same setting (the `[browser]` keys), the
+config file wins over the variable. Boolean variables take `1`/`true`/`yes`/`on`
+or `0`/`false`/`no`/`off`; any other value is ignored, as is a number that does
+not parse.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | unset | Anthropic API key, sent as `x-api-key`. Wins over every other Anthropic credential. |
+| `ANTHROPIC_AUTH_TOKEN` | unset | Bearer token for the Anthropic API, used when `ANTHROPIC_API_KEY` is unset; wins over the Claude Code Keychain session. |
+| `KLAUDIA_CUSTOM_ENDPOINT` | Anthropic's production API | Base URL for the Anthropic provider (a proxy or gateway). The OpenAI-compatible provider uses `baseURL` in `config.toml` instead. |
+| `KLAUDIA_MAX_RETRIES` | `5` | Retries for a failed model request (429, 5xx, dropped connection), with exponential backoff that honours `Retry-After`. A non-negative integer. |
+| `KLAUDIA_STREAM_IDLE_TIMEOUT` | `120` | Seconds a streamed turn may go without an event before it counts as stalled (see [Streaming & reliability](#streaming--reliability)). `0` disables the watchdog. |
+| `KLAUDIA_DISABLE_PROMPT_CACHE` | unset (caching on) | Any non-empty value — even `0` — stops Klaudia marking prompt-cache breakpoints on Anthropic requests, so every turn re-sends and is billed for the whole prompt. |
+| `KLAUDIA_CONFIG_DIR` | `~/.klaudia` | Base directory for per-user state: sessions, tool-output spills, job logs, the Chrome profile and the user-level `.mcp.json`. `config.toml` and user skills are still read from `~/.klaudia`. |
+| `KLAUDIA_LOG` | unset (discarded) | File to append the standard `log` package's output to while the TUI runs (see [Logs & diagnostics](#logs--diagnostics)). |
+| `KLAUDIA_BROWSER_LOG` | unset | File to append chromedp's unfiltered browser/protocol log to. |
+| `KLAUDIA_MCP_STDERR` | unset | Directory to append each stdio MCP server's stderr to, as `<name>.log`, in any mode. |
+| `KLAUDIA_WEB_SEARCH_ENGINE` | `ddg` | `BrowserSearch` engine: `ddg` (DuckDuckGo) or `google`. Config: `browser.searchEngine`. |
+| `KLAUDIA_CHROME_PATH` | auto-discovered | Chrome/Chromium executable to launch. Config: `browser.chromePath`. |
+| `KLAUDIA_CHROME_REMOTE_URL` | unset (launch Chrome) | DevTools endpoint of a running Chrome to attach to instead of launching one. Config: `browser.remoteUrl`. |
+| `KLAUDIA_CHROME_USER_DATA_DIR` | `<config dir>/browser/chrome-profile` | Chrome profile directory (cookies, the solved-challenge state). Config: `browser.userDataDir`. |
+| `KLAUDIA_BROWSER_HEADLESS` | `true` | Run the launched Chrome headless. Config: `browser.headless`. |
+| `KLAUDIA_BROWSER_HEADED_FALLBACK` | `true` | On a search bot-challenge page, relaunch a headed Chrome so you can solve it once. Config: `browser.headedFallback`. |
+
+Variables you name yourself — `apiKeyEnv`, `extraHeadersEnv`, `${VAR}` in
+`.mcp.json` — are not listed. `cmd/klaudia/envdocs_test.go` keeps this table
+honest: it fails when non-test code names a `KLAUDIA_*` or `ANTHROPIC_*`
+variable that has no row here, or a row names one no code reads.
+
 ## Internal package layout
 
 | Package | Responsibility |
