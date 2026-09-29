@@ -131,7 +131,7 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 	for _, s := range servers {
 		lspServers = append(lspServers, doctor.LSPServer{Name: s.Bin, Language: s.Language, Version: s.Version})
 	}
-	ctxLimit, ctxSource := api.ContextWindow(string(model), cfg.ContextWindow)
+	ctxLimit, ctxSource := api.ContextWindowFor(cfg.Provider, string(model), cfg.ContextWindow)
 	in := doctor.Input{
 		Provider:        providerName(cfg),
 		Model:           string(model),
@@ -725,7 +725,15 @@ func run(cmd *cobra.Command, opts *options) error {
 	if modelStr == "" {
 		modelStr = providerModel
 	}
-	model := api.ResolveModel(modelStr)
+	// Claude's aliases and default model are Anthropic's: another provider
+	// gets the model string as written, so it has to have one.
+	model := api.ResolveModelFor(cfg.Provider, modelStr)
+	if model == "" {
+		return usageErrorf("provider %q needs a model: set model in .klaudia/config.toml or pass --model", cfg.Provider)
+	}
+	if w := api.AliasWarning(cfg.Provider, modelStr); w != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
+	}
 
 	// Build allow/deny rules from config (.klaudia) + CLI flags.
 	allowRules, err := permission.ParseRules(append(append([]string{}, cfg.Permissions.Allow...), opts.allowedTools...))
@@ -915,6 +923,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		return err
 	}
+	wiring.spawner.WithProviderName(cfg.Provider)
 	registry := wiring.registry
 
 	// MCP config hot reload. An edit to any .mcp.json that applies here takes
@@ -992,7 +1001,7 @@ func run(cmd *cobra.Command, opts *options) error {
 					"would have done — run /trust to see it, or /trust upgrade to switch over.")
 		}
 		// Shared settings so slash commands can read/change them between turns.
-		ctxLimit, ctxSource := api.ContextWindow(string(model), cfg.ContextWindow)
+		ctxLimit, ctxSource := api.ContextWindowFor(cfg.Provider, string(model), cfg.ContextWindow)
 		sess := &tui.Session{
 			// Effective model (flag or config default), never "" — otherwise a
 			// non-Anthropic provider would wrongly resolve to the Anthropic default.
@@ -1015,7 +1024,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			ContextWindowSource: ctxSource,
 			Compact: func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 				return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
-					return loop.Compact(ctx, history, api.ResolveModel(modelStr))
+					return loop.Compact(ctx, history, api.ResolveModelFor(cfg.Provider, modelStr))
 				}, onSummary)
 			},
 
@@ -1048,7 +1057,8 @@ func run(cmd *cobra.Command, opts *options) error {
 			return loop.Run(ctx, agent.Options{
 				WorkingDir:      cwd,
 				Prompt:          prompt,
-				Model:           api.ResolveModel(sess.Model), // resolved fresh each turn
+				Model:           api.ResolveModelFor(cfg.Provider, sess.Model), // resolved fresh each turn
+				ProviderName:    cfg.Provider,
 				System:          withExtraDirs(sysPrompt, sess.ExtraDirs),
 				MaxTurns:        opts.maxTurns,
 				ContextWindow:   cfg.ContextWindow,
@@ -1080,6 +1090,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				WorkingDir:      cwd,
 				Prompt:          prompt,
 				Model:           model,
+				ProviderName:    cfg.Provider,
 				System:          sysPrompt,
 				MaxTurns:        opts.maxTurns,
 				ContextWindow:   cfg.ContextWindow,
@@ -1104,6 +1115,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			cwd:        cwd,
 			mode:       mode,
 			model:      model,
+			provider:   cfg.Provider,
 			system:     sysPrompt,
 			maxTurns:   opts.maxTurns,
 			iterations: opts.maxIterations,
@@ -1137,6 +1149,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		WorkingDir:      cwd,
 		Prompt:          opts.prompt,
 		Model:           model,
+		ProviderName:    cfg.Provider,
 		System:          sysPrompt,
 		MaxTurns:        opts.maxTurns,
 		ContextWindow:   cfg.ContextWindow,

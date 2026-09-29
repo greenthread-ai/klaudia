@@ -70,7 +70,7 @@ type Options struct {
 	Model      anthropic.Model
 	System     string
 	MaxTurns   int   // 0 = unlimited
-	MaxTokens  int64 // 0 = model-aware default via api.MaxOutputTokens
+	MaxTokens  int64 // 0 = model-aware default via api.MaxOutputTokensFor
 	Permission permission.Context
 	// Host is the trust gate: it classifies each tool call and refuses changes
 	// to this machine that the user has not agreed to. Nil disables the whole
@@ -116,6 +116,10 @@ type Options struct {
 	// ContextWindow is the model's context size, used for autocompact
 	// thresholds. 0 uses the package default.
 	ContextWindow int
+	// ProviderName is the configured provider ("" = anthropic). The
+	// model-aware MaxTokens default comes from Claude's table only on
+	// Anthropic; any other provider gets the conservative unknown-model cap.
+	ProviderName string
 	// PartialMessages, if set, receives raw model stream events during the main
 	// answer turn (not compaction summaries). The CLI wires this to a
 	// stream_event emitter when --include-partial-messages is set. Nil by
@@ -163,7 +167,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// large write hit the output limit mid-tool-call and was dispatched with
 		// empty arguments. api.MaxOutputTokens raises it on models that support
 		// more, staying a safe under-approximation of each model's real cap.
-		maxTokens = int64(api.MaxOutputTokens(string(opts.Model)))
+		maxTokens = int64(api.MaxOutputTokensFor(opts.ProviderName, string(opts.Model)))
 	}
 
 	// Deferred tools are withheld from the request until ToolSearch reveals them.

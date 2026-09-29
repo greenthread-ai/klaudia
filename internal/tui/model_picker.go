@@ -53,7 +53,7 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 		shown = shown[:9]
 	}
 
-	current := api.ResolveModel(m.sess.Model)
+	current := api.ResolveModelFor(m.sess.Provider, m.sess.Model)
 	items := make([]choiceItem, 0, len(shown))
 	for _, mi := range shown {
 		mi := mi
@@ -87,7 +87,9 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 func (m *Model) setModel(id string, contextWindow int) string {
 	id = strings.TrimSpace(id)
 	m.sess.Model = id
-	m.sess.ResolvedModel = string(api.ResolveModel(id))
+	// Aliases resolve only on Anthropic; another provider is sent the id as
+	// typed, so a bare "sonnet" there gets a warning instead of a rewrite.
+	m.sess.ResolvedModel = string(api.ResolveModelFor(m.sess.Provider, id))
 
 	msg := "Model set to " + id
 	if resolved := m.sess.ResolvedModel; resolved != id {
@@ -96,11 +98,15 @@ func (m *Model) setModel(id string, contextWindow int) string {
 	if contextWindow > 0 {
 		m.sess.ContextWindow = contextWindow
 		m.sess.ContextWindowSource = "provider"
-	} else if limit, source := api.ContextWindow(id, 0); limit > 0 {
+	} else if limit, source := api.ContextWindowFor(m.sess.Provider, id, 0); limit > 0 {
 		m.sess.ContextWindow, m.sess.ContextWindowSource = limit, source
 	}
 	if m.sess.ContextWindow > 0 {
 		msg += fmt.Sprintf(" · %s context", humanTokens(int64(m.sess.ContextWindow)))
 	}
-	return msg + ". Applies to the next turn."
+	msg += ". Applies to the next turn."
+	if w := api.AliasWarning(m.sess.Provider, id); w != "" {
+		msg += "\nwarning: " + w + "."
+	}
+	return msg
 }

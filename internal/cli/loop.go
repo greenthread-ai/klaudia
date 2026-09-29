@@ -25,6 +25,7 @@ type loopRun struct {
 	cwd        string
 	mode       permission.Mode
 	model      anthropic.Model
+	provider   string // configured provider name, for the model-aware defaults
 	system     string
 	maxTurns   int
 	iterations int
@@ -85,6 +86,7 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 			WorkingDir:    p.cwd,
 			Prompt:        prompt,
 			Model:         p.model,
+			ProviderName:  p.provider,
 			System:        p.system,
 			MaxTurns:      p.maxTurns,
 			Permission:    p.permCtx,
