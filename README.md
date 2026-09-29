@@ -170,6 +170,29 @@ send on macOS, that now adds a line; and pressing `Esc` immediately followed by
 `Return` can be read as `Alt+Return`, since that is the same byte sequence —
 one of the reasons a terminal cannot simply invent a `Ctrl+Return` key.
 
+### Attention notifications
+
+When Klaudia needs you while you are looking elsewhere — a turn has finished, or
+a permission/approval prompt is waiting — it can get your attention through the
+terminal:
+
+```toml
+[tui]
+notify = "bell"           # default when unset: the terminal bell (\a)
+# notify = "bell,osc9"    # bell + an iTerm2/kitty/WezTerm desktop notification
+# notify = "osc777"       # an rxvt/urxvt desktop notification
+# notify = "all"          # every mechanism
+# notify = "off"          # stay silent
+```
+
+The mechanisms are `bell` (the terminal bell, the most widely supported),
+`osc9` (an OSC 9 desktop notification honoured by iTerm2, kitty and WezTerm) and
+`osc777` (an OSC 777 notification for rxvt/urxvt and others); combine them with
+commas. When your terminal reports focus (Klaudia enables focus reporting, which
+does not disturb scrollback or selection), the notification fires only while the
+window is unfocused; a terminal that does not report focus is notified either
+way.
+
 **Klaudia renders inline, not full-screen.** Finished output is printed into
 your terminal's real scrollback and only the input and status bar are redrawn in
 place, so scrolling, drag-to-select, your terminal's own search and tmux copy
@@ -396,6 +419,14 @@ apiKeyEnv = "MY_API_KEY"
 # terminals cannot send one.
 # [input]
 # enter = "newline"
+
+# Optional: how Klaudia gets your attention when it needs you (a turn finished,
+# a prompt is waiting). A comma-separated list of "bell" (terminal bell), "osc9"
+# (iTerm2/kitty/WezTerm desktop notification) and "osc777" (rxvt/urxvt); "all"
+# enables every mechanism and "off" disables them. Defaults to "bell". See
+# "Attention notifications" above.
+# [tui]
+# notify = "bell,osc9"
 ```
 
 Create a commented starter config with `./klaudia --create-config=global` for

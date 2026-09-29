@@ -53,6 +53,7 @@ type Session struct {
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
 	Theme          string         // markdown render theme ("" = dark)
 	EnterInserts   bool           // Return inserts a newline; alt+Return/ctrl+j submit
+	Notify         NotifyModes    // terminal-attention mechanisms (bell/OSC9/OSC777)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
 
 	// Render-only context for /config and /context (set once at startup).
@@ -470,6 +471,19 @@ type Model struct {
 	// pendingOSC holds a clipboard escape sequence to emit on the next frame.
 	// Writing it through View keeps it ordered with respect to the renderer.
 	pendingOSC string
+	// pendingNotify holds attention escapes (bell/OSC 9/OSC 777) to emit on the
+	// next frame, queued when Klaudia needs the user (a turn finished, a prompt
+	// is waiting). Emitted through View for the same ordering reason as
+	// pendingOSC, but kept separate so a queued /copy and a notification in the
+	// same frame don't clobber each other.
+	pendingNotify string
+	// focused tracks terminal focus when the terminal reports it (DECSET 1004,
+	// enabled by tea.WithReportFocus). focusKnown is false until the first
+	// focus/blur event proves the terminal supports it; while it is false the
+	// notifier fires regardless, so a terminal that never reports focus still
+	// gets notified rather than silently never.
+	focused    bool
+	focusKnown bool
 	// steer holds what the user typed while Klaudia was working. The agent loop
 	// drains it at its next safe point, so a correction lands before the next
 	// consequential action rather than after the turn. Anything still pending
@@ -547,6 +561,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		state:   stateIdle,
 		history: history,
 		sess:    sess,
+		focused: true, // assume focused until the terminal says otherwise
 	}
 	m.executor = sess.Executor
 	// Capture the working tree before Klaudia touches anything. A file that is
@@ -815,6 +830,14 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.onKey(msg)
 
+	case tea.FocusMsg:
+		m.focused, m.focusKnown = true, true
+		return m, nil
+
+	case tea.BlurMsg:
+		m.focused, m.focusKnown = false, true
+		return m, nil
+
 	case eventMsg:
 		m.renderEvent(msg.ev)
 		return m, m.waitForEvent()
@@ -851,6 +874,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setState(stateAwaitingPermission)
 		m.pending = msg.reply
 		m.pendingReq = msg.req
+		// A prompt stalls the turn until the user answers, so it is exactly the
+		// moment to get their attention if they have looked away.
+		m.notifyAttention("Klaudia needs permission")
 		if msg.req.HostChange != nil {
 			for _, line := range hostCardLines(msg.req.HostChange) {
 				m.appendLine(line)
@@ -870,6 +896,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.askReply = msg.reply
 		m.askOptions = msg.options
 		m.askQuestion = msg.question
+		m.notifyAttention("Klaudia has a question")
 		m.appendLine(askStyle.Render("? " + msg.question))
 		for i, o := range msg.options {
 			line := fmt.Sprintf("  %d) %s", i+1, o.Label)
@@ -885,6 +912,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case planMsg:
 		m.setState(stateAwaitingPlan)
 		m.planReply = msg.reply
+		m.notifyAttention("Klaudia proposed a plan")
 		m.appendLine(askStyle.Render("Proposed plan:"))
 		m.appendMarkdown(msg.plan)
 		// The y/n prompt lives only in the persistent bottom view (see
@@ -985,6 +1013,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
+		}
+		// The turn is over and nothing follows it: Klaudia is now waiting on the
+		// user. Notify here rather than at the top of the handler so a goal-loop
+		// iteration or a queued follow-up — which don't hand control back —
+		// doesn't ring the bell.
+		switch {
+		case errors.Is(msg.err, context.Canceled):
+			m.notifyAttention("Klaudia stopped")
+		case msg.err != nil:
+			m.notifyAttention("Klaudia hit an error")
+		default:
+			m.notifyAttention("Klaudia finished")
 		}
 		m.setState(stateIdle)
 		m.input.Focus()
@@ -2249,8 +2289,8 @@ func (m *Model) renderConfig() string {
 	if sandbox == "" {
 		sandbox = "local"
 	}
-	return fmt.Sprintf("Configuration:\n  provider=%s\n  model=%s\n  sandbox=%s\n  permissions=%s\n\n  /mode to change permissions · /model to change the model",
-		provider, model, sandbox, m.currentMode().Label())
+	return fmt.Sprintf("Configuration:\n  provider=%s\n  model=%s\n  sandbox=%s\n  permissions=%s\n  notify=%s\n\n  /mode to change permissions · /model to change the model",
+		provider, model, sandbox, m.currentMode().Label(), m.sess.Notify)
 }
 
 // renderAgents lists the available sub-agent types (Agent tool subagent_type).
@@ -3277,6 +3317,9 @@ func (m *Model) View() string {
 	if m.pendingOSC != "" {
 		out, m.pendingOSC = m.pendingOSC+out, ""
 	}
+	if m.pendingNotify != "" {
+		out, m.pendingNotify = m.pendingNotify+out, ""
+	}
 	return out
 }
 
@@ -3465,7 +3508,12 @@ func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	// quit. Alt-screen would take all of those away (and would also make
 	// tea.Println a no-op), and mouse capture sets DECSET 1002, which is
 	// precisely what stops click-drag from selecting text.
-	p := tea.NewProgram(New(ctx, run, history, sess))
+	// Report focus (DECSET 1004) so the notifier can stay quiet while the window
+	// is focused. It is one of the few DECSETs that does not disturb inline
+	// rendering, scrollback or click-drag selection the way alt-screen and mouse
+	// capture would; a terminal that ignores it simply never sends focus events,
+	// and the notifier then fires regardless (see Model.focusKnown).
+	p := tea.NewProgram(New(ctx, run, history, sess), tea.WithReportFocus())
 	defer quietStandardLogger()()
 	_, err := p.Run()
 	return err
