@@ -68,6 +68,10 @@ type Session struct {
 	ContextWindow       int
 	ContextWindowSource string
 
+	// PromptHistory, if set, keeps ↑ history across sessions in this project.
+	// Nil keeps it for this session only.
+	PromptHistory PromptHistoryStore
+
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
 	Compact CompactFunc
@@ -497,6 +501,10 @@ type Model struct {
 	inputHistory []string
 	histPos      int
 	histDraft    string // the in-progress line stashed when navigating up
+	// search is the open Ctrl+R history search, if any (see history.go).
+	search historySearch
+	// historyFaulted is set once a history-file failure has been reported.
+	historyFaulted bool
 	// Verbatim payloads for pastes shown in the input as chips (see paste.go).
 	// Session-scoped, because history recall re-shows a chip.
 	pastes pasteStore
@@ -591,6 +599,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	m.introModel, m.introBranch = model, branch
 	m.introTagline, m.hasIntro = randomTagline(), true
 	m.appendLine(m.introText())
+	m.loadInputHistory(history)
 	// A resumed session gets the operational picture instead of the
 	// dirty-tree note: it subsumes it, and adds what did not survive.
 	if st := m.buildResumeState(); len(history) > 0 && st.hasContent() {
@@ -1138,6 +1147,17 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitArmed = false
 	}
 
+	// An open Ctrl+R search owns the keyboard, Esc and Ctrl+C included: both
+	// cancel the search, not the session. A key it passes on accepts the match
+	// and is then handled as usual.
+	if m.search.active && m.state == stateIdle {
+		if m.onSearchKey(msg) {
+			return m, nil
+		}
+	} else if m.search.active {
+		m.search = historySearch{} // the state changed under it
+	}
+
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m.onCtrlC()
@@ -1395,9 +1415,13 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Input history navigation (only on a fresh idle line).
-	if m.state == stateIdle && m.input.LineCount() <= 1 && (msg.Type == tea.KeyUp || msg.Type == tea.KeyDown) {
+	// Input history: ↑/↓ at the top/bottom row browse it, Ctrl+R searches it.
+	if m.historyKey(msg) {
 		m.navigateHistory(msg.Type == tea.KeyUp)
+		return m, nil
+	}
+	if m.state == stateIdle && msg.Type == tea.KeyCtrlR {
+		m.beginHistorySearch()
 		return m, nil
 	}
 
@@ -2469,17 +2493,15 @@ func commonPrefix(ss []string) string {
 	return p
 }
 
-// maxInputHistory caps the remembered prompts (ring buffer).
-const maxInputHistory = 200
-
 // pushHistory appends a submitted prompt (dropping an immediate duplicate) and
 // resets the navigation cursor to "not navigating".
 func (m *Model) pushHistory(prompt string) {
 	if n := len(m.inputHistory); n == 0 || m.inputHistory[n-1] != prompt {
 		m.inputHistory = append(m.inputHistory, prompt)
-		if len(m.inputHistory) > maxInputHistory {
-			m.inputHistory = m.inputHistory[len(m.inputHistory)-maxInputHistory:]
+		if len(m.inputHistory) > MaxInputHistory {
+			m.inputHistory = m.inputHistory[len(m.inputHistory)-MaxInputHistory:]
 		}
+		m.storePrompt(prompt)
 	}
 	m.histPos = len(m.inputHistory)
 	m.histDraft = ""
@@ -2487,6 +2509,10 @@ func (m *Model) pushHistory(prompt string) {
 
 // navigateHistory moves through prior prompts: up = older, down = newer. The
 // in-progress line is stashed on first up and restored past the newest entry.
+//
+// Going up leaves the cursor on the recalled entry's first line and going down
+// on its last, so a run of ↑ (or ↓) keeps browsing through multi-line entries
+// instead of stopping to walk the lines of each one (see historyKey).
 func (m *Model) navigateHistory(up bool) {
 	if len(m.inputHistory) == 0 {
 		return
@@ -2508,7 +2534,34 @@ func (m *Model) navigateHistory(up bool) {
 	} else {
 		m.input.SetValue(m.inputHistory[m.histPos])
 	}
-	m.input.CursorEnd()
+	m.syncInputHeight()
+	if up {
+		// SetValue leaves the cursor at the end; walk it back to the top. Each
+		// CursorUp moves one row, and the bound only guards against a widget
+		// that stops moving.
+		for i := 0; m.input.Line() > 0 && i < 10000; i++ {
+			m.input.CursorUp()
+		}
+		m.input.CursorStart()
+	} else {
+		m.input.CursorEnd()
+	}
+}
+
+// historyKey reports whether ↑/↓ should browse history rather than move the
+// cursor: ↑ with the cursor on the first row of the box, ↓ on the last
+// (readline's up-line-or-history). A single-row line browses either way, as it
+// always did; a multi-line entry recalled from history can be browsed past
+// instead of trapping the arrows inside it.
+func (m *Model) historyKey(msg tea.KeyMsg) bool {
+	if m.state != stateIdle || (msg.Type != tea.KeyUp && msg.Type != tea.KeyDown) {
+		return false
+	}
+	li := m.input.LineInfo()
+	if msg.Type == tea.KeyUp {
+		return m.input.Line() == 0 && li.RowOffset == 0
+	}
+	return m.input.Line() == m.input.LineCount()-1 && li.RowOffset+1 >= li.Height
 }
 
 // fmtDuration renders a turn duration compactly: "850ms", "12.3s", "2m05s".
@@ -3393,7 +3446,9 @@ func (m *Model) bottomView() string {
 	default:
 		m.input.SetHeight(m.inputHeight())
 		bottom = m.promptBox()
-		if sug := m.slashSuggestionLine(); sug != "" {
+		if m.search.active {
+			bottom += "\n" + caption(m.searchLine())
+		} else if sug := m.slashSuggestionLine(); sug != "" {
 			bottom += "\n" + caption(sug)
 		}
 	}
