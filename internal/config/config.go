@@ -125,6 +125,11 @@ type Sandbox struct {
 	ReadOnly bool `toml:"readOnly,omitempty"`
 	// Network is the container's --network value (e.g. "none" to isolate).
 	Network string `toml:"network,omitempty"`
+	// ReadCredentials lets commands under "os" confinement read the user's
+	// credentials (~/.ssh, ~/.aws, ~/.kube/config, …), which are hidden by
+	// default. Set it when commands in the sandbox need them — git over ssh,
+	// the aws or kubectl CLIs.
+	ReadCredentials bool `toml:"readCredentials,omitempty"`
 }
 
 // Browser engines.
@@ -303,6 +308,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Sandbox.Network != "" {
 		dst.Sandbox.Network = src.Sandbox.Network
+	}
+	if src.Sandbox.ReadCredentials {
+		dst.Sandbox.ReadCredentials = true
 	}
 	if len(src.Sandbox.WriteRoots) > 0 {
 		dst.Sandbox.WriteRoots = append(dst.Sandbox.WriteRoots, src.Sandbox.WriteRoots...)

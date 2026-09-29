@@ -339,17 +339,34 @@ func buildOSExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {
 			warn("sandbox mode \"os\": sandbox-exec not found; falling back to local execution")
 			return sandbox.NewLocal()
 		}
-		return sandbox.NewSeatbelt(sb.WriteRoots, sb.Network)
+		s := sandbox.NewSeatbelt(sb.WriteRoots, sb.Network)
+		s.Hide, s.Keep = hiddenCredentials(sb)
+		return s
 	case "linux":
 		if _, err := exec.LookPath("bwrap"); err != nil {
 			warn("sandbox mode \"os\": bwrap (bubblewrap) not found; falling back to local execution")
 			return sandbox.NewLocal()
 		}
-		return sandbox.NewBwrap(sb.WriteRoots, sb.Network)
+		b := sandbox.NewBwrap(sb.WriteRoots, sb.Network)
+		b.Hide, b.Keep = hiddenCredentials(sb)
+		return b
 	default:
 		warn("sandbox mode \"os\" is unsupported on " + goruntime.GOOS + "; falling back to local execution")
 		return sandbox.NewLocal()
 	}
+}
+
+// hiddenCredentials is what OS confinement hides from commands: the user's
+// credential files and directories, unless sandbox.readCredentials is set.
+func hiddenCredentials(sb config.Sandbox) (hide, keep []string) {
+	if sb.ReadCredentials {
+		return nil, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, nil
+	}
+	return trust.CredentialPaths(home)
 }
 
 func buildContainerExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {

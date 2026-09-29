@@ -459,9 +459,14 @@ check auth, tools and environment.
 `.klaudia/config.toml` → `sandbox.mode`:
 
 - `local` (default) — run on the host, unconfined.
-- `os` — host confinement: `sandbox-exec` (macOS) / `bubblewrap` (Linux). Reads
-  are unrestricted; writes limited to cwd + temp (+ `writeRoots`); `network`
-  configurable. Falls back to local with a warning if the tool is absent.
+- `os` — host confinement: `sandbox-exec` (macOS) / `bubblewrap` (Linux). Writes
+  are limited to cwd + temp (+ `writeRoots`); `network` configurable. Reads are
+  unrestricted except for your credentials — `~/.ssh` (known_hosts and config
+  stay visible), `~/.aws`, `~/.gnupg`, `~/.kube/config`, `~/.netrc`, `~/.npmrc`,
+  `~/.docker/config.json`, gcloud/azure/gh/1Password config and the like — which
+  commands cannot read. Set `readCredentials = true` when commands in the
+  sandbox need them (git over ssh, the aws or kubectl CLIs). Falls back to
+  local with a warning if the tool is absent.
 - `container` — run inside docker/podman (`runtime`, `image`, `mountCwd`,
   `readOnly`, `network`).
 
