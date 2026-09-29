@@ -3,6 +3,7 @@ package lsp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 )
@@ -70,6 +71,10 @@ func (c *Client) Diagnostics(ctx context.Context, path, languageID string) ([]Di
 	wait := make(chan struct{})
 	c.diagCh[uri] = append(c.diagCh[uri], wait)
 	c.mu.Unlock()
+	// However this returns — a publish, the timeout, cancellation, a failed
+	// open — the waiter must not outlive the call. Only a publish used to
+	// remove it, so every cancelled or timed-out call leaked one.
+	defer c.dropDiagWaiter(uri, wait)
 
 	if _, err := c.didOpen(path, languageID); err != nil {
 		return nil, err
@@ -84,7 +89,29 @@ func (c *Client) Diagnostics(ctx context.Context, path, languageID string) ([]Di
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.closed {
+		return nil, fmt.Errorf("lsp server exited")
+	}
 	return c.diags[uri], nil
+}
+
+// dropDiagWaiter unregisters one Diagnostics waiter. A no-op if a publish (or
+// failAll) already consumed it.
+func (c *Client) dropDiagWaiter(uri string, wait chan struct{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ws := c.diagCh[uri]
+	for i, w := range ws {
+		if w == wait {
+			ws = append(ws[:i], ws[i+1:]...)
+			break
+		}
+	}
+	if len(ws) == 0 {
+		delete(c.diagCh, uri)
+	} else {
+		c.diagCh[uri] = ws
+	}
 }
 
 // Definition returns the definition location(s) for the symbol at pos.

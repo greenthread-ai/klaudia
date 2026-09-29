@@ -69,7 +69,14 @@ func (p *Pool) clientFor(path string) (*Client, ServerSpec, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if c := p.clients[spec.Language]; c != nil {
-		return c, spec, nil
+		if c.Alive() {
+			return c, spec, nil
+		}
+		// The server died (crashed, or was killed). Reap it and start a fresh
+		// one; handing back the dead client left the language broken until the
+		// session restarted.
+		c.Close()
+		delete(p.clients, spec.Language)
 	}
 	c, err := NewClient(p.parent, bin, spec.Args...)
 	if err != nil {
