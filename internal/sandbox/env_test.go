@@ -136,3 +136,60 @@ func TestTTYRequiredDetection(t *testing.T) {
 		}
 	}
 }
+
+// Issue #105: the message check used to look for the substring "-m", so a
+// combined short-flag cluster like -am never matched and the model was told to
+// "pass the message with -m" when it already had — a retry loop. The check now
+// parses git's option syntax (clusters, attached values, long forms, the end
+// of options), so it also stops mistaking a path, another option's value, or a
+// later command's argument for a message flag.
+func TestTTYRequiredGitCommitMessageFlags(t *testing.T) {
+	for _, cmd := range []string{
+		`git commit -am "fix the build"`,
+		`git commit -sm "fix"`,
+		`git commit -asm "fix"`,
+		`git commit -a -s -m fix`,
+		`git commit -mfix`,
+		`git commit -am"fix"`,
+		`git commit -vm 'fix'`,
+		`git commit --message="fix"`,
+		`git commit --message fix`,
+		`git commit -aF /tmp/msg`,
+		`git commit -F/tmp/msg`,
+		`git commit --file=/tmp/msg`,
+		`git commit -aC HEAD`,
+		`git commit -CHEAD`,
+		`git commit --reuse-message=HEAD`,
+		`git commit --amend --no-edit`,
+		`git commit --fixup=HEAD~1`,
+		`git commit -m "$(printf 'fix\n\nbody')"`,
+		`git commit -am "fix" && git push`,
+		`git commit -c HEAD --no-edit`,
+	} {
+		if reason, blocked := TTYRequired(cmd); blocked {
+			t.Errorf("%q supplies a message but was refused: %s", cmd, reason)
+		}
+	}
+
+	// None of these supplies a message, so each would open an editor. Most
+	// used to pass because "-m" or "-F" appeared somewhere in the text.
+	for _, cmd := range []string{
+		`git commit -a`,
+		`git commit -as`,
+		`git commit src/my-module`,          // a path containing "-m"
+		`git commit -- -m`,                  // a pathspec after --
+		`git commit --author "Jane -m Doe"`, // another option's value
+		`git commit --trailer "Note: -F x"`,
+		`git commit --template=/tmp/x-m`,
+		`git commit -t /tmp/tmpl -a`,
+		`git commit -uno`,             // -u's attached value, not an m flag
+		`git commit -a && echo " -m"`, // a later command's argument
+		`git commit -a; git log -m`,
+		`git commit -c HEAD`, // --reedit-message opens the editor on it
+		`git commit --reedit-message=HEAD`,
+	} {
+		if _, blocked := TTYRequired(cmd); !blocked {
+			t.Errorf("%q supplies no message but was allowed; it would open an editor", cmd)
+		}
+	}
+}

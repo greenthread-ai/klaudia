@@ -152,15 +152,134 @@ var interactivePrograms = map[string]string{
 }
 
 // hasCommitMessage reports whether a `git commit` line supplies its message
-// non-interactively.
+// non-interactively. rest is the command after `git`, starting at "commit".
+//
+// It parses the arguments the way git's option parser does rather than looking
+// for substrings: a substring search misses short-flag clusters (`-am`,
+// `-asm`), which sent the model into a loop of being told to "pass -m" when it
+// had, and it matched "-m" inside a path or another option's value, letting a
+// commit through to an editor that hangs the turn.
 func hasCommitMessage(rest string) bool {
-	for _, flag := range []string{"-m", "--message", "-F", "--file", "-C", "--reuse-message",
-		"--amend --no-edit", "--no-edit", "-c ", "--fixup", "--squash"} {
-		if strings.Contains(rest, flag) {
-			return true
+	args := shellWords(rest)
+	if len(args) > 0 {
+		args = args[1:] // "commit"
+	}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--":
+			return false // the rest are pathspecs
+		case strings.HasPrefix(a, "--"):
+			name, _, attached := strings.Cut(a[2:], "=")
+			if commitMessageLong[name] {
+				return true
+			}
+			if commitValuedLong[name] && !attached {
+				i++ // the value is the next word, whatever it looks like
+			}
+		case len(a) > 1 && a[0] == '-':
+			supplies, takesNext := commitShortCluster(a[1:])
+			if supplies {
+				return true
+			}
+			if takesNext {
+				i++
+			}
 		}
 	}
 	return false
+}
+
+// commitMessageLong are the long options of `git commit` that supply the
+// message, or say not to edit one.
+var commitMessageLong = map[string]bool{
+	"message": true, "file": true, "reuse-message": true,
+	"no-edit": true, "fixup": true, "squash": true,
+}
+
+// commitValuedLong are the other long options whose value may be the next
+// word, which must then be skipped rather than read as an option.
+// --reedit-message is here, not above: like -C it reuses a commit's message,
+// but it then opens the editor on it.
+var commitValuedLong = map[string]bool{
+	"author": true, "date": true, "template": true, "cleanup": true,
+	"trailer": true, "pathspec-from-file": true, "reedit-message": true,
+}
+
+// commitShortCluster reads one cluster of short options (without its leading
+// dash) as git does: letters are boolean flags until one that takes a value,
+// and that one consumes the rest of the cluster, or the next word when the
+// cluster ends there. So -am, -asm and -mfix all carry -m.
+func commitShortCluster(c string) (supplies, takesNext bool) {
+	for j := 0; j < len(c); j++ {
+		switch c[j] {
+		case 'm', 'F', 'C':
+			return true, false
+		case 'c', 't': // --reedit-message (which opens the editor), --template
+			return false, j == len(c)-1
+		case 'S', 'u': // optional value, attached only
+			return false, false
+		}
+	}
+	return false, false
+}
+
+// shellWords splits the first simple command of a shell line into words,
+// honouring single quotes, double quotes and backslashes, and stopping at an
+// unquoted `;`, `&`, `|` or newline. It is not a shell parser: it is enough to
+// keep a quoted value in one word and a later command's arguments out.
+func shellWords(s string) []string {
+	var (
+		words  []string
+		cur    strings.Builder
+		inWord bool
+		quote  byte
+	)
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case quote == '\'':
+			if ch == '\'' {
+				quote = 0
+			} else {
+				cur.WriteByte(ch)
+			}
+		case quote == '"':
+			switch {
+			case ch == '"':
+				quote = 0
+			case ch == '\\' && i+1 < len(s) && strings.IndexByte("\"\\$`", s[i+1]) >= 0:
+				i++
+				cur.WriteByte(s[i])
+			default:
+				cur.WriteByte(ch)
+			}
+		case ch == '\'' || ch == '"':
+			quote, inWord = ch, true
+		case ch == '\\' && i+1 < len(s):
+			i++
+			cur.WriteByte(s[i])
+			inWord = true
+		case ch == ';' || ch == '&' || ch == '|' || ch == '\n':
+			if inWord {
+				words = append(words, cur.String())
+			}
+			return words
+		case ch == ' ' || ch == '\t':
+			if inWord {
+				words = append(words, cur.String())
+				cur.Reset()
+				inWord = false
+			}
+		default:
+			cur.WriteByte(ch)
+			inWord = true
+		}
+	}
+	if inWord {
+		words = append(words, cur.String())
+	}
+	return words
 }
 
 // remoteHasNoCommand reports whether an ssh invocation names a destination but
