@@ -263,6 +263,13 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			continue
 		}
 		if err != nil {
+			// A stream that failed after text was shown — cut off by a stall or
+			// dropped connection, or interrupted by the user — keeps that text,
+			// so the history matches what the user read. See interrupted.go.
+			if partial, ok := interruptedPartial(assistant, err); ok {
+				messages = append(messages, partial)
+				record(opts.Recorder, "assistant", partial)
+			}
 			res.Messages = messages
 			return res, err
 		}
