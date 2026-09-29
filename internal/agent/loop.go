@@ -789,6 +789,8 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 			ToolUseID:  tu.ID,
 			Input:      raw,
 			Specifier:  req.Specifier,
+			Commands:   req.Commands,
+			Opaque:     req.Opaque,
 			Suggestion: decision.Message,
 		})
 		if ad.Behavior != permission.Allow {
