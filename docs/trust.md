@@ -148,13 +148,16 @@ You are asked only when the work genuinely cannot proceed otherwise, and then
 you get three answers rather than two:
 
 ```
-Change this machine? (y)es / (n)o / (s)omething else
+Change this machine? (y)es / (n)o / (s)omething else  (esc cancels turn)
 ```
 
 **Something else** is the one that is easy to leave out and shouldn't be.
 Declining a host change usually means "not like that", not "abandon the task" —
 so it keeps the turn alive and lets you redirect, and what you type lands before
-Klaudia's next action instead of after the turn ends.
+Klaudia's next action instead of after the turn ends. Every other permission
+ask offers it too (`Allow …? (y)es once / (a)lways / (n)o / (s)omething else`),
+for the same reason. Esc is a fourth answer, and a bigger one: it cancels the
+whole turn, so the prompt names it.
 
 The remaining risk is the quiet one: Klaudia hits a gate, decides it cannot
 continue, and simply moves on without telling you. So a host change that was

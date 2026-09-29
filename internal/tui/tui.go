@@ -336,11 +336,11 @@ type Model struct {
 	history    []anthropic.BetaMessageParam
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
-	// hostRedirect marks the pending answer as "no, do it differently" rather
-	// than a plain refusal, so the echoed line invites the instruction the user
-	// is about to type instead of announcing that Klaudia will carry on without
-	// it. Cleared as it is read.
-	hostRedirect bool
+	// redirect marks the pending answer as "no, do it differently" rather than
+	// a plain refusal, so the echoed line invites the instruction the user is
+	// about to type instead of announcing that Klaudia will carry on without
+	// it. Any permission prompt can be answered this way. Cleared as it is read.
+	redirect bool
 	// following is the job whose log is being tailed into scrollback, or "".
 	// Follow prints into the terminal's own scrollback rather than a managed
 	// region, which is why scrolling up during follow cannot be snapped back
@@ -1359,22 +1359,15 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.answer(permission.Decision{Behavior: permission.Deny, Message: msg})
 		case "s":
-			// "Something else" is not "no". Someone declining a host change
-			// usually wants the task done differently, not abandoned — and the
-			// plain refusal tells the model to stop looking, which is right for
-			// "no" and wrong here. The turn stays alive and whatever they type
-			// next lands before Klaudia's next action, through the same steering
-			// path a mid-turn correction uses.
-			if !host {
-				return m, nil
-			}
-			m.hostRedirect = true
-			m.answer(permission.Decision{
-				Behavior: permission.Deny,
-				Message: "The user declined this change to their machine and is redirecting. " +
-					"Do not look for another way to make it. They are about to say what they want " +
-					"instead — wait for that instruction and follow it.",
-			})
+			// "Something else" is not "no". Someone declining an action usually
+			// wants the task done differently, not abandoned — and the plain
+			// refusal tells the model to stop looking, which is right for "no"
+			// and wrong here. The turn stays alive and whatever they type next
+			// lands before Klaudia's next action, through the same steering path
+			// a mid-turn correction uses. It began on host changes; an ordinary
+			// tool ask is declined for the same reason just as often.
+			m.redirect = true
+			m.answer(permission.Decision{Behavior: permission.Deny, Message: redirectDenial(host)})
 		}
 		return m, nil
 	}
@@ -2625,7 +2618,25 @@ func (m *Model) permissionPrompt() string {
 	if hc := m.pendingReq.HostChange; hc != nil {
 		return hostPrompt(hc)
 	}
-	return fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o", m.permissionSummary(m.pendingReq))
+	return fmt.Sprintf("Allow %s? (y)es once / (a)lways / (n)o / (s)omething else", m.permissionSummary(m.pendingReq))
+}
+
+// redirectAnswerLine echoes a "something else" answer. It invites the
+// instruction the user is about to type rather than announcing that Klaudia
+// will carry on without the action.
+const redirectAnswerLine = "declined — say what you'd like instead, and it lands before Klaudia's next step"
+
+// redirectDenial is the denial reason the model receives when the user answers
+// a permission ask with "something else": not only no, but that an instruction
+// is coming and it should wait for it rather than find another route to the
+// same end.
+func redirectDenial(host bool) string {
+	what := "The user declined this action"
+	if host {
+		what = "The user declined this change to their machine"
+	}
+	return what + " and is redirecting. Do not look for another way to do it. " +
+		"They are about to say what they want instead — wait for that instruction and follow it."
 }
 
 func permissionDetail(req agent.ApprovalRequest) string {
@@ -2725,9 +2736,11 @@ func (m *Model) answer(d permission.Decision) {
 	// For a host change, say what the answer reached rather than just that one
 	// was given. "allowed" tells the user nothing about how far it went.
 	if hc := m.pendingReq.HostChange; hc != nil {
-		verb = hostAnswerLine(hc, d.Behavior == permission.Allow, m.hostRedirect)
+		verb = hostAnswerLine(hc, d.Behavior == permission.Allow, m.redirect)
+	} else if m.redirect {
+		verb = redirectAnswerLine
 	}
-	m.hostRedirect = false
+	m.redirect = false
 	m.appendLine(toolStyle.Render("  → " + verb))
 	m.setState(stateRunning)
 }
@@ -3376,7 +3389,9 @@ func (m *Model) bottomView() string {
 			bottom += "\n" + caption(m.renderQueuedHint())
 		}
 	case stateAwaitingPermission:
-		bottom = caption(askStyle.Render(m.permissionPrompt()))
+		// Esc here is not "no": it cancels the whole turn, a bigger answer than
+		// any of the listed ones, so it is named rather than left to discover.
+		bottom = caption(askStyle.Render(m.permissionPrompt()) + hintStyle.Render("  (esc cancels turn)"))
 	case stateAwaitingAnswer:
 		bottom = caption(askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions)+1)) +
 			hintStyle.Render(fmt.Sprintf("  (%d, or just start typing, to answer in your own words)", len(m.askOptions)+1)))
