@@ -208,12 +208,25 @@ func (a Assessment) Summary() string {
 	return strings.Join(parts, ", ")
 }
 
+// UnknownPath reports whether the effect lands on a path the command line does
+// not spell out — `rm -rf "$BUILD_DIR"`, `cat > "$OUT"`. Writing the literal
+// path instead is usually all it takes to let the classifier see it.
+func (e Effect) UnknownPath() bool {
+	return e.Res.Class == "path" && e.Res.ID == "" && !e.Certain
+}
+
 // Describe renders one effect as a phrase a person can read.
 func (e Effect) Describe() string {
 	if e.Kind == KindOpaque || e.Res.ID == "" {
 		if !e.Certain {
-			switch e.Res.Class {
-			case "path":
+			switch {
+			case e.UnknownPath():
+				switch e.Kind {
+				case KindDelete:
+					return "deletes a path it does not determine statically"
+				case KindDestructiveBulk:
+					return "recursively deletes a path it does not determine statically"
+				}
 				return "writes a path it does not determine statically"
 			default:
 				return "does something this reader could not determine"
