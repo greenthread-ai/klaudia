@@ -144,6 +144,23 @@ func TestEditValidateRejectsSameStrings(t *testing.T) {
 	}
 }
 
+// An empty old_string matches between every rune, so with replace_all it used
+// to insert new_string all through the file ("abc\n" -> "XaXbXcX\nX") and
+// report success (#104). It is refused before Execute, pointing at Write.
+func TestEditValidateRejectsEmptyOldString(t *testing.T) {
+	e, _ := NewEdit()
+	for _, replaceAll := range []bool{false, true} {
+		raw, _ := json.Marshal(EditInput{FilePath: "/abs/f.txt", OldString: "", NewString: "X", ReplaceAll: replaceAll})
+		err := e.ValidateInput(raw)
+		if err == nil {
+			t.Fatalf("replace_all=%v: expected error for empty old_string", replaceAll)
+		}
+		if !strings.Contains(err.Error(), "Write") {
+			t.Errorf("replace_all=%v: error should point at Write, got %q", replaceAll, err)
+		}
+	}
+}
+
 // editClassPermission verifies the mode-dependent intrinsic decisions through
 // the central Check flow for a mutating tool.
 func TestEditClassPermissionByMode(t *testing.T) {
