@@ -122,7 +122,10 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpS
 	doctorSkills := make([]doctor.Skill, 0)
 	for _, sk := range skill.Load(cwd, func(string) {}) {
 		scope := "user"
-		if strings.HasPrefix(sk.Path, cwd) {
+		switch {
+		case sk.Bundled:
+			scope = "bundled"
+		case strings.HasPrefix(sk.Path, cwd):
 			scope = "project"
 		}
 		doctorSkills = append(doctorSkills, doctor.Skill{Name: sk.Name, Scope: scope})
@@ -854,8 +857,9 @@ func run(cmd *cobra.Command, opts *options) error {
 		staticTools = append(staticTools, memTool)
 	}
 
-	// User-defined skills (~/.klaudia/skills overlaid by .klaudia/skills) become a
-	// single Skill tool the model can invoke; the TUI also dispatches /<skill>.
+	// Skills (bundled, overlaid by the user's skill directories and then the
+	// project's) become a single Skill tool the model can invoke; the TUI also
+	// dispatches /<skill>.
 	skills := skill.Load(cwd, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
 	skillInfos := skillToolInfos(skills)
 	if skillTool, serr := tools.NewSkill(skillInfos); serr == nil && skillTool != nil {

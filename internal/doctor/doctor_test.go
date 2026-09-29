@@ -180,4 +180,16 @@ func TestSkillsCheckDistinguishesEmptyFromBroken(t *testing.T) {
 			t.Errorf("loaded: detail %q missing %q", got.Detail, want)
 		}
 	}
+	if strings.Contains(got.Detail, "none of your own") {
+		t.Errorf("loaded: detail %q claims there are no user skills", got.Detail)
+	}
+
+	// Only the bundled skills: something loaded, but the user's directories
+	// came up empty — the case the directory hint exists for.
+	got, _ = find(Run(Input{Skills: []Skill{{Name: "code-review", Scope: "bundled"}}}), "skills")
+	for _, want := range []string{"code-review (bundled)", "none of your own", ".klaudia/skills"} {
+		if !strings.Contains(got.Detail, want) {
+			t.Errorf("bundled only: detail %q missing %q", got.Detail, want)
+		}
+	}
 }

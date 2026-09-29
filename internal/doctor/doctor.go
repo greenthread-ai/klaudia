@@ -51,7 +51,7 @@ type Input struct {
 // Skill is one loaded user-defined skill, for the /doctor report.
 type Skill struct {
 	Name  string // invocation name
-	Scope string // "project" | "user"
+	Scope string // "project" | "user" | "bundled"
 }
 
 // LSPServer is a detected language server for the /doctor report.
@@ -81,11 +81,21 @@ func Run(in Input) []Check {
 		add("skills", StatusInfo, "none loaded (add .md files to .klaudia/skills or ~/.klaudia/skills)")
 	} else {
 		names := make([]string, 0, len(in.Skills))
+		onDisk := 0
 		for _, sk := range in.Skills {
 			names = append(names, sk.Name+" ("+sk.Scope+")")
+			if sk.Scope != "bundled" {
+				onDisk++
+			}
 		}
 		sort.Strings(names)
-		add("skills", StatusOK, strconv.Itoa(len(in.Skills))+" loaded: "+strings.Join(names, ", "))
+		detail := strconv.Itoa(len(in.Skills)) + " loaded: " + strings.Join(names, ", ")
+		// The bundled skills always load, so a non-zero count no longer shows
+		// that the user's own were found. Say so when none were.
+		if onDisk == 0 {
+			detail += "; none of your own (add .md files to .klaudia/skills or ~/.klaudia/skills)"
+		}
+		add("skills", StatusOK, detail)
 	}
 
 	// Authentication.

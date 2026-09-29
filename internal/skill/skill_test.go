@@ -120,7 +120,7 @@ Deploy the service. $ARGUMENTS`)
 	// Supporting files beside the definition are the reason this layout exists.
 	write(t, filepath.Join(skills, "deploy", "checklist.md"), "not a skill")
 
-	got := Load(dir, func(string) {})
+	got := onDisk(Load(dir, func(string) {}))
 	if len(got) != 1 {
 		t.Fatalf("got %d skills, want 1: %+v", len(got), got)
 	}
@@ -143,7 +143,7 @@ func TestLoadDirWarnsOnSkillDirWithoutDefinition(t *testing.T) {
 	write(t, filepath.Join(skills, "halfdone", "notes.md"), "just notes")
 
 	var warnings []string
-	got := Load(dir, func(m string) { warnings = append(warnings, m) })
+	got := onDisk(Load(dir, func(m string) { warnings = append(warnings, m) }))
 	if len(got) != 0 {
 		t.Fatalf("got %d skills, want 0", len(got))
 	}
@@ -163,7 +163,7 @@ description: d
 ---
 body`)
 
-	got := Load(dir, func(string) {})
+	got := onDisk(Load(dir, func(string) {}))
 	if len(got) != 1 || got[0].Name != "explicit" {
 		t.Fatalf("frontmatter name should win, got %+v", got)
 	}
@@ -196,7 +196,7 @@ description: only in .claude
 ---
 body`)
 
-	got := Load(dir, func(string) {})
+	got := onDisk(Load(dir, func(string) {}))
 	if len(got) != 2 {
 		t.Fatalf("got %d skills, want 2: %+v", len(got), got)
 	}

@@ -609,17 +609,29 @@ description: Structured review of the current diff
 Review the staged changes carefully. $ARGUMENTS
 ```
 
+Three skills ship inside the binary and are always available:
+
+| Skill | What it does |
+|---|---|
+| `code-review` | Reviews the uncommitted diff (or a branch, range or PR number given as arguments) for real defects, confirming each against the code before reporting it. |
+| `review-pr` | A pre-merge review that gives each aspect — correctness, tests, error handling, comments, design, simplicity — to its own read-only `Explore` sub-agent, then merges and checks the findings. Name aspects in the arguments to run only those. |
+| `feature-dev` | A staged workflow for a non-trivial feature: explore with sub-agents, settle open questions with you, compare designs, implement, then verify and review. |
+
+They follow the shape of Claude Code's `code-review`, `pr-review-toolkit` and
+`feature-dev` plugins, rewritten for Klaudia's tools and sub-agent types (the
+upstream prompts are not open-licensed, so none of their text is used). A skill
+of the same name in any skills directory replaces the bundled one, which is how
+you adapt one to a project.
+
 Loaded skills are listed in the startup banner. A skill's **name and
 description** are in every request; its **instructions** load only when the
 skill is invoked (skill bodies are large, so this is deliberate) — a model
 saying "registered but not loaded" is reporting correct behaviour.
 
-**If a skill doesn't appear at all, run `/doctor`.** With no skills loaded the
-`Skill` tool is not registered at all, so asking the model whether it has skills
-gets an honest "I have no such tool" — which is indistinguishable from the
-feature being missing. `/doctor` reports what loaded, from which scope, and
-names the directories when nothing did. A skill directory without a `SKILL.md`
-warns at startup rather than being skipped in silence.
+**If a skill doesn't appear at all, run `/doctor`.** It reports what loaded and
+from which scope (`bundled`, `user` or `project`), and names the directories
+when none of your own did. A skill directory without a `SKILL.md` warns at
+startup rather than being skipped in silence.
 
 ## Themes
 
