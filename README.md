@@ -578,6 +578,21 @@ Recognised today: `gopls` (Go), `rust-analyzer` (Rust),
 disabled = ["python"]
 ```
 
+## Project instructions
+
+Instructions are read into the system prompt from, farthest first so the
+closest have the last word:
+
+- `~/.claude/CLAUDE.md` and `~/.claude/rules/*.md`;
+- every directory from `/` down to the working directory: its `CLAUDE.md` — or
+  `AGENTS.md` when it has none — then its `.claude/rules/*.md`.
+
+So a workspace-level `CLAUDE.md` above several checkouts applies to all of
+them. A line that is only `@path` is replaced by that file (relative to the
+file it is in; `~/` is home; five levels deep); an `@path` inside a sentence
+stays as written and the file is appended. `@` inside code fences is left
+alone, `<!-- comments -->` are removed, and each file is included once.
+
 ## Skills
 
 Skills are read from four directories, in increasing precedence — so a project
