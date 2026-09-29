@@ -926,6 +926,13 @@ starting point; copy it and edit. `.mcp.json` itself is gitignored because a
 credential in it would be a literal in a committed file — `git add -f` it if you
 want a secret-free team config in the repo.
 
+A stdio server's stderr is where it logs. In headless (`-p`) and embedding
+runs each line is forwarded to Klaudia's stderr as `mcp[<name>]: …`;
+interactive runs do not, because the TUI owns the terminal. Set
+`KLAUDIA_MCP_STDERR=<dir>` to also append each server's stderr to
+`<dir>/<name>.log`, in any mode. A server that fails to start has the tail of its
+stderr appended to its connect error.
+
 Worth pairing with the `readOnly` guidance above: `-r` and `-S` on the server
 command narrow what exists at all, and `readOnly` decides who is handed it.
 `-S issue,pull_request,actions` still matters: MCP tools are deferred behind
