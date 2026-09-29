@@ -489,6 +489,9 @@ type Model struct {
 	planReply chan bool
 	// Pending /commit-style confirmation: run on "y", returns a result line.
 	confirmAction func() string
+	// choiceNav is the open picker's filter, highlight and scroll (picker.go).
+	choiceNav choiceNav
+
 	// Pending local settings picker (e.g. /mode): numbered choices.
 	choiceItems  []choiceItem
 	choicePrompt string
@@ -1079,8 +1082,7 @@ func (m *Model) onCtrlC() (tea.Model, tea.Cmd) {
 		m.appendLine(toolStyle.Render("  → cancelled"))
 		return m, nil
 	case stateAwaitingChoice:
-		m.choiceItems, m.choicePrompt = nil, ""
-		m.setState(stateIdle)
+		m.closeChoice()
 		m.appendLine(toolStyle.Render("  → cancelled"))
 		return m, nil
 	}
@@ -1270,22 +1272,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingChoice {
-		if msg.Type == tea.KeyEsc {
-			m.choiceItems, m.choicePrompt = nil, ""
-			m.setState(stateIdle)
-			m.appendLine(toolStyle.Render("  → cancelled"))
-			return m, nil
-		}
-		s := msg.String()
-		if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
-			if n := int(s[0] - '0'); n <= len(m.choiceItems) {
-				item := m.choiceItems[n-1]
-				m.choiceItems, m.choicePrompt = nil, ""
-				m.setState(stateIdle)
-				m.appendLine(bannerStyle.Render("  → " + item.apply()))
-			}
-		}
-		return m, nil
+		return m.onChoiceKey(msg)
 	}
 
 	if m.state == stateAwaitingAnswer {
@@ -1561,16 +1548,22 @@ func (m *Model) slashSuggestionLine() string {
 	return suggestStyle.Render(strings.Join(sug, "  ")) + hintStyle.Render("  (Tab to complete)")
 }
 
-// startChoice opens a numbered settings picker. The selected item's apply runs
-// when the user presses its digit (Esc cancels). Reusable for any quick toggle.
+// startChoice opens a settings picker. The selected item's apply runs when the
+// user picks it — Enter on the highlighted row, or its digit (Esc cancels).
+// Reusable for any quick toggle. The list is drawn in the live region by
+// choiceView, not printed to scrollback, so the highlight can move.
 func (m *Model) startChoice(title string, items []choiceItem) {
 	m.choiceItems = items
 	m.choicePrompt = title
+	m.choiceNav = choiceNav{}
 	m.setState(stateAwaitingChoice)
-	m.appendLine(askStyle.Render(title))
-	for i, it := range items {
-		m.appendLine(toolStyle.Render(fmt.Sprintf("  %d) %s", i+1, it.label)))
-	}
+}
+
+// closeChoice dismisses the picker and returns to idle.
+func (m *Model) closeChoice() {
+	m.choiceItems, m.choicePrompt = nil, ""
+	m.choiceNav = choiceNav{}
+	m.setState(stateIdle)
 }
 
 // currentMode returns the live permission mode, defaulting to ModeDefault.
@@ -3389,7 +3382,7 @@ func (m *Model) bottomView() string {
 	case stateAwaitingConfirm:
 		bottom = caption(askStyle.Render("Confirm? (y)es / (n)o"))
 	case stateAwaitingChoice:
-		bottom = caption(askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.choiceItems))) + hintStyle.Render("  (esc to cancel)"))
+		bottom = m.choiceView()
 	default:
 		m.input.SetHeight(m.inputHeight())
 		bottom = m.promptBox()

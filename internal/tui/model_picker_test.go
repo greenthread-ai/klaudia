@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/greenthread-ai/klaudia/internal/api"
 )
 
@@ -37,7 +39,7 @@ func TestModelNoArgOpensPicker(t *testing.T) {
 	if m.state != stateAwaitingChoice {
 		t.Fatalf("state = %v, want a picker", m.state)
 	}
-	out := visibleText(m.transcript.String())
+	out := visibleText(m.bottomView())
 	for _, want := range []string{"Claude Opus 5", "claude-sonnet-5", "1.0M ctx"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("picker missing %q:\n%s", want, out)
@@ -52,7 +54,7 @@ func TestModelPickerMarksCurrent(t *testing.T) {
 		{ID: "claude-opus-5", DisplayName: "Claude Opus 5"},
 		{ID: "claude-sonnet-5", DisplayName: "Claude Sonnet 5"},
 	})
-	out := visibleText(m.transcript.String())
+	out := visibleText(m.bottomView())
 	sonnet := strings.Index(out, "Claude Sonnet 5")
 	current := strings.Index(out, "(current)")
 	if sonnet < 0 || current < sonnet {
@@ -65,7 +67,7 @@ func TestModelPickerMarksCurrentThroughAlias(t *testing.T) {
 	m := pickerModel(t, nil, nil)
 	m.sess.Model = "opus"
 	m.showModelPicker([]api.ModelInfo{{ID: "claude-opus-5", DisplayName: "Claude Opus 5"}})
-	if !strings.Contains(visibleText(m.transcript.String()), "(current)") {
+	if !strings.Contains(visibleText(m.bottomView()), "(current)") {
 		t.Error("an aliased current model should still be marked")
 	}
 }
@@ -114,7 +116,10 @@ func TestModelWithArgumentStillSetsDirectly(t *testing.T) {
 	}
 }
 
-func TestModelPickerCapsAtNineAndSaysSo(t *testing.T) {
+// The picker used to stop at nine (digits were the only way to choose), which
+// hid most of an OpenAI-compatible endpoint's list. Every model is offered now,
+// and one past the ninth is reachable from the keyboard.
+func TestModelPickerOffersEveryModel(t *testing.T) {
 	many := make([]api.ModelInfo, 15)
 	for i := range many {
 		many[i] = api.ModelInfo{ID: string(rune('a'+i)) + "-model"}
@@ -122,11 +127,15 @@ func TestModelPickerCapsAtNineAndSaysSo(t *testing.T) {
 	m := pickerModel(t, nil, nil)
 	m.showModelPicker(many)
 
-	if len(m.choiceItems) != 9 {
-		t.Errorf("picker offers %d items; digit selection caps at 9", len(m.choiceItems))
+	if len(m.choiceItems) != len(many) {
+		t.Fatalf("picker offers %d items, want all %d", len(m.choiceItems), len(many))
 	}
-	if !strings.Contains(visibleText(m.transcript.String()), "6 more") {
-		t.Error("truncation must be stated, not silent")
+	for i := 0; i < 11; i++ {
+		m = pickerKey(m, tea.KeyMsg{Type: tea.KeyDown})
+	}
+	m = pickerKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.sess.Model != "l-model" {
+		t.Errorf("model = %q, want the twelfth, l-model", m.sess.Model)
 	}
 }
 
