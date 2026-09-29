@@ -1155,6 +1155,21 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.interruptTurn()
 			return m, nil
 		}
+	case tea.KeyCtrlZ:
+		// Raw mode delivers Ctrl+Z as a key, not SIGTSTP, so job control only
+		// works if we ask for it. Bubble Tea restores the terminal before
+		// stopping and repaints on fg.
+		return m, tea.Suspend
+	case tea.KeyCtrlL:
+		// The shell convention: clear the visible screen. Output already
+		// printed stays in the terminal's scrollback.
+		return m, tea.ClearScreen
+	case tea.KeyCtrlD:
+		// EOF on an empty idle prompt quits, as in a shell. Anywhere else it
+		// keeps the textarea's delete-forward meaning.
+		if m.state == stateIdle && m.input.Value() == "" {
+			return m, tea.Quit
+		}
 	}
 
 	// A bracketed paste arrives as one KeyMsg carrying the whole payload. It is
@@ -1446,6 +1461,9 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // /help and the type-ahead suggestions, so the two can never drift.
 type cmdInfo struct{ name, args, desc string }
 
+// helpColumn is the width of the usage column in /help.
+const helpColumn = 20
+
 var commandList = []cmdInfo{
 	{"/help", "", "Show this help"},
 	{"/model", "[name]", "Pick a model from the provider (no arg), or set one by alias/ID"},
@@ -1456,11 +1474,11 @@ var commandList = []cmdInfo{
 	{"/changes", "", "Show the working tree split into your changes and Klaudia's"},
 	{"/undo", "", "Undo Klaudia's last change, leaving anything you also touched alone"},
 	{"/jobs", "", "List background jobs: what's running, on what port, and where"},
-	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation"},
+	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation; /logs stop ends a -f tail"},
 	{"/restart", "<job>", "Restart a background job in place, keeping its name and log"},
 	{"/stopjob", "<job|all>", "Stop a background job and its whole process group"},
-	{"/trust", "[upgrade|observe|off|revoke <id>]", "Show what Klaudia may change on this machine, and what it already may"},
-	{"/goal", "[run N|stop|text]", "No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder"},
+	{"/trust", "[upgrade|observe|off|revoke <id|all>]", "Show what Klaudia may change on this machine, and what it already may"},
+	{"/goal", "[run N|stop|clear|text]", "No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. clear: drop the standing reminder. text: standing reminder"},
 	{"/memory", "[add|recent|stale|tag|promote|supersede]", "Show / audit / curate memory; no args views the index"},
 	{"/mcp", "", "List MCP servers; reconnect or disconnect them"},
 	{"/stats", "", "Show session stats (turns, tokens)"},
@@ -1478,7 +1496,7 @@ var commandList = []cmdInfo{
 	{"/diff", "[args]", "Show git diff of the working tree"},
 	{"/commit", "<msg>", "Stage all changes and commit (asks first)"},
 	{"/export", "", "Export the conversation to a Markdown file"},
-	{"/last", "[n|list]", "Show a tool output in full (no arg = latest; list = index)"},
+	{"/last", "[n|list]", "Show a tool output in full (no arg = latest; list or ls = index)"},
 	{"/copy", "[target]", "Copy to the clipboard: answer (default) | code [N] | out | all"},
 	{"/search", "<query>", "Search the session (--mine, --answers, --tools, --errors; /regex/)"},
 	{"/outline", "", "Show a session outline of prompts, tool calls, and errors"},
@@ -1496,8 +1514,13 @@ const keyHints = `Keys:
   ↑ / ↓            Cycle through previous prompts
   Ctrl+J           Newline without sending
   Ctrl+U / Ctrl+K  Delete before / after the cursor
+  Ctrl+W           Delete the word before the cursor
+  Alt+← / Alt+→    Move by word
   Esc              Interrupt the model mid-turn
-  Ctrl+C           Interrupt, or clear the line — press twice to quit`
+  Ctrl+C           Interrupt, or clear the line — press twice to quit
+  Ctrl+D           Quit (on an empty prompt)
+  Ctrl+L           Clear the screen (scrollback is kept)
+  Ctrl+Z           Suspend to the shell (fg to return)`
 
 // slashHelp renders the command reference from commandList + keyHints.
 func slashHelp() string {
@@ -1508,7 +1531,13 @@ func slashHelp() string {
 		if c.args != "" {
 			left += " " + c.args
 		}
-		fmt.Fprintf(&b, "\n  %-16s %s", left, c.desc)
+		// A usage longer than the column gets its description on the next
+		// line, so one long entry can't push every description out of line.
+		if len([]rune(left)) > helpColumn {
+			fmt.Fprintf(&b, "\n  %s\n  %-*s %s", left, helpColumn, "", c.desc)
+			continue
+		}
+		fmt.Fprintf(&b, "\n  %-*s %s", helpColumn, left, c.desc)
 	}
 	b.WriteString("\n\n")
 	b.WriteString(keyHints)
@@ -2107,7 +2136,11 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			}
 			break
 		}
-		dir := strings.Join(args, " ")
+		dir, err := resolveAddDir(m.sess.CWD, strings.Join(args, " "))
+		if err != nil {
+			m.appendLine(errStyle.Render("/add-dir: " + err.Error()))
+			break
+		}
 		m.sess.ExtraDirs = append(m.sess.ExtraDirs, dir)
 		m.appendLine(bannerStyle.Render("Added directory (referenced in the prompt context next turn): " + dir))
 	case "/compact":
@@ -2130,7 +2163,11 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}(m.history)
 		return m, m.spin.Tick
 	case "/plan":
-		if len(args) > 0 && strings.ToLower(args[0]) == "off" {
+		if len(args) > 1 || (len(args) == 1 && !strings.EqualFold(args[0], "off")) {
+			m.appendLine(errStyle.Render("usage: /plan (enter plan mode) or /plan off (leave it)"))
+			break
+		}
+		if len(args) == 1 {
 			m.sess.PermissionMode = string(permission.ModeDefault)
 			m.appendLine(bannerStyle.Render("Left plan mode (default permissions)."))
 		} else {
