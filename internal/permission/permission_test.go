@@ -48,6 +48,32 @@ func TestCheckAllowRule(t *testing.T) {
 	}
 }
 
+// TestCheckPlanModeBeatsAllowRule pins the plan-mode bypass: an allow rule
+// used to be consulted before the tool's plan-mode refusal, so an allowed
+// Bash or Edit ran while the session was only meant to be planning.
+func TestCheckPlanModeBeatsAllowRule(t *testing.T) {
+	pctx := Context{
+		Mode:  StaticMode(ModePlan),
+		Allow: []Rule{{Tool: "Bash", Specifier: "git:*"}, {Tool: "Read"}},
+	}
+	planDeny := Decision{Behavior: Deny, Message: "plan mode is read-only"}
+	bash := fakeTool{name: "Bash", intrinsic: planDeny}
+	if got := Check(pctx, bash, PermissionRequest{Specifier: "git commit"}); got.Behavior != Deny {
+		t.Errorf("allowed Bash in plan mode: behavior = %q, want deny", got.Behavior)
+	}
+	// A read-only tool still gets its allow in plan mode.
+	read := fakeTool{name: "Read", intrinsic: Decision{Behavior: Allow}}
+	if got := Check(pctx, read, PermissionRequest{}); got.Behavior != Allow {
+		t.Errorf("Read in plan mode: behavior = %q, want allow", got.Behavior)
+	}
+	// Outside plan mode the same allow rule still wins over an intrinsic ask.
+	pctx.Mode = StaticMode(ModeDefault)
+	bash.intrinsic = Decision{Behavior: Ask}
+	if got := Check(pctx, bash, PermissionRequest{Specifier: "git commit"}); got.Behavior != Allow {
+		t.Errorf("allowed Bash in default mode: behavior = %q, want allow", got.Behavior)
+	}
+}
+
 func TestCheckFallsThroughToIntrinsic(t *testing.T) {
 	pctx := Context{Mode: StaticMode(ModeDefault)}
 	tool := fakeTool{name: "Write", intrinsic: Decision{Behavior: Ask}}

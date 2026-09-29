@@ -218,15 +218,29 @@ func MatchAny(rules []Rule, tool, specifier string) bool {
 //
 //  1. deny rules        → deny
 //  2. bypassPermissions → allow
-//  3. allow rules       → allow
-//  4. tool intrinsic    → its decision (may consider acceptEdits/plan)
+//  3. plan mode         → the tool's own deny, if it refuses
+//  4. allow rules       → allow
+//  5. tool intrinsic    → its decision (may consider acceptEdits/plan)
+//
+// Step 3 exists because plan mode's read-only guarantee lives in each tool's
+// intrinsic decision, and allow rules used to be consulted first: with
+// `Bash(git:*)` or `Edit` allowed, plan mode ran the command or wrote the
+// file. An allow rule says "don't ask me about this", not "do this while I'm
+// only planning", so a tool that refuses in plan mode is refused whatever the
+// allow list says. Read-only tools allow themselves and fall through as before.
 func Check(pctx Context, tool IntrinsicChecker, req PermissionRequest) Decision {
 	name := tool.Name()
 	if anyMatch(pctx.Deny, name, req.Specifier) {
 		return Decision{Behavior: Deny, Message: "denied by permission rule"}
 	}
-	if CurrentMode(pctx) == ModeBypassPermissions {
+	mode := CurrentMode(pctx)
+	if mode == ModeBypassPermissions {
 		return Decision{Behavior: Allow}
+	}
+	if mode == ModePlan {
+		if d := tool.CheckPermissions(pctx, req); d.Behavior == Deny {
+			return d
+		}
 	}
 	if anyMatch(pctx.Allow, name, req.Specifier) {
 		return Decision{Behavior: Allow}
