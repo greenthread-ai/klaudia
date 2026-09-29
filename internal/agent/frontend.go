@@ -23,6 +23,11 @@ type ApprovalRequest struct {
 	ToolUseID string
 	Input     json.RawMessage
 	Specifier string
+	// Commands and Opaque are the request's per-command rule forms (see
+	// permission.PermissionRequest), so a frontend's own session rules are
+	// matched the same way as configured ones.
+	Commands [][]string
+	Opaque   bool
 	// Suggestion is the message from the intrinsic check (may be empty).
 	Suggestion string
 	// HostChange, when set, means this approval is about a change to the

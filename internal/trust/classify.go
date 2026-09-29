@@ -206,6 +206,22 @@ func classifyOne(cmd bashparser.Command, c *cmdCtx, as *Assessment, depth int) {
 	}
 }
 
+// Unwrapped returns the command that actually runs once wrapper programs
+// (sudo, env, nice, timeout, xargs, …) are stripped: the program and its
+// arguments' text. ok is false when the program, or the one a wrapper runs, is
+// an expansion and so cannot be named.
+func Unwrapped(cmd bashparser.Command) (name string, args []string, ok bool) {
+	name, words, _, ok := unwrap(cmd)
+	if !ok {
+		return "", nil, false
+	}
+	args = make([]string, len(words))
+	for i, w := range words {
+		args[i] = w.Text
+	}
+	return name, args, true
+}
+
 // unwrap strips wrapper programs to reach the command that actually runs,
 // reporting whether privilege was raised on the way.
 func unwrap(cmd bashparser.Command) (name string, args []bashparser.Word, priv bool, ok bool) {
