@@ -47,7 +47,7 @@
 <text x="22" y="937" textLength="405.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /quit            Exit Klaudia (alias /exit)</tspan></text>
 <text x="22" y="977" textLength="45.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">Keys:</tspan></text>
 <text x="22" y="997" textLength="504.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  /                Type a slash to see matching commands</tspan></text>
-<text x="22" y="1017" textLength="729.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  Tab              Complete a /command or an @&lt;path&gt; reference (Tab again cycles)</tspan></text>
+<text x="22" y="1017" textLength="864.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  Tab              Complete a /command, its argument, or an @&lt;path&gt; reference (Tab again cycles)</tspan></text>
 <text x="22" y="1037" textLength="441.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  ↑ / ↓            Cycle through previous prompts</tspan></text>
 <text x="22" y="1057" textLength="378.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  Ctrl+J           Newline without sending</tspan></text>
 <text x="22" y="1077" textLength="459.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#d8dee9">  Ctrl+U / Ctrl+K  Delete before / after the cursor</tspan></text>

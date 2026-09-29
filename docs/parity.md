@@ -98,7 +98,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Headless `-p` / `--print` | 08-entry | `cli/` | ✅ done | text / json / stream-json. |
 | stream-json input (embedding frontend) | 08-entry | `cli/` + `streamjson/` | ✅ done | `--input-format stream-json`. |
 | @ file autocomplete | 06-app-ui | `tui/tui.go` | 🔀 divergent | Tab-completes the trailing @<path> token (robust completion vs. JS live overlay). |
-| Slash command type-ahead | 06-app-ui | `tui/tui.go` | ✅ done | Live suggestions as you type `/…`; Tab completes (unique → fill, many → common prefix). |
+| Slash command type-ahead | 06-app-ui | `tui/tui.go` | ✅ done | Live suggestions as you type `/…`; Tab completes (unique → fill, many → common prefix), and after `/<cmd> ` completes its argument where the command has a completer (`tui/argcomplete.go`). |
 | Bracketed paste / drag-drop | 06-app-ui | bubbletea default | ✅ done | Bracketed paste on by default (multi-line pastes atomic). |
 | Help bar / keymap / input history | 06-app-ui | `tui/tui.go` | ✅ done | Up/Down ring-buffer history, Tab completion, key hints; /help generated from one command table. |
 | Scrollback | 06-app-ui | terminal-native (inline render) | ✅ done | Output is printed into the terminal's own scrollback via `tea.Println`; no alt-screen and no mouse capture, so scrolling, selection, search and tmux copy mode are the terminal's. `/search`, `/outline`, `/errors` add structured lookup on top. |
