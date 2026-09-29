@@ -2617,6 +2617,12 @@ func (m *Model) permissionSummary(req agent.ApprovalRequest) string {
 		if target := firstNonEmpty(req.Specifier, stringField(req.Input, "command")); target != "" {
 			return "run command " + target
 		}
+	case "Memory":
+		// The only Memory call that asks is a write to KNOWLEDGE.md.
+		if name := stringField(req.Input, "name"); stringField(req.Input, "operation") == "promote" && name != "" {
+			return "promote memory note " + name + " to project knowledge (.klaudia/KNOWLEDGE.md)"
+		}
+		return "add to project knowledge (.klaudia/KNOWLEDGE.md)"
 	}
 	return label
 }
@@ -2643,6 +2649,15 @@ func permissionDetail(req agent.ApprovalRequest) string {
 	case "Bash":
 		if cmd := stringField(req.Input, "command"); cmd != "" {
 			return "command: " + oneline(cmd, 220)
+		}
+	case "Memory":
+		// Show what would be written: the point of asking is that the user
+		// reads the entry before every later session is primed with it.
+		if content := stringField(req.Input, "content"); content != "" {
+			return "note: " + oneline(content, 220) + "\n  loaded into every future session's prompt"
+		}
+		if stringField(req.Input, "operation") == "promote" {
+			return "copies the note's body into KNOWLEDGE.md, which is loaded into every future session's prompt"
 		}
 	}
 	if req.Suggestion != "" {

@@ -66,7 +66,8 @@ func (m *Memory) Description(context.Context) (string, error) {
 		"MEMORY.md by default, scope=\"project\" appends to KNOWLEDGE.md), \"promote\" " +
 		"(copy a detail note's body into KNOWLEDGE.md and mark the source superseded — " +
 		"requires `name`), \"supersede\" (record that `name` is replaced by `replacement` " +
-		"— rewrites both files' frontmatter).\n\n" +
+		"— rewrites both files' frontmatter). Writes to KNOWLEDGE.md (scope=\"project\" " +
+		"and \"promote\") ask the user first; session notes do not.\n\n" +
 		"Search early when resuming work. Use `stale` to audit aged context; promote " +
 		"validated lessons to project knowledge.", nil
 }
@@ -135,14 +136,65 @@ func parseMemoryDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-// PermissionRequest: memory is the agent's own scratch space, not user files.
-func (m *Memory) PermissionRequest(json.RawMessage) permission.PermissionRequest {
+// knowledgeSpecifier is the permission specifier of a Memory call that writes
+// .klaudia/KNOWLEDGE.md: `add` with scope=project, and `promote`. It is what an
+// allow rule names to pre-approve those writes — "Memory(project)" — and what
+// the TUI remembers when the user answers "always".
+const knowledgeSpecifier = "project"
+
+// writesKnowledge reports whether raw is a Memory call that writes KNOWLEDGE.md.
+// Parsed leniently: the permission check runs before ValidateInput, and input
+// that does not parse is refused there, before anything is written.
+func writesKnowledge(raw json.RawMessage) bool {
+	var in MemoryInput
+	if err := json.Unmarshal(raw, &in); err != nil {
+		return false
+	}
+	return in.Operation == "promote" || (in.Operation == "add" && in.Scope == "project")
+}
+
+// PermissionRequest: session notes (MEMORY.md, the detail notes) are the
+// agent's own scratch space and carry no specifier. A write to KNOWLEDGE.md is
+// the one Memory action that is gated, and it carries knowledgeSpecifier so an
+// allow rule can name it without allowing it for every other Memory call.
+func (m *Memory) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
+	if writesKnowledge(raw) {
+		return permission.PermissionRequest{Specifier: knowledgeSpecifier}
+	}
 	return permission.PermissionRequest{}
 }
 
-func (m *Memory) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
-	return allowAlways(pctx)
+// CheckPermissions allows every Memory operation except a write to
+// KNOWLEDGE.md, which asks in every mode that can ask — autonomous included.
+//
+// KNOWLEDGE.md is loaded into the system prompt of every later session. Were
+// the model free to write it, text it read on a web page or from an MCP server
+// could plant itself there and outlive the session it arrived in; a person
+// saying yes is what makes an entry curated. Session notes stay autonomous:
+// they are recalled as the model's own notes, not as project knowledge.
+// bypassPermissions and an allow rule ("Memory(project)") are handled upstream
+// by permission.Check.
+func (m *Memory) CheckPermissions(pctx permission.Context, req permission.PermissionRequest) permission.Decision {
+	if req.Specifier != knowledgeSpecifier {
+		return allowAlways(pctx)
+	}
+	switch permission.CurrentMode(pctx) {
+	case permission.ModePlan:
+		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; writing project knowledge (.klaudia/KNOWLEDGE.md) is not allowed"}
+	case permission.ModeDontAsk:
+		return permission.Decision{Behavior: permission.Deny, Message: knowledgeUnapprovedMsg}
+	default:
+		return permission.Decision{Behavior: permission.Ask, Message: knowledgeUnapprovedMsg}
+	}
 }
+
+// knowledgeUnapprovedMsg explains a KNOWLEDGE.md write that needs the user. It
+// is the ask's fallback detail and, when no one can answer (headless, dontAsk),
+// the refusal the model reads — so it says what to do instead.
+const knowledgeUnapprovedMsg = "Writing project knowledge (.klaudia/KNOWLEDGE.md) needs the user's approval, " +
+	"because it is loaded into every future session, and no one approved this write. " +
+	"Keep the note in session memory instead (operation=add without scope=project), " +
+	"or tell the user what you would add. An allow rule Memory(project) pre-approves these writes."
 
 func (m *Memory) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
 	var in MemoryInput
