@@ -41,8 +41,9 @@ type Config struct {
 	// "context length exceeded" errors deep into a session.
 	ContextWindow int `toml:"contextWindow,omitempty"`
 	// MaxTokens is the per-response output-token cap. 0 (unset) uses a
-	// model-aware default (api.MaxOutputTokens): capable Claude models get their
-	// real limit, unknown/OpenAI-compatible models a safe floor. Set this to
+	// model-aware default (api.MaxOutputTokensFor): Claude models on the
+	// Anthropic provider get their real limit; unknown models, and every model
+	// on another provider, a safe floor. Set this to
 	// raise or lower the cap explicitly — e.g. an OpenAI-compatible model whose
 	// output limit the table doesn't know.
 	MaxTokens int `toml:"maxTokens,omitempty"`

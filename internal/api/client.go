@@ -7,6 +7,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -158,6 +159,67 @@ func ResolveModel(m string) anthropic.Model {
 		return anthropic.Model(full)
 	}
 	return anthropic.Model(m)
+}
+
+// ClaudeProvider reports whether a configured provider name ("" = the default)
+// serves Anthropic's model ids. Only then do the alias, context-window and
+// output-cap tables above describe the model actually being called; an
+// OpenAI-compatible endpoint names its models however it likes, and even one
+// that serves a Claude model under its Anthropic id sets its own limits.
+func ClaudeProvider(provider string) bool {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "", "anthropic":
+		return true
+	}
+	return false
+}
+
+// ResolveModelFor is ResolveModel for a configured provider. Aliases and the
+// Claude default apply to Anthropic only: any other provider gets the string
+// it was given, trimmed, and "" stays "" — sending "claude-sonnet-5" to an
+// OpenAI-compatible endpoint because someone typed "sonnet" is not a guess
+// worth making.
+func ResolveModelFor(provider, m string) anthropic.Model {
+	if ClaudeProvider(provider) {
+		return ResolveModel(m)
+	}
+	return anthropic.Model(strings.TrimSpace(m))
+}
+
+// ContextWindowFor is ContextWindow for a configured provider: off Anthropic
+// the per-model table does not apply, so only an explicit override counts.
+func ContextWindowFor(provider, model string, override int) (limit int, source string) {
+	if ClaudeProvider(provider) || override > 0 {
+		return ContextWindow(model, override)
+	}
+	return 0, ContextSourceUnknown
+}
+
+// MaxOutputTokensFor is MaxOutputTokens for a configured provider: off
+// Anthropic every model gets the conservative DefaultMaxOutputTokens.
+func MaxOutputTokensFor(provider, model string) int {
+	if ClaudeProvider(provider) {
+		return MaxOutputTokens(model)
+	}
+	return DefaultMaxOutputTokens
+}
+
+// AliasWarning explains, when model is a bare Claude alias ("sonnet") used with
+// a provider that does not serve Anthropic's ids, that it is sent as written.
+// It returns "" otherwise. Callers show it once, when the model is chosen —
+// not on every turn that re-resolves it.
+func AliasWarning(provider, model string) string {
+	if ClaudeProvider(provider) {
+		return ""
+	}
+	alias := strings.ToLower(strings.TrimSpace(model))
+	full, ok := modelAliases[alias]
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("model %q is a Claude alias, which Klaudia resolves only for the Anthropic provider; "+
+		"provider %q receives it unchanged. Use the model id your endpoint serves (for Anthropic it would have been %s)",
+		strings.TrimSpace(model), strings.TrimSpace(provider), full)
 }
 
 // Client is Klaudia's Anthropic API client: the SDK client plus the resolved

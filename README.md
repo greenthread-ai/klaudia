@@ -196,8 +196,8 @@ interrupt and send it now, or `↑` to edit it.
 `/model` with no argument asks the provider which models it serves and offers
 them as a picker — Anthropic and OpenAI-compatible endpoints both answer at
 `GET /v1/models` — so you don't have to remember an exact model ID. `/model
-<alias|id>` still sets one directly (`opus`, `sonnet`, `haiku`, `fable`, or any
-full ID). Picking from the list also records that model's real context window,
+<alias|id>` still sets one directly (`opus`, `sonnet`, `haiku`, `fable` on
+Anthropic, or any full ID). Picking from the list also records that model's real context window,
 which is what the status bar's `ctx N%` measures against.
 
 `/theme` switches the colour theme (Markdown + chrome) for the session; set a
@@ -384,10 +384,11 @@ apiKeyEnv = "MY_API_KEY"
 # "max_tokens must be at least 1, got -N" or "context length exceeded" 400s.
 # contextWindow = 128000
 
-# Optional: cap the tokens a single turn may generate. Defaults to the model's
-# real maximum (128000 on the 1M-context Claude models, 64000 on the 200k ones,
-# 8192 for models Klaudia doesn't recognise — including most OpenAI-compatible
-# ones). Set this when your provider's limit differs from that fallback.
+# Optional: cap the tokens a single turn may generate. On Anthropic it defaults
+# to the model's real maximum (128000 on the 1M-context Claude models, 64000 on
+# the 200k ones, 8192 for models Klaudia doesn't recognise); with
+# provider = "openai" it is always 8192. Set this when your provider's limit
+# differs from that fallback.
 # maxTokens = 32000
 
 # Optional: what the Return key does at the prompt. "send" (default) submits
@@ -402,7 +403,10 @@ Create a commented starter config with `./klaudia --create-config=global` for
 `~/.klaudia/config.toml`, or `./klaudia --create-config=local` for
 `./.klaudia/config.toml`.
 
-`--model haiku|sonnet|opus` (or a full model ID) overrides per-run. The
+`--model haiku|sonnet|opus` (or a full model ID) overrides per-run. The aliases
+and the Claude default model belong to the Anthropic provider: with
+`provider = "openai"` the model string is sent exactly as written (a bare
+`sonnet` gets a warning, not a rewrite), and a `model` is required. The
 OpenAI-compatible provider translates the Anthropic message shape to Chat
 Completions (including image tool-results → `image_url`).
 

@@ -162,6 +162,40 @@ func TestModelWithoutListerReportsCurrent(t *testing.T) {
 	}
 }
 
+// On a non-Anthropic provider an alias is sent as typed, the Claude table does
+// not size the window, and the confirmation warns (#125).
+func TestModelAliasOnOpenAIPassesThroughAndWarns(t *testing.T) {
+	m := pickerModel(t, nil, nil)
+	m.sess.Provider = "openai"
+	m.sess.ContextWindow, m.sess.ContextWindowSource = 128000, "config override"
+
+	m.handleSlash("/model sonnet")
+
+	if m.sess.Model != "sonnet" || m.sess.ResolvedModel != "sonnet" {
+		t.Errorf("model = %q resolved %q, want sonnet passed through", m.sess.Model, m.sess.ResolvedModel)
+	}
+	if m.sess.ContextWindow != 128000 {
+		t.Errorf("context window = %d; the Claude table must not replace the configured window", m.sess.ContextWindow)
+	}
+	out := visibleText(m.transcript.String())
+	if !strings.Contains(out, "Model set to sonnet") || !strings.Contains(out, "warning:") {
+		t.Errorf("/model <alias> should confirm and warn:\n%s", out)
+	}
+}
+
+func TestModelAliasOnAnthropicResolvesWithoutWarning(t *testing.T) {
+	m := pickerModel(t, nil, nil)
+	m.sess.Provider = "anthropic"
+	m.handleSlash("/model sonnet")
+	if m.sess.ResolvedModel != "claude-sonnet-5" {
+		t.Errorf("resolved = %q, want claude-sonnet-5", m.sess.ResolvedModel)
+	}
+	out := visibleText(m.transcript.String())
+	if !strings.Contains(out, "claude-sonnet-5") || strings.Contains(out, "warning:") {
+		t.Errorf("want a confirmation naming the resolved id and no warning:\n%s", out)
+	}
+}
+
 // End to end through the real provider: /model → live endpoint → picker.
 // Skipped without credentials.
 func TestModelPickerAgainstLiveProvider(t *testing.T) {
