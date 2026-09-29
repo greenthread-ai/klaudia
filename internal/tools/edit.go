@@ -174,13 +174,8 @@ func (e *Edit) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 		updated = strings.Replace(content, oldString, newString, 1)
 	}
 
-	// Preserve the original file mode.
-	info, statErr := os.Stat(in.FilePath)
-	mode := os.FileMode(0o644)
-	if statErr == nil {
-		mode = info.Mode().Perm()
-	}
-	if err := os.WriteFile(in.FilePath, []byte(updated), mode); err != nil {
+	// Atomic, and keeps the original file mode.
+	if err := writeFileAtomic(in.FilePath, []byte(updated), 0o644); err != nil {
 		return []Result{{Content: fmt.Sprintf("Error writing file: %v", err), IsError: true}}, nil
 	}
 
