@@ -101,6 +101,10 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 			ctor{"Diagnostics", func() (Tool, error) { return NewDiagnostics(pool) }},
 			ctor{"Definition", func() (Tool, error) { return NewDefinition(pool) }},
 			ctor{"References", func() (Tool, error) { return NewReferences(pool) }},
+			ctor{"Implementation", func() (Tool, error) { return NewImplementation(pool) }},
+			ctor{"Hover", func() (Tool, error) { return NewHover(pool) }},
+			ctor{"DocumentSymbols", func() (Tool, error) { return NewDocumentSymbols(pool) }},
+			ctor{"Rename", func() (Tool, error) { return NewRename(pool) }},
 		)
 	}
 

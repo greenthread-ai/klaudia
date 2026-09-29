@@ -562,7 +562,17 @@ agent real code intelligence:
 
 - `Diagnostics` — compiler/linter errors for a file (the edit → check → fix
   loop).
-- `Definition` / `References` — jump to a symbol's definition or find its uses.
+- `Definition` / `References` / `Implementation` — jump to a symbol's
+  definition, find its uses, or find the concrete implementations of an
+  interface.
+- `Hover` — the type, signature, and docs a server shows on hover.
+- `DocumentSymbols` — an outline of the functions, types, and methods in a file.
+- `Rename` — a preview of the edits a symbol rename would make across the
+  workspace (it returns the edits; it does not apply them).
+
+Location, symbol, and hover results include the source line's text alongside
+its `file:line`, so the agent sees the code without a follow-up read. A server
+that lacks a capability is reported as "not supported" rather than failing.
 
 Servers are **detected, never downloaded** — looked up on `$PATH` *and* in the
 usual toolchain locations (so `gopls` in `~/go/bin`, `rust-analyzer` in
