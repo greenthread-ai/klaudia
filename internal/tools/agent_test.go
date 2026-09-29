@@ -10,6 +10,9 @@ type fakeSpawner struct {
 	gotType, gotPrompt string
 	result             string
 	gotProgress        func(string) // captured so a test can assert it was forwarded
+	bgType, bgPrompt   string       // captured by SpawnBackground
+	bgLabel            string
+	bgID               string // returned by SpawnBackground ("" defaults to "agent-1")
 }
 
 func (f *fakeSpawner) Spawn(_ context.Context, subagentType, prompt string, progress func(string)) (string, error) {
@@ -18,6 +21,14 @@ func (f *fakeSpawner) Spawn(_ context.Context, subagentType, prompt string, prog
 		progress("Read main.go") // a child tool call, as the real spawner relays
 	}
 	return f.result, nil
+}
+
+func (f *fakeSpawner) SpawnBackground(subagentType, prompt, label string, _ func(string)) (string, error) {
+	f.bgType, f.bgPrompt, f.bgLabel = subagentType, prompt, label
+	if f.bgID == "" {
+		return "agent-1", nil
+	}
+	return f.bgID, nil
 }
 
 func newTestAgent(t *testing.T, sp Spawner) *Agent {
@@ -57,6 +68,28 @@ func TestAgentExecuteDelegatesToSpawner(t *testing.T) {
 	}
 	if res[0].Content != "sub-agent findings" {
 		t.Errorf("result = %q", res[0].Content)
+	}
+}
+
+func TestAgentBackgroundReturnsHandleWithoutBlocking(t *testing.T) {
+	sp := &fakeSpawner{bgID: "agent-3"}
+	a := newTestAgent(t, sp)
+	raw, _ := json.Marshal(AgentInput{
+		Prompt: "investigate the flake", SubagentType: "general-purpose",
+		Description: "chase the flake", Background: true,
+	})
+	res, err := a.Execute(context.Background(), Context{}, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sp.bgType != "general-purpose" || sp.bgPrompt != "investigate the flake" || sp.bgLabel != "chase the flake" {
+		t.Errorf("SpawnBackground got type=%q prompt=%q label=%q", sp.bgType, sp.bgPrompt, sp.bgLabel)
+	}
+	if sp.gotType != "" {
+		t.Error("background launch should not call the synchronous Spawn")
+	}
+	if !contains(res[0].Content, "agent-3") || !contains(res[0].Content, "later turn") {
+		t.Errorf("background result should hand back the handle and say it is deferred: %q", res[0].Content)
 	}
 }
 

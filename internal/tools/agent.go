@@ -17,6 +17,11 @@ type Spawner interface {
 	// progress, when non-nil, is called with short display lines as the child
 	// works, so the frontend can show what it is doing instead of a bare spinner.
 	Spawn(ctx context.Context, subagentType, prompt string, progress func(line string)) (string, error)
+	// SpawnBackground launches a sub-agent that runs independently of this turn
+	// and returns its handle id immediately; the result is delivered on a later
+	// turn. label is the task description, for the status view. It takes no
+	// context because the child must outlive the turn that started it.
+	SpawnBackground(subagentType, prompt, label string, progress func(line string)) (id string, err error)
 }
 
 // AgentTypeInfo is the model-facing summary of a sub-agent type, used to build
@@ -31,6 +36,12 @@ type AgentInput struct {
 	Description  string `json:"description" jsonschema:"description=A short (3-5 word) description of the task"`
 	Prompt       string `json:"prompt" jsonschema:"description=The task for the sub-agent to perform autonomously"`
 	SubagentType string `json:"subagent_type" jsonschema:"description=The type of sub-agent to use"`
+	// Background runs the sub-agent independently of this turn: the call returns
+	// a handle immediately and the result is delivered to you on a later turn,
+	// instead of blocking until the sub-agent finishes. Use it for long-running
+	// work you want to continue past; leave it false (the default) to wait for
+	// the result inline.
+	Background bool `json:"background,omitempty" jsonschema:"description=Run the sub-agent in the background: return a handle immediately and deliver the result on a later turn instead of blocking this turn. Default false (wait inline)."`
 }
 
 // Agent launches a sub-agent (its own agentic loop with a filtered toolset)
@@ -70,7 +81,10 @@ func (a *Agent) Description(context.Context) (string, error) {
 		fmt.Fprintf(&b, "- %s: %s\n", t.Name, t.Description)
 	}
 	b.WriteString("The sub-agent runs to completion and returns a single final message; it cannot " +
-		"ask follow-up questions, so give it a complete, self-contained prompt.")
+		"ask follow-up questions, so give it a complete, self-contained prompt.\n")
+	b.WriteString("Set background=true to launch it without blocking: the call returns a handle " +
+		"immediately and the result is delivered to you on a later turn, so you can continue in the " +
+		"meantime. A background writer runs in its own isolated worktree.")
 	return b.String(), nil
 }
 
@@ -104,6 +118,16 @@ func (a *Agent) Execute(ctx context.Context, tctx Context, raw json.RawMessage) 
 	var in AgentInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
+	}
+	if in.Background {
+		id, err := a.spawner.SpawnBackground(in.SubagentType, in.Prompt, in.Description, tctx.Progress)
+		if err != nil {
+			return []Result{{Content: fmt.Sprintf("Could not launch background sub-agent: %v", err), IsError: true}}, nil
+		}
+		return []Result{{Content: fmt.Sprintf(
+			"Launched background sub-agent %q (%s). It runs independently; its result will be "+
+				"delivered to you on a later turn once it finishes. Continue with other work — do not "+
+				"wait on it, and do not re-launch it.", id, in.SubagentType)}}, nil
 	}
 	result, err := a.spawner.Spawn(ctx, in.SubagentType, in.Prompt, tctx.Progress)
 	if err != nil {

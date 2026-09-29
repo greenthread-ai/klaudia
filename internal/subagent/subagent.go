@@ -73,6 +73,29 @@ func Builtin() []Type {
 	}
 }
 
+// mutatingTools are the local tools that can change the working tree or the
+// host. A type that can call any of them is a "writer", which decides whether a
+// background instance of it needs an isolated git worktree (a read-only agent
+// can safely share the parent's tree). Bash counts because a command is free to
+// write; the read-only agents (Explore, Plan) hold none of these.
+var mutatingTools = map[string]bool{
+	"Write": true, "Edit": true, "MultiEdit": true, "NotebookEdit": true, "Bash": true,
+}
+
+// MayWrite reports whether this type can modify the working tree. A wildcard
+// toolset ("*") can, and so can any explicit set naming a mutating tool. It is
+// derived from the granted toolset rather than the system prompt for the same
+// reason ReadOnlyMCP is: an instruction not to write is a request, but the tool
+// registry is what the sub-agent actually holds.
+func (t Type) MayWrite() bool {
+	for _, name := range t.Tools {
+		if name == "*" || mutatingTools[name] {
+			return true
+		}
+	}
+	return false
+}
+
 // Lookup returns the built-in type with the given name.
 func Lookup(name string) (Type, bool) {
 	for _, t := range Builtin() {
