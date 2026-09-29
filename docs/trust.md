@@ -223,7 +223,10 @@ the per-command model.
 A config that already has `[permissions]` allow/deny rules starts in **observe**:
 the classifier runs and `/trust` shows what it found, but nothing is refused and
 your existing per-action prompts continue. You get a one-time notice at startup.
-`/trust upgrade` switches over.
+`/trust upgrade` switches over. Rules passed on the command line with
+`--allowedTools`/`--disallowedTools` are still honoured but don't count: they
+are one invocation's choice, not a config to migrate, so they leave the
+guardrail enforcing.
 
 Everything else starts enforcing.
 

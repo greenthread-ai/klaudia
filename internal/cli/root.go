@@ -739,8 +739,14 @@ func run(cmd *cobra.Command, opts *options) error {
 	// The host gate. extraDirs is read at check time rather than captured, so a
 	// directory added mid-session with /add-dir counts as project work on the
 	// next tool call.
+	//
+	// Only rules from config count as legacy here. Starting in observe is the
+	// migration path for a config written for the per-command model
+	// (docs/trust.md); --allowedTools on one command line has nothing to
+	// migrate, and letting it switch the guardrail off made
+	// `--allowedTools Read --permission-mode autonomous` a usage error.
 	hostPolicy, hostNotice := agent.ResolveHostPolicy(
-		cfg.Trust.Mode, len(allowRules) > 0 || len(denyRules) > 0)
+		cfg.Trust.Mode, len(cfg.Permissions.Allow) > 0 || len(cfg.Permissions.Deny) > 0)
 
 	// Resolve the permission mode: --permission-mode flag wins, else the config
 	// default ([permissions] mode), else autonomous — but only when the host
