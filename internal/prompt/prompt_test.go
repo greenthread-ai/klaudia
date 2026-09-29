@@ -108,6 +108,68 @@ func TestSystemRecallsLegacyMemoryPath(t *testing.T) {
 	}
 }
 
+func TestSystemRecallsUserMemory(t *testing.T) {
+	// Point the user config root at a temp dir so the test never reads the real
+	// $HOME/.klaudia (issue #161 / #110).
+	cfgDir := t.TempDir()
+	t.Setenv("KLAUDIA_CONFIG_DIR", cfgDir)
+	if err := os.WriteFile(filepath.Join(cfgDir, "MEMORY.md"), []byte("# Memory\n\n- user prefers tabs over spaces\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := System(t.TempDir(), "")
+	if !strings.Contains(p, "# Recalled memory") {
+		t.Error("expected recalled-memory section")
+	}
+	if !strings.Contains(p, "User memory") {
+		t.Error("expected a user-memory label")
+	}
+	if !strings.Contains(p, "user prefers tabs over spaces") {
+		t.Error("expected user memory content to be injected")
+	}
+}
+
+func TestSystemNoUserMemory(t *testing.T) {
+	// An empty config root (no MEMORY.md) must be a no-op — no user-memory
+	// label and no spurious recall section.
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	p := System(t.TempDir(), "")
+	if strings.Contains(p, "User memory") {
+		t.Error("absent user MEMORY.md should not emit a user-memory label")
+	}
+	if strings.Contains(p, "# Recalled memory") {
+		t.Error("no memory anywhere should not emit a recall section")
+	}
+}
+
+func TestSystemRecallsUserAndProjectMemory(t *testing.T) {
+	cfgDir := t.TempDir()
+	t.Setenv("KLAUDIA_CONFIG_DIR", cfgDir)
+	if err := os.WriteFile(filepath.Join(cfgDir, "MEMORY.md"), []byte("# Memory\n\n- global fact about the user\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	klaudiaDir := filepath.Join(dir, ".klaudia")
+	if err := os.MkdirAll(klaudiaDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(klaudiaDir, "MEMORY.md"), []byte("# Memory\n\n- project-specific fact\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := System(dir, "")
+	for _, want := range []string{"User memory", "Project memory", "global fact about the user", "project-specific fact"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("system prompt missing %q", want)
+		}
+	}
+	// Project memory comes last so it can refine the user-level notes.
+	if strings.Index(p, "User memory") > strings.Index(p, "Project memory") {
+		t.Error("user memory should be injected before project memory")
+	}
+}
+
 func TestSystemRecallsKnowledge(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
