@@ -2144,15 +2144,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(bannerStyle.Render(m.sess.Doctor()))
 		}
 	case "/diff":
-		out, err := gitOutput(m.sess.CWD, append([]string{"diff"}, args...)...)
-		switch {
-		case err != nil:
-			m.appendLine(errStyle.Render("git diff: " + err.Error()))
-		case strings.TrimSpace(out) == "":
-			m.appendLine(bannerStyle.Render("No changes."))
-		default:
-			m.appendLine(out)
-		}
+		return m, m.showDiff(args)
 	case "/export":
 		path, err := m.exportTranscript()
 		if err != nil {
