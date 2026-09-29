@@ -9,7 +9,7 @@ const SummaryInstruction = `Your context window is nearly full. Produce a detail
 2. Key files, functions, and decisions made, with paths.
 3. What has been done so far and the current state.
 4. The next steps that remain.
-Write the summary as plain prose. Do not ask questions or take any further action.`
+Write the summary as plain prose. Respond with text only: do not call any tools, ask questions, or take any further action.`
 
 // BuildSummaryRequest returns a request that asks the model to summarize the
 // given conversation. The summary instruction is appended as a final user turn.

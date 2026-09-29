@@ -41,7 +41,10 @@ the saving is worthwhile, so it's cheap and rarely disruptive.
 
 When the estimated token count exceeds the compaction threshold, Klaudia asks
 the model to summarize the conversation and replaces the history with that
-summary. Thresholds (`ComputeThresholds`):
+summary. The summary request carries the same system prompt and tools as the
+conversation's own requests (for `/compact`, those of the last request sent),
+so it reads the history from the prompt cache instead of paying for all of it
+again. Thresholds (`ComputeThresholds`):
 
 ```
 reserve          = min(20000, contextWindow)         // halved for tiny windows
