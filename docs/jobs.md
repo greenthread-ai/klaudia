@@ -91,7 +91,10 @@ Your own `$PAGER` is untouched where it matters — Klaudia's long-output view a
 Klaudia does not allocate a pseudo-terminal, so programs that require one do not
 run. `vim`, `less`, `top`, `git rebase -i`, `git commit` with no `-m`, `ssh` with
 no command, `docker run -it` are refused immediately, with the non-interactive
-alternative named.
+alternative named. Their forms that never touch a terminal still run: a pager or
+`man` whose output is piped or redirected, `top -b`, `crontab -l`, tmux and
+screen commands that do not attach, and `--help`/`--version`. The command a
+refusal suggests is never itself refused.
 
 This is a choice, not an omission. A PTY would make `vim` "work" in a surface
 the model cannot drive and you cannot see: the turn would look successful while
