@@ -236,26 +236,76 @@ func (s *fsStore) FilePointers() []string {
 	return ptrs
 }
 
-// fileHook returns a one-line summary of a memory file: its first Markdown
-// heading (with leading '#'s stripped) or, failing that, its first non-empty
-// line. Returns "" if the file is unreadable or empty.
+// hookMaxRunes caps a note's hook in the index. Counted in runes, not bytes,
+// so the cut never splits a multi-byte character.
+const hookMaxRunes = 80
+
+// fileHook returns a one-line summary of a memory file: its frontmatter
+// `description` when it has one, else the first non-empty line of the body
+// (with leading '#'s stripped, so a heading reads as its text). Frontmatter is
+// never the hook — Promote and Supersede add it to notes that had none, and a
+// hook of "---" says nothing. Returns "" if the file is unreadable or empty.
 func fileHook(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(string(data), "\n") {
+	return noteHook(data)
+}
+
+// noteHook is fileHook on a note's contents.
+func noteHook(data []byte) string {
+	meta, body := parseFrontmatter(data)
+	if desc := strings.Join(strings.Fields(meta.Description), " "); desc != "" {
+		return truncateRunes(desc, hookMaxRunes)
+	}
+	lines := strings.Split(string(body), "\n")
+	// parseFrontmatter leaves a block it cannot read (bad YAML, CRLF fences) in
+	// the body; skip it here too rather than surface its fence or keys.
+	lines = skipFrontmatterLines(lines)
+	for _, line := range lines {
 		t := strings.TrimSpace(line)
 		if t == "" {
 			continue
 		}
 		t = strings.TrimSpace(strings.TrimLeft(t, "#"))
-		if len(t) > 80 {
-			t = t[:80] + "…"
+		if t == "" {
+			continue // a bare "#" line
 		}
-		return t
+		return truncateRunes(t, hookMaxRunes)
 	}
 	return ""
+}
+
+// skipFrontmatterLines drops a leading "---" fenced block from lines. A
+// leading fence with no closing one drops just the fence line.
+func skipFrontmatterLines(lines []string) []string {
+	first := 0
+	for first < len(lines) && strings.TrimSpace(lines[first]) == "" {
+		first++
+	}
+	if first == len(lines) || strings.TrimSpace(lines[first]) != "---" {
+		return lines
+	}
+	for j := first + 1; j < len(lines); j++ {
+		if strings.TrimSpace(lines[j]) == "---" {
+			return lines[j+1:]
+		}
+	}
+	return lines[first+1:]
+}
+
+// truncateRunes returns s cut to at most n runes, with "…" appended when
+// anything was cut. It never splits a UTF-8 sequence.
+func truncateRunes(s string, n int) string {
+	count := 0
+	for i := range s {
+		if count == n {
+			return strings.TrimRight(s[:i], " ") + "…"
+		}
+		count++
+	}
+	return s
 }
 
 func appendBullet(path, header, text string) error {

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,12 +16,12 @@ import (
 
 // MemoryInput is the Memory tool's input.
 type MemoryInput struct {
-	Operation   string `json:"operation" jsonschema:"enum=search,enum=add,enum=view,enum=recent,enum=stale,enum=by_tag,enum=promote,enum=supersede,description=Operation to perform"`
+	Operation   string `json:"operation" jsonschema:"enum=search,enum=add,enum=view,enum=recent,enum=stale,enum=by_tag,enum=promote,enum=supersede,enum=remove,description=Operation to perform"`
 	Scope       string `json:"scope,omitempty" jsonschema:"enum=session,enum=project,description=Where to write for operation=add: session (default) writes .klaudia/MEMORY.md; project writes .klaudia/KNOWLEDGE.md"`
-	Query       string `json:"query,omitempty" jsonschema:"description=Search terms (required for operation=search)"`
+	Query       string `json:"query,omitempty" jsonschema:"description=Search terms (required for operation=search). For operation=remove: terms that pick out the one session note to forget"`
 	Content     string `json:"content,omitempty" jsonschema:"description=The note to store (required for operation=add)"`
 	Tag         string `json:"tag,omitempty" jsonschema:"description=Frontmatter tag to filter on (required for operation=by_tag)"`
-	Name        string `json:"name,omitempty" jsonschema:"description=Detail note name without .md (required for promote/supersede)"`
+	Name        string `json:"name,omitempty" jsonschema:"description=Detail note name without .md (required for promote/supersede; for remove, deletes that detail note)"`
 	Replacement string `json:"replacement,omitempty" jsonschema:"description=The replacing note's name (required for operation=supersede)"`
 	Within      string `json:"within,omitempty" jsonschema:"description=Duration window for operation=recent — accepts Go duration syntax plus 'Nd' for days (e.g. 7d, 24h). Default 7d."`
 	OlderThan   string `json:"older_than,omitempty" jsonschema:"description=Duration threshold for operation=stale. Same format as within. Default 30d."`
@@ -54,8 +55,10 @@ func (m *Memory) Name() string { return "Memory" }
 
 func (m *Memory) Description(context.Context) (string, error) {
 	return "Your persistent memory across sessions. Use it to recall prior context before " +
-		"asking the user or re-investigating, and to store and curate durable facts " +
-		"(decisions, conventions, gotchas) for later.\n\n" +
+		"asking the user or re-investigating, to store and curate durable facts " +
+		"(decisions, conventions, gotchas) for later, and to forget notes that turn out " +
+		"wrong: \"remove\" deletes the one session note matching `query` (include its " +
+		"timestamp to tell apart similar notes), or the detail note `name`.\n\n" +
 		"Recall ops: \"search\" (matches query terms across the MEMORY.md index and the " +
 		".klaudia/memory/*.md detail notes; a detail hit is tagged \"file.md: …\", Read " +
 		"that file for full context), \"view\" (read all session notes), \"recent\" " +
@@ -114,8 +117,13 @@ func (m *Memory) ValidateInput(raw json.RawMessage) error {
 		if strings.TrimSpace(in.Name) == "" || strings.TrimSpace(in.Replacement) == "" {
 			return fmt.Errorf("operation \"supersede\" requires name and replacement")
 		}
+	case "remove":
+		hasQuery, hasName := strings.TrimSpace(in.Query) != "", strings.TrimSpace(in.Name) != ""
+		if hasQuery == hasName {
+			return fmt.Errorf("operation \"remove\" requires exactly one of query (a session note) or name (a detail note)")
+		}
 	default:
-		return fmt.Errorf("operation %q is invalid (want search|view|add|recent|stale|by_tag|promote|supersede)", in.Operation)
+		return fmt.Errorf("operation %q is invalid (want search|view|add|recent|stale|by_tag|promote|supersede|remove)", in.Operation)
 	}
 	return nil
 }
@@ -209,6 +217,8 @@ func (m *Memory) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]R
 			return []Result{{Content: "Supersede failed: " + err.Error(), IsError: true}}, nil
 		}
 		return []Result{{Content: "Marked " + in.Name + " as superseded by " + in.Replacement + "."}}, nil
+	case "remove":
+		return m.remove(in), nil
 	default: // view
 		idx, err := m.store.Index()
 		if err != nil {
@@ -219,6 +229,32 @@ func (m *Memory) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]R
 		}
 		return []Result{{Content: idx}}, nil
 	}
+}
+
+// remove runs operation=remove: a detail note by name, else the one session
+// note query matches. The result names what was removed, or, when the query is
+// ambiguous, lists the candidates so the next call can pick one.
+func (m *Memory) remove(in MemoryInput) []Result {
+	if name := strings.TrimSpace(in.Name); name != "" {
+		if err := m.store.RemoveNote(name); err != nil {
+			if errors.Is(err, memory.ErrNotFound) {
+				return []Result{{Content: "Remove failed: no detail note .klaudia/memory/" + strings.TrimSuffix(name, ".md") + ".md", IsError: true}}
+			}
+			return []Result{{Content: "Remove failed: " + err.Error(), IsError: true}}
+		}
+		return []Result{{Content: "Removed detail note " + strings.TrimSuffix(name, ".md") + " and its index pointer."}}
+	}
+	matched, err := m.store.Remove(in.Query)
+	switch {
+	case errors.Is(err, memory.ErrAmbiguous):
+		return []Result{{Content: fmt.Sprintf("Nothing removed: %d session notes match %q. Narrow the query (the timestamp picks out one):\n- %s",
+			len(matched), in.Query, strings.Join(matched, "\n- ")), IsError: true}}
+	case errors.Is(err, memory.ErrNotFound):
+		return []Result{{Content: fmt.Sprintf("Nothing removed: no session note matches %q. A detail note under .klaudia/memory/ is removed with name.", in.Query), IsError: true}}
+	case err != nil:
+		return []Result{{Content: "Remove failed: " + err.Error(), IsError: true}}
+	}
+	return []Result{{Content: "Removed from session memory: " + matched[0]}}
 }
 
 // formatEntries renders the Recent/Stale/ByTag list as a bullet list with

@@ -21,9 +21,10 @@ type Entry struct {
 	// a logical doc id on PG. /memory and other UI paths display it verbatim.
 	Path string
 
-	// Title is a one-line hook (the first heading with leading "#" stripped,
-	// or the first non-empty line, capped to 80 chars). Sourced via fileHook
-	// on the FS impl so it tracks whatever convention the note happens to use.
+	// Title is a one-line hook (the frontmatter `description`, else the first
+	// heading with leading "#" stripped or the first non-empty body line,
+	// capped to 80 runes). Sourced via fileHook on the FS impl so it tracks
+	// whatever convention the note happens to use.
 	Title string
 
 	// Tags is the frontmatter `tags:` list when present, nil otherwise.
