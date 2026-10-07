@@ -11,6 +11,9 @@ import (
 type Seatbelt struct {
 	WriteRoots []string
 	Network    string
+	// Hide and Keep are as for Bwrap: credential paths the command may not
+	// read, and exceptions inside them it may.
+	Hide, Keep []string
 }
 
 func NewSeatbelt(writeRoots []string, network string) *Seatbelt {
@@ -39,6 +42,21 @@ func (s *Seatbelt) profile(req Request) string {
 	}
 	b.WriteString("  (literal \"/dev/null\") (literal \"/dev/stdout\") (literal \"/dev/stderr\") (literal \"/dev/zero\")\n")
 	b.WriteString("  (regex #\"^/dev/tty\"))\n")
+	if hide := existing(s.Hide); len(hide) > 0 {
+		b.WriteString("(deny file-read*\n")
+		for _, p := range hide {
+			fmt.Fprintf(&b, "  (subpath %q)\n", p)
+		}
+		b.WriteString(")\n")
+		// Later rules win, so the exceptions are allowed after the deny.
+		if keep := existing(s.Keep); len(keep) > 0 {
+			b.WriteString("(allow file-read*\n")
+			for _, p := range keep {
+				fmt.Fprintf(&b, "  (literal %q)\n", p)
+			}
+			b.WriteString(")\n")
+		}
+	}
 	if s.Network == "none" {
 		b.WriteString("(deny network*)\n")
 	}

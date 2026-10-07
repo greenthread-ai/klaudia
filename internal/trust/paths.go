@@ -186,6 +186,27 @@ var credentialPaths = []string{
 	"/Library/Keychains", "/etc/ssh",
 }
 
+// CredentialPaths returns the credential locations under home as absolute
+// paths, for a sandbox to hide, and the exceptions inside them to leave
+// visible (known_hosts and ssh config hold no secret, and ssh needs them).
+// /etc/ssh is left out: the ssh client reads its config there, and the host
+// keys in it are readable only by root anyway.
+func CredentialPaths(home string) (hide, keep []string) {
+	for _, p := range credentialPaths {
+		if p == "/etc/ssh" {
+			continue
+		}
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(home, p)
+		}
+		hide = append(hide, p)
+	}
+	for _, p := range credentialExceptions {
+		keep = append(keep, filepath.Join(home, p))
+	}
+	return hide, keep
+}
+
 // credentialExceptions are inside a credential directory but hold no secret.
 // known_hosts in particular is touched constantly by ordinary ssh use.
 var credentialExceptions = []string{
