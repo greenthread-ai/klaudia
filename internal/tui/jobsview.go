@@ -71,21 +71,14 @@ func (m *Model) logsCommand(args []string) (tea.Model, tea.Cmd) {
 			ref = a
 		}
 	}
-	if ref == "" {
-		// One job is the common case; naming it every time would be noise.
-		running := runningJobs(m.sess.Jobs.List())
-		if len(running) == 1 {
-			ref = running[0].Name
-		} else {
-			m.appendLine(bannerStyle.Render(tools.RenderJobs(m.sess.Jobs.List())))
-			m.appendLine(hintStyle.Render("usage: /logs [-f] [--errors] <job>"))
-			return m, nil
-		}
+	var ok bool
+	if ref, ok = m.resolveJobRef(ref, "usage: /logs [-f] [--errors] <job>"); !ok {
+		return m, nil
 	}
 
 	text, path, ok := m.sess.Jobs.Log(ref)
 	if !ok {
-		m.appendLine(errStyle.Render("no job " + ref))
+		m.reportNoJob(ref)
 		return m, nil
 	}
 
@@ -244,14 +237,13 @@ func (m *Model) restartCommand(args []string) {
 		m.appendLine(errStyle.Render("background jobs are not available in this session"))
 		return
 	}
-	ref := firstOr(args, soleRunningJob(m.sess.Jobs))
-	if ref == "" {
-		m.appendLine(errStyle.Render("usage: /restart <job>"))
+	ref, ok := m.resolveJobRef(firstOr(args, ""), "usage: /restart <job>")
+	if !ok {
 		return
 	}
 	st, ok := m.sess.Jobs.Restart(ref)
 	if st.ID == "" {
-		m.appendLine(errStyle.Render("no job " + ref))
+		m.reportNoJob(ref)
 		return
 	}
 	if !ok {
@@ -277,16 +269,78 @@ func (m *Model) stopJobCommand(args []string) {
 		m.appendLine(bannerStyle.Render(fmt.Sprintf("stopped %d job(s)", n)))
 		return
 	}
-	ref := firstOr(args, soleRunningJob(m.sess.Jobs))
-	if ref == "" {
-		m.appendLine(errStyle.Render("usage: /stopjob <job|all>"))
+	ref, ok := m.resolveJobRef(firstOr(args, ""), "usage: /stopjob <job|all>")
+	if !ok {
+		return
+	}
+	// Kill finds an exited job too and "stops" it as a no-op, which used to
+	// be reported as "stopped" — say what actually happened instead.
+	if st, found := findJob(m.sess.Jobs.List(), ref); found && !st.Running {
+		m.appendLine(bannerStyle.Render(fmt.Sprintf("%s already exited (code %d) — /restart %s to run it again",
+			st.Name, st.ExitCode, st.Name)))
 		return
 	}
 	if !m.sess.Jobs.Kill(ref) {
-		m.appendLine(errStyle.Render("no job " + ref))
+		m.reportNoJob(ref)
 		return
 	}
 	m.appendLine(bannerStyle.Render("stopped " + ref))
+}
+
+// resolveJobRef turns a /logs, /restart or /stopjob argument into a job
+// reference, the same way for all three. With no argument the sole running
+// job is meant; when that is ambiguous the jobs are listed with the usage, so
+// the user can see the names they could have typed. A name that matches no
+// job is reported with the names that do exist.
+func (m *Model) resolveJobRef(ref, usage string) (string, bool) {
+	jobs := m.sess.Jobs.List()
+	if ref == "" {
+		if running := runningJobs(jobs); len(running) == 1 {
+			return running[0].Name, true
+		}
+		m.appendLine(bannerStyle.Render(tools.RenderJobs(jobs)))
+		m.appendLine(hintStyle.Render(usage))
+		return "", false
+	}
+	if _, found := findJob(jobs, ref); !found {
+		m.reportNoJob(ref)
+		return "", false
+	}
+	return ref, true
+}
+
+// reportNoJob says a reference matched nothing, and lists what would have.
+func (m *Model) reportNoJob(ref string) {
+	jobs := m.sess.Jobs.List()
+	if len(jobs) == 0 {
+		m.appendLine(errStyle.Render("no job " + ref + " — no jobs have run in this session"))
+		return
+	}
+	names := make([]string, 0, len(jobs))
+	for _, j := range jobs {
+		state := "running"
+		if !j.Running {
+			state = fmt.Sprintf("exited %d", j.ExitCode)
+		}
+		names = append(names, fmt.Sprintf("%s (%s)", j.Name, state))
+	}
+	m.appendLine(errStyle.Render("no job " + ref + " — jobs: " + strings.Join(names, ", ")))
+}
+
+// findJob matches a reference the way the job store does: an exact id, or a
+// name compared case-insensitively.
+func findJob(jobs []tools.JobStatus, ref string) (tools.JobStatus, bool) {
+	for _, j := range jobs {
+		if j.ID == ref {
+			return j, true
+		}
+	}
+	for _, j := range jobs {
+		if strings.EqualFold(j.Name, ref) {
+			return j, true
+		}
+	}
+	return tools.JobStatus{}, false
 }
 
 func runningJobs(jobs []tools.JobStatus) []tools.JobStatus {
