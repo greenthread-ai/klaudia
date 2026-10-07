@@ -55,6 +55,14 @@ const DefaultModel = "claude-opus-5"
 // always pin a specific snapshot via `--model claude-opus-4-8` or
 // `--model claude-opus-4-5-20251101`. Bumped to track the current Claude 4.x
 // lineup — verified live against /v1/messages with a one-shot probe.
+//
+// The aliases deliberately stay on the 5.0 models although Claude Code now
+// defaults to Opus 5.5, Sonnet 5.5 and Fable 5.1. Opus 5.5 and Fable 5.1 bind
+// thinking blocks to the conversation that produced them ("preserved
+// thinking"): for newer accounts, a request whose earlier turns were edited
+// is rejected. Microcompaction and the sanitiser edit earlier turns, so those
+// models are available by full ID (--model claude-opus-5-5) but not yet by
+// alias; moving the aliases waits on making those edits append-only.
 var modelAliases = map[string]string{
 	"haiku":  "claude-haiku-4-5",
 	"sonnet": "claude-sonnet-5",
@@ -72,6 +80,12 @@ var modelAliases = map[string]string{
 // for the current lineup regardless, so the status bar's `ctx N%` had been
 // overstating context pressure roughly fivefold.
 var modelContextWindows = map[string]int{
+	// Claude Opus 5.5 and Fable 5.1: 1M per the Claude API model reference
+	// (2026-06); Sonnet 5.5: 1M per the Claude Code 2.1.284 release note. Not
+	// probed live — no API credential in the session that added them.
+	"claude-opus-5-5":            1_000_000,
+	"claude-sonnet-5-5":          1_000_000,
+	"claude-fable-5-1":           1_000_000,
 	"claude-opus-5":              1_000_000,
 	"claude-sonnet-5":            1_000_000,
 	"claude-fable-5":             1_000_000,
@@ -122,7 +136,11 @@ const DefaultMaxOutputTokens = 8192
 // cap can't 400. Every 1M-context model generates up to 128k; the 200k-context
 // models up to 64k. Keep this in sync with modelContextWindows.
 var modelMaxOutputTokens = map[string]int{
-	// 1M-context models → 128k output.
+	// 1M-context models → 128k output. Opus 5.5 and Fable 5.1 are documented at
+	// 128k; Sonnet 5.5 is assumed from the 1M → 128k rule above.
+	"claude-opus-5-5":   128000,
+	"claude-sonnet-5-5": 128000,
+	"claude-fable-5-1":  128000,
 	"claude-opus-5":     128000,
 	"claude-sonnet-5":   128000,
 	"claude-fable-5":    128000,
