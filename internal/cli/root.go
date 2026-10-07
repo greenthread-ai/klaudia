@@ -424,57 +424,73 @@ func buildBrowserOptions(bc config.Browser) browser.Options {
 }
 
 // buildExecutor selects the Bash execution backend from config. Both "os"
-// (host confinement via sandbox-exec/bwrap) and "container" modes degrade
-// gracefully to the local executor when the required tool is absent or the
-// config is incomplete (warn explains why).
-func buildExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {
+// (host confinement via sandbox-exec/bwrap) and "container" modes fall back
+// to the local executor when the required tool is absent, cannot run, or the
+// config is incomplete (warn explains why) - unless sandbox.failIfUnavailable
+// is set, in which case that is an error and Klaudia does not start.
+func buildExecutor(sb config.Sandbox, warn func(string)) (sandbox.Executor, error) {
+	fallback := func(reason string) (sandbox.Executor, error) {
+		if sb.FailIfUnavailable {
+			return nil, fmt.Errorf("sandbox mode %q is required (sandbox.failIfUnavailable) but %s", sb.Mode, reason)
+		}
+		warn(fmt.Sprintf("sandbox mode %q: %s; falling back to local (unconfined) execution", sb.Mode, reason))
+		return sandbox.NewLocal(), nil
+	}
 	switch sb.Mode {
 	case config.SandboxOS:
-		return buildOSExecutor(sb, warn)
+		return buildOSExecutor(sb, fallback)
 	case config.SandboxContainer:
-		return buildContainerExecutor(sb, warn)
+		return buildContainerExecutor(sb, fallback)
 	default:
-		return sandbox.NewLocal()
+		return sandbox.NewLocal(), nil
 	}
 }
 
 // buildOSExecutor picks the OS-native confinement tool for the current
-// platform: sandbox-exec on macOS, bubblewrap on Linux. Falls back to local
-// (unconfined) execution with a warning when the tool isn't available.
-func buildOSExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {
+// platform: sandbox-exec on macOS, bubblewrap on Linux.
+func buildOSExecutor(sb config.Sandbox, fallback func(string) (sandbox.Executor, error)) (sandbox.Executor, error) {
 	switch goruntime.GOOS {
 	case "darwin":
 		if _, err := exec.LookPath("sandbox-exec"); err != nil {
-			warn("sandbox mode \"os\": sandbox-exec not found; falling back to local execution")
-			return sandbox.NewLocal()
+			return fallback("sandbox-exec not found")
 		}
-		return sandbox.NewSeatbelt(sb.WriteRoots, sb.Network)
+		return sandbox.NewSeatbelt(sb.WriteRoots, sb.Network), nil
 	case "linux":
 		if _, err := exec.LookPath("bwrap"); err != nil {
-			warn("sandbox mode \"os\": bwrap (bubblewrap) not found; falling back to local execution")
-			return sandbox.NewLocal()
+			return fallback("bwrap (bubblewrap) not found")
 		}
-		return sandbox.NewBwrap(sb.WriteRoots, sb.Network)
+		// Installed is not the same as usable. Where unprivileged user
+		// namespaces are disabled, bwrap is on PATH and fails every command,
+		// so sandbox mode "os" turned each Bash call into an error.
+		if out, err := exec.Command("bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "true").CombinedOutput(); err != nil {
+			return fallback("bwrap is installed but cannot run here (" + strings.TrimSpace(firstLine(string(out))) + ")")
+		}
+		return sandbox.NewBwrap(sb.WriteRoots, sb.Network), nil
 	default:
-		warn("sandbox mode \"os\" is unsupported on " + goruntime.GOOS + "; falling back to local execution")
-		return sandbox.NewLocal()
+		return fallback("not supported on " + goruntime.GOOS)
 	}
 }
 
-func buildContainerExecutor(sb config.Sandbox, warn func(string)) sandbox.Executor {
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+func buildContainerExecutor(sb config.Sandbox, fallback func(string) (sandbox.Executor, error)) (sandbox.Executor, error) {
 	runtime := sb.Runtime
 	if runtime == "" {
 		runtime = "docker"
 	}
 	switch {
 	case sb.Image == "":
-		warn("sandbox mode \"container\" has no image set; falling back to local execution")
+		return fallback("no image is set")
 	case !sandbox.RuntimeAvailable(runtime):
-		warn(runtime + " is not installed; falling back to local execution")
+		return fallback(runtime + " is not installed")
 	default:
-		return sandbox.NewContainer(runtime, sb.Image, sb.MountCWDOr(true), sb.ReadOnly, sb.Network)
+		return sandbox.NewContainer(runtime, sb.Image, sb.MountCWDOr(true), sb.ReadOnly, sb.Network), nil
 	}
-	return sandbox.NewLocal()
 }
 
 // mcpController adapts the mcp.Manager to the TUI's MCPController so /mcp can
@@ -924,7 +940,10 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Build the tool registry. Sub-agents draw from the base tools (incl. any
 	// MCP tools); the top-level registry adds the Agent tool.
-	executor := buildExecutor(cfg.Sandbox, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
+	executor, err := buildExecutor(cfg.Sandbox, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
+	if err != nil {
+		return err
+	}
 	// Lazy browser engine for the web tools, tied to the run context and closed
 	// at session end so any launched Chrome is reliably terminated (it launches
 	// nothing until a web tool actually runs).
