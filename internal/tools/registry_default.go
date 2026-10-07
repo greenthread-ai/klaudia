@@ -114,3 +114,31 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 	}
 	return NewRegistry(ts...), nil
 }
+
+// DefaultDeferredTools names the local tools withheld from the initial request
+// and revealed on demand by ToolSearch, alongside the MCP tools the caller
+// already defers. They stay registered — so they work the moment ToolSearch
+// reveals them — but they are kept out of every request's standing tool list,
+// where each one costs input tokens (and, because the list is part of the
+// cached prompt prefix, cache) on turns that never touch it.
+//
+// The set is deliberately narrow: the common edit/read/bash/search core
+// (Read, Write, Edit, Glob, Grep, Bash and the job tools) and the TodoWrite
+// planning checklist stay eager, because almost every non-trivial turn uses
+// them and paying to search for them would be a net loss.
+//
+//   - Browser* (BrowserSearch/BrowserFetch/BrowserNavigate/BrowserSnapshot):
+//     the headless-Chrome web tools. Their own descriptions already tell the
+//     model to prefer the server-side web_search/web_fetch on Claude models;
+//     these are the fallback for non-Claude models or an explicit "use the
+//     browser", so they do not belong in every request.
+//   - Task* (TaskCreate/TaskList/TaskGet/TaskUpdate): the four-tool session
+//     task store. This is distinct from TodoWrite (which stays eager): it is a
+//     heavier, persistent-within-session task surface most turns never touch,
+//     and four standing tools is a lot to carry for it.
+func DefaultDeferredTools() []string {
+	return []string{
+		"BrowserSearch", "BrowserFetch", "BrowserNavigate", "BrowserSnapshot",
+		"TaskCreate", "TaskList", "TaskGet", "TaskUpdate",
+	}
+}
