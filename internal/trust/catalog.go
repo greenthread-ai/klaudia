@@ -181,11 +181,11 @@ var serviceMutations = map[string]bool{
 // packageManagers and the subcommands that install or remove.
 var packageInstalls = map[string]bool{
 	"install": true, "add": true, "reinstall": true, "upgrade": true, "update": true,
-	"tap": true, "-S": true, "-U": true,
+	"tap": true,
 }
 var packageRemovals = map[string]bool{
 	"remove": true, "uninstall": true, "purge": true, "autoremove": true,
-	"erase": true, "delete": true, "untap": true, "-R": true, "-Rs": true,
+	"erase": true, "delete": true, "untap": true,
 }
 
 var packageManagers = map[string]bool{
@@ -193,6 +193,50 @@ var packageManagers = map[string]bool{
 	"yum": true, "rpm": true, "zypper": true, "pacman": true, "apk": true,
 	"snap": true, "flatpak": true, "port": true, "brew": true, "nix-env": true,
 	"softwareupdate": true, "mas": true, "emerge": true,
+}
+
+// indexRefreshers are the managers whose `update` only refreshes the package
+// index (and, for brew, Homebrew itself) and installs nothing. Elsewhere —
+// dnf, yum, zypper, flatpak — `update` upgrades installed packages, so it
+// stays an install there.
+var indexRefreshers = map[string]bool{
+	"apt": true, "apt-get": true, "aptitude": true, "apk": true, "brew": true,
+}
+
+// flagPackageOps are the managers that choose the operation with a flag rather
+// than a subcommand: `rpm -ivh x.rpm`, `dpkg -i x.deb`, `nix-env -iA hello`.
+// Their first operand is a package, so reading it as the verb, as for apt or
+// brew, misses the install entirely. A short cluster is keyed by its first
+// letter (-ivh → -i); pacman has its own grammar in detectPacman.
+var flagPackageOps = map[string]map[string]Kind{
+	"rpm": {
+		"-i": KindPackageInstall, "-U": KindPackageInstall, "-F": KindPackageInstall,
+		"--install": KindPackageInstall, "--upgrade": KindPackageInstall,
+		"--freshen": KindPackageInstall, "--reinstall": KindPackageInstall,
+		"-e": KindPackageRemove, "--erase": KindPackageRemove,
+	},
+	"dpkg": {
+		"-i": KindPackageInstall, "--install": KindPackageInstall, "--unpack": KindPackageInstall,
+		"-r": KindPackageRemove, "-P": KindPackageRemove,
+		"--remove": KindPackageRemove, "--purge": KindPackageRemove,
+	},
+	"nix-env": {
+		"-i": KindPackageInstall, "-u": KindPackageInstall,
+		"--install": KindPackageInstall, "--upgrade": KindPackageInstall,
+		"-e": KindPackageRemove, "--uninstall": KindPackageRemove,
+	},
+	"softwareupdate": {
+		"-i": KindPackageInstall, "--install": KindPackageInstall,
+	},
+}
+
+// buildInstallers run a build's install step, which copies into a prefix —
+// /usr/local unless told otherwise. Only reached through sudo is that taken as
+// a change to this machine: unprivileged, the prefix is usually somewhere the
+// user owns (a project dir, ~/.local), and guessing otherwise would prompt on
+// ordinary builds.
+var buildInstallers = map[string]bool{
+	"make": true, "gmake": true, "ninja": true, "cmake": true,
 }
 
 // writeDestinations maps a program to a function returning the argument

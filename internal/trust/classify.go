@@ -187,23 +187,31 @@ func classifyOne(cmd bashparser.Command, c *cmdCtx, as *Assessment, depth int) {
 		return
 	}
 
-	// Unknown program. Its path-shaped arguments still matter: something we do
-	// not recognise, pointed at /etc, is exactly the case worth asking about.
-	// Marked uncertain because we do not know whether it reads or writes.
-	exempt := credentialUseExemptions(prog, args)
+	as.Effects = append(as.Effects, detectUnknown(&sub, args)...)
+}
+
+// detectUnknown is what a program this package does not model gets. Its
+// path-shaped arguments still matter: something we do not recognise, pointed
+// at /etc, is exactly the case worth asking about. Marked uncertain because we
+// do not know whether it reads or writes. Detectors that model only part of a
+// program (git config, sudo make install) fall back to this for the rest.
+func detectUnknown(c *cmdCtx, args []bashparser.Word) []Effect {
+	var out []Effect
+	exempt := credentialUseExemptions(c.prog, args)
 	for i, w := range args {
 		if !looksLikePath(w) || exempt[i] {
 			continue
 		}
-		e, ok := sub.pathEffect(KindWrite, w, prog+" "+w.Text)
+		e, ok := c.pathEffect(KindWrite, w, c.prog+" "+w.Text)
 		if !ok {
 			continue
 		}
 		if e.Zone.Protected() {
 			e.Certain = false
-			as.Effects = append(as.Effects, e)
+			out = append(out, e)
 		}
 	}
+	return out
 }
 
 // unwrap strips wrapper programs to reach the command that actually runs,
