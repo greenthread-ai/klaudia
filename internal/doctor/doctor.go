@@ -21,9 +21,41 @@ const (
 
 // Check is one diagnostic line.
 type Check struct {
-	Name   string
-	Status string // StatusOK | StatusWarn | StatusInfo
-	Detail string
+	Name   string `json:"name"`
+	Status string `json:"status"` // StatusOK | StatusWarn | StatusInfo
+	Detail string `json:"detail"`
+}
+
+// Report is the machine-readable form of a diagnostic run: the checks plus a
+// single verdict a caller (e.g. CI) can branch on without re-deriving it from
+// the individual lines.
+type Report struct {
+	Checks []Check `json:"checks"`
+	// OK is false when a critical check failed — see Critical. It is the field
+	// a `klaudia doctor` exit code is derived from.
+	OK bool `json:"ok"`
+}
+
+// NewReport bundles checks with the OK verdict.
+func NewReport(checks []Check) Report {
+	return Report{Checks: checks, OK: !Critical(checks)}
+}
+
+// Critical reports whether the checks contain a failure serious enough that a
+// headless run should exit non-zero. Today that is exactly one condition: no
+// usable credential resolved (the "auth" check warns), because without one
+// Klaudia cannot reach a model at all — every other warning (a missing sandbox
+// binary, an unknown context window, no language servers) still leaves a
+// working session, so those stay advisory. Keeping the rule here, next to the
+// checks it inspects, means the CLI and any future caller share one definition
+// of "broken" rather than each guessing from status strings.
+func Critical(checks []Check) bool {
+	for _, c := range checks {
+		if c.Name == "auth" && c.Status == StatusWarn {
+			return true
+		}
+	}
+	return false
 }
 
 // Input carries facts the CLI already resolved, so doctor stays pure and
