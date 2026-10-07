@@ -477,6 +477,37 @@ func buildContainerExecutor(sb config.Sandbox, warn func(string)) sandbox.Execut
 	return sandbox.NewLocal()
 }
 
+// limitMemory applies sandbox.memoryMax to the Bash executor. A container gets
+// --memory; anything else on Linux runs inside a systemd scope with MemoryMax,
+// once probe has shown the limit would be enforced. Where it would not be, warn
+// says why and commands run without a limit: the setting is protection against
+// a runaway command, and refusing to run any command at all is the worse
+// failure for it.
+func limitMemory(ctx context.Context, e sandbox.Executor, memoryMax, goos string,
+	probe func(context.Context, int64) error, warn func(string)) sandbox.Executor {
+	if memoryMax == "" {
+		return e
+	}
+	bytes, err := sandbox.ParseMemory(memoryMax)
+	if err != nil {
+		warn("sandbox.memoryMax ignored: " + err.Error())
+		return e
+	}
+	if c, ok := e.(*sandbox.Container); ok {
+		c.Memory = bytes
+		return c
+	}
+	if goos != "linux" {
+		warn("sandbox.memoryMax is not supported on " + goos + " outside container mode; commands run without a memory limit")
+		return e
+	}
+	if err := probe(ctx, bytes); err != nil {
+		warn("sandbox.memoryMax not applied: " + err.Error() + "; commands run without a memory limit")
+		return e
+	}
+	return sandbox.NewMemoryScope(e, bytes)
+}
+
 // mcpController adapts the mcp.Manager to the TUI's MCPController so /mcp can
 // inspect and reconnect/disconnect servers without the TUI owning the manager.
 type mcpController struct {
@@ -925,6 +956,8 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Build the tool registry. Sub-agents draw from the base tools (incl. any
 	// MCP tools); the top-level registry adds the Agent tool.
 	executor := buildExecutor(cfg.Sandbox, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
+	executor = limitMemory(ctx, executor, cfg.Sandbox.MemoryMax, goruntime.GOOS, sandbox.ProbeMemoryScope,
+		func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
 	// Lazy browser engine for the web tools, tied to the run context and closed
 	// at session end so any launched Chrome is reliably terminated (it launches
 	// nothing until a web tool actually runs).

@@ -159,6 +159,12 @@ type Sandbox struct {
 	ReadOnly bool `toml:"readOnly,omitempty"`
 	// Network is the container's --network value (e.g. "none" to isolate).
 	Network string `toml:"network,omitempty"`
+	// MemoryMax caps the memory one Bash command and everything it starts may
+	// use, e.g. "4G" or "512M" (K/M/G/T are powers of 1024). Empty means no
+	// limit. On Linux it is a cgroup made through `systemd-run --user --scope`;
+	// in container mode it is the container's --memory. Where it cannot be
+	// enforced Klaudia warns at startup and runs commands without it.
+	MemoryMax string `toml:"memoryMax,omitempty"`
 }
 
 // Browser engines.
@@ -339,6 +345,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Sandbox.Network != "" {
 		dst.Sandbox.Network = src.Sandbox.Network
+	}
+	if src.Sandbox.MemoryMax != "" {
+		dst.Sandbox.MemoryMax = src.Sandbox.MemoryMax
 	}
 	if len(src.Sandbox.WriteRoots) > 0 {
 		dst.Sandbox.WriteRoots = append(dst.Sandbox.WriteRoots, src.Sandbox.WriteRoots...)

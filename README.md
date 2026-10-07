@@ -529,6 +529,14 @@ check auth, tools and environment.
 - `container` — run inside docker/podman (`runtime`, `image`, `mountCwd`,
   `readOnly`, `network`).
 
+`sandbox.memoryMax` (e.g. `"4G"`, `"512M"`; opt-in, any mode) caps the memory
+one Bash command and everything it starts may use, swap included, so a runaway
+command is OOM-killed on its own. In container mode it is `--memory`. On Linux
+otherwise it is a cgroup made by `systemd-run --user --scope`, which needs a
+systemd user session with the memory controller delegated (the default on
+current distros); Klaudia checks at startup that the limit is really enforced
+and warns, running commands without it, when it is not — as it does on macOS.
+
 ## Web search & browsing
 
 Built-in, permission-gated tools backed by a lazily-launched **headless Chrome**
