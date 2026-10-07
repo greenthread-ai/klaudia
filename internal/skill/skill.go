@@ -19,9 +19,11 @@
 package skill
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -55,14 +57,23 @@ type frontmatter struct {
 // Render substitutes $ARGUMENTS in the body with args (the text after the skill
 // name). When the body contains no $ARGUMENTS placeholder and args is non-empty,
 // the args are appended on a new line so they are never silently dropped.
+//
+// ${CLAUDE_SKILL_DIR} (and ${KLAUDIA_SKILL_DIR}) become the directory the
+// skill file is in, so a skill that ships scripts or templates beside its
+// SKILL.md can name them. Skills written for Claude Code use the first form.
 func (s Skill) Render(args string) string {
-	if strings.Contains(s.Body, "$ARGUMENTS") {
-		return strings.ReplaceAll(s.Body, "$ARGUMENTS", args)
+	body := s.Body
+	if s.Path != "" {
+		dir := filepath.Dir(s.Path)
+		body = strings.NewReplacer("${CLAUDE_SKILL_DIR}", dir, "${KLAUDIA_SKILL_DIR}", dir).Replace(body)
+	}
+	if strings.Contains(body, "$ARGUMENTS") {
+		return strings.ReplaceAll(body, "$ARGUMENTS", args)
 	}
 	if strings.TrimSpace(args) == "" {
-		return s.Body
+		return body
 	}
-	return strings.TrimRight(s.Body, "\n") + "\n\n" + args
+	return strings.TrimRight(body, "\n") + "\n\n" + args
 }
 
 // Load reads skills from ~/.klaudia/skills then overlays <cwd>/.klaudia/skills
@@ -174,13 +185,26 @@ func parse(data []byte, path string) (Skill, error) {
 // omits one — the file's basename for the flat layout, the directory's name for
 // the SKILL.md layout, where "SKILL" would be a useless name.
 func parseNamed(data []byte, path, defaultName string) (Skill, error) {
+	// A UTF-8 byte-order mark (editors on Windows add one) hid the opening
+	// "---", so the frontmatter was read as body and the skill lost its
+	// description without a word.
+	data = bytes.TrimPrefix(data, []byte("\ufeff"))
 	fm, body, err := splitFrontmatter(data)
 	if err != nil {
 		return Skill{}, err
 	}
 	var meta frontmatter
 	if err := yaml.Unmarshal(fm, &meta); err != nil {
-		return Skill{}, fmt.Errorf("invalid frontmatter: %w", err)
+		// Skill files are written as "key: text", and text is prose: a
+		// description like "Use this. Triggers include: deck" is not valid
+		// YAML (a second ": " starts a mapping), and strict parsing turned
+		// such skills away. Read the known keys line by line instead, and
+		// fail only when that finds nothing either.
+		lenient, ok := lenientFrontmatter(fm)
+		if !ok {
+			return Skill{}, fmt.Errorf("invalid frontmatter: %w", err)
+		}
+		meta = lenient
 	}
 
 	name := strings.TrimSpace(meta.Name)
@@ -205,6 +229,51 @@ func parseNamed(data []byte, path, defaultName string) (Skill, error) {
 		Body:        strings.TrimSpace(string(body)),
 		Path:        path,
 	}, nil
+}
+
+// lenientFrontmatter reads "key: rest of line" for the frontmatter keys,
+// joining indented continuation lines to the value before them and stripping
+// matching quotes. tools takes "[a, b]" or "a, b". ok is false when no known
+// key was found.
+func lenientFrontmatter(fm []byte) (frontmatter, bool) {
+	var meta frontmatter
+	vals := map[string]string{}
+	var last string
+	for _, line := range strings.Split(string(fm), "\n") {
+		line = strings.TrimRight(line, "\r")
+		if last != "" && (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")) && strings.TrimSpace(line) != "" {
+			vals[last] += " " + strings.TrimSpace(line)
+			continue
+		}
+		key, val, found := strings.Cut(line, ":")
+		key = strings.TrimSpace(key)
+		if !found || !slices.Contains([]string{"name", "description", "type", "tools"}, key) {
+			last = ""
+			continue
+		}
+		vals[key] = strings.TrimSpace(val)
+		last = key
+	}
+	if len(vals) == 0 {
+		return meta, false
+	}
+	unquote := func(s string) string {
+		if len(s) >= 2 && (s[0] == '"' || s[0] == '\'') && s[len(s)-1] == s[0] {
+			return s[1 : len(s)-1]
+		}
+		return s
+	}
+	meta.Name = unquote(vals["name"])
+	meta.Description = unquote(vals["description"])
+	meta.Type = unquote(vals["type"])
+	if t := strings.Trim(vals["tools"], "[] "); t != "" {
+		for _, tool := range strings.Split(t, ",") {
+			if tool = unquote(strings.TrimSpace(tool)); tool != "" {
+				meta.Tools = append(meta.Tools, tool)
+			}
+		}
+	}
+	return meta, true
 }
 
 // splitFrontmatter separates a leading `---\n … \n---` YAML block from the body.
