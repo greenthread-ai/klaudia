@@ -115,6 +115,19 @@ go test ./internal/...
 
 The result is one self-contained binary (Linux + macOS).
 
+`klaudia --version` prints the reference-compatible `2.1.66-klaudia (Klaudia)`
+and then the build: the commit it was built from, `+dirty` if the tree had
+uncommitted changes, and the commit time. The startup banner, `/doctor` and each
+transcript line (`klaudiaBuild`) carry the same, so a stale installed binary is
+visible. `go build`/`go install` in a checkout record this automatically; a
+build without VCS information (a source tarball, `-buildvcs=false`) shows
+`dev`, and a release build can stamp it:
+
+```bash
+go build -ldflags "-X github.com/greenthread-ai/klaudia/internal/version.release=v1.2.3 \
+  -X github.com/greenthread-ai/klaudia/internal/version.commit=$(git rev-parse HEAD)" ./cmd/klaudia
+```
+
 Two end-to-end rigs go beyond the unit tests (both need a working credential):
 `scripts/smoke.sh` drives the real agent loop across modes, the client-side
 tools and the resume path on `haiku`; `scripts/torture.sh` runs the spec's

@@ -104,6 +104,38 @@ func TestWriteReadRoundTrip(t *testing.T) {
 	}
 }
 
+// The transcript keeps the reference-compatible "version" and carries the
+// build that wrote it alongside, so a transcript in a bug report names its binary.
+func TestTranscriptStampsVersionAndBuild(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	tr, err := NewTranscript(Meta{SessionID: "s", CWD: "/work", Version: "2.1.66-klaudia", Build: "abcdef123456+dirty", Path: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.Record("user", json.RawMessage(`{"role":"user","content":"hi"}`)); err != nil {
+		t.Fatal(err)
+	}
+	_ = tr.Close()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"version":"2.1.66-klaudia"`, `"klaudiaBuild":"abcdef123456+dirty"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("transcript missing %s:\n%s", want, raw)
+		}
+	}
+
+	// Unknown build: the field is left out rather than written empty.
+	path2 := filepath.Join(t.TempDir(), "t2.jsonl")
+	tr2, _ := NewTranscript(Meta{SessionID: "s", CWD: "/work", Version: "v", Path: path2})
+	_ = tr2.Record("user", json.RawMessage(`{"role":"user","content":"hi"}`))
+	_ = tr2.Close()
+	if raw2, _ := os.ReadFile(path2); strings.Contains(string(raw2), "klaudiaBuild") {
+		t.Errorf("empty build should be omitted:\n%s", raw2)
+	}
+}
+
 func TestMostRecent(t *testing.T) {
 	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	cwd := "/work/proj"

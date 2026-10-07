@@ -141,6 +141,7 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpC
 		AuthKind:        "none",
 		ContextWindow:   ctxLimit,
 		ContextSource:   ctxSource,
+		Build:           version.Get().Summary(),
 	}
 	if cfg.Provider == config.ProviderOpenAI {
 		if cfg.ResolveAPIKey() != "" {
@@ -703,8 +704,9 @@ func NewRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "klaudia [prompt]",
 		Short: "Klaudia — a locally-buildable, extensible agentic coding tool",
-		// We render our own version string to match the JS reference exactly.
-		Version:       fmt.Sprintf("%s (%s)", version.Version, version.Name),
+		// The first line is the reference-compatible "2.1.66-klaudia (Klaudia)";
+		// the second names this build (commit, dirty tree, commit time).
+		Version:       version.Line(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ArbitraryArgs,
@@ -718,7 +720,8 @@ func NewRootCommand() *cobra.Command {
 		},
 	}
 
-	// Match commander's `--version` output: "<version> (Klaudia)" with no prefix.
+	// Match commander's `--version` output: "<version> (Klaudia)" with no
+	// prefix, followed by the build line.
 	cmd.SetVersionTemplate("{{.Version}}\n")
 
 	// A malformed command line is a usage error, not a run failure: nothing
@@ -1102,6 +1105,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		SessionID:      sessionID,
 		CWD:            cwd,
 		Version:        version.Version,
+		Build:          version.Get().Summary(),
 		GitBranch:      gitBranch(cwd),
 		PermissionMode: string(mode),
 	}); terr == nil {

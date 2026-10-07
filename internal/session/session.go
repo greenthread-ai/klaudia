@@ -109,6 +109,11 @@ type Entry struct {
 	PermissionMode string `json:"permissionMode,omitempty"`
 	// assistant-only
 	RequestID string `json:"requestId,omitempty"`
+
+	// Build is Klaudia's own build (version.Info.Summary). A Klaudia
+	// addition: "version" stays the reference-compatible string readers
+	// expect, so the build that wrote a transcript needs a field of its own.
+	Build string `json:"klaudiaBuild,omitempty"`
 }
 
 // Now returns an RFC3339 millisecond UTC timestamp matching the JS format
