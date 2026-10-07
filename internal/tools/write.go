@@ -65,8 +65,8 @@ func (w *Write) PermissionRequest(raw json.RawMessage) permission.PermissionRequ
 }
 
 // CheckPermissions: Write is a file-mutating (edit-class) tool.
-func (w *Write) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
-	return editClassDecision(pctx)
+func (w *Write) CheckPermissions(pctx permission.Context, req permission.PermissionRequest) permission.Decision {
+	return editPathDecision(pctx, req.Specifier)
 }
 
 func (w *Write) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
