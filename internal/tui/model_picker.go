@@ -36,26 +36,15 @@ func (m *Model) fetchModels() tea.Cmd {
 	}
 }
 
-// showModelPicker turns the fetched list into the standard numbered picker.
+// showModelPicker turns the fetched list into the standard picker.
 func (m *Model) showModelPicker(models []api.ModelInfo) {
 	if len(models) == 0 {
 		m.appendLine(bannerStyle.Render("The provider reported no models. /model <id> still works."))
 		return
 	}
-	// The picker is digit-selected, so it can only offer nine. The list arrives
-	// newest-first from Anthropic and sorted from OpenAI-compatible endpoints,
-	// so the truncation keeps the most useful end either way — and says so
-	// rather than silently hiding the rest.
-	shown := models
-	truncated := 0
-	if len(shown) > 9 {
-		truncated = len(shown) - 9
-		shown = shown[:9]
-	}
-
 	current := api.ResolveModel(m.sess.Model)
-	items := make([]choiceItem, 0, len(shown))
-	for _, mi := range shown {
+	items := make([]choiceItem, 0, len(models))
+	for _, mi := range models {
 		mi := mi
 		label := mi.Name()
 		if mi.Name() != mi.ID {
@@ -73,11 +62,9 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 		})
 	}
 
-	title := "Select a model:"
-	if truncated > 0 {
-		title += fmt.Sprintf("  (%d more — /model <id> to pick one not listed)", truncated)
-	}
-	m.startChoice(title, items)
+	// Every model is offered: the picker scrolls and filters (picker.go), so an
+	// endpoint serving dozens of models no longer loses all but nine of them.
+	m.startChoice("Select a model:", items)
 }
 
 // setModel switches the model for subsequent turns. A context window from the
