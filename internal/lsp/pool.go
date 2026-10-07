@@ -110,6 +110,43 @@ func (p *Pool) References(ctx context.Context, path string, pos Position) ([]Loc
 	return c.References(ctx, path, spec.LanguageID, pos)
 }
 
+// Implementation returns implementation location(s) for the symbol at pos.
+func (p *Pool) Implementation(ctx context.Context, path string, pos Position) ([]Location, error) {
+	c, spec, err := p.clientFor(path)
+	if err != nil {
+		return nil, err
+	}
+	return c.Implementation(ctx, path, spec.LanguageID, pos)
+}
+
+// Hover returns hover information for the symbol at pos.
+func (p *Pool) Hover(ctx context.Context, path string, pos Position) (*Hover, error) {
+	c, spec, err := p.clientFor(path)
+	if err != nil {
+		return nil, err
+	}
+	return c.Hover(ctx, path, spec.LanguageID, pos)
+}
+
+// DocumentSymbols returns the symbols declared in a file.
+func (p *Pool) DocumentSymbols(ctx context.Context, path string) ([]Symbol, error) {
+	c, spec, err := p.clientFor(path)
+	if err != nil {
+		return nil, err
+	}
+	return c.DocumentSymbols(ctx, path, spec.LanguageID)
+}
+
+// Rename returns the workspace edit for renaming the symbol at pos to newName,
+// grouped by file as a preview (it does not apply the edits).
+func (p *Pool) Rename(ctx context.Context, path string, pos Position, newName string) ([]FileEdits, error) {
+	c, spec, err := p.clientFor(path)
+	if err != nil {
+		return nil, err
+	}
+	return c.Rename(ctx, path, spec.LanguageID, pos, newName)
+}
+
 // Close shuts down all spawned servers.
 func (p *Pool) Close() {
 	p.mu.Lock()
