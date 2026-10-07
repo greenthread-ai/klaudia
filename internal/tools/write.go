@@ -80,7 +80,7 @@ func (w *Write) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([
 			return []Result{{Content: fmt.Sprintf("Error creating parent directory: %v", err), IsError: true}}, nil
 		}
 	}
-	if err := os.WriteFile(in.FilePath, []byte(in.Content), 0o644); err != nil {
+	if err := writeFileAtomic(in.FilePath, matchLineEndings(in.FilePath, []byte(in.Content)), 0o644); err != nil {
 		return []Result{{Content: fmt.Sprintf("Error writing file: %v", err), IsError: true}}, nil
 	}
 	return []Result{{Content: fmt.Sprintf("File written successfully to %s", in.FilePath)}}, nil
