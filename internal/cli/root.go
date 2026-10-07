@@ -809,6 +809,13 @@ func run(cmd *cobra.Command, opts *options) error {
 	if opts.partialMessages && (!opts.print || format != FormatStreamJSON) {
 		return usageErrorf("--include-partial-messages only works with --print and --output-format=stream-json")
 	}
+	// Single-shot -p takes its prompt from the command line, piped stdin, or
+	// both; --loop reads a goal spec and stream-json input owns stdin.
+	if opts.print && !opts.loop && opts.inputFormat != "stream-json" {
+		if opts.prompt, err = resolvePrintPrompt(opts.prompt, cmd.InOrStdin(), pipedStdinWait, cmd.ErrOrStderr()); err != nil {
+			return err
+		}
+	}
 
 	start := time.Now()
 	ctx := cmd.Context()
