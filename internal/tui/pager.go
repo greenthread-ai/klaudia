@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 // Long output is handed to the user's own pager rather than shown in a pager we
@@ -103,6 +105,59 @@ func (m *Model) showLong(name, text string) tea.Cmd {
 	} else {
 		m.appendLine(toolStyle.Render(text))
 	}
+	return nil
+}
+
+// diffArgs builds the git argv for /diff. Our colour flag goes before the
+// user's own arguments so an explicit --color/--no-color of theirs still wins.
+// With colour off we say --no-color rather than relying on git's auto mode,
+// because a color.ui = always in the user's git config would otherwise ignore
+// NO_COLOR.
+func diffArgs(colour bool, args []string) []string {
+	flag := "--no-color"
+	if colour {
+		flag = "--color=always"
+	}
+	return append([]string{"diff", flag}, args...)
+}
+
+// diffColour reports whether /diff should ask git for colour: not when the
+// user set NO_COLOR, and not on a terminal that cannot show it. git cannot
+// decide for itself — its stdout is a pipe to us, so its auto mode is always
+// off.
+func diffColour(env func(string) string) bool {
+	if env("NO_COLOR") != "" {
+		return false
+	}
+	return lipgloss.ColorProfile() != termenv.Ascii
+}
+
+// showDiff backs /diff. It takes the same route as showLong — a long diff goes
+// to $PAGER, a short one prints — but prints the diff as git wrote it rather
+// than through showLong's inline styling: a muted foreground would fight git's
+// own colours, and a diff that touches Markdown must not be rendered as
+// Markdown.
+func (m *Model) showDiff(args []string) tea.Cmd {
+	out, err := gitOutput(m.sess.CWD, diffArgs(diffColour(os.Getenv), args)...)
+	switch {
+	case err != nil:
+		msg := strings.TrimSpace(out)
+		if msg == "" {
+			msg = err.Error()
+		}
+		m.appendLine(errStyle.Render("git diff: " + msg))
+		return nil
+	case strings.TrimSpace(out) == "":
+		m.appendLine(bannerStyle.Render("No changes."))
+		return nil
+	}
+	if m.shouldPage(out) {
+		if cmd, err := m.pageText("diff", out); err == nil {
+			return cmd
+		}
+		// No pager, or the temp file failed: fall through and print.
+	}
+	m.appendLine(strings.TrimRight(out, "\n"))
 	return nil
 }
 
