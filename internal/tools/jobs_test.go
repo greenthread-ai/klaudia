@@ -368,6 +368,7 @@ func TestLooksLikeService(t *testing.T) {
 	for _, cmd := range []string{
 		"npm run dev", "yarn start", "docker compose up", "python -m http.server",
 		"tail -f /var/log/app.log", "make dev", "uvicorn app:main --reload",
+		"npx vite", "air", "cd web && npx serve -s build",
 	} {
 		if !looksLikeService(cmd) {
 			t.Errorf("%q should look like a service", cmd)
@@ -377,6 +378,10 @@ func TestLooksLikeService(t *testing.T) {
 		"go test ./...", "npm run build", "make test", "git log",
 		"tail -f app.log | head -20", // a pipeline that ends
 		"npm run lint",
+		"go test ./server/...", // server is not serve
+		"npx vitest",           // vitest is not vite
+		"./scripts/repair.sh",  // repair is not air
+		"cat watch.log",
 	} {
 		if looksLikeService(cmd) {
 			t.Errorf("%q should not look like a service", cmd)
@@ -465,21 +470,44 @@ func TestOrdinaryBackgroundingIsLeftAlone(t *testing.T) {
 	}
 }
 
-func TestHasBackgroundOperator(t *testing.T) {
-	for cmd, want := range map[string]bool{
-		"a &":          true,
-		"a & b":        true,
-		"(a &) ; b":    true,
-		"nohup a":      true,
-		"a && b":       false,
-		"a 2>&1":       false,
-		"a >&2":        false,
-		"echo 'x & y'": false,
-		`echo "x & y"`: false,
-		"a | b":        false,
+// Issue #113: each of the first list was refused. `&>` is a redirection,
+// hints are whole words (`server` is not `serve`, `vitest` is not `vite`,
+// `repair` is not `air`), and `& … wait` holds the shell until its children are
+// done.
+func TestBackgroundDetectorReadsTheShell(t *testing.T) {
+	for _, cmd := range []string{
+		"npx vite build &> build.log",
+		"go run ./cmd/gen &> gen.log",
+		"go run ./cmd/gen &>> gen.log",
+		"go test ./server/... & go test ./client/... & wait",
+		"./scripts/repair.sh &",
+		"npx vitest run &",
+		"npm run dev & sleep 5; curl -s localhost:5173; wait",
+		"sleep 1 & go run ./cmd/api", // go run is in the foreground
+		"echo 'npm run dev &'",
+		"bash -c 'go test ./server/... &> t.log'",
+		"(npm run build &) ; wait",    // not long-running at all
+		"npm run dev | tee dev.log &", // a pipeline: serviceHints stand down
+		"a & b",
 	} {
-		if got := hasBackgroundOperator(cmd); got != want {
-			t.Errorf("hasBackgroundOperator(%q) = %v, want %v", cmd, got, want)
+		if reason, blocked := selfBackgrounded(cmd); blocked {
+			t.Errorf("%q was refused: %s", cmd, reason)
+		}
+	}
+	for _, cmd := range []string{
+		"a & npm run dev &",
+		"npx serve -s build &",
+		"air &",
+		"./node_modules/.bin/vite &",
+		"go run ./cmd/api | tee api.log &", // runHints ignore the pipe rule
+		"setsid go run ./cmd/api & wait",   // setsid can fork past wait
+		"nohup go run ./cmd/api > api.log 2>&1",
+		"bash -c 'go run ./cmd/api &'",
+		"bash -c 'go run ./cmd/api' &",
+		"go run ./cmd/api & wait &", // the wait is itself backgrounded
+	} {
+		if _, blocked := selfBackgrounded(cmd); !blocked {
+			t.Errorf("%q was allowed to detach an untracked service", cmd)
 		}
 	}
 }

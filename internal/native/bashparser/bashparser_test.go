@@ -1,6 +1,9 @@
 package bashparser
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestParsePrefix(t *testing.T) {
 	cases := []struct {
@@ -151,4 +154,36 @@ func equal(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func TestParseBackground(t *testing.T) {
+	for in, want := range map[string][]bool{
+		"a &":               {true},
+		"a & b":             {true, false},
+		"(a &) ; b":         {true, false},
+		"(a; b) &":          {true, true},
+		"a | b &":           {true, true},
+		"a && b":            {false, false},
+		"a 2>&1":            {false},
+		"a >&2":             {false},
+		"a &> log":          {false},
+		"a &>> log":         {false},
+		"echo 'x & y'":      {false},
+		`echo "x & y"`:      {false},
+		"a & b & wait":      {true, true, false},
+		"if a; then b & fi": {false, true},
+	} {
+		a, err := Parse(in)
+		if err != nil {
+			t.Errorf("Parse(%q): %v", in, err)
+			continue
+		}
+		var got []bool
+		for _, c := range a.Commands {
+			got = append(got, c.Background)
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("Parse(%q) backgrounds = %v, want %v", in, got, want)
+		}
+	}
 }
