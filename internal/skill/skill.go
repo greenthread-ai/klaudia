@@ -113,6 +113,9 @@ func Load(cwd string, warn func(string)) []Skill {
 // its failure mode used to be silent: subdirectories were skipped before
 // anything was parsed, so a correctly written skill in the wrong shape produced
 // no skill, no warning, and no Skill tool at all.
+//
+// The one directory skipped quietly is Claude Code's ~/.claude/skills/synced
+// (see isSyncedStore).
 func loadDir(dir string, warn func(string)) []Skill {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -128,6 +131,9 @@ func loadDir(dir string, warn func(string)) []Skill {
 		case e.IsDir():
 			path, defaultName = skillFileIn(filepath.Join(dir, e.Name())), e.Name()
 			if path == "" {
+				if isSyncedStore(dir, e.Name()) {
+					continue
+				}
 				warnf(warn, "skill %s: directory has no SKILL.md", filepath.Join(dir, e.Name()))
 				continue
 			}
@@ -151,6 +157,26 @@ func loadDir(dir string, warn func(string)) []Skill {
 		out = append(out, sk)
 	}
 	return out
+}
+
+// syncedDir is where Claude Code keeps the skills it syncs from claude.ai:
+// ~/.claude/skills/synced/<bucket>/<skill>/SKILL.md, beside a manifest.json.
+const syncedDir = "synced"
+
+// isSyncedStore reports whether dir/name is Claude Code's store of synced
+// skills, which is skipped without a warning. It is not a skill (so "no
+// SKILL.md" is true but useless, and printed at every start), and the skills in
+// it are not loaded either: many are claude.ai-specific — they drive that
+// product's artifacts, connectors and file tools — and would be offered to the
+// model here as if they worked. Only the user's ~/.claude/skills is checked,
+// because that is the only place Claude Code writes it; a "synced" directory
+// anywhere else is an ordinary misplaced skill and still warns.
+func isSyncedStore(dir, name string) bool {
+	if name != syncedDir {
+		return false
+	}
+	home, err := os.UserHomeDir()
+	return err == nil && filepath.Clean(dir) == filepath.Join(home, ".claude", "skills")
 }
 
 // skillFileIn returns the skill definition inside a skill directory, or "" if

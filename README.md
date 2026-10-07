@@ -686,6 +686,11 @@ skills/review/SKILL.md      # one directory per skill, for skills that ship
                             # templates, licences or scripts alongside
 ```
 
+`~/.claude/skills/synced/` — where Claude Code keeps the skills it syncs from
+claude.ai — is skipped without a warning, and its skills are not loaded: many
+of them drive claude.ai's own artifacts and connectors and would not work here.
+Copy one you want into `~/.klaudia/skills/`.
+
 They become a `Skill` tool the model can invoke and `/＜name＞` commands in the
 TUI. Body supports `$ARGUMENTS`. `name` defaults to the file's — or the
 directory's — name.
