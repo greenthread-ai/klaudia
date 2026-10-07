@@ -949,6 +949,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// q is the chip form (kept short for the queued hint and ↑ recall);
 			// expand it only on the way to the model.
 			next := m.pastes.expand(q)
+			// Indexed like a typed prompt, so /outline and /search --mine see
+			// every message the user sent, however it was delivered.
+			m.noteNav(navUser, q, next, 0)
 			// An interrupt kills the foreground command but leaves managed
 			// background jobs running (they are session-scoped). The model was
 			// mid-task when cut off, so tell it what is still up and let it
@@ -2311,7 +2314,7 @@ func (m *Model) completeSlash() {
 // cycle through the rest.
 func (m *Model) completeAtPath() {
 	value := m.input.Value()
-	at := strings.LastIndex(value, "@")
+	at := atTokenStart(value)
 	if at < 0 {
 		return
 	}
@@ -2338,14 +2341,10 @@ func (m *Model) completeAtPath() {
 		if len(hits) == 0 {
 			return
 		}
+		// Several matches are shown under the prompt by atCandidateLine while
+		// the cycle lasts, not printed: a line in scrollback outlives the
+		// moment it was useful for.
 		m.cycle = completeCycle{base: stem, hits: hits}
-		if len(hits) > 1 {
-			show := hits
-			if len(show) > 12 {
-				show = show[:12]
-			}
-			m.appendLine(bannerStyle.Render("candidates: " + strings.Join(show, "  ")))
-		}
 	}
 
 	chosen := m.cycle.hits[m.cycle.idx]
@@ -3435,6 +3434,8 @@ func (m *Model) bottomView() string {
 		bottom = m.promptBox()
 		if sug := m.slashSuggestionLine(); sug != "" {
 			bottom += "\n" + caption(sug)
+		} else if cand := m.atCandidateLine(); cand != "" {
+			bottom += "\n" + caption(cand)
 		}
 	}
 	// Persistent status bar at the very bottom, in every state.
