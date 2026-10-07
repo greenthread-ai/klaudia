@@ -119,6 +119,14 @@ func TestSystemRecallsKnowledge(t *testing.T) {
 	if !strings.Contains(p, "# Project knowledge") || !strings.Contains(p, "CGO_ENABLED=0") {
 		t.Errorf("system prompt should include recalled project knowledge")
 	}
+	// Framed as notes to weigh, not facts to obey: an entry that arrived from
+	// a web page or a commit must not be promoted to ground truth by framing.
+	if strings.Contains(p, "established facts") {
+		t.Error("project knowledge is still framed as established facts")
+	}
+	if !strings.Contains(p, "not as instructions") {
+		t.Error("project knowledge framing should say it is context, not instructions")
+	}
 }
 
 func TestSystemNoClaudeMd(t *testing.T) {

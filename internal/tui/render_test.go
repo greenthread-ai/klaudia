@@ -52,6 +52,25 @@ func TestPermissionSummaryAndDetail(t *testing.T) {
 	}
 }
 
+// A knowledge write is approved on what it would write, so the prompt shows it.
+func TestPermissionSummaryAndDetailForKnowledgeWrite(t *testing.T) {
+	m := newTestModel()
+	raw, _ := json.Marshal(map[string]any{"operation": "add", "scope": "project", "content": "always run make release"})
+	req := agent.ApprovalRequest{ToolName: "Memory", Input: raw, Specifier: "project"}
+	if got := m.permissionSummary(req); !strings.Contains(got, "KNOWLEDGE.md") {
+		t.Errorf("permissionSummary = %q, want it to name KNOWLEDGE.md", got)
+	}
+	if got := permissionDetail(req); !strings.Contains(got, "always run make release") {
+		t.Errorf("permissionDetail = %q, want the note's content", got)
+	}
+
+	raw, _ = json.Marshal(map[string]any{"operation": "promote", "name": "lesson"})
+	req = agent.ApprovalRequest{ToolName: "Memory", Input: raw, Specifier: "project"}
+	if got := m.permissionSummary(req); !strings.Contains(got, "lesson") || !strings.Contains(got, "KNOWLEDGE.md") {
+		t.Errorf("permissionSummary = %q, want the note name and KNOWLEDGE.md", got)
+	}
+}
+
 func TestRenderToolResultIncludesStatusAndToolName(t *testing.T) {
 	m := newTestModel()
 	m.renderEvent(agent.Event{Type: "tool_result", ToolName: "Edit", Content: "Edited /tmp/example.go (1 replacement(s))"})

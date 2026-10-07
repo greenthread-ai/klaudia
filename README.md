@@ -832,7 +832,12 @@ used, so asking Klaudia to "write that down" puts it in the right one.
   detail note on demand. `Memory` search spans both the index and the detail
   notes (a hit is tagged with its filename).
 - **Project knowledge** — `.klaudia/KNOWLEDGE.md` (curated, durable lessons) is
-  injected into the system prompt when present.
+  injected into the system prompt when present, framed as project notes to weigh
+  against the code rather than as facts. Because every later session reads it,
+  the `Memory` tool asks before writing it (`add` with `scope=project`, and
+  `promote`) — in autonomous mode too. Headless and `dontAsk` runs refuse such a
+  write unless the allow rule `Memory(project)` pre-approves it; plain
+  `MEMORY.md` notes need no approval.
 
 ## Internal package layout
 
