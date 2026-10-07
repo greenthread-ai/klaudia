@@ -85,6 +85,16 @@ var ErrStreamStalled = errors.New("model stream stalled")
 // from one that stalled before any output and exhausted its retries.
 var errStallMidStream = errors.New("after partial output")
 
+// ErrStreamInterrupted marks a response the stream did not finish: it closed
+// without message_stop, carried an overloaded or api error event after the
+// response began, or could not be assembled. Like a stall, it is retried when
+// nothing had been shown yet; after partial output it is reported as an
+// interrupted response rather than passed off as a complete one.
+var ErrStreamInterrupted = errors.New("model response interrupted")
+
+// errIncomplete is the interruption where the stream simply ended early.
+var errIncomplete = errors.New("stream ended before message_stop")
+
 // StreamTurn implements Provider for the native Anthropic client: it streams the
 // Beta Messages API and accumulates the response. Default betas are applied
 // when the caller set none. Each raw stream event is forwarded to the sink
@@ -122,6 +132,15 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 func (c *Client) streamRetrying(ctx context.Context, params anthropic.BetaMessageNewParams, sink StreamSink, idle time.Duration) (anthropic.BetaMessage, error) {
 	for attempt := 0; ; attempt++ {
 		acc, delivered, stalled, err := c.streamOnce(ctx, params, sink, idle)
+		if !stalled && interrupted(ctx, err) {
+			if !delivered && attempt < maxStreamStallRetries {
+				continue
+			}
+			if delivered {
+				return acc, fmt.Errorf("%w (%w): %w", ErrStreamInterrupted, errStallMidStream, err)
+			}
+			return acc, fmt.Errorf("%w: %w", ErrStreamInterrupted, err)
+		}
 		if !stalled {
 			return acc, err
 		}
@@ -179,8 +198,12 @@ func (c *Client) streamOnce(ctx context.Context, params anthropic.BetaMessageNew
 	}
 
 	stream := c.sdk.Beta.Messages.NewStreaming(streamCtx, params)
+	sawStop := false
 	for stream.Next() {
 		ev := stream.Current()
+		if ev.Type == "message_stop" {
+			sawStop = true
+		}
 		// Defend against an SDK bug in Accumulate (upstream issue #292):
 		// BetaRawContentBlockStopEvent and BetaRawMessageStopEvent run
 		// `json.Marshal(content_block)` / `json.Marshal(acc)` to refresh the
@@ -196,7 +219,7 @@ func (c *Client) streamOnce(ctx context.Context, params anthropic.BetaMessageNew
 		// marshal paths, only invalid Input fields).
 		repairInvalidToolInputs(&acc, ev)
 		if aerr := acc.Accumulate(ev); aerr != nil {
-			return acc, delivered, false, aerr
+			return acc, delivered, false, fmt.Errorf("%w: %w", errAssemble, aerr)
 		}
 		if sink.OnRawEvent != nil {
 			delivered = true
@@ -212,7 +235,37 @@ func (c *Client) streamOnce(ctx context.Context, params anthropic.BetaMessageNew
 	if tripped.Load() && ctx.Err() == nil {
 		return acc, delivered, true, context.DeadlineExceeded
 	}
-	return acc, delivered, false, stream.Err()
+	if err := stream.Err(); err != nil {
+		return acc, delivered, false, err
+	}
+	// A proxy or load balancer that closes the connection cleanly ends the
+	// stream with no error, and the half-built message used to be returned as
+	// the answer — a truncated reply, or a turn with no stop reason at all.
+	if !sawStop && ctx.Err() == nil {
+		return acc, delivered, false, errIncomplete
+	}
+	return acc, delivered, false, nil
+}
+
+// errAssemble wraps a failure to fold a stream event into the message.
+var errAssemble = errors.New("could not assemble the streamed response")
+
+// interrupted reports whether err ended a stream in a way worth retrying: the
+// stream ended early, could not be assembled, or carried an overloaded or
+// server error event after the response had begun (errors before it are
+// retried by the SDK). A caller's cancel is never an interruption.
+func interrupted(ctx context.Context, err error) bool {
+	if err == nil || ctx.Err() != nil {
+		return false
+	}
+	if errors.Is(err, errIncomplete) || errors.Is(err, errAssemble) {
+		return true
+	}
+	if status, ok := apiStatus(err); ok && status == 200 {
+		t, _ := anthropicPayload(err)
+		return t == "overloaded_error" || t == "api_error"
+	}
+	return false
 }
 
 // repairInvalidToolInputs replaces any json.RawMessage Input that wouldn't
