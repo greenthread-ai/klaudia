@@ -13,9 +13,10 @@ import (
 // regOptions holds the caller-owned, session-scoped resources the registry's
 // tools share. The caller is responsible for their lifecycle (Close/KillAll).
 type regOptions struct {
-	browser *browser.Engine
-	shells  *JobStore
-	lsp     *lsp.Pool
+	browser    *browser.Engine
+	shells     *JobStore
+	lsp        *lsp.Pool
+	noFrontend bool
 }
 
 // RegOption configures DefaultRegistry.
@@ -33,6 +34,15 @@ func WithJobStore(s *JobStore) RegOption { return func(o *regOptions) { o.shells
 // References. The caller Close()s it at session end. When omitted, the LSP tools
 // are not registered.
 func WithLSP(p *lsp.Pool) RegOption { return func(o *regOptions) { o.lsp = p } }
+
+// WithoutFrontend declares that no interactive frontend exists for this run
+// (headless -p, --loop, stream-json embedding). Tools whose only purpose is to
+// put a question to a human — AskUserQuestion — are then not registered at
+// all, instead of being offered to the model and answering "no interactive
+// user is available" when called. A model that is shown the tool will reach
+// for it on any ambiguity, burning a turn (often several) to learn there is
+// nobody there; a model that is not shown it picks a default and states it.
+func WithoutFrontend() RegOption { return func(o *regOptions) { o.noFrontend = true } }
 
 // DefaultRegistry builds the registry of all implemented local tools, with the
 // Bash tool wired to the given executor (local host, or a container sandbox).
@@ -85,13 +95,16 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 		{"TaskGet", func() (Tool, error) { return NewTaskGet(taskStore) }},
 		{"TaskUpdate", func() (Tool, error) { return NewTaskUpdate(taskStore) }},
 		{"NotebookEdit", func() (Tool, error) { return NewNotebookEdit() }},
-		{"AskUserQuestion", func() (Tool, error) { return NewAskUserQuestion() }},
 		{"ExitPlanMode", func() (Tool, error) { return NewExitPlanMode() }},
 		{"RequestHostChange", func() (Tool, error) { return NewRequestHostChange() }},
 		{"BrowserSearch", func() (Tool, error) { return NewBrowserSearch(engine) }},
 		{"BrowserFetch", func() (Tool, error) { return NewBrowserFetch(engine) }},
 		{"BrowserNavigate", func() (Tool, error) { return NewBrowserNavigate(engine) }},
 		{"BrowserSnapshot", func() (Tool, error) { return NewBrowserSnapshot(engine) }},
+	}
+	// AskUserQuestion needs a human on the other end; see WithoutFrontend.
+	if !cfg.noFrontend {
+		ctors = append(ctors, ctor{"AskUserQuestion", func() (Tool, error) { return NewAskUserQuestion() }})
 	}
 	// LSP code-intel tools are registered only when a language-server pool is
 	// supplied (i.e. the interactive/headless CLI, not bare tests).
