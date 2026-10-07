@@ -264,3 +264,23 @@ func New(cred Credential, baseURL string) *Client {
 
 // IsOAuth reports whether this client authenticates via OAuth bearer token.
 func (c *Client) IsOAuth() bool { return c.cred.IsOAuth() }
+
+// ResolveAnthropicBaseURL picks the base URL for the native Anthropic provider.
+//
+// Precedence (first non-empty wins):
+//  1. configBaseURL          — explicit config.toml `baseURL` (explicit config wins)
+//  2. KLAUDIA_CUSTOM_ENDPOINT — the --custom-endpoint override
+//  3. ANTHROPIC_BASE_URL      — the standard Anthropic env var (beats the default)
+//  4. ""                      — the Anthropic production API
+func ResolveAnthropicBaseURL(configBaseURL string) string {
+	if s := strings.TrimSpace(configBaseURL); s != "" {
+		return s
+	}
+	if s := strings.TrimSpace(os.Getenv("KLAUDIA_CUSTOM_ENDPOINT")); s != "" {
+		return s
+	}
+	if s := strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL")); s != "" {
+		return s
+	}
+	return ""
+}
