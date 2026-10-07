@@ -17,8 +17,12 @@ import (
 type SkillInfo struct {
 	Name        string
 	Description string
-	// Render returns the skill body with $ARGUMENTS substituted by the supplied
-	// arguments. Supplied by the loader so this package stays decoupled.
+	// ArgHint is the skill's argument-hint frontmatter, surfaced in the tool
+	// description so the model knows the shape of the arguments it should pass.
+	ArgHint string
+	// Render returns the skill body with $ARGUMENTS, $1..$N and
+	// $KLAUDIA_SKILL_DIR substituted from the supplied arguments. Supplied by
+	// the loader so this package stays decoupled.
 	Render func(arguments string) string
 }
 
@@ -64,7 +68,12 @@ func (t *Skill) Description(context.Context) (string, error) {
 	b.WriteString("Invoke a user-defined skill: a reusable, named set of instructions. ")
 	b.WriteString("Call this when a request matches one of the available skills. Available skills:\n")
 	for _, n := range t.names {
-		fmt.Fprintf(&b, "- %s: %s\n", n, t.byName[n].Description)
+		sk := t.byName[n]
+		if sk.ArgHint != "" {
+			fmt.Fprintf(&b, "- %s (arguments: %s): %s\n", n, sk.ArgHint, sk.Description)
+		} else {
+			fmt.Fprintf(&b, "- %s: %s\n", n, sk.Description)
+		}
 	}
 	b.WriteString("The skill's instructions are returned as the tool result; follow them. " +
 		"Pass any extra detail the skill needs via \"arguments\".")
