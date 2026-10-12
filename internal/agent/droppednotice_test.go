@@ -8,12 +8,16 @@ import (
 )
 
 func notices(msgs []anthropic.BetaMessageParam, reported map[string]bool) []string {
+	return noticesResumed(msgs, reported, nil)
+}
+
+func noticesResumed(msgs []anthropic.BetaMessageParam, reported, resumed map[string]bool) []string {
 	var out []string
 	announceDroppedServerTools(msgs, func(ev Event) {
 		if ev.Type == "notice" {
 			out = append(out, ev.Content)
 		}
-	}, reported)
+	}, reported, resumed)
 	return out
 }
 
@@ -168,5 +172,46 @@ func TestTheNoticeDistinguishesFetchFromSearch(t *testing.T) {
 	}
 	if !strings.Contains(got[0], "web fetch") {
 		t.Errorf("notice = %q, want it to name a web fetch", got[0])
+	}
+}
+
+// The notice used to blame the transcript for every drop, including the
+// ordinary case of a search still running when the user interrupted the turn.
+// Reading "could not be restored from the transcript" for that sent someone
+// looking for a corruption bug that had already been fixed.
+func TestDroppedNoticeNamesTheRightCause(t *testing.T) {
+	msgs := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("what's the news?")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			webSearchUse("srvtoolu_live"),
+		}},
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("never mind")),
+	}
+
+	got := noticesResumed(msgs, map[string]bool{}, nil)
+	if len(got) != 1 || !strings.Contains(got[0], "interrupted before it returned") {
+		t.Fatalf("an in-session drop should say it was interrupted: %q", got)
+	}
+
+	// Same shape, but this one arrived broken from disk.
+	got = noticesResumed(msgs, map[string]bool{}, map[string]bool{"srvtoolu_live": true})
+	if len(got) != 1 || !strings.Contains(got[0], "saved transcript") {
+		t.Fatalf("a resumed drop should blame the transcript: %q", got)
+	}
+}
+
+// resumedUnpairedIDs is what separates the two, so it must see the same
+// orphans the announcement does.
+func TestResumedUnpairedIDsFindsOrphans(t *testing.T) {
+	msgs := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("q")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			webSearchUse("srvtoolu_orphan"),
+		}},
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("next")),
+	}
+	got := resumedUnpairedIDs(msgs)
+	if !got["srvtoolu_orphan"] {
+		t.Errorf("orphan not found: %v", got)
 	}
 }

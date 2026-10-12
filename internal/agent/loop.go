@@ -252,6 +252,9 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	// calib corrects the local token estimate using the input sizes the API
 	// reports; overflowRecovered ensures the compact-and-retry path fires at
 	// most once per Run, so a genuinely oversized request still surfaces.
+	// Captured before the first turn: what was already broken on arrival, as
+	// opposed to what this session interrupted.
+	resumedDrops := resumedUnpairedIDs(messages)
 	var calib compaction.Calibration
 	overflowRecovered := false
 	for {
@@ -294,7 +297,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 
 		// Say so when a web search or fetch has gone missing, before the
 		// repair quietly papers over it; see servertool.go.
-		announceDroppedServerTools(messages, emit, reportedDrops)
+		announceDroppedServerTools(messages, emit, reportedDrops, resumedDrops)
 
 		// Repair any message with empty content (e.g. an old refusal recorded with
 		// content: null) before sending — the Anthropic API otherwise rejects the

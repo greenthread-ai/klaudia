@@ -103,26 +103,24 @@ func Load(cwd string, warn func(string)) []Skill {
 }
 
 // loadDir parses every *.md file in dir. A missing dir yields nothing.
-// loadDir reads the layouts skills actually arrive in:
+// loadDir reads the two layouts a skill is written in:
 //
-//	<skills>/<name>.md                      — one file per skill
-//	<skills>/<name>/SKILL.md                — one directory per skill
-//	<skills>/synced/<workspace-id>/<name>/  — Claude's synced skills, nested
-//	                                          under a container directory
+//	<skills>/<name>.md         — one file per skill
+//	<skills>/<name>/SKILL.md   — one directory per skill, so it can keep
+//	                             templates, licences or scripts alongside
 //
-// Hidden directories are skipped outright: Claude keeps deleted skills in
-// <skills>/.trash/<timestamp>/<name>/SKILL.md, which are perfectly valid
-// skills that must not come back from the dead.
+// It does not descend further, which is a trust boundary rather than a
+// limitation. Claude's synced skills arrive at
+// <skills>/synced/<workspace-id>/<name>/SKILL.md, placed there by a backend
+// and able to change between runs; a skill is instructions injected into the
+// model's context, so loading whatever appeared overnight is not a courtesy we
+// extend. Copy one into .klaudia/skills (or ~/.claude/skills directly) to use
+// it, where it sits in version control and changes when you change it.
+//
+// Hidden directories are skipped for a related reason: <skills>/.trash holds
+// skills that were deleted but are still complete on disk, and they should
+// stay deleted.
 func loadDir(dir string, warn func(string)) []Skill {
-	return walkSkills(dir, 1, warn)
-}
-
-// maxSkillDepth bounds the search below the skills root. Three is what the
-// synced layout needs (<root>/synced/<workspace-id>/<name>/SKILL.md) and stops
-// a stray symlink or a vendored tree turning startup into a filesystem crawl.
-const maxSkillDepth = 3
-
-func walkSkills(dir string, depth int, warn func(string)) []Skill {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil // missing/unreadable dir is not an error
@@ -130,17 +128,12 @@ func walkSkills(dir string, depth int, warn func(string)) []Skill {
 	var out []Skill
 	for _, e := range entries {
 		name := e.Name()
-		// .trash, .git, .DS_Store: never skills, and in .trash's case
-		// deliberately discarded ones.
-		if strings.HasPrefix(name, ".") {
+		if strings.HasPrefix(name, ".") { // .trash, .git, .DS_Store
 			continue
 		}
 
 		if !e.IsDir() {
-			// A loose .md is a skill only at the root. Deeper down it is
-			// support material sitting beside a SKILL.md — a skill's own
-			// notes.md must not become a second, bogus skill.
-			if depth > 1 || !strings.HasSuffix(name, ".md") {
+			if !strings.HasSuffix(name, ".md") {
 				continue
 			}
 			if sk, ok := loadSkillFile(filepath.Join(dir, name), strings.TrimSuffix(name, ".md"), warn); ok {
@@ -156,15 +149,9 @@ func walkSkills(dir string, depth int, warn func(string)) []Skill {
 			}
 			continue
 		}
-		if depth < maxSkillDepth {
-			if nested := walkSkills(sub, depth+1, warn); len(nested) > 0 {
-				out = append(out, nested...)
-				continue
-			}
-		}
 		// Only complain when the directory looks like an attempt at a skill.
-		// A container that simply holds other directories is not a mistake,
-		// and warning about it is the noise this replaced.
+		// A directory of other directories is a container — synced/, or
+		// somebody's own filing — and warning about it is pure noise.
 		if hasMarkdown(sub) {
 			warnf(warn, "skill %s: directory has no SKILL.md", sub)
 		}

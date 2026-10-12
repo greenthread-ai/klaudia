@@ -50,6 +50,10 @@ type Input struct {
 	// MissingLSPHints are actionable suggestions for languages present in the
 	// project but lacking a server (e.g. "install gopls for go support").
 	MissingLSPHints []string
+	// SyncedIgnored counts skills found under a backend-synced directory and
+	// deliberately not loaded, so they stay discoverable without being
+	// injected into context.
+	SyncedIgnored int
 }
 
 // Skill is one loaded user-defined skill, for the /doctor report.
@@ -97,15 +101,19 @@ func Run(in Input) []Check {
 	// tool is not registered at all, so asking the model whether skills work
 	// gets "I have no such ability" — indistinguishable from a broken feature.
 	// This is the only place that can tell the two apart.
+	syncedNote := ""
+	if in.SyncedIgnored > 0 {
+		syncedNote = fmt.Sprintf("; %d synced skill(s) ignored (backend-managed — copy one into .klaudia/skills to use it)", in.SyncedIgnored)
+	}
 	if len(in.Skills) == 0 {
-		add("skills", StatusInfo, "none loaded (add .md files to .klaudia/skills or ~/.klaudia/skills)")
+		add("skills", StatusInfo, "none loaded (add .md files to .klaudia/skills or ~/.klaudia/skills)"+syncedNote)
 	} else {
 		names := make([]string, 0, len(in.Skills))
 		for _, sk := range in.Skills {
 			names = append(names, sk.Name+" ("+sk.Scope+")")
 		}
 		sort.Strings(names)
-		add("skills", StatusOK, strconv.Itoa(len(in.Skills))+" loaded: "+strings.Join(names, ", "))
+		add("skills", StatusOK, strconv.Itoa(len(in.Skills))+" loaded: "+strings.Join(names, ", ")+syncedNote)
 	}
 
 	// Authentication.

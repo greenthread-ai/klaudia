@@ -526,7 +526,27 @@ port mirrors (see `internal/version`).
   `[permissions] mode` is still read and now takes
   `autonomous`/`plan`/`bypassPermissions`.
 
+### Changed
+- **Backend-synced skills are no longer loaded.** `~/.claude/skills/synced/` is
+  written by Claude's sync service: not in anyone's version control, not
+  reviewed, and able to change between runs. A skill is instructions injected
+  into the model's context, so this is a trust boundary rather than a parsing
+  question — reading `~/.claude/skills` is a compatibility courtesy, and it does
+  not extend to whatever a backend put there overnight. Copy a skill into
+  `.klaudia/skills` to use it, where it lives under git and changes when you
+  change it. `/doctor` reports how many were ignored so they stay discoverable.
+
 ### Fixed
+- **The dropped-search notice blamed the transcript for every drop.** A web
+  search still in flight when a turn is interrupted is orphaned in the ordinary
+  course of events — the `pause_turn` assistant message is recorded with the
+  search unanswered — but the notice said its result "could not be restored
+  from the transcript", which is the wording for genuine corruption. Reading
+  that for three interrupted searches in one session sent someone hunting a bug
+  that had already been fixed. The notice now distinguishes the two: orphans
+  present when the Run started blame the saved transcript, and ones that appear
+  mid-session say they were interrupted.
+
 - **Claude's own skills directory produced warnings and hid 19 skills.**
   Startup printed `skill ~/.claude/skills/.trash: directory has no SKILL.md`
   and the same for `synced`. Both were wrong in opposite directions.

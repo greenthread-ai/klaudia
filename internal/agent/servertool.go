@@ -280,7 +280,27 @@ func serverToolLabel(content []anthropic.BetaContentBlockParamUnion, id string) 
 // reported is keyed by tool_use_id and lives for the Run, so a broken exchange
 // inherited from a resumed transcript is mentioned once rather than on every
 // turn for the rest of the session.
-func announceDroppedServerTools(messages []anthropic.BetaMessageParam, emit Emitter, reported map[string]bool) {
+// resumedUnpairedIDs collects the unpaired server-tool ids already present when
+// a Run starts. Those came off disk; anything that goes unpaired later did so
+// in front of the user, which is a different thing to say.
+func resumedUnpairedIDs(messages []anthropic.BetaMessageParam) map[string]bool {
+	out := map[string]bool{}
+	merged := mergeSameRole(messages)
+	pending := pendingAssistantIndex(merged)
+	for i, m := range merged {
+		for id := range unpairedServerToolIDs(m.Content, i == pending) {
+			out[id] = true
+		}
+		for _, b := range m.Content {
+			if id, ok := brokenResultToolUseID(b); ok {
+				out[id] = true
+			}
+		}
+	}
+	return out
+}
+
+func announceDroppedServerTools(messages []anthropic.BetaMessageParam, emit Emitter, reported, resumed map[string]bool) {
 	if emit == nil {
 		return
 	}
@@ -301,8 +321,16 @@ func announceDroppedServerTools(messages []anthropic.BetaMessageParam, emit Emit
 				continue
 			}
 			reported[id] = true
+			// Two causes, and conflating them sent a user hunting a bug that
+			// had already been fixed. A search that was in flight when the
+			// turn was interrupted is ordinary; one that arrived broken from
+			// a saved transcript is the corruption this package repairs.
+			cause := "was interrupted before it returned"
+			if resumed[id] {
+				cause = "could not be restored from the saved transcript"
+			}
 			emit(Event{Type: "notice", Content: "an earlier " + serverToolLabel(m.Content, id) +
-				" did not complete and was dropped from the conversation — re-run it if the answer depends on it"})
+				" " + cause + " and was dropped from the conversation — re-run it if the answer depends on it"})
 		}
 	}
 }

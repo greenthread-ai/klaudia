@@ -114,6 +114,14 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpC
 	servers, hints := lsp.Survey(cwd)
 	// Loaded silently: skill.Load's warnings go to the session that owns the
 	// prompt, not to /doctor, which must stay quiet on stderr.
+	// Skills a backend syncs into ~/.claude/skills/synced are not loaded (see
+	// skill.loadDir); counting them keeps them discoverable in /doctor rather
+	// than silently absent.
+	syncedIgnored := 0
+	if home, err := os.UserHomeDir(); err == nil {
+		matches, _ := filepath.Glob(filepath.Join(home, ".claude", "skills", "synced", "*", "*", "SKILL.md"))
+		syncedIgnored = len(matches)
+	}
 	doctorSkills := make([]doctor.Skill, 0)
 	for _, sk := range skill.Load(cwd, func(string) {}) {
 		scope := "user"
@@ -136,6 +144,7 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpC
 		MCPLegacySSE:    legacySSEServers(mcpCfg),
 		LSPServers:      lspServers,
 		Skills:          doctorSkills,
+		SyncedIgnored:   syncedIgnored,
 		Hooks:           doctorHooks(hookRunner),
 		MissingLSPHints: hints,
 		AuthKind:        "none",
