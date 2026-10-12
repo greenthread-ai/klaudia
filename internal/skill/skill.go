@@ -103,54 +103,101 @@ func Load(cwd string, warn func(string)) []Skill {
 }
 
 // loadDir parses every *.md file in dir. A missing dir yields nothing.
-// loadDir reads both supported layouts:
+// loadDir reads the layouts skills actually arrive in:
 //
-//	<skills>/<name>.md         — one file per skill
-//	<skills>/<name>/SKILL.md   — one directory per skill, so a skill can keep
-//	                             supporting files (templates, scripts) beside it
+//	<skills>/<name>.md                      — one file per skill
+//	<skills>/<name>/SKILL.md                — one directory per skill
+//	<skills>/synced/<workspace-id>/<name>/  — Claude's synced skills, nested
+//	                                          under a container directory
 //
-// The directory form is the layout skills are increasingly published in, and
-// its failure mode used to be silent: subdirectories were skipped before
-// anything was parsed, so a correctly written skill in the wrong shape produced
-// no skill, no warning, and no Skill tool at all.
+// Hidden directories are skipped outright: Claude keeps deleted skills in
+// <skills>/.trash/<timestamp>/<name>/SKILL.md, which are perfectly valid
+// skills that must not come back from the dead.
 func loadDir(dir string, warn func(string)) []Skill {
+	return walkSkills(dir, 1, warn)
+}
+
+// maxSkillDepth bounds the search below the skills root. Three is what the
+// synced layout needs (<root>/synced/<workspace-id>/<name>/SKILL.md) and stops
+// a stray symlink or a vendored tree turning startup into a filesystem crawl.
+const maxSkillDepth = 3
+
+func walkSkills(dir string, depth int, warn func(string)) []Skill {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil // missing/unreadable dir is not an error
 	}
 	var out []Skill
 	for _, e := range entries {
-		var (
-			path        string
-			defaultName string
-		)
-		switch {
-		case e.IsDir():
-			path, defaultName = skillFileIn(filepath.Join(dir, e.Name())), e.Name()
-			if path == "" {
-				warnf(warn, "skill %s: directory has no SKILL.md", filepath.Join(dir, e.Name()))
-				continue
-			}
-		case strings.HasSuffix(e.Name(), ".md"):
-			path = filepath.Join(dir, e.Name())
-			defaultName = strings.TrimSuffix(e.Name(), ".md")
-		default:
+		name := e.Name()
+		// .trash, .git, .DS_Store: never skills, and in .trash's case
+		// deliberately discarded ones.
+		if strings.HasPrefix(name, ".") {
 			continue
 		}
 
-		data, err := os.ReadFile(path)
-		if err != nil {
-			warnf(warn, "skill %s: %v", path, err)
+		if !e.IsDir() {
+			// A loose .md is a skill only at the root. Deeper down it is
+			// support material sitting beside a SKILL.md — a skill's own
+			// notes.md must not become a second, bogus skill.
+			if depth > 1 || !strings.HasSuffix(name, ".md") {
+				continue
+			}
+			if sk, ok := loadSkillFile(filepath.Join(dir, name), strings.TrimSuffix(name, ".md"), warn); ok {
+				out = append(out, sk)
+			}
 			continue
 		}
-		sk, err := parseNamed(data, path, defaultName)
-		if err != nil {
-			warnf(warn, "skill %s: %v", path, err)
+
+		sub := filepath.Join(dir, name)
+		if path := skillFileIn(sub); path != "" {
+			if sk, ok := loadSkillFile(path, name, warn); ok {
+				out = append(out, sk)
+			}
 			continue
 		}
-		out = append(out, sk)
+		if depth < maxSkillDepth {
+			if nested := walkSkills(sub, depth+1, warn); len(nested) > 0 {
+				out = append(out, nested...)
+				continue
+			}
+		}
+		// Only complain when the directory looks like an attempt at a skill.
+		// A container that simply holds other directories is not a mistake,
+		// and warning about it is the noise this replaced.
+		if hasMarkdown(sub) {
+			warnf(warn, "skill %s: directory has no SKILL.md", sub)
+		}
 	}
 	return out
+}
+
+func loadSkillFile(path, defaultName string, warn func(string)) (Skill, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		warnf(warn, "skill %s: %v", path, err)
+		return Skill{}, false
+	}
+	sk, err := parseNamed(data, path, defaultName)
+	if err != nil {
+		warnf(warn, "skill %s: %v", path, err)
+		return Skill{}, false
+	}
+	return sk, true
+}
+
+// hasMarkdown reports whether a directory directly contains any .md file.
+func hasMarkdown(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			return true
+		}
+	}
+	return false
 }
 
 // skillFileIn returns the skill definition inside a skill directory, or "" if

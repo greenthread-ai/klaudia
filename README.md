@@ -684,7 +684,14 @@ put things (`anthropics/skills` and friends), for the same reason Klaudia reads
 skills/review.md            # one file per skill
 skills/review/SKILL.md      # one directory per skill, for skills that ship
                             # templates, licences or scripts alongside
+skills/synced/<id>/review/  # a container of skill directories, which is how
+                            # Claude's synced skills arrive
 ```
+
+Hidden directories are skipped, so deleted skills parked in
+`~/.claude/skills/.trash/` stay deleted. A directory is only reported as a
+broken skill if it holds Markdown but no `SKILL.md`; a directory that merely
+contains other skill directories is a container, not a mistake.
 
 They become a `Skill` tool the model can invoke and `/＜name＞` commands in the
 TUI. Body supports `$ARGUMENTS`. `name` defaults to the file's — or the

@@ -527,6 +527,23 @@ port mirrors (see `internal/version`).
   `autonomous`/`plan`/`bypassPermissions`.
 
 ### Fixed
+- **Claude's own skills directory produced warnings and hid 19 skills.**
+  Startup printed `skill ~/.claude/skills/.trash: directory has no SKILL.md`
+  and the same for `synced`. Both were wrong in opposite directions.
+
+  `.trash` holds skills Claude has *deleted*, still complete on disk —
+  resurrecting them would be worse than the warning. Hidden directories are now
+  skipped outright. `synced/<workspace-id>/<name>/SKILL.md` is where Claude's
+  synced skills actually live, so the container was not a broken skill but 19
+  working ones we never looked inside; the loader now walks containers to a
+  bounded depth of three, which covers that layout without turning startup into
+  a filesystem crawl.
+
+  A directory is only reported as broken if it directly contains Markdown but
+  no `SKILL.md` — a directory holding other skill directories is a container,
+  not a mistake. Loose `.md` files count as skills only at the top level, so a
+  skill's own `notes.md` cannot become a second, bogus skill.
+
 - **Five things the stream-json embedding channel could not do.** It is the
   channel whose entire purpose is a client with a user sitting in front of it,
   and most of what follows was a capability the transport never carried.

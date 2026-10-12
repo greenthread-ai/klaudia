@@ -226,3 +226,59 @@ body`)
 		t.Error("a skill only in .claude/skills should load")
 	}
 }
+
+// Claude leaves two kinds of directory in ~/.claude/skills that are not skills
+// themselves: .trash, holding deleted skills that are still perfectly valid on
+// disk, and synced/<workspace-id>/, a container of real ones. Both produced a
+// "directory has no SKILL.md" warning, and the 19 synced skills never loaded.
+func TestLoadSkipsTrashAndWalksSyncedContainers(t *testing.T) {
+	isolateHome(t)
+	dir := t.TempDir()
+	skills := filepath.Join(dir, ".klaudia", "skills")
+
+	write(t, filepath.Join(skills, "synced", "ws-123_user-456", "morning", "SKILL.md"), `---
+name: morning
+description: morning brief
+---
+body`)
+	write(t, filepath.Join(skills, ".trash", "1791497476770-61432-PGxdKr", "deep-research", "SKILL.md"), `---
+name: deep-research
+description: deleted, must stay deleted
+---
+body`)
+
+	var warnings []string
+	got := Load(dir, func(m string) { warnings = append(warnings, m) })
+
+	names := map[string]bool{}
+	for _, sk := range got {
+		names[sk.Name] = true
+	}
+	if !names["morning"] {
+		t.Errorf("synced skill never loaded, got %v", names)
+	}
+	if names["deep-research"] {
+		t.Error("a skill in .trash was resurrected")
+	}
+	if len(warnings) != 0 {
+		t.Errorf("containers should be silent, got %q", warnings)
+	}
+}
+
+// The walk must not become a filesystem crawl.
+func TestLoadStopsAtMaxDepth(t *testing.T) {
+	isolateHome(t)
+	dir := t.TempDir()
+	deep := filepath.Join(dir, ".klaudia", "skills", "a", "b", "c", "d", "buried")
+	write(t, filepath.Join(deep, "SKILL.md"), `---
+name: buried
+description: too deep
+---
+body`)
+
+	for _, sk := range Load(dir, func(string) {}) {
+		if sk.Name == "buried" {
+			t.Errorf("walked past maxSkillDepth=%d", maxSkillDepth)
+		}
+	}
+}
