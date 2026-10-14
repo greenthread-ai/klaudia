@@ -554,6 +554,18 @@ port mirrors (see `internal/version`).
   change it. `/doctor` reports how many were ignored so they stay discoverable.
 
 ### Fixed
+- **The dropped-search notice reappeared above every reply.** Three notices,
+  every turn, for the rest of the session. The repair was only ever applied to
+  the copy of the conversation sent to the API — `Messages:
+  sanitizeMessages(messages)` — so the orphaned `server_tool_use` blocks stayed
+  in the conversation itself and were rediscovered on the next turn, and the
+  next. The "already reported" set is per `Run`, and a TUI turn is a `Run`, so
+  it never suppressed anything.
+
+  The sanitised conversation is now kept, so a search is announced once and the
+  history is clean from then on. Sanitising is idempotent, so this costs
+  nothing when there is nothing to repair.
+
 - **A repaired turn could 400 forever: "`thinking` ... blocks in the latest
   assistant message cannot be modified".** Reported from a session that could
   not be continued at all — five interrupted web fetches, then this 400 on

@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"context"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 	"strings"
 	"testing"
 
@@ -213,5 +215,61 @@ func TestResumedUnpairedIDsFindsOrphans(t *testing.T) {
 	got := resumedUnpairedIDs(msgs)
 	if !got["srvtoolu_orphan"] {
 		t.Errorf("orphan not found: %v", got)
+	}
+}
+
+// Reported from a live session: the same three notices printed above every
+// reply, turn after turn. The repair was applied to the copy sent to the API
+// while the conversation kept its orphans, so each turn rediscovered them — and
+// since a TUI turn is one Run, the per-Run "already reported" set never helped.
+func TestDroppedServerToolsAreRepairedOnce(t *testing.T) {
+	history := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("what's new?")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			anthropic.NewBetaTextBlock("Looking."),
+			webSearchUse("srvtoolu_lost"),
+		}},
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("carry on")),
+	}
+
+	provider := &scriptedProvider{turns: []anthropic.BetaMessage{
+		{StopReason: "end_turn", Content: []anthropic.BetaContentBlockUnion{{Type: "text", Text: "ok"}}},
+		{StopReason: "end_turn", Content: []anthropic.BetaContentBlockUnion{{Type: "text", Text: "ok"}}},
+	}}
+	loop := New(provider, tools.NewRegistry())
+
+	count := func(res Result, err error) (int, Result) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+		return 0, res
+	}
+
+	var notices int
+	emit := func(e Event) {
+		if e.Type == "notice" && strings.Contains(e.Content, "dropped from the conversation") {
+			notices++
+		}
+	}
+
+	_, res := count(loop.Run(context.Background(), Options{Prompt: "turn one", InitialMessages: history}, emit))
+	if notices != 1 {
+		t.Fatalf("first turn emitted %d notices, want 1", notices)
+	}
+	for _, m := range res.Messages {
+		for _, b := range m.Content {
+			if su := b.OfServerToolUse; su != nil && su.ID == "srvtoolu_lost" {
+				t.Fatal("the orphan survived in the returned conversation, so it will be found again next turn")
+			}
+		}
+	}
+
+	// The next turn resumes from what the last one returned, exactly as the TUI
+	// does. Nothing should be announced again.
+	notices = 0
+	_, _ = count(loop.Run(context.Background(), Options{Prompt: "turn two", InitialMessages: res.Messages}, emit))
+	if notices != 0 {
+		t.Errorf("turn two re-announced %d dropped searches", notices)
 	}
 }

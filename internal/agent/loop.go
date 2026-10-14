@@ -300,13 +300,22 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// repair quietly papers over it; see servertool.go.
 		announceDroppedServerTools(messages, emit, reportedDrops, resumedDrops)
 
+		// Keep the repair, rather than repairing a copy on the way out. The
+		// sanitised version used to be built for the request alone, so the
+		// orphans stayed in the conversation and were rediscovered on every
+		// later turn — and because reportedDrops is per Run while a TUI turn is
+		// a Run, the same three notices reappeared above every reply for the
+		// rest of the session. Sanitising is idempotent, so doing it here costs
+		// nothing on a clean history.
+		messages = sanitizeMessages(messages)
+
 		// Repair any message with empty content (e.g. an old refusal recorded with
 		// content: null) before sending — the Anthropic API otherwise rejects the
 		// whole request with "messages.<i>.content: Field required".
 		params := anthropic.BetaMessageNewParams{
 			Model:     opts.Model,
 			MaxTokens: maxTokens,
-			Messages:  sanitizeMessages(messages),
+			Messages:  messages,
 			System:    system,
 			Tools:     toolParams,
 			Betas:     betas,
