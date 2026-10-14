@@ -307,3 +307,24 @@ func IsContextOverflow(err error) bool {
 	}
 	return isContextOverflow(err.Error())
 }
+
+// IsImmutableThinking reports whether err is the API refusing a request because
+// the latest assistant message's thinking blocks were altered:
+//
+//	messages.1.content.42: `thinking` or `redacted_thinking` blocks in the
+//	latest assistant message cannot be modified.
+//
+// Klaudia alters that message when it repairs an interrupted server-tool call,
+// and the alteration cannot be undone — the original blocks are gone. The agent
+// loop recovers by abandoning the turn rather than resending it forever.
+func IsImmutableThinking(err error) bool {
+	if err == nil {
+		return false
+	}
+	d := strings.ToLower(providerDetail(err))
+	if d == "" {
+		d = strings.ToLower(err.Error())
+	}
+	return strings.Contains(d, "cannot be modified") &&
+		(strings.Contains(d, "thinking") || strings.Contains(d, "redacted_thinking"))
+}

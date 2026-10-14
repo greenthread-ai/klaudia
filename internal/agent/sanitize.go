@@ -41,6 +41,16 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 	// the result unpaired — trading one 400 for its mirror image.
 	out := mergeSameRole(messages)
 
+	// (1a) The latest assistant message cannot be edited if it carries thinking
+	// blocks: the API validates them against what it produced and rejects the
+	// request outright — "`thinking` or `redacted_thinking` blocks in the
+	// latest assistant message cannot be modified". An interrupted server-tool
+	// turn lands exactly there, so the repair below would fix one 400 by
+	// causing another, every turn, with no way forward. Drop the whole message
+	// instead: it is an incomplete turn, the notice already tells the user its
+	// search was lost, and the model simply takes the turn again.
+	out = dropUneditableTrailingTurn(out)
+
 	// (1) drop server-tool blocks that would be rejected on send. Done before
 	// the empty-content repair, so a message left empty by the drop is caught
 	// there rather than slipping through.
@@ -157,6 +167,79 @@ func needsSanitize(messages []anthropic.BetaMessageParam) bool {
 			if tu := b.OfToolUse; tu != nil && !hasToolResultAt(messages, i+1, tu.ID) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// dropUneditableTrailingTurn removes the final assistant message when it both
+// needs a server-tool repair and carries thinking blocks, along with any client
+// tool_results answering it (which would otherwise dangle).
+func dropUneditableTrailingTurn(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
+	last := -1
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == anthropic.BetaMessageParamRoleAssistant {
+			last = i
+			break
+		}
+	}
+	if last < 0 || !hasThinkingBlock(messages[last].Content) {
+		return messages
+	}
+	if _, changed := repairServerToolResults(messages[last].Content, last == pendingAssistantIndex(messages)); !changed {
+		return messages
+	}
+
+	return dropAssistantTurnAt(messages, last)
+}
+
+// DropLastAssistantTurn removes the most recent assistant message and anything
+// that depended on it. Used to recover from the API refusing a request because
+// that message's thinking blocks were modified: there is no way to un-modify
+// it, so the turn is abandoned and taken again.
+func DropLastAssistantTurn(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == anthropic.BetaMessageParamRoleAssistant {
+			return dropAssistantTurnAt(messages, i)
+		}
+	}
+	return messages
+}
+
+// dropAssistantTurnAt removes messages[idx] and any client tool_results in
+// later messages that answered its tool_use blocks, which would otherwise
+// dangle and earn a 400 of their own.
+func dropAssistantTurnAt(messages []anthropic.BetaMessageParam, idx int) []anthropic.BetaMessageParam {
+	orphanedResults := map[string]bool{}
+	for _, b := range messages[idx].Content {
+		if tu := b.OfToolUse; tu != nil {
+			orphanedResults[tu.ID] = true
+		}
+	}
+
+	out := make([]anthropic.BetaMessageParam, 0, len(messages)-1)
+	out = append(out, messages[:idx]...)
+	for _, m := range messages[idx+1:] {
+		kept := make([]anthropic.BetaContentBlockParamUnion, 0, len(m.Content))
+		for _, b := range m.Content {
+			if tr := b.OfToolResult; tr != nil && orphanedResults[tr.ToolUseID] {
+				continue // its tool_use just went with the dropped message
+			}
+			kept = append(kept, b)
+		}
+		if len(kept) == 0 {
+			continue
+		}
+		m.Content = kept
+		out = append(out, m)
+	}
+	return mergeSameRole(out)
+}
+
+func hasThinkingBlock(content []anthropic.BetaContentBlockParamUnion) bool {
+	for _, b := range content {
+		if b.OfThinking != nil || b.OfRedactedThinking != nil {
+			return true
 		}
 	}
 	return false

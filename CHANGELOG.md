@@ -537,6 +537,27 @@ port mirrors (see `internal/version`).
   change it. `/doctor` reports how many were ignored so they stay discoverable.
 
 ### Fixed
+- **A repaired turn could 400 forever: "`thinking` ... blocks in the latest
+  assistant message cannot be modified".** Reported from a session that could
+  not be continued at all — five interrupted web fetches, then this 400 on
+  every send, including after typing `continue`.
+
+  The two repairs collided. An interrupted server-tool call leaves an unpaired
+  `server_tool_use`, which the API rejects, so Klaudia edits that message to
+  drop it. But the API also forbids *any* modification of the latest assistant
+  message when it carries thinking blocks — and with extended thinking on,
+  nearly every assistant message does (9021 of them in the transcript
+  concerned). Fixing the first 400 therefore caused the second, with no way
+  forward: the edit cannot be undone, because the original blocks are gone.
+
+  Both ends are now handled. Sanitising drops the whole trailing turn rather
+  than editing it when that message carries thinking — an incomplete turn the
+  model simply takes again, with the existing notice explaining the lost
+  search. And if the API rejects a request for this reason anyway, the loop
+  abandons that turn and retries once instead of resending it forever. Client
+  `tool_result` blocks answering a dropped turn go with it, so one dead end is
+  not traded for another.
+
 - **The dropped-search notice blamed the transcript for every drop.** A web
   search still in flight when a turn is interrupted is orphaned in the ordinary
   course of events — the `pause_turn` assistant message is recorded with the

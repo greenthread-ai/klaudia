@@ -257,6 +257,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	resumedDrops := resumedUnpairedIDs(messages)
 	var calib compaction.Calibration
 	overflowRecovered := false
+	thinkingRecovered := false
 	for {
 		res.NumTurns++
 
@@ -313,6 +314,19 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 
 		estimateAtSend := compaction.EstimateTokens(messages)
 		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages)
+		if err != nil && api.IsImmutableThinking(err) && !thinkingRecovered {
+			// The last assistant message was repaired (an interrupted
+			// server-tool call), and the API will not accept a message whose
+			// thinking blocks changed. The original blocks are gone, so there
+			// is nothing to restore: abandon that turn and take it again. Every
+			// resend otherwise fails identically — the session is over.
+			thinkingRecovered = true
+			messages = DropLastAssistantTurn(messages)
+			if emit != nil {
+				emit(Event{Type: "notice", Content: "the previous reply could not be re-sent (its thinking blocks were repaired) — retaking that turn"})
+			}
+			continue
+		}
 		if err != nil && api.IsContextOverflow(err) && !overflowRecovered {
 			// Every resend of an over-limit conversation fails identically, so
 			// without this the session is finished. Summarise and re-send once;
