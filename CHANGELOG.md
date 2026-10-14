@@ -6,6 +6,23 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **`--version` reports the commit it was built from.** `klaudia --version`
+  said `2.1.66-klaudia` regardless of the binary, because that constant mirrors
+  the retired JavaScript bundle for the parity harness and has not moved in the
+  lifetime of the Go port — while `go install` reports a pseudo-version like
+  `v0.0.0-20261014093743-a32e343be969` that pins the commit exactly. Two
+  numbers, one of them real.
+
+  The real one is now shown: `2.1.66-klaudia (Klaudia) a32e343 (2026-10-14)`,
+  from the VCS metadata the toolchain embeds, falling back to the commit inside
+  the pseudo-version for binaries built from the module cache. A working tree
+  with uncommitted changes is marked `-dirty`. `/doctor` reports the same under
+  `build`. The constant itself is unchanged and still leads the line, so the
+  parity harness sees what it expects.
+
+  This is the question every "is the fix in?" needed answering, and the
+  alternative has been comparing the binary's mtime against `git log`.
+
 - **An editor can drive Klaudia directly: the Agent Client Protocol v1, over
   stdio (`--input-format acp`).** Zed, Neovim's `acp.nvim` and the JetBrains
   plugin all speak it, so the editor keeps its own UI for messages, tool calls,

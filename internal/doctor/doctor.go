@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/greenthread-ai/klaudia/internal/version"
 )
 
 // Status values for a Check.
@@ -96,6 +98,16 @@ func Run(in Input) []Check {
 	}
 
 	add("platform", StatusInfo, runtime.GOOS+"/"+runtime.GOARCH)
+
+	// Which binary is this? The version constant cannot say — it mirrors a
+	// retired JS bundle and never moves — so report the commit the toolchain
+	// embedded. "Is the fix in?" has been answered by comparing file mtimes to
+	// git log more than once.
+	if b := version.Build(); b != "" {
+		add("build", StatusInfo, version.Version+" "+b)
+	} else {
+		add("build", StatusInfo, version.Version+" (no build metadata embedded)")
+	}
 
 	// Skills are invisible when none are defined: with zero skills the Skill
 	// tool is not registered at all, so asking the model whether skills work

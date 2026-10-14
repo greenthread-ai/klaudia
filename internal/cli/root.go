@@ -713,7 +713,7 @@ func NewRootCommand() *cobra.Command {
 		Use:   "klaudia [prompt]",
 		Short: "Klaudia — a locally-buildable, extensible agentic coding tool",
 		// We render our own version string to match the JS reference exactly.
-		Version:       fmt.Sprintf("%s (%s)", version.Version, version.Name),
+		Version:       version.Full(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.ArbitraryArgs,
