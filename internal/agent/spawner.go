@@ -37,6 +37,7 @@ type Spawner struct {
 	hostGate   *HostGate
 	hooks      *hooks.Runner
 	worktrees  bool
+	effort     api.Effort
 }
 
 // SetDeferred replaces the deferred-tool set. A config reload can add or drop
@@ -98,6 +99,20 @@ func (s *Spawner) WithHooks(h *hooks.Runner) *Spawner {
 // paths, which an isolated checkout would make wrong.
 func (s *Spawner) WithWorktrees(on bool) *Spawner {
 	s.worktrees = on
+	return s
+}
+
+// WithEffort sets the effort level sub-agents run at, independently of the
+// parent session's.
+//
+// The default is inherit — the parent passes its own level — because a silent
+// downgrade is the kind of change that degrades results months later with
+// nothing to attribute it to. The knob exists so the trade can be measured:
+// Explore fan-outs are the canonical low-effort workload (many short,
+// mechanical searches), and running them below the main loop is a real saving
+// for anyone who has checked it holds on their own work.
+func (s *Spawner) WithEffort(e api.Effort) *Spawner {
+	s.effort = e
 	return s
 }
 
@@ -187,6 +202,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		WorkingDir:    dir,
 		Approver:      s.approver,
 		ContextWindow: ctxWindow,
+		Effort:        s.effort,
 		DeferredTools: filterDeferred(s.deferred(), childTools),
 		Hooks:         s.hooks,
 		SubAgent:      true,

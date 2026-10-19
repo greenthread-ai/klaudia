@@ -85,13 +85,23 @@ type oaToolCall struct {
 }
 
 type oaRequest struct {
-	Model               string        `json:"model"`
-	Messages            []oaMessage   `json:"messages"`
-	Tools               []oaTool      `json:"tools,omitempty"`
-	Temperature         *float64      `json:"temperature,omitempty"` // optional per OpenAI spec; omitted when nil
-	MaxCompletionTokens int64         `json:"max_completion_tokens,omitempty"`
-	Stream              bool          `json:"stream"`
-	StreamOptions       *oaStreamOpts `json:"stream_options,omitempty"`
+	Model               string      `json:"model"`
+	Messages            []oaMessage `json:"messages"`
+	Tools               []oaTool    `json:"tools,omitempty"`
+	Temperature         *float64    `json:"temperature,omitempty"` // optional per OpenAI spec; omitted when nil
+	MaxCompletionTokens int64       `json:"max_completion_tokens,omitempty"`
+	// ReasoningEffort carries the same five levels Anthropic takes in
+	// output_config.effort. The OpenAI-compatible vocabulary is a superset of
+	// ours — it adds "none" and "minimal" below "low" — so the value passes
+	// through unchanged rather than being mapped, and the two providers stay
+	// at matching capability.
+	//
+	// omitempty is load-bearing: plenty of OpenAI-compatible servers (older
+	// vLLM, llama.cpp) reject an unknown field outright, so an unset effort has
+	// to leave the request exactly as it was.
+	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
+	Stream          bool          `json:"stream"`
+	StreamOptions   *oaStreamOpts `json:"stream_options,omitempty"`
 }
 
 type oaStreamOpts struct {
@@ -187,6 +197,7 @@ func (p *OpenAIProvider) translateRequest(params anthropic.BetaMessageNewParams)
 		Model:               string(params.Model),
 		Temperature:         p.temperature,
 		MaxCompletionTokens: params.MaxTokens,
+		ReasoningEffort:     string(params.OutputConfig.Effort),
 		Stream:              true,
 		StreamOptions:       &oaStreamOpts{IncludeUsage: true},
 	}

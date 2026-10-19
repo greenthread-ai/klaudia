@@ -48,8 +48,8 @@ Use `go install` when you mean to try the change.
 `docs/ux-spec.md` is the authoritative record of the two terminal-UX specs and
 where the implementation deliberately differs from them — read it before
 "fixing" something that looks unimplemented. `docs/trust.md`, `docs/jobs.md`,
-`docs/working-tree.md`, `docs/hooks.md` and `docs/acp.md` cover five subsystems
-in detail.
+`docs/working-tree.md`, `docs/hooks.md`, `docs/acp.md` and `docs/effort.md`
+cover six subsystems in detail.
 
 Hooks are the one subsystem that executes a string from a config file, so
 `docs/hooks.md` is where the reasoning for the trust prompt lives. A hook runs
@@ -64,6 +64,13 @@ stream-json for months, because a frontend that omitted a capability was
 indistinguishable from one that did not want it. `docs/acp.md` records what the
 ACP frontend declines (client-side writes, `terminal/*`, `session/delete`) and
 why those are decisions rather than gaps.
+
+Effort is **one setting translated per provider**, not a per-provider setting:
+`api.Effort` carries the five levels, the Anthropic path writes
+`output_config.effort` and the OpenAI shim writes `reasoning_effort`, and
+unset sends nothing on both. Keep it that way — a provider-shaped knob would
+let the same config mean different things on the two backends, which is the
+capability skew `docs/effort.md` exists to prevent.
 
 ## Rules
 

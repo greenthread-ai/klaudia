@@ -121,6 +121,10 @@ type Options struct {
 	// ContextWindow is the model's context size, used for autocompact
 	// thresholds. 0 uses the package default.
 	ContextWindow int
+	// Effort is how hard the model works on each response: thinking depth,
+	// tool calls and text together. api.EffortUnset (the zero value) sends
+	// nothing and lets the provider apply its own default.
+	Effort api.Effort
 	// PartialMessages, if set, receives raw model stream events during the main
 	// answer turn (not compaction summaries). The CLI wires this to a
 	// stream_event emitter when --include-partial-messages is set. Nil by
@@ -319,6 +323,13 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			System:    system,
 			Tools:     toolParams,
 			Betas:     betas,
+		}
+		// Only set when the user asked for a level. An empty OutputConfig is
+		// omitzero, so an unset effort leaves the request byte-identical to
+		// what it was before effort existed and the provider applies its own
+		// default. Top-level effort is GA — no beta header belongs here.
+		if opts.Effort != api.EffortUnset {
+			params.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(opts.Effort)
 		}
 
 		estimateAtSend := compaction.EstimateTokens(messages)
@@ -536,8 +547,8 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 // the replacement history plus the summary text. Used by the TUI's /compact
 // command (the loop's own autocompact runs automatically near the context
 // limit). Returns an error if the summary call fails or yields no text.
-func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model) ([]anthropic.BetaMessageParam, string, error) {
-	req := compaction.BuildSummaryRequest(messages, model, 4096)
+func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model, effort api.Effort) ([]anthropic.BetaMessageParam, string, error) {
+	req := compaction.BuildSummaryRequest(messages, model, 4096, effort)
 	req.Betas = api.DefaultBetas
 	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
 	if err != nil {
@@ -553,7 +564,7 @@ func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessagePara
 // autocompact summarizes the conversation via the model and replaces history
 // with the summary. Returns (messages, false) if the summary call fails.
 func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options) ([]anthropic.BetaMessageParam, bool) {
-	req := compaction.BuildSummaryRequest(messages, opts.Model, 4096)
+	req := compaction.BuildSummaryRequest(messages, opts.Model, 4096, opts.Effort)
 	req.Betas = api.DefaultBetas
 	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
 	if err != nil {

@@ -23,6 +23,8 @@ extras we lean on day to day:
   Klaudia the agent behind Zed, `acp.nvim` or the JetBrains plugin.
 - **[Isolated sub-agents](#your-changes-and-klaudias)** — children that write
   get their own git checkout, so two of them can work at once.
+- **[Effort](#effort)** — `--effort` and `/effort` set how hard the model works
+  per response, on both the Anthropic and OpenAI-compatible backends.
 - Plus [OS/container Bash sandboxing](#sandboxing-the-bash-tool), local
   [web search & browsing](#web-search--browsing), [MCP](#mcp), and
   [skills](#skills).
@@ -518,6 +520,45 @@ Neither is on by default, and a path that can't be opened is dropped rather than
 reported — the noise is the thing being prevented. `/doctor` remains the way to
 check auth, tools and environment.
 
+## Effort
+
+Effort is how many tokens the model spends on a response — thinking, tool calls
+and text together. On the current Claude models thinking is always on and
+effort is *the* control for how deep it goes.
+
+```bash
+klaudia --effort xhigh            # one run
+export KLAUDIA_EFFORT=medium      # your shell
+```
+
+```toml
+# .klaudia/config.toml
+effort = "xhigh"        # low | medium | high | xhigh | max
+
+[subagents]
+effort = "low"          # unset = inherit the session's level
+```
+
+Precedence is `--effort` → `KLAUDIA_EFFORT` → config; `/effort <level>` beats
+all three for the running session, and `/effort off` restores the provider's
+default. `/effort` with no argument lists the levels and marks the live one.
+
+Unset is the default and sends nothing, so you get the provider's own default
+(high on most Claude models). The level reaches both backends from one field —
+`output_config.effort` on Anthropic, `reasoning_effort` on OpenAI-compatible
+endpoints — and all five values pass through unchanged on both, so the setting
+means the same thing whichever you are on.
+
+Two things worth knowing, both of which Klaudia tells you about when they
+apply. Changing effort mid-session invalidates the conversation's prompt cache,
+so the next turn re-reads the whole prefix at full rate. And `max_tokens`
+bounds thinking and text together, so `xhigh` or `max` against a small output
+cap truncates mid-thought rather than erroring — `/doctor` warns when that is
+the setup.
+
+Full detail, including the per-model ceilings and why the cache-preserving beta
+is not used: [docs/effort.md](docs/effort.md).
+
 ## Sandboxing the Bash tool
 
 `.klaudia/config.toml` → `sandbox.mode`:
@@ -881,6 +922,8 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 - [docs/working-tree.md](docs/working-tree.md) — change ownership, `/commit`,
   `/undo`, and the sub-agent checkouts
 - [docs/acp.md](docs/acp.md) — the ACP frontend: what is served, and what is declined
+- [docs/effort.md](docs/effort.md) — effort levels, model support, and the two
+  costs it is easy not to notice
 - [docs/parity.md](docs/parity.md) — JS→Go feature map and divergences
 - [docs/compaction.md](docs/compaction.md) — context-window management
 - [docs/memory-architecture.md](docs/memory-architecture.md) — index→detail memory store

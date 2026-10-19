@@ -45,6 +45,11 @@ type Config struct {
 	// raise or lower the cap explicitly — e.g. an OpenAI-compatible model whose
 	// output limit the table doesn't know.
 	MaxTokens int `toml:"maxTokens,omitempty"`
+	// Effort is how hard the model works per response: "low", "medium",
+	// "high", "xhigh" or "max". Unset sends nothing and lets the provider
+	// apply its own default (high on most Claude models). --effort and
+	// KLAUDIA_EFFORT override it; /effort overrides those for one session.
+	Effort string `toml:"effort,omitempty"`
 	// APIKey is the bearer token. Prefer APIKeyEnv to keep secrets out of files.
 	APIKey string `toml:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable holding the key.
@@ -102,6 +107,11 @@ type Subagents struct {
 	// is gitignored and expensive. A worktree starts from the parent's tracked
 	// and untracked files, never its ignored ones.
 	Worktree *bool `toml:"worktree,omitempty"`
+	// Effort is the level sub-agents run at: "low", "medium", "high", "xhigh"
+	// or "max". Unset means inherit the session's level, which is the default
+	// because a quieter sub-agent is a quality trade that should be made
+	// deliberately rather than inherited from a default nobody chose.
+	Effort string `toml:"effort,omitempty"`
 }
 
 // SubagentWorktrees resolves the default: on unless the config says otherwise.
@@ -322,6 +332,9 @@ func merge(dst *Config, src Config) {
 	if src.MaxTokens != 0 {
 		dst.MaxTokens = src.MaxTokens
 	}
+	if src.Effort != "" {
+		dst.Effort = src.Effort
+	}
 	if src.Sandbox.Mode != "" {
 		dst.Sandbox.Mode = src.Sandbox.Mode
 	}
@@ -370,6 +383,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Subagents.Worktree != nil {
 		dst.Subagents.Worktree = src.Subagents.Worktree
+	}
+	if src.Subagents.Effort != "" {
+		dst.Subagents.Effort = src.Subagents.Effort
 	}
 	// Disabled LSP languages accumulate (union of home + project).
 	dst.LSP.Disabled = append(dst.LSP.Disabled, src.LSP.Disabled...)

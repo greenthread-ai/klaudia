@@ -49,6 +49,7 @@ type Session struct {
 	SessionID      string         // transcript/session id used by --resume
 	Model          string         // model alias or full ID ("" = default)
 	ResolvedModel  string         // concrete model id for display
+	Effort         api.Effort     // how hard the model works per response ("" = provider default)
 	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
 	Memory         memory.Store   // backs /memory; never nil — set to memory.Disabled() when unavailable
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
@@ -1418,6 +1419,7 @@ type cmdInfo struct{ name, args, desc string }
 var commandList = []cmdInfo{
 	{"/help", "", "Show this help"},
 	{"/model", "[name]", "Pick a model from the provider (no arg), or set one by alias/ID"},
+	{"/effort", "[level]", "Show or set how hard the model works per response (" + api.EffortNames() + "; bare `off` restores the provider default)"},
 	{"/theme", "[name]", "Change Markdown render theme (no arg = picker)"},
 	{"/mode", "[name]", "Change how Klaudia asks permission (no arg = picker)"},
 	{"!<command>", "", "Run a shell command directly; its output becomes context for Klaudia"},
@@ -1911,6 +1913,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		m.appendLine(bannerStyle.Render("Model: " + cur + " — fetching available models…"))
 		return m, m.fetchModels()
+	case "/effort":
+		m.setEffort(args)
 	case "/theme":
 		if len(args) == 0 {
 			if m.state == stateRunning {
@@ -2220,8 +2224,12 @@ func (m *Model) renderConfig() string {
 	if sandbox == "" {
 		sandbox = "local"
 	}
-	return fmt.Sprintf("Configuration:\n  provider=%s\n  model=%s\n  sandbox=%s\n  permissions=%s\n\n  /mode to change permissions · /model to change the model",
-		provider, model, sandbox, m.currentMode().Label())
+	effort := string(m.sess.Effort)
+	if effort == "" {
+		effort = "(provider default)"
+	}
+	return fmt.Sprintf("Configuration:\n  provider=%s\n  model=%s\n  effort=%s\n  sandbox=%s\n  permissions=%s\n\n  /mode to change permissions · /model to change the model · /effort to change effort",
+		provider, model, effort, sandbox, m.currentMode().Label())
 }
 
 // renderAgents lists the available sub-agent types (Agent tool subagent_type).

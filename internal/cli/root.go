@@ -110,7 +110,17 @@ func withExtraDirs(sys string, dirs []string) string {
 // hookRunner may be nil — the common case, meaning no hook is configured
 // anywhere; doctor is told "none" rather than being left silent about a
 // subsystem that runs shell commands when it is on.
-func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpCfg mcp.Config, hookRunner *hooks.Runner) doctor.Input {
+// effectiveMaxOutputTokens mirrors the loop's own resolution (loop.go: an
+// explicit cfg.MaxTokens, else the model-aware default) so /doctor reports the
+// cap that will actually be requested rather than the configured one.
+func effectiveMaxOutputTokens(cfg config.Config, model anthropic.Model) int {
+	if cfg.MaxTokens > 0 {
+		return cfg.MaxTokens
+	}
+	return api.MaxOutputTokens(string(model))
+}
+
+func buildDoctorInput(cfg config.Config, model anthropic.Model, effort api.Effort, cwd string, mcpCfg mcp.Config, hookRunner *hooks.Runner) doctor.Input {
 	servers, hints := lsp.Survey(cwd)
 	// Loaded silently: skill.Load's warnings go to the session that owns the
 	// prompt, not to /doctor, which must stay quiet on stderr.
@@ -150,6 +160,8 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, cwd string, mcpC
 		AuthKind:        "none",
 		ContextWindow:   ctxLimit,
 		ContextSource:   ctxSource,
+		Effort:          string(effort),
+		MaxOutputTokens: effectiveMaxOutputTokens(cfg, model),
 	}
 	if cfg.Provider == config.ProviderOpenAI {
 		if cfg.ResolveAPIKey() != "" {
@@ -533,6 +545,24 @@ type turnSettings struct {
 	Model      anthropic.Model
 	Permission permission.Context
 	ExtraDirs  []string
+	Effort     api.Effort
+}
+
+// resolveEffort applies the precedence --effort > KLAUDIA_EFFORT > config.
+// The env var sits in the middle so a shell default can be overridden by a
+// flag for one run, and a config file can be overridden by the shell.
+func resolveEffort(flag, fromConfig string) (api.Effort, error) {
+	for _, v := range []string{flag, os.Getenv("KLAUDIA_EFFORT"), fromConfig} {
+		if strings.TrimSpace(v) == "" {
+			continue
+		}
+		e, err := api.ParseEffort(v)
+		if err != nil {
+			return api.EffortUnset, usageErrorf("%s", err)
+		}
+		return e, nil
+	}
+	return api.EffortUnset, nil
 }
 
 // mcpReloadNotifier carries reload outcomes from the config watcher to whichever
@@ -660,6 +690,7 @@ type options struct {
 	print            bool
 	prompt           string
 	model            string
+	effort           string
 	outputFormat     string
 	inputFormat      string
 	permissionMode   string
@@ -738,6 +769,7 @@ func NewRootCommand() *cobra.Command {
 	f := cmd.Flags()
 	f.BoolVarP(&opts.print, "print", "p", false, "Non-interactive mode: print result to stdout and exit")
 	f.StringVar(&opts.model, "model", "", "Model alias (haiku|sonnet|opus) or full model ID")
+	f.StringVar(&opts.effort, "effort", "", "How hard the model works per response: "+api.EffortNames()+" (default: the provider's own, usually high)")
 	f.StringVar(&opts.outputFormat, "output-format", "text", "Output format: text|json|stream-json")
 	f.StringVar(&opts.inputFormat, "input-format", "text", "Input format: text|stream-json|acp (stream-json and acp both drive a persistent agent over stdin; acp speaks the Agent Client Protocol for editors such as Zed)")
 	f.StringVar(&opts.permissionMode, "permission-mode", "", "Permission mode: autonomous|plan|bypassPermissions (default: config [permissions] mode, else autonomous)")
@@ -887,6 +919,19 @@ func run(cmd *cobra.Command, opts *options) error {
 		modelStr = providerModel
 	}
 	model := api.ResolveModel(modelStr)
+
+	// Effort: --effort wins, then KLAUDIA_EFFORT, then config. Unset stays
+	// unset and sends nothing, so the provider's own default applies.
+	effort, err := resolveEffort(opts.effort, cfg.Effort)
+	if err != nil {
+		return err
+	}
+	// Refuse a level this model rejects rather than letting the first turn die
+	// on a 400: the API errors on an unsupported combination instead of
+	// dropping to the nearest level it does support.
+	if msg := api.EffortError(string(model), effort); msg != "" {
+		return usageErrorf("%s", msg)
+	}
 
 	// Resolve the permission mode: --permission-mode flag wins, else the config
 	// default ([permissions] mode), else autonomous. --dangerously-skip wins
@@ -1056,6 +1101,21 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Sub-agents inherit the hooks for the same reason they inherit the host
 	// gate: a child must not be the way around a rule the user set.
 	wiring.spawner.WithHooks(hookRunner)
+	// Effort is inherited unless [subagents] effort says otherwise. Like the
+	// sub-agent model, this is a snapshot taken at startup: a later /effort
+	// changes the main loop, not children already wired.
+	subEffort := effort
+	if cfg.Subagents.Effort != "" {
+		e, perr := api.ParseEffort(cfg.Subagents.Effort)
+		if perr != nil {
+			return usageErrorf("[subagents] effort: %s", perr)
+		}
+		if msg := api.EffortError(string(model), e); msg != "" {
+			return usageErrorf("[subagents] effort: %s", msg)
+		}
+		subEffort = e
+	}
+	wiring.spawner.WithEffort(subEffort)
 
 	// MCP config hot reload. An edit to any .mcp.json that applies here takes
 	// effect in this session instead of at the next start — installing a server
@@ -1142,6 +1202,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			MaxTurns:      opts.maxTurns,
 			ContextWindow: cfg.ContextWindow,
 			MaxTokens:     int64(cfg.MaxTokens),
+			Effort:        s.Effort,
 			Permission:    s.Permission,
 			Host:          hostGate,
 			DeferredTools: currentDeferred(),
@@ -1165,6 +1226,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			SessionID:           sessionID,
 			Model:               modelStr,
 			ResolvedModel:       string(model),
+			Effort:              effort,
 			Theme:               themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
 			PermissionMode:      string(mode),
 			EnterInserts:        tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
@@ -1179,21 +1241,25 @@ func run(cmd *cobra.Command, opts *options) error {
 			Agents:              tuiAgents(),
 			ContextWindow:       ctxLimit,
 			ContextWindowSource: ctxSource,
-			Compact: func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
-				return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
-					return loop.Compact(ctx, history, api.ResolveModel(modelStr))
-				}, onSummary)
-			},
-
-			Doctor: func() string {
-				return doctor.Format(doctor.Run(buildDoctorInput(cfg, model, cwd, mcpCfg, hookRunner)))
-			},
 			// Nil unless the provider can enumerate its models; /model falls
 			// back to type-the-id when it is.
 			ListModels: modelLister(provider),
 			Trust:      tui.NewTrustController(hostGate),
 			Jobs:       jobStore,
 			Executor:   executor,
+		}
+		// Assigned after the literal rather than inside them so the closures
+		// can read the session back: /compact and /doctor then use whatever
+		// /model and /effort have most recently set, instead of the values
+		// captured at startup — which is what /compact did when it closed over
+		// modelStr.
+		sess.Doctor = func() string {
+			return doctor.Format(doctor.Run(buildDoctorInput(cfg, api.ResolveModel(sess.Model), sess.Effort, cwd, mcpCfg, hookRunner)))
+		}
+		sess.Compact = func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
+			return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
+				return loop.Compact(ctx, history, api.ResolveModel(sess.Model), sess.Effort)
+			}, onSummary)
 		}
 		extraDirs = func() []string { return sess.ExtraDirs }
 		runFn := func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
@@ -1209,6 +1275,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				// inside the running turn rather than at the next TUI turn
 				// boundary.
 				ExtraDirs: sess.ExtraDirs,
+				Effort:    sess.Effort, // resolved fresh each turn, like Model
 			}), turn.Emit)
 		}
 		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages, sess)
@@ -1225,6 +1292,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			return loop.Run(ctx, baseOptions(turn, turnSettings{
 				Model:      model,
 				Permission: permCtx,
+				Effort:     effort,
 			}), turn.Emit)
 		}
 		// initialMessages, not nil: an explicit --resume/--continue was being
@@ -1243,7 +1311,8 @@ func run(cmd *cobra.Command, opts *options) error {
 				// Permission comes from the Turn: an ACP client keeps a mode
 				// per editor session, so one resolved here would be wrong for
 				// every session but the first.
-				Model: model,
+				Model:  model,
+				Effort: effort,
 			}), turn.Emit)
 		}
 		acpCtxLimit, _ := api.ContextWindow(string(model), cfg.ContextWindow)
@@ -1279,6 +1348,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				return loop.Run(ctx, baseOptions(turn, turnSettings{
 					Model:      model,
 					Permission: permCtx,
+					Effort:     effort,
 				}), turn.Emit)
 			},
 			approver:   approver,
@@ -1317,7 +1387,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		History:  initialMessages,
 		Emit:     emit,
 		Approver: approver,
-	}, turnSettings{Model: model, Permission: permCtx})
+	}, turnSettings{Model: model, Permission: permCtx, Effort: effort})
 	// Three fields the shared builder has no business knowing about: a headless
 	// run uses the envelope recorder rather than the plain transcript, it is the
 	// only mode that streams raw model events, and its deferred set is fixed at

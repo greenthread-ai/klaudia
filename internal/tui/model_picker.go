@@ -102,5 +102,13 @@ func (m *Model) setModel(id string, contextWindow int) string {
 	if m.sess.ContextWindow > 0 {
 		msg += fmt.Sprintf(" · %s context", humanTokens(int64(m.sess.ContextWindow)))
 	}
+	// A model switch can strand the live effort level: xhigh is fine on Opus 5
+	// and a 400 on Opus 4.6. Drop to the ceiling and say so, rather than
+	// letting the next turn fail on a setting the user made before the switch.
+	if emsg := api.EffortError(id, m.sess.Effort); emsg != "" {
+		_, highest := api.EffortSupported(id, m.sess.Effort)
+		m.sess.Effort = highest
+		msg += ". " + emsg + " — effort lowered to " + string(highest)
+	}
 	return msg + ". Applies to the next turn."
 }

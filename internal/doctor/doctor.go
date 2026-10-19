@@ -49,6 +49,12 @@ type Input struct {
 	// fall back to compaction's default at request time.
 	ContextWindow int
 	ContextSource string
+	// Effort is the resolved level ("" when unset, i.e. the provider's own
+	// default), and MaxOutputTokens the per-response cap it has to fit in.
+	// Both are reported together because the cap bounds thinking and text
+	// combined, so a high level against a small cap truncates.
+	Effort          string
+	MaxOutputTokens int
 	// MissingLSPHints are actionable suggestions for languages present in the
 	// project but lacking a server (e.g. "install gopls for go support").
 	MissingLSPHints []string
@@ -56,6 +62,17 @@ type Input struct {
 	// deliberately not loaded, so they stay discoverable without being
 	// injected into context.
 	SyncedIgnored int
+}
+
+// effortMinOutputTokens is the output cap below which a high effort level is
+// a truncation risk rather than a setting. Anthropic's own guidance for xhigh
+// and max starts at 64k; that is the number used here rather than a guess.
+const effortMinOutputTokens = 64000
+
+// effortNeedsRoom reports whether a level is one of the two the docs call out
+// as needing a large max_tokens.
+func effortNeedsRoom(level string) bool {
+	return level == "xhigh" || level == "max"
 }
 
 // Skill is one loaded user-defined skill, for the /doctor report.
@@ -156,6 +173,23 @@ func Run(in Input) []Check {
 		add("context", StatusInfo, fmt.Sprintf("%s tokens (%s)", formatTokens(in.ContextWindow), in.ContextSource))
 	} else if in.ContextSource != "" {
 		add("context", StatusWarn, in.ContextSource)
+	}
+
+	// Effort, and the one way it goes wrong quietly. max_tokens is a hard
+	// limit on thinking plus response text, so a high level against the 8192
+	// floor an unknown model gets does not fail — it truncates mid-thought,
+	// which reads as the model losing the plot rather than as a setting.
+	if in.Effort != "" {
+		msg := "effort " + in.Effort
+		if in.MaxOutputTokens > 0 {
+			msg += fmt.Sprintf(" · %s max output", formatTokens(in.MaxOutputTokens))
+		}
+		if effortNeedsRoom(in.Effort) && in.MaxOutputTokens > 0 && in.MaxOutputTokens < effortMinOutputTokens {
+			add("effort", StatusWarn, msg+fmt.Sprintf(" — %s bounds thinking and text together; raise maxTokens (at least %s) or lower the effort",
+				formatTokens(in.MaxOutputTokens), formatTokens(effortMinOutputTokens)))
+		} else {
+			add("effort", StatusInfo, msg)
+		}
 	}
 
 	// Config presence.

@@ -1,6 +1,10 @@
 package compaction
 
-import "github.com/anthropics/anthropic-sdk-go"
+import (
+	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/greenthread-ai/klaudia/internal/api"
+)
 
 // SummaryInstruction is appended to the conversation to elicit a structured
 // summary, condensed from the JS compaction prompt (compactConversation).
@@ -13,14 +17,39 @@ Write the summary as plain prose. Do not ask questions or take any further actio
 
 // BuildSummaryRequest returns a request that asks the model to summarize the
 // given conversation. The summary instruction is appended as a final user turn.
-func BuildSummaryRequest(messages []anthropic.BetaMessageParam, model anthropic.Model, maxTokens int64) anthropic.BetaMessageNewParams {
+// effort is the session's level; SummaryEffort decides what the summary call
+// actually runs at.
+func BuildSummaryRequest(messages []anthropic.BetaMessageParam, model anthropic.Model, maxTokens int64, effort api.Effort) anthropic.BetaMessageNewParams {
 	msgs := append([]anthropic.BetaMessageParam{}, messages...)
 	msgs = append(msgs, anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(SummaryInstruction)))
-	return anthropic.BetaMessageNewParams{
+	params := anthropic.BetaMessageNewParams{
 		Model:     model,
 		MaxTokens: maxTokens,
 		Messages:  msgs,
 	}
+	if lvl := SummaryEffort(effort); lvl != api.EffortUnset {
+		params.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(lvl)
+	}
+	return params
+}
+
+// SummaryEffort is the level a compaction summary runs at, given the session's.
+//
+// Summarising is extraction, not reasoning: the instruction above names the
+// four things to pull out of a transcript that is already in front of the
+// model. Spending xhigh or max on it buys nothing and costs on every
+// compaction, which on a long session is the call made most often after the
+// turn itself. So it is capped at medium.
+//
+// A session already below medium keeps its own level — someone who asked for
+// low everywhere did not ask compaction to be the exception — and an unset
+// session stays unset rather than opting into effort on a provider that may
+// not take it.
+func SummaryEffort(session api.Effort) api.Effort {
+	if session == api.EffortUnset || session == api.EffortLow {
+		return session
+	}
+	return api.EffortMedium
 }
 
 // ReplaceWithSummary returns the post-compaction conversation: a single user

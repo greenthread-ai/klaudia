@@ -23,6 +23,55 @@ port mirrors (see `internal/version`).
   This is the question every "is the fix in?" needed answering, and the
   alternative has been comparing the binary's mtime against `git log`.
 
+- **Effort: how hard the model works per response, on both providers.**
+  `--effort low|medium|high|xhigh|max`, `KLAUDIA_EFFORT`, `effort = "..."` in
+  the config, and `/effort` to change it mid-session. Effort covers the whole
+  response — thinking, tool calls and text — and on the current Claude models
+  it is *the* control for thinking depth, having replaced `budget_tokens`.
+  Klaudia previously sent nothing and silently took whatever the provider's
+  default was.
+
+  Unset still sends nothing. That is what keeps the request byte-identical to
+  before for anyone who does not set a level, and it is load-bearing for the
+  OpenAI-compatible path: older vLLM and llama.cpp builds reject an unknown key
+  outright, so an empty `reasoning_effort` would break them.
+
+  One field, translated per provider — `output_config.effort` on Anthropic (GA,
+  no beta header) and `reasoning_effort` on OpenAI-compatible endpoints. All
+  five levels pass through unchanged in both directions because the OpenAI
+  vocabulary is a superset of ours, so nothing is clamped and the same setting
+  means the same thing on either backend. Configuring it per provider would
+  have been less code and a worse answer.
+
+  The API rejects an unsupported model/level pair with a 400 instead of
+  dropping to the nearest level it supports, so a wrong value is a dead session
+  rather than a cheaper one. `--effort` is validated against the model at
+  startup, `/effort` refuses what the current model cannot do, and `/model`
+  lowers the live level to the new model's ceiling and says so. An *unknown*
+  model is treated as capable, not incapable: that is every OpenAI-compatible
+  endpoint and every Claude snapshot newer than the table, and refusing locally
+  would be Klaudia inventing a limit the provider never stated.
+
+  Two costs are surfaced rather than hidden. Changing effort mid-session
+  invalidates the conversation's prompt cache, so `/effort` says that the next
+  turn re-reads the whole prefix at full rate — on a long session the most
+  expensive thing a slash command can do. And `max_tokens` bounds thinking and
+  text *together*, so `/doctor` warns when `xhigh` or `max` is set against a
+  cap under 64k: against the 8192 floor an unknown model gets, that does not
+  error, it truncates mid-thought and reads as the model losing the plot.
+
+  The cache-preserving alternative (per-message effort, beta header
+  `mid-conversation-output-config-2026-07-01`) is deliberately not used: it is
+  Anthropic-only, and taking it would make a mid-session change cheap on one
+  backend and expensive on the other. See `docs/effort.md`.
+
+  Sub-agents inherit the session's level unless `[subagents] effort` says
+  otherwise. Inherit is the default because a quieter Explore fan-out is a real
+  saving but a silent downgrade degrades results months later with nothing to
+  attribute it to; the knob exists so the trade can be measured first.
+  Compaction summaries cap at `medium` — summarising is extraction from a
+  transcript already in context, so `xhigh` buys nothing there and would be
+  paid on every compaction.
 - **An editor can drive Klaudia directly: the Agent Client Protocol v1, over
   stdio (`--input-format acp`).** Zed, Neovim's `acp.nvim` and the JetBrains
   plugin all speak it, so the editor keeps its own UI for messages, tool calls,
