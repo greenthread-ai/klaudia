@@ -81,6 +81,20 @@ claude
 klaudia
 ```
 
+**GreenThread AI Console**
+
+```toml
+# ~/.klaudia/config.toml
+provider = "greenthread"
+```
+
+```bash
+export GREENTHREAD_API_KEY="gt_live_..."
+klaudia
+```
+
+See [GreenThread AI Console](#greenthread-ai-console) for what that sets up.
+
 **OpenAI-compatible provider**
 
 Edit the config you just generated and set the provider block:
@@ -432,8 +446,9 @@ Klaudia defaults to the Anthropic Messages API. A project or user
 `.klaudia/config.toml` selects the provider and model:
 
 ```toml
-# "anthropic" (default) | "openai" — the API dialect spoken at baseURL,
-# not the vendor: vLLM, llama.cpp and LiteLLM all speak "openai".
+# "anthropic" (default) | "openai" | "greenthread" (see below) — for the
+# first two, the API dialect spoken at baseURL and not the vendor: vLLM,
+# llama.cpp and LiteLLM all speak "openai".
 provider = "openai"
 model = "openai/gpt-5.5"
 
@@ -487,12 +502,46 @@ mismatch from the server rather than as something naming the cause.
 `KLAUDIA_CUSTOM_ENDPOINT` overrides `baseURL` for one run, whichever provider
 is selected.
 
+### GreenThread AI Console
+
+```toml
+provider = "greenthread"
+```
+
+```bash
+export GREENTHREAD_API_KEY="gt_live_..."
+```
+
+That one line gives you:
+
+| Setting | Default | Override with |
+| --- | --- | --- |
+| endpoint | `https://console.gt-syd.gthread.dev` | `baseURL` (a trailing `/v1` is fine) |
+| key | `$GREENTHREAD_API_KEY` | `apiKey`, or `apiKeyEnv` to name another variable |
+| model | `moonshotai/Kimi-K3` | `model`, `--model`, or `/model` |
+| context window | 1,000,000 for Kimi K3 | `contextWindow` |
+| output cap | 32000 for Kimi K3 | `maxTokens` |
+
+`/model` lists the console's chat models. Models that offer the Anthropic
+Messages endpoint (Kimi K3 today) are driven over it. There, the model's
+reasoning comes back as thinking blocks and is carried from one turn to the
+next. Other models go through the OpenAI-compatible shim. Anthropic-only
+features are not sent to the console: no betas, no prompt caching, and no
+server-side web search. The local `BrowserSearch` / `BrowserFetch` tools handle
+the web instead.
+
+As with every provider, autocompaction triggers against `contextWindow`
+(200000 when unset), not the 1M shown in `/doctor`. Set
+`contextWindow = 1000000` to let a session use Kimi K3's full window before it
+is summarised.
+
 ### Auth
 
 - `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`), or
 - an existing Claude Code OAuth session in the macOS Keychain (Klaudia refreshes
   expired tokens and writes them back), or
-- a provider key via `apiKey` / `apiKeyEnv` in `.klaudia/config.toml`.
+- a provider key via `apiKey` / `apiKeyEnv` in `.klaudia/config.toml`
+  (`GREENTHREAD_API_KEY` by default for `provider = "greenthread"`).
 
 ### Streaming & reliability
 
