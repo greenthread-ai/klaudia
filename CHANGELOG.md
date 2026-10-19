@@ -17,6 +17,17 @@ port mirrors (see `internal/version`).
   push is now `--atomic`: the remote rejects both refs or neither.
   `docs/releasing.md` claimed this case "stops before tagging"; it did not.
 
+### Changed
+- **CI actions moved to their current majors**: `actions/checkout` v4 → v7,
+  `actions/setup-go` v5 → v7, `goreleaser/goreleaser-action` v6 → v7. All
+  three are node24/ESM migrations with no input changes — v7 of
+  goreleaser-action still takes the same `version` and `args`. The one
+  behavioural change that matters here is in checkout v6, which moved
+  persisted credentials out of `.git/config` into `$RUNNER_TEMP`; the release
+  job pushes with those credentials, and the coupling is now commented at the
+  checkout step so a future `persist-credentials: false` is not mistaken for
+  hardening.
+
 ## v0.1.0 — 2026-10-19
 
 ### Added

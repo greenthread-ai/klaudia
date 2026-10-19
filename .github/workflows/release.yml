@@ -25,14 +25,21 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history, not the default shallow clone: the build reads the
           # commit out of VCS metadata for `klaudia --version`, and both
           # GoReleaser and scripts/release.sh need the preceding tags.
           fetch-depth: 0
+          # persist-credentials is left at its default true: scripts/release.sh
+          # pushes the changelog commit and tag with it. checkout v6 moved
+          # those credentials out of .git/config into a file under
+          # $RUNNER_TEMP; git push still picks them up, and the runner-version
+          # caveat on that change applies to Docker container actions, which
+          # this workflow does not use. Setting persist-credentials: false
+          # here would break the dispatch path, not harden it.
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.26'
           check-latest: true
@@ -66,7 +73,7 @@ jobs:
 
       - name: Publish
         if: '!inputs.dry_run'
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean
@@ -77,7 +84,7 @@ jobs:
       # without creating a tag or a release.
       - name: Rehearse (dry run only)
         if: inputs.dry_run
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --snapshot --clean --skip=publish
