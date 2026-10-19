@@ -26,7 +26,17 @@ type Config struct {
 	// Theme is the TUI theme for Markdown + chrome (e.g. "nord", "dracula").
 	// "" uses the default; /theme overrides it for the current session.
 	Theme string `toml:"theme,omitempty"`
-	// BaseURL is the OpenAI-compatible endpoint (including /v1), if provider=openai.
+	// BaseURL is the API endpoint, in whichever dialect Provider selects: an
+	// OpenAI-compatible base (including the /v1 suffix) under
+	// provider="openai", an Anthropic-compatible one (a proxy or gateway)
+	// otherwise. Empty uses the provider's own default, which for Anthropic is
+	// production and for OpenAI-compatible does not exist — there it is
+	// required.
+	//
+	// Endpoint and dialect are deliberately two keys rather than one: a bare
+	// baseURL cannot say whether the host behind it speaks Anthropic or
+	// OpenAI, and guessing turns a wrong guess into a protocol-mismatch 400
+	// from the server instead of something that names the cause.
 	BaseURL string `toml:"baseURL,omitempty"`
 	// Temperature for the OpenAI-compatible provider. Omitted from the request
 	// when nil (lets the server pick its default).
@@ -389,6 +399,17 @@ func merge(dst *Config, src Config) {
 	}
 	// Disabled LSP languages accumulate (union of home + project).
 	dst.LSP.Disabled = append(dst.LSP.Disabled, src.LSP.Disabled...)
+}
+
+// ResolveBaseURL returns the configured endpoint, trimmed. "" means the
+// provider's own default.
+//
+// It applies to whichever dialect Provider selects, which baseURL did not do
+// before: the key was read only under provider="openai", so an Anthropic proxy
+// could be set through KLAUDIA_CUSTOM_ENDPOINT and nowhere else, and a baseURL
+// left in the file under the default provider was silently ignored.
+func (c Config) ResolveBaseURL() string {
+	return strings.TrimSpace(c.BaseURL)
 }
 
 // ResolveAPIKey returns the inline key, or the value of the named env var.

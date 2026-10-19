@@ -557,6 +557,32 @@ port mirrors (see `internal/version`).
   point at `/mcp`. A reload that works stays silent: announcing every one would
   print a line each time an unrelated key in the file was saved.
 
+### Changed
+- **`baseURL` now applies to whichever provider is selected, not just
+  `provider = "openai"`.** It was read on the OpenAI-compatible path and
+  nowhere else, so an Anthropic-dialect proxy or gateway could only be reached
+  through the undocumented `KLAUDIA_CUSTOM_ENDPOINT`, and a `baseURL` sitting
+  in the file under the default provider was read, ignored, and silently
+  overridden by production. `KLAUDIA_CUSTOM_ENDPOINT` still wins over the
+  config — env over config, as everywhere else — and now applies to both
+  providers rather than only to Anthropic.
+
+  This is a behaviour change for one configuration: `baseURL` set with
+  `provider` unset or `"anthropic"`. That combination previously went to the
+  Anthropic production API and now goes to `baseURL`. If the URL was left over
+  from an OpenAI-compatible setup, set `provider = "openai"` to restore the
+  pairing, or delete the key.
+
+  `baseURL` and `provider` stay two keys — endpoint and dialect — rather than
+  collapsing into one. Separate `baseURLAnthropic`/`baseURLOpenAI` keys were
+  built first and removed before release: `provider` already states the
+  dialect, so a key per backend duplicates it and grows the config by one key
+  for every protocol added later. Inferring the dialect from the URL instead
+  was rejected in the other direction — nothing in a hostname distinguishes an
+  Anthropic-compatible gateway from an OpenAI-compatible one, and a wrong
+  inference surfaces as a protocol-mismatch 400 from the server rather than as
+  anything that names the cause.
+
 ### Removed
 - **The per-command permission model is gone, not deprecated.** No allow/deny
   rules, no `--allowedTools`/`--disallowedTools`, no `/allow` or `/deny`, no

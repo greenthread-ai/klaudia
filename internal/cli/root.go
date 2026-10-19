@@ -368,23 +368,33 @@ func modelLister(p api.Provider) func(context.Context) ([]api.ModelInfo, error) 
 // buildProvider selects and constructs the model provider from config. It
 // returns the provider and the provider's default model. Anthropic is the
 // default; "openai" uses an OpenAI-compatible Chat Completions endpoint.
+// resolveEndpoint returns the API endpoint for the active provider:
+// KLAUDIA_CUSTOM_ENDPOINT wins, else the configured baseURL — env over config,
+// as everywhere else. The env var used to reach only the Anthropic client; it
+// now applies to whichever dialect is selected, so one override behaves the
+// same way on both.
+func resolveEndpoint(cfg config.Config) string {
+	return firstNonEmpty(os.Getenv("KLAUDIA_CUSTOM_ENDPOINT"), cfg.ResolveBaseURL())
+}
+
 func buildProvider(cfg config.Config) (api.Provider, string, error) {
+	endpoint := resolveEndpoint(cfg)
 	switch cfg.Provider {
 	case config.ProviderOpenAI:
-		if cfg.BaseURL == "" {
+		if endpoint == "" {
 			return nil, "", fmt.Errorf("provider \"openai\" requires baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml (try --create-config=global or --create-config=local)")
 		}
 		key := cfg.ResolveAPIKey()
 		if key == "" {
 			return nil, "", fmt.Errorf("provider \"openai\" needs apiKey or apiKeyEnv in ~/.klaudia/config.toml or ./.klaudia/config.toml; if using apiKeyEnv, export that variable before running")
 		}
-		return api.NewOpenAIProvider(cfg.BaseURL, key, cfg.Temperature), cfg.Model, nil
+		return api.NewOpenAIProvider(endpoint, key, cfg.Temperature), cfg.Model, nil
 	default:
 		cred, err := api.ResolveCredential()
 		if err != nil {
 			return nil, "", err
 		}
-		return api.New(cred, os.Getenv("KLAUDIA_CUSTOM_ENDPOINT")), cfg.Model, nil
+		return api.New(cred, endpoint), cfg.Model, nil
 	}
 }
 

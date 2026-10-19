@@ -236,8 +236,9 @@ func maxRetries() int {
 	return defaultMaxRetries
 }
 
-// New builds a Client from the resolved credential and optional custom base URL
-// (--custom-endpoint). baseURL == "" uses the Anthropic production API.
+// New builds a Client from the resolved credential and optional custom base
+// URL (KLAUDIA_CUSTOM_ENDPOINT, or baseURL/baseURLAnthropic in the config).
+// baseURL == "" uses the Anthropic production API.
 //
 // On the OAuth path Anthropic's rate-limit bucket is selected entirely by the
 // presence of an `x-anthropic-billing-header:` prefix on system[0] — see

@@ -432,11 +432,15 @@ Klaudia defaults to the Anthropic Messages API. A project or user
 `.klaudia/config.toml` selects the provider and model:
 
 ```toml
-# "anthropic" (default) | "openai"
+# "anthropic" (default) | "openai" — the API dialect spoken at baseURL,
+# not the vendor: vLLM, llama.cpp and LiteLLM all speak "openai".
 provider = "openai"
 model = "openai/gpt-5.5"
 
-# OpenAI-compatible endpoint.
+# The endpoint, in whichever dialect `provider` selects. Include /v1 for
+# OpenAI-compatible hosts. Omit it to use the provider's default (Anthropic
+# production); it is required under provider = "openai".
+# An Anthropic-dialect proxy or gateway goes here too, with provider unset.
 baseURL = "https://api.example.com/v1"
 
 # apiKeyEnv names the env var holding the key (you then `export MY_API_KEY=...`).
@@ -474,6 +478,14 @@ Completions (including image tool-results → `image_url`).
 
 `~/.klaudia/config.toml` is the user default; a project `./.klaudia/config.toml`
 overlays it (project wins). Settings merge per field.
+
+`baseURL` and `provider` are an endpoint/dialect pair, and both apply to either
+backend: point `baseURL` at an Anthropic-compatible proxy with `provider`
+unset, or at an OpenAI-compatible host with `provider = "openai"`. Klaudia does
+not infer the dialect from the URL — a wrong guess would surface as a protocol
+mismatch from the server rather than as something naming the cause.
+`KLAUDIA_CUSTOM_ENDPOINT` overrides `baseURL` for one run, whichever provider
+is selected.
 
 ### Auth
 
