@@ -99,7 +99,14 @@ stays frozen and the binary reports its commit."
 git tag -a "$VERSION" -m "$VERSION"
 
 if [[ "$PUSH" == true ]]; then
-  git push origin HEAD "$VERSION"
+  # --atomic or the two refs go up independently. Measured against a bare repo
+  # with an `update` hook declining refs/heads/main, which is how a protected
+  # branch rejects per ref: the plain push reports "[new tag] v9.9.9" and
+  # "[remote rejected] HEAD -> main", exits 1, and leaves the tag on the
+  # remote with its changelog commit nowhere. A tag pushed by CI starts no
+  # workflow run, so that state is a tag with no release and no failed run
+  # pointing at it. Atomic makes the remote reject both or neither.
+  git push --atomic origin HEAD "$VERSION"
   echo "release: pushed $VERSION"
 else
   echo "release: created $VERSION locally (not pushed)"

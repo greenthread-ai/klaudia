@@ -5,6 +5,18 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+- **A release rejected by branch protection no longer leaves a tag behind.**
+  `scripts/release.sh` creates the tag locally and then pushed two refs
+  non-atomically, and a protected branch is declined *per ref*: measured
+  against a bare repo whose `update` hook declines `refs/heads/main`, the
+  remote took `v0.1.1` and refused the changelog commit. The script exits
+  non-zero and the publish step is skipped, so nothing is built — but the tag
+  is left on the remote pointing at a commit that is not on `main`, and a tag
+  pushed by CI starts no workflow run, so nothing fails visibly either. The
+  push is now `--atomic`: the remote rejects both refs or neither.
+  `docs/releasing.md` claimed this case "stops before tagging"; it did not.
+
 ## v0.1.0 — 2026-10-19
 
 ### Added

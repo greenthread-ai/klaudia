@@ -105,9 +105,26 @@ laptop is a normal user event and does trigger it.
 ## Branch protection
 
 The dispatch path pushes a changelog commit straight to `main`. If `main` ever
-requires pull requests, that push fails and the release stops before tagging —
-no half-made release, but the pipeline then needs either an exemption for
-`github-actions[bot]` or a change to open a PR instead.
+requires pull requests, that push is rejected and the release stops before
+anything is published — but only because the push is `--atomic`, and that is
+load-bearing rather than tidiness.
+
+`scripts/release.sh` creates the tag locally before pushing, so the push
+carries two refs. A protected branch is declined per ref, so a plain
+`git push origin HEAD vX.Y.Z` has the remote take the tag and refuse the
+branch. Measured against a bare repo whose `update` hook declines
+`refs/heads/main`: `* [new tag] v9.9.9 -> v9.9.9` alongside
+`! [remote rejected] HEAD -> main`, exit status 1. The non-zero exit does stop
+the script and skip the publish step, so no release is built — but the tag is
+now on the remote, pointing at a commit that is not on `main`, and because a
+tag pushed by CI starts no workflow run there is no failed run pointing at it
+either. Someone has to notice and `git push --delete origin vX.Y.Z`. With
+`--atomic` the remote rejects both refs or neither.
+
+So the pipeline fails safe under branch protection, but it does fail: enabling
+it needs either an exemption for `github-actions[bot]` or a change to open a
+PR instead of pushing. Until then the atomic push is what keeps a rejection
+from leaving debris.
 
 ## Platforms
 
