@@ -6,6 +6,33 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Releases are one click: pick the bump, CI does the rest.** The Release
+  workflow takes `minor` (default), `patch` or `major`, and a dry-run tickbox
+  that computes the version and builds the matrix without tagging or
+  publishing anything. `scripts/release.sh` holds the logic so it can be run
+  and read locally rather than living inside YAML.
+
+  The bump is chosen, not derived. Deriving it means Conventional Commits, and
+  this project uses `area: lowercase sentence` — documented in `CLAUDE.md` and
+  followed by every commit in the history. release-please and semantic-release
+  read nothing else, so adopting one would mean changing the commit convention
+  across the project to automate a one-word decision. Same reason GoReleaser's
+  generated changelog is off.
+
+  Tagging and publishing happen in **one job**, which is not a shortcut.
+  GitHub suppresses workflow runs for events raised with `GITHUB_TOKEN` to
+  prevent recursion, with `workflow_dispatch` and `repository_dispatch` the
+  only exceptions — so the obvious two-workflow shape (dispatch tags, tag
+  push publishes) leaves the tag in the repository and never publishes, with
+  no failed run to notice. The alternative fix is a PAT or App token, i.e. a
+  standing credential to rotate and leak in exchange for a job boundary
+  nobody needed. A tag pushed from a laptop is a user event and still
+  triggers the workflow normally.
+
+  Releasing an empty `## Unreleased` section is refused — the mistake is
+  easiest to make right after a release — and so is a dirty tree, which would
+  otherwise be swept into the changelog commit and mark every binary `-dirty`.
+  Tests run before the tag is cut, so a failure leaves nothing to clean up.
 - **Tagged releases: push `v*`, get built binaries.** The project had no
   release machinery at all — no tags on origin, no pipeline, and `ci.yml`
   triggering only on `push: branches: [main]` and pull requests. GoReleaser now

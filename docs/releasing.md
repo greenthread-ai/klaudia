@@ -1,30 +1,58 @@
 # Releasing
 
 Klaudia releases are built by [GoReleaser](https://goreleaser.com) from a tag.
-`.goreleaser.yaml` holds the build matrix; `.github/workflows/release.yml` runs
-it. This file records why the pipeline is shaped the way it is.
+`.goreleaser.yaml` holds the build matrix, `scripts/release.sh` works out the
+next version and cuts the tag, and `.github/workflows/release.yml` runs both.
+This file records why the pipeline is shaped the way it is.
 
 ## Cutting a release
 
+From the Actions tab: run **Release**, pick `minor` (default), `patch` or
+`major`, and leave *dry run* unticked. CI vets, tests, stamps the changelog,
+commits, tags, and publishes. Nothing else is manual.
+
+Tick *dry run* to rehearse: the version is computed and printed, the matrix is
+built, and nothing is committed, tagged or published.
+
+The same thing locally, if you would rather watch it happen:
+
 ```bash
-git switch main && git pull                  # release from what origin has
-# edit CHANGELOG.md: rename "## Unreleased" to "## v0.2.0 — 2026-10-19"
-git commit -am "changelog: cut v0.2.0"
-git tag -a v0.2.0 -m "v0.2.0"
-git push origin main v0.2.0
+scripts/release.sh --dry-run          # what would the next version be?
+scripts/release.sh minor              # commit, tag and push -> CI publishes
+scripts/release.sh patch --no-push    # stop short of pushing
 ```
 
-The tag push triggers the workflow: vet, test, then build and publish. Nothing
-else is manual — no version constant to bump (see below).
+A tag pushed from a laptop triggers the workflow normally. A tag pushed by CI
+does not — see below.
 
-Dry-run the whole thing without a tag, writing to `dist/` (git-ignored):
+Rehearse just the build, with no tag, writing to `dist/` (git-ignored):
 
 ```bash
 goreleaser check                                  # validate the config
 goreleaser release --snapshot --clean --skip=publish
 ```
 
-## What the version reports, and why nothing is bumped
+## Versioning
+
+The version is the tag. There is no number in the source to bump, and the
+bump size is chosen per release rather than derived from the commits.
+
+Deriving it would mean [Conventional
+Commits](https://www.conventionalcommits.org) — `feat:` for a minor, `fix:`
+for a patch — and this project uses `area: lowercase sentence` instead, which
+`CLAUDE.md` documents and every commit in the history follows. Tools like
+release-please and semantic-release read nothing else, so adopting one means
+changing the commit convention across the project to make a one-word choice
+automatic. It is the same reason GoReleaser's generated changelog is off.
+
+`scripts/release.sh` refuses to release an empty `## Unreleased` section. That
+mistake is easiest to make immediately after a release, when the section is
+empty and the habit says to run the command again.
+
+The first release is `v0.1.0`: with no tags in the repository there is nothing
+to bump from, and any bump size lands there.
+
+## What a released binary reports
 
 `version.Version` is a frozen constant, `2.1.66-klaudia`, mirroring the retired
 JavaScript bundle so the parity harness sees identical `--version` output. It
@@ -47,6 +75,39 @@ answer ("does this binary have the fix?") stops being answerable. A shallow
 workflow sets `fetch-depth: 0`.
 
 A binary built from a tree with uncommitted changes is marked `-dirty`.
+
+An archive is named for its tag (`klaudia_0.1.0_darwin_arm64.tar.gz`) while the
+binary inside names its commit. `git tag --contains <commit>` maps one to the
+other. Injecting the tag through `-ldflags` was considered and left alone: the
+point of `version.Build()` is that there is exactly one number worth trusting,
+and a third one printed beside the other two works against that.
+
+## Tagging from CI: one job, not two
+
+The obvious shape — dispatch computes the tag, pushes it, and a separate
+`on: push: tags` workflow publishes — does not work, and fails quietly.
+
+[GitHub suppresses workflow runs for events raised with
+`GITHUB_TOKEN`](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication),
+to stop a workflow triggering itself forever. `workflow_dispatch` and
+`repository_dispatch` are the only exceptions. So a tag pushed by CI with the
+default token lands in the repository and starts nothing: the tag is there, the
+release is not, and there is no failed run to notice.
+
+The fixes are a PAT or GitHub App token, or doing the work in one job. This
+uses one job. A long-lived credential whose only purpose is to bounce from one
+workflow run into another is a standing secret to rotate and leak, in exchange
+for a job boundary nobody needed.
+
+The `on: push: tags` trigger is still there, because a tag pushed from a
+laptop is a normal user event and does trigger it.
+
+## Branch protection
+
+The dispatch path pushes a changelog commit straight to `main`. If `main` ever
+requires pull requests, that push fails and the release stops before tagging —
+no half-made release, but the pipeline then needs either an exemption for
+`github-actions[bot]` or a change to open a PR instead.
 
 ## Platforms
 
@@ -78,7 +139,8 @@ goreleaser release --release-notes=/path/to/notes.md
 
 ## Checks the pipeline owns
 
-`ci.yml` triggers on `push: branches: [main]` and on pull requests. A tag push
-matches neither, so `release.yml` runs `go vet` and `go test ./internal/...`
-itself. Without that, the release build would be the only build in the project
-that nothing gates.
+`ci.yml` triggers on `push: branches: [main]` and on pull requests. Neither a
+tag push nor a dispatch matches, so `release.yml` runs `go vet` and
+`go test ./internal/...` itself. Without that, the release build would be the
+only build in the project that nothing gates. They run *before* the tag is
+cut, so a failing test leaves no tag behind to clean up.

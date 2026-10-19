@@ -1,6 +1,20 @@
 name: Release
 
 on:
+  # Cut a release: pick the bump, CI does the rest.
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        type: choice
+        options: [minor, patch, major]
+        default: minor
+      dry_run:
+        description: 'Rehearse only: build nothing public, push nothing'
+        type: boolean
+        default: false
+  # A tag cut by hand (scripts/release.sh --no-push, then git push) still
+  # publishes. Tags pushed by this workflow do NOT arrive here — see below.
   push:
     tags: ['v*']
 
@@ -14,8 +28,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # Full history, not the default shallow clone: the build reads the
-          # commit out of VCS metadata for `klaudia --version`, and GoReleaser
-          # needs the preceding tags to work out the version.
+          # commit out of VCS metadata for `klaudia --version`, and both
+          # GoReleaser and scripts/release.sh need the preceding tags.
           fetch-depth: 0
 
       - uses: actions/setup-go@v5
@@ -24,17 +38,46 @@ jobs:
           check-latest: true
           cache: true
 
-      # ci.yml triggers on `branches: [main]`, which a tag push does not
-      # match — without this a release would be the one build nothing gates.
+      # ci.yml triggers on `branches: [main]`, which neither a tag push nor a
+      # dispatch matches — without this a release would be the one build
+      # nothing gates. Runs before the tag is cut, so a failure leaves no tag.
       - name: Vet
         run: go vet ./...
 
       - name: Test
         run: go test ./internal/... -count=1
 
-      - uses: goreleaser/goreleaser-action@v6
+      - name: Configure git identity
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      # Stamps the changelog, commits, tags and pushes. The publish step below
+      # runs in this same job on purpose: a tag pushed with GITHUB_TOKEN does
+      # not start a new workflow run (GitHub suppresses it to prevent
+      # recursion), so a separate tag-triggered publish job would never fire
+      # and the failure would be silent — tag present, release missing.
+      - name: Cut the release
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          scripts/release.sh '${{ inputs.bump }}' \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Publish
+        if: '!inputs.dry_run'
+        uses: goreleaser/goreleaser-action@v6
         with:
           version: '~> v2'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Proves the matrix still builds and the archives are well-formed
+      # without creating a tag or a release.
+      - name: Rehearse (dry run only)
+        if: inputs.dry_run
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --snapshot --clean --skip=publish
