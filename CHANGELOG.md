@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.1.0 — 2026-10-19
+
 ### Added
 - **Releases are one click: pick the bump, CI does the rest.** The Release
   workflow takes `minor` (default), `patch` or `major`, and a dry-run tickbox
