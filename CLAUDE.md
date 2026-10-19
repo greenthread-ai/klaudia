@@ -16,6 +16,11 @@ but into the working directory, not onto `$PATH`. Running `klaudia` after either
 one runs whatever was installed last — a two-month-old binary in one real case.
 Use `go install` when you mean to try the change.
 
+`klaudia --version` prints the constant and then the commit the binary was
+built from, so you can check which one you are running rather than inferring it
+from mtimes. Releases are a tag push; `docs/releasing.md` has the steps and the
+reason `-buildvcs=false` must never appear in the build flags.
+
 ## Internal Package Layout
 
 - **agent** - Main event loop, orchestration, and sub-agent spawning
@@ -48,8 +53,8 @@ Use `go install` when you mean to try the change.
 `docs/ux-spec.md` is the authoritative record of the two terminal-UX specs and
 where the implementation deliberately differs from them — read it before
 "fixing" something that looks unimplemented. `docs/trust.md`, `docs/jobs.md`,
-`docs/working-tree.md`, `docs/hooks.md`, `docs/acp.md` and `docs/effort.md`
-cover six subsystems in detail.
+`docs/working-tree.md`, `docs/hooks.md`, `docs/acp.md`, `docs/effort.md` and
+`docs/releasing.md` cover seven subsystems in detail.
 
 Hooks are the one subsystem that executes a string from a config file, so
 `docs/hooks.md` is where the reasoning for the trust prompt lives. A hook runs

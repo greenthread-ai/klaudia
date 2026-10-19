@@ -936,6 +936,8 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 - [docs/acp.md](docs/acp.md) — the ACP frontend: what is served, and what is declined
 - [docs/effort.md](docs/effort.md) — effort levels, model support, and the two
   costs it is easy not to notice
+- [docs/releasing.md](docs/releasing.md) — tagging, the build matrix, and why
+  `--version` reports a commit rather than a number
 - [docs/parity.md](docs/parity.md) — JS→Go feature map and divergences
 - [docs/compaction.md](docs/compaction.md) — context-window management
 - [docs/memory-architecture.md](docs/memory-architecture.md) — index→detail memory store

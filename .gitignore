@@ -6,6 +6,9 @@
 # Stray local build artifact (build with: go build -o /tmp/klaudia ./cmd/klaudia)
 /klaudia
 
+# GoReleaser output (goreleaser release --snapshot --clean)
+/dist
+
 # Legacy JS artifacts (the JS reference lives on the js-reference branch)
 /node_modules
 /dist

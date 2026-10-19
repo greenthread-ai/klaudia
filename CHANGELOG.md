@@ -6,6 +6,36 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Tagged releases: push `v*`, get built binaries.** The project had no
+  release machinery at all — no tags on origin, no pipeline, and `ci.yml`
+  triggering only on `push: branches: [main]` and pull requests. GoReleaser now
+  builds darwin and linux on amd64 and arm64 from one runner, which is free
+  because the project is pure Go and `CGO_ENABLED=0`. `docs/releasing.md` has
+  the steps.
+
+  Nothing bumps a version. `version.Version` stays the frozen
+  `2.1.66-klaudia` mirroring the retired JS bundle for the parity harness, and
+  a release identifies itself by the commit `version.Build()` reads out of the
+  toolchain's VCS metadata. The build flags are load-bearing for that, and
+  quietly so: measured on this repo, `-trimpath` and `-s -w` preserve the
+  stamp, but `-buildvcs=false` strips it and `--version` degrades to the bare
+  constant with no error anywhere. A shallow `actions/checkout` breaks it from
+  the other end, hence `fetch-depth: 0`.
+
+  The release job runs `go vet` and `go test` itself rather than trusting CI.
+  A tag push matches neither of `ci.yml`'s triggers, so without that the
+  release build would be the only build in the project that nothing gates.
+
+  Windows is not published, though it cross-compiles cleanly on amd64 and
+  arm64. The Keychain credential path, Chrome discovery and sandbox mode `os`
+  are all darwin/linux-shaped, and shipping a binary nobody has run would
+  invite bug reports against a platform with no maintainer. Two lines in
+  `goos:` when that changes.
+
+  GoReleaser's generated changelog is off: this file is written by hand and
+  explains reasoning, and the repo's `area: lowercase sentence` subjects are
+  not conventional commits, so the grouping would file everything under
+  "Others" beside a better document.
 - **`--version` reports the commit it was built from.** `klaudia --version`
   said `2.1.66-klaudia` regardless of the binary, because that constant mirrors
   the retired JavaScript bundle for the parity harness and has not moved in the

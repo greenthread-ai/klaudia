@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, not the default shallow clone: the build reads the
+          # commit out of VCS metadata for `klaudia --version`, and GoReleaser
+          # needs the preceding tags to work out the version.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: true
+          cache: true
+
+      # ci.yml triggers on `branches: [main]`, which a tag push does not
+      # match — without this a release would be the one build nothing gates.
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./internal/... -count=1
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

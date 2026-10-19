@@ -1,0 +1,66 @@
+# GoReleaser builds the tagged binaries. See docs/releasing.md for the
+# reasoning behind the choices here and for how to cut a release.
+version: 2
+
+project_name: klaudia
+
+builds:
+  - id: klaudia
+    main: ./cmd/klaudia
+    binary: klaudia
+    env:
+      # The project rule: builds stay cgo-free, no system libs. This is also
+      # what makes the cross-compile matrix below work from one runner.
+      - CGO_ENABLED=0
+    # Deliberately NOT -buildvcs=false. `klaudia --version` reports the commit
+    # from the VCS metadata the toolchain stamps in (version.Build), because
+    # version.Version is a frozen constant mirroring the retired JS bundle and
+    # cannot answer "does this binary have the fix?". Measured: -trimpath and
+    # -s -w both preserve the stamp, -buildvcs=false silently removes it and
+    # --version degrades to the constant alone with no error anywhere.
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: klaudia
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  # CHANGELOG.md is written by hand and explains reasoning; a list of commit
+  # subjects generated next to it would be a worse duplicate, and this repo's
+  # "area: sentence" subjects do not parse as conventional commits, so
+  # GoReleaser's grouping would put everything under "Others" regardless.
+  disable: true
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    Full notes for this version are in
+    [CHANGELOG.md](https://github.com/greenthread-ai/klaudia/blob/{{ .Tag }}/CHANGELOG.md).
+
+    Binaries are pure-Go and static. Verify with `checksums.txt`, then check
+    you have what you think you have:
+
+    ```
+    ./klaudia --version   # prints the constant, then the commit it was built from
+    ```
