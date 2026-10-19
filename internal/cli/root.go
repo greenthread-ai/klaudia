@@ -365,9 +365,6 @@ func modelLister(p api.Provider) func(context.Context) ([]api.ModelInfo, error) 
 	return lister.ListModels
 }
 
-// buildProvider selects and constructs the model provider from config. It
-// returns the provider and the provider's default model. Anthropic is the
-// default; "openai" uses an OpenAI-compatible Chat Completions endpoint.
 // resolveEndpoint returns the API endpoint for the active provider:
 // KLAUDIA_CUSTOM_ENDPOINT wins, else the configured baseURL — env over config,
 // as everywhere else. The env var used to reach only the Anthropic client; it
@@ -377,6 +374,9 @@ func resolveEndpoint(cfg config.Config) string {
 	return firstNonEmpty(os.Getenv("KLAUDIA_CUSTOM_ENDPOINT"), cfg.ResolveBaseURL())
 }
 
+// buildProvider selects and constructs the model provider from config. It
+// returns the provider and the provider's default model. Anthropic is the
+// default; "openai" uses an OpenAI-compatible Chat Completions endpoint.
 func buildProvider(cfg config.Config) (api.Provider, string, error) {
 	endpoint := resolveEndpoint(cfg)
 	switch cfg.Provider {
