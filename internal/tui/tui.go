@@ -3464,7 +3464,7 @@ func (m *Model) clampBottom(s string) string {
 
 // bottomView renders everything below the scrollback: the state-specific prompt
 // or input area, then the persistent status bar. Its measured height is what
-// relayout reserves, so the two can never drift.
+// resize reserves, so the two can never drift.
 func (m *Model) bottomView() string {
 	var bottom string
 	switch m.state {
@@ -3479,7 +3479,7 @@ func (m *Model) bottomView() string {
 		// saw. Suppressed during cancellation — "cancelling… quiet for 12s"
 		// is a worse signal than "cancelling…". 30s threshold picked so a
 		// fast turn never sees the suffix; a long API call or tool-bound
-		// stall does. Re-evaluated every spinner tick (~80ms).
+		// stall does. Re-evaluated every spinner tick (spinner.Dot, 100ms).
 		if !m.cancelling && !m.lastEventAt.IsZero() {
 			if q := time.Since(m.lastEventAt); q > 30*time.Second {
 				work += hintStyle.Render(fmt.Sprintf("  · quiet for %s", fmtDuration(q)))
