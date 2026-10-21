@@ -489,10 +489,10 @@ type Model struct {
 	// Verbatim payloads for pastes shown in the input as chips (see paste.go).
 	// Session-scoped, because history recall re-shows a chip.
 	pastes pasteStore
-	// File-reference completion state (see fileref.go).
+	// File-reference completion state (see fileref.go, pathmenu.go).
 	paths       pathIndex
 	recentPaths []string
-	cycle       completeCycle
+	menu        pathMenu
 	// nav indexes the conversation for /search, /errors and /outline.
 	nav []navEntry
 	// Elapsed-run stopwatch and per-turn cancel (Esc interrupts the model).
@@ -713,6 +713,11 @@ func (m *Model) updateInput(msg tea.Msg) tea.Cmd {
 	m.input, cmd = m.input.Update(msg)
 	m.syncInputHeight()
 	m.reconcilePastes()
+	// Rank the paths here rather than in View: the menu has to be recomputed
+	// when the reference changes, and View runs on every spinner tick.
+	if m.state == stateIdle {
+		m.refreshPathMenu()
+	}
 	return cmd
 }
 
@@ -1349,11 +1354,6 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Any key other than Tab ends an in-progress completion cycle.
-	if msg.Type != tea.KeyTab {
-		m.cycle = completeCycle{}
-	}
-
 	// Tab completion on an idle line: slash command when the line is a "/token",
 	// otherwise an @<path> reference.
 	if m.state == stateIdle && msg.Type == tea.KeyTab {
@@ -1363,6 +1363,26 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.completeAtPath()
 		}
 		return m, nil
+	}
+
+	// The @-completion menu owns Up/Down while it is open — it is on screen and
+	// it is what the keys obviously refer to. Esc closes it. Both fall through
+	// to history navigation and the usual Esc handling when it is not.
+	if m.state == stateIdle && m.menuActive() {
+		switch msg.Type {
+		case tea.KeyUp:
+			if m.movePathMenu(-1) {
+				return m, nil
+			}
+		case tea.KeyDown:
+			if m.movePathMenu(1) {
+				return m, nil
+			}
+		case tea.KeyEsc:
+			if m.dismissPathMenu() {
+				return m, nil
+			}
+		}
 	}
 
 	// Input history navigation (only on a fresh idle line).
@@ -1463,8 +1483,9 @@ var commandList = []cmdInfo{
 // keyHints documents the non-command key bindings shown in /help.
 const keyHints = `Keys:
   /                Type a slash to see matching commands
-  Tab              Complete a /command or an @<path> reference (Tab again cycles)
-  ↑ / ↓            Cycle through previous prompts
+  @                Type an @ to pick a file (↑/↓ select, Tab cycles, Esc dismisses)
+  Tab              Complete a /command or an @<path> reference
+  ↑ / ↓            Cycle through previous prompts (or the @ file menu)
   Ctrl+J           Newline without sending
   Ctrl+U / Ctrl+K  Delete before / after the cursor
   Esc              Interrupt the model mid-turn
@@ -2310,57 +2331,23 @@ func (m *Model) completeSlash() {
 	m.input.CursorEnd()
 }
 
-// completeAtPath completes the trailing "@<partial>" token in the input against
-// files under the working directory. A unique match is filled in; multiple
-// matches fill the common prefix and list candidates as a banner.
-// completeAtPath completes an @<path> reference. Matching is fuzzy, so
-// "@session.ts" finds "src/auth/session.ts"; that makes commonPrefix
-// meaningless, so instead the first Tab inserts the best hit and further Tabs
-// cycle through the rest.
+// completeAtPath inserts the selected @<path> completion. Matching is fuzzy, so
+// "@session.ts" finds "src/auth/session.ts"; that makes a common-prefix
+// completion meaningless, so Tab inserts the best hit and each further Tab
+// advances to the next one. The dropdown (pathmenu.go) shows what is being
+// cycled through — before this it was a one-shot banner, and with nothing on
+// screen until Tab was pressed the whole feature was invisible.
 func (m *Model) completeAtPath() {
-	value := m.input.Value()
-	at := strings.LastIndex(value, "@")
-	if at < 0 {
+	m.menu.dismissed = "" // Tab reopens a menu Esc closed
+	cycling := m.menu.open && m.menu.inserted == m.input.Value()
+	m.refreshPathMenu()
+	if !m.menu.open || len(m.menu.hits) == 0 {
 		return
 	}
-	partial := value[at+1:]
-	if strings.ContainsAny(partial, " \t") {
-		return // the @token has already been closed by whitespace
+	if cycling {
+		m.menu.idx = (m.menu.idx + 1) % len(m.menu.hits)
 	}
-
-	// Keep any :line[:col] suffix out of the match and put it back afterwards,
-	// so a reference pasted straight from a stack trace completes cleanly.
-	stem, line, col := splitLineSuffix(partial)
-	suffix := ""
-	if line > 0 {
-		suffix = ":" + strconv.Itoa(line)
-		if col > 0 {
-			suffix += ":" + strconv.Itoa(col)
-		}
-	}
-
-	if len(m.cycle.hits) > 0 && m.cycle.last == value {
-		m.cycle.idx = (m.cycle.idx + 1) % len(m.cycle.hits)
-	} else {
-		hits := m.matchPaths(stem)
-		if len(hits) == 0 {
-			return
-		}
-		m.cycle = completeCycle{base: stem, hits: hits}
-		if len(hits) > 1 {
-			show := hits
-			if len(show) > 12 {
-				show = show[:12]
-			}
-			m.appendLine(bannerStyle.Render("candidates: " + strings.Join(show, "  ")))
-		}
-	}
-
-	chosen := m.cycle.hits[m.cycle.idx]
-	completed := value[:at+1] + chosen + suffix
-	m.cycle.last = completed
-	m.input.SetValue(completed)
-	m.input.CursorEnd()
+	m.insertPathHit()
 }
 
 // matchPaths returns working-dir-relative file paths that start with partial
@@ -2371,8 +2358,22 @@ func (m *Model) completeAtPath() {
 // alphabetically, so "the file I was just working on" ranked below "a_test.go".
 // Files Klaudia has actually read or written outrank everything.
 func (m *Model) matchPaths(partial string) []string {
+	// A reference that names a place outside the project is answered from the
+	// filesystem: the index only covers the working directory, so "@~/Desktop/…"
+	// used to match nothing and leave the user to type the path by hand.
+	if hits, isFS := matchFilesystemPaths(partial); isFS {
+		return hits
+	}
 	root := m.rootDir()
 	files := m.paths.files(root, time.Now())
+
+	// A bare "@" matches everything, so the ranking is pure recency and the
+	// scoring pass has nothing to decide. Skipping it matters now that the menu
+	// recomputes on the keystroke rather than on Tab: this is a sort of up to
+	// pathIndexMaxFiles entries, between the key and the character appearing.
+	if partial == "" {
+		return m.headPaths(root, files)
+	}
 
 	type scored struct {
 		path  string
@@ -3443,6 +3444,9 @@ func (m *Model) bottomView() string {
 		bottom = m.promptBox()
 		if sug := m.slashSuggestionLine(); sug != "" {
 			bottom += "\n" + caption(sug)
+		}
+		if menu := m.pathMenuView(); menu != "" {
+			bottom += "\n" + menu
 		}
 	}
 	// Persistent status bar at the very bottom, in every state.

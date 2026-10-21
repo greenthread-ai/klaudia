@@ -122,7 +122,7 @@ closed. `docs/trust.md` is the design record.
 | Interactive TUI | 04/06 | `tui/` | 🔀 divergent | Bubble Tea (JS was React+Ink). Single-reader invariant. |
 | Headless `-p` / `--print` | 08-entry | `cli/` | ✅ done | text / json / stream-json. |
 | stream-json input (embedding frontend) | 08-entry | `cli/` + `streamjson/` | ✅ done | `--input-format stream-json`. |
-| @ file autocomplete | 06-app-ui | `tui/tui.go` | 🔀 divergent | Tab-completes the trailing @<path> token (robust completion vs. JS live overlay). |
+| @ file autocomplete | 06-app-ui | `tui/pathmenu.go` | ✅ done | Live dropdown as you type `@…` (ranked, ↑↓ to pick, Tab cycles, Esc dismisses). The earlier Tab-only completion was recorded here as a deliberate divergence; it was really invisible — typing `@` showed nothing, so the feature was reported as missing. Paths with spaces are inserted quoted, and references outside the working directory complete from the filesystem. |
 | Slash command type-ahead | 06-app-ui | `tui/tui.go` | ✅ done | Live suggestions as you type `/…`; Tab completes (unique → fill, many → common prefix). |
 | Bracketed paste / drag-drop | 06-app-ui | bubbletea default | ✅ done | Bracketed paste on by default (multi-line pastes atomic). |
 | Help bar / keymap / input history | 06-app-ui | `tui/tui.go` | ✅ done | Up/Down ring-buffer history, Tab completion, key hints; /help generated from one command table. |

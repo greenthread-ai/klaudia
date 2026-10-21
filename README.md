@@ -133,8 +133,15 @@ scores the transcript against the spec's checklist.
 ```
 
 A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
-type-ahead, fuzzy `@path` file completion (Tab, Tab again to cycle), input
-history (↑/↓), and `Esc` to interrupt a turn. Type `/help` for the full list.
+type-ahead, fuzzy `@path` file completion, input history (↑/↓), and `Esc` to
+interrupt a turn. Type `/help` for the full list.
+
+Typing `@` opens a ranked file menu: `↑`/`↓` pick, `Tab` inserts and cycles,
+`Esc` dismisses. Matching is fuzzy, so `@session.ts` finds
+`src/auth/session.ts`, and files Klaudia has just read or written rank first.
+A reference starting with `/`, `./` or `~/` completes from the filesystem
+instead of the project, and a path containing spaces is inserted quoted
+(`@"My Notes.md"`) so it stays one reference.
 
 ### Return, and multi-line input
 

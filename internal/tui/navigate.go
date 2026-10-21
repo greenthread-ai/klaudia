@@ -21,17 +21,6 @@ import (
 // filter by "only my messages" or "only failed commands", which is what this
 // index is for.
 
-// completeCycle remembers an in-progress Tab cycle through @-completions.
-// last is the exact input value we inserted: comparing against it is what tells
-// a second Tab ("cycle to the next hit") apart from a first Tab on freshly
-// typed text, since after an insertion the @token is the completion itself.
-type completeCycle struct {
-	base string
-	last string
-	hits []string
-	idx  int
-}
-
 type navKind int
 
 const (
