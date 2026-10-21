@@ -33,6 +33,21 @@ type themePalette struct {
 
 var renderThemes = []renderTheme{
 	{
+		id:      "klaudia",
+		name:    "Klaudia",
+		desc:    "house palette — sky blue and bronze on near-black",
+		aliases: []string{"house"},
+		// Mapped from the source palette's nine slots onto our seven:
+		// background/foreground/background_alt become bg/fg/codeBG,
+		// foreground_alt is the muted tone, primary is the accent, and the
+		// two contrast tones become accent2/accent3 — the palette has one
+		// warm hue where the others have a third colour, so inline code and
+		// links read as the same family rather than borrowing a green that
+		// is not in it. foreground_bright and primary_bright have no slot;
+		// the chrome gets its lift from bold, not from a brighter hex.
+		palette: themePalette{fg: "#cccccc", muted: "#505050", accent: "#91c7d9", accent2: "#af875f", accent3: "#d7af87", bg: "#121212", codeBG: "#222222"},
+	},
+	{
 		id:       "dracula",
 		name:     "Dracula",
 		desc:     "dark purples with high contrast",
@@ -77,10 +92,23 @@ var renderThemes = []renderTheme{
 	},
 }
 
-// defaultChromePalette colours the TUI chrome when no theme is selected
-// (currentThemeID == "dark") or a theme lacks a palette.
-var defaultChromePalette = themePalette{
-	fg: "#d8dee9", muted: "#6c7086", accent: "#88c0d0", accent2: "#81a1c1", accent3: "#a3be8c", bg: "#2e3440", codeBG: "#3b4252",
+// defaultThemeID is the theme a session renders in until someone picks another
+// one, so it is also what /theme marks as current on a fresh session. It is a
+// real entry in renderThemes rather than a palette only the default path knows
+// about: the old arrangement meant the colours you got on startup could not be
+// chosen by name, and switching away from them was a one-way door.
+const defaultThemeID = "klaudia"
+
+// defaultChromePalette colours the TUI chrome before a session exists and for
+// any theme that lacks a palette.
+var defaultChromePalette = mustThemePalette(defaultThemeID)
+
+func mustThemePalette(id string) themePalette {
+	theme, ok := lookupTheme(id)
+	if !ok {
+		panic("tui: default theme " + id + " is not in renderThemes")
+	}
+	return theme.palette
 }
 
 // chromePaletteFor returns the palette used to colour the TUI chrome (banner,
@@ -135,7 +163,7 @@ func (m *Model) currentThemeID() string {
 	if m.sess != nil && m.sess.Theme != "" {
 		return m.sess.Theme
 	}
-	return "dark"
+	return defaultThemeID
 }
 
 // setTheme switches the palette for subsequent output. Text already printed

@@ -23,6 +23,36 @@ func TestChromePaletteFor(t *testing.T) {
 	}
 }
 
+// The default has to be a theme you can name, or the startup colours are the
+// one scheme /theme cannot switch back to.
+func TestDefaultThemeIsSelectable(t *testing.T) {
+	theme, ok := lookupTheme(defaultThemeID)
+	if !ok {
+		t.Fatalf("default theme %q is not in renderThemes", defaultThemeID)
+	}
+	if theme.palette != defaultChromePalette {
+		t.Errorf("default theme palette %+v != defaultChromePalette %+v", theme.palette, defaultChromePalette)
+	}
+	if !strings.Contains(themeNames(), defaultThemeID) {
+		t.Errorf("themeNames() = %q, missing the default %q", themeNames(), defaultThemeID)
+	}
+	// A session that has chosen nothing renders in the default, and /theme
+	// marks it current rather than showing no selection at all.
+	m := &Model{sess: &Session{}}
+	if got := m.currentThemeID(); got != defaultThemeID {
+		t.Errorf("currentThemeID() with no session theme = %q, want %q", got, defaultThemeID)
+	}
+	var current int
+	for _, item := range m.themeChoices() {
+		if strings.Contains(item.label, "(current)") {
+			current++
+		}
+	}
+	if current != 1 {
+		t.Errorf("theme picker marked %d entries current, want exactly 1", current)
+	}
+}
+
 func TestApplyChromeThemeRecolours(t *testing.T) {
 	defer applyChromeTheme(defaultChromePalette) // don't leak global state to other tests
 

@@ -649,7 +649,7 @@ apiKeyEnv = "MY_API_KEY"
 # contextWindow = 8192
 
 # TUI theme (Markdown + chrome). /theme switches it for a session.
-# theme = "nord" # dracula | gruvbox | tokyo-night | nord | catppuccin
+# theme = "nord" # klaudia (default) | dracula | gruvbox | tokyo-night | nord | light | catppuccin
 
 # Optional examples:
 # [sandbox]

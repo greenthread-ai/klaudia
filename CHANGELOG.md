@@ -5,6 +5,15 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+- **A `klaudia` theme, and it is the default.** Sky blue and bronze on
+  near-black. The startup colours were previously a palette no theme owned:
+  `currentThemeID()` returned `"dark"`, which is not in `renderThemes`, so the
+  theme picker marked nothing current and switching away from the default was
+  a one-way door — there was no name to switch back to. The default is now a
+  real entry, `defaultChromePalette` is derived from it rather than written
+  out twice, and a test fails if the two ever disagree.
+
 ### Fixed
 - **A release rejected by branch protection no longer leaves a tag behind.**
   `scripts/release.sh` creates the tag locally and then pushed two refs

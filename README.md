@@ -207,8 +207,9 @@ full ID). Picking from the list also records that model's real context window,
 which is what the status bar's `ctx N%` measures against.
 
 `/theme` switches the colour theme (Markdown + chrome) for the session; set a
-durable default with `theme = "nord"` in `.klaudia/config.toml` (dracula |
-gruvbox | tokyo-night | nord | light | catppuccin). `NO_COLOR` is honoured.
+durable default with `theme = "nord"` in `.klaudia/config.toml` (klaudia |
+dracula | gruvbox | tokyo-night | nord | light | catppuccin). `NO_COLOR` is
+honoured.
 
 Long-running commands run detached as **managed jobs**: `Bash` with
 `run_in_background` returns a shell id, `BashOutput` reads new output
@@ -819,9 +820,10 @@ Full semantics: [docs/hooks.md](docs/hooks.md).
 ## Themes
 
 `/theme` recolors the whole UI — banner, prompts, menus, type-ahead, and
-Markdown rendering, not just code blocks. Built in: `dracula`, `gruvbox`,
-`tokyo-night`, `nord`, `light`, `catppuccin`. Persist a default in config
-(project `.klaudia` overrides `~/.klaudia`):
+Markdown rendering, not just code blocks. Built in: `klaudia`, `dracula`,
+`gruvbox`, `tokyo-night`, `nord`, `light`, `catppuccin`. `klaudia` — sky blue
+and bronze on near-black — is what you get until you choose otherwise. Persist
+a default in config (project `.klaudia` overrides `~/.klaudia`):
 
 ```toml
 theme = "nord"
