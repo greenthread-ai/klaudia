@@ -208,7 +208,10 @@ interrupt and send it now, or `↑` to edit it.
 
 `/model` with no argument asks the provider which models it serves and offers
 them as a picker — Anthropic and OpenAI-compatible endpoints both answer at
-`GET /v1/models` — so you don't have to remember an exact model ID. `/model
+`GET /v1/models` — so you don't have to remember an exact model ID. The picker
+(`/model`, `/theme`, `/mode`, `/mcp`) is a dropdown: `↑↓` to move, Enter to
+confirm, type to filter, Esc to cancel, and `1`-`9` still pick directly until
+you start filtering. `/model
 <alias|id>` still sets one directly (`opus`, `sonnet`, `haiku`, `fable`, or any
 full ID). Picking from the list also records that model's real context window,
 which is what the status bar's `ctx N%` measures against.

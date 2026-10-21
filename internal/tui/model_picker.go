@@ -42,20 +42,13 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 		m.appendLine(bannerStyle.Render("The provider reported no models. /model <id> still works."))
 		return
 	}
-	// The picker is digit-selected, so it can only offer nine. The list arrives
-	// newest-first from Anthropic and sorted from OpenAI-compatible endpoints,
-	// so the truncation keeps the most useful end either way — and says so
-	// rather than silently hiding the rest.
-	shown := models
-	truncated := 0
-	if len(shown) > 9 {
-		truncated = len(shown) - 9
-		shown = shown[:9]
-	}
-
+	// The picker filters and scrolls, so the whole list is offered. It used to
+	// be cut to nine — the length of the digit row — which is how an endpoint
+	// serving thirty models answered /model with "the rest are reachable by
+	// typing an id", the one thing the picker exists to spare you.
 	current := api.ResolveModel(m.sess.Model)
-	items := make([]choiceItem, 0, len(shown))
-	for _, mi := range shown {
+	items := make([]choiceItem, 0, len(models))
+	for _, mi := range models {
 		mi := mi
 		label := mi.Name()
 		if mi.Name() != mi.ID {
@@ -73,11 +66,7 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 		})
 	}
 
-	title := "Select a model:"
-	if truncated > 0 {
-		title += fmt.Sprintf("  (%d more — /model <id> to pick one not listed)", truncated)
-	}
-	m.startChoice(title, items)
+	m.startChoice(fmt.Sprintf("Select a model (%d):", len(items)), items)
 }
 
 // setModel switches the model for subsequent turns. A context window from the

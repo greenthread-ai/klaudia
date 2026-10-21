@@ -37,7 +37,7 @@ func TestModelNoArgOpensPicker(t *testing.T) {
 	if m.state != stateAwaitingChoice {
 		t.Fatalf("state = %v, want a picker", m.state)
 	}
-	out := visibleText(m.transcript.String())
+	out := pickerView(m)
 	for _, want := range []string{"Claude Opus 5", "claude-sonnet-5", "1.0M ctx"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("picker missing %q:\n%s", want, out)
@@ -52,7 +52,7 @@ func TestModelPickerMarksCurrent(t *testing.T) {
 		{ID: "claude-opus-5", DisplayName: "Claude Opus 5"},
 		{ID: "claude-sonnet-5", DisplayName: "Claude Sonnet 5"},
 	})
-	out := visibleText(m.transcript.String())
+	out := pickerView(m)
 	sonnet := strings.Index(out, "Claude Sonnet 5")
 	current := strings.Index(out, "(current)")
 	if sonnet < 0 || current < sonnet {
@@ -65,7 +65,7 @@ func TestModelPickerMarksCurrentThroughAlias(t *testing.T) {
 	m := pickerModel(t, nil, nil)
 	m.sess.Model = "opus"
 	m.showModelPicker([]api.ModelInfo{{ID: "claude-opus-5", DisplayName: "Claude Opus 5"}})
-	if !strings.Contains(visibleText(m.transcript.String()), "(current)") {
+	if !strings.Contains(pickerView(m), "(current)") {
 		t.Error("an aliased current model should still be marked")
 	}
 }
@@ -114,7 +114,10 @@ func TestModelWithArgumentStillSetsDirectly(t *testing.T) {
 	}
 }
 
-func TestModelPickerCapsAtNineAndSaysSo(t *testing.T) {
+// The nine-item cap is gone: the picker filters and scrolls, so a long list is
+// offered whole. What a short terminal shows is a window onto it, not a
+// truncation of it — everything stays reachable by typing.
+func TestModelPickerOffersEveryModel(t *testing.T) {
 	many := make([]api.ModelInfo, 15)
 	for i := range many {
 		many[i] = api.ModelInfo{ID: string(rune('a'+i)) + "-model"}
@@ -122,11 +125,19 @@ func TestModelPickerCapsAtNineAndSaysSo(t *testing.T) {
 	m := pickerModel(t, nil, nil)
 	m.showModelPicker(many)
 
-	if len(m.choiceItems) != 9 {
-		t.Errorf("picker offers %d items; digit selection caps at 9", len(m.choiceItems))
+	if len(m.choiceItems) != 15 {
+		t.Errorf("picker offers %d of 15 models", len(m.choiceItems))
 	}
-	if !strings.Contains(visibleText(m.transcript.String()), "6 more") {
-		t.Error("truncation must be stated, not silent")
+	if !strings.Contains(pickerView(m), "(15)") {
+		t.Errorf("the title should say how many there are:\n%s", pickerView(m))
+	}
+	// The fifteenth is off the bottom of the window but one filter away.
+	typeInto(m, "o-mo")
+	if len(m.choiceHits) != 1 {
+		t.Fatalf("filter %q matched %d models, want 1", m.choiceFilter, len(m.choiceHits))
+	}
+	if !strings.Contains(pickerView(m), "o-model") {
+		t.Errorf("filtering should surface the entry the window hid:\n%s", pickerView(m))
 	}
 }
 
@@ -196,8 +207,7 @@ func TestModelPickerAgainstLiveProvider(t *testing.T) {
 	if len(m.choiceItems) == 0 {
 		t.Fatal("picker is empty")
 	}
-	out := visibleText(m.transcript.String())
-	t.Logf("picker:\n%s", out)
+	t.Logf("picker:\n%s", pickerView(m))
 
 	// Selecting the first entry must set both the model and its window.
 	line := m.choiceItems[0].apply()

@@ -145,7 +145,7 @@ closed. `docs/trust.md` is the design record.
 | /stats, /status | `tui/tui.go` | ✅ done | |
 | /allow, /deny | — | 🔀 divergent | Removed with the rule model; `/trust` is the replacement. |
 | /config, /agents, /context | `tui/tui.go` | ✅ done | Group A (render-only); friendly permission labels. |
-| /mode, /permissions | `tui/tui.go` + `permission.Mode.Label` | ✅ done | Interactive numbered picker (or direct set) to change permission mode mid-session. |
+| /mode, /permissions | `tui/tui.go` + `permission.Mode.Label` | ✅ done | Interactive picker (or direct set) to change permission mode mid-session. The picker (`choice.go`) is a live filterable dropdown shared by `/model`, `/theme`, `/mode` and `/mcp`. |
 | /compact, /cost, /add-dir | `tui/tui.go` + `agent.Loop.Compact` | ✅ done | Group B. |
 | /plan, /doctor, /diff, /commit, /export | `tui/tui.go` + `doctor/` | ✅ done | Group C; /commit gated by a y/n confirm. |
 
