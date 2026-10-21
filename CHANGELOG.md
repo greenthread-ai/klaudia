@@ -27,6 +27,23 @@ port mirrors (see `internal/version`).
   `docs/releasing.md` claimed this case "stops before tagging"; it did not.
 
 ### Changed
+- **chromedp v0.16.0 → v0.21.0** (and cdproto to v0.158.3), which is an API
+  rewrite, not a bump: actions are generic (`Action[T]`), `Run` takes one
+  action and returns its value, `Location`/`Title` return strings instead of
+  filling pointers, and the remote allocator moved to `chromedp/remote`. Taken
+  deliberately — the intermediate releases do not build either, so the break
+  predates the fix and there was no cheaper step. Upstream now handles the four
+  DOM events that used to be logged as errors on every ad-carrying page; the
+  local filter in `internal/browser/log.go` stays, because the hand-written
+  event switch it works around is still hand-written and cdproto is still
+  generated. Headed Chrome now launches with `VisibleWindow` rather than
+  `Flag("headless", false)`, which also drops `hide-scrollbars`, `mute-audio`
+  and the automation infobar — the only reason Klaudia ever runs headed is a
+  search challenge a human has to solve, and that is a window they have to be
+  able to use. The browser package now has live Chrome tests
+  (`internal/browser/live_test.go`, skipped with `-short` or without Chrome),
+  because the whole port compiled on the first attempt and compiling says
+  nothing about whether a navigation still ends with the page in hand.
 - **CI actions moved to their current majors**: `actions/checkout` v4 → v7,
   `actions/setup-go` v5 → v7, `goreleaser/goreleaser-action` v6 → v7. All
   three are node24/ESM migrations with no input changes — v7 of

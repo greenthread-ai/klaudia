@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
 	cdpdom "github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/chromedp"
 )
@@ -129,7 +130,7 @@ func (e *Engine) Navigate(url string) error {
 		return fmt.Errorf("url required")
 	}
 	return e.RunWithTimeout(defaultNavigateTimeout, func(ctx context.Context) error {
-		if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {
+		if err := chromedp.Do(ctx, chromedp.Navigate(url)); err != nil {
 			return err
 		}
 		// chromedp.Navigate returns on the load event, before JS-rendered (SPA)
@@ -154,14 +155,13 @@ func waitStable(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		var ready string
-		var textLen int
-		err := chromedp.Run(ctx,
-			chromedp.Evaluate(`document.readyState`, &ready),
-			chromedp.Evaluate(`((document.body&&document.body.innerText)||"").length`, &textLen),
-		)
+		ready, err := chromedp.Run(ctx, chromedp.Evaluate[string](`document.readyState`))
 		if err != nil {
 			return nil // best-effort; don't fail navigation on a poll hiccup
+		}
+		textLen, err := chromedp.Run(ctx, chromedp.Evaluate[int](`((document.body&&document.body.innerText)||"").length`))
+		if err != nil {
+			return nil
 		}
 		if ready == "complete" {
 			if textLen == lastLen {
@@ -187,22 +187,18 @@ func waitStable(ctx context.Context) error {
 func (e *Engine) Snapshot(includeHTML, includeMarkdown bool) (*Snapshot, error) {
 	var snap Snapshot
 	err := e.RunWithTimeout(defaultActionTimeout, func(ctx context.Context) error {
-		var actions []chromedp.Action
-		actions = append(actions,
-			chromedp.Location(&snap.URL),
-			chromedp.Title(&snap.Title),
-		)
-		if includeHTML || includeMarkdown {
-			actions = append(actions, chromedp.ActionFunc(func(ctx context.Context) error {
-				root, err := cdpdom.GetDocument().Do(ctx)
-				if err != nil {
-					return err
-				}
-				snap.HTML, err = cdpdom.GetOuterHTML().WithNodeID(root.NodeID).Do(ctx)
-				return err
-			}))
+		var err error
+		if snap.URL, err = chromedp.Run(ctx, chromedp.Location()); err != nil {
+			return err
 		}
-		return chromedp.Run(ctx, actions...)
+		if snap.Title, err = chromedp.Run(ctx, chromedp.Title()); err != nil {
+			return err
+		}
+		if !includeHTML && !includeMarkdown {
+			return nil
+		}
+		snap.HTML, err = chromedp.Run(ctx, documentHTML())
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -218,4 +214,24 @@ func (e *Engine) Snapshot(includeHTML, includeMarkdown bool) (*Snapshot, error) 
 		snap.HTML = ""
 	}
 	return &snap, nil
+}
+
+// documentHTML is the serialised document, root node included. chromedp's own
+// OuterHTML takes a selector and would give us the <html> element; the root is
+// what carries the doctype, and the markdown converter is fed the whole thing.
+func documentHTML() chromedp.Action[string] {
+	return func(ctx context.Context, t *chromedp.Target) (string, error) {
+		doc, err := cdp.Call(ctx, t, cdpdom.GetDocument, cdpdom.GetDocumentParams{})
+		if err != nil {
+			return "", err
+		}
+		if doc.Root == nil {
+			return "", fmt.Errorf("page has no document root")
+		}
+		res, err := cdp.Call(ctx, t, cdpdom.GetOuterHTML, cdpdom.GetOuterHTMLParams{NodeID: doc.Root.NodeID})
+		if err != nil {
+			return "", err
+		}
+		return res.OuterHTML, nil
+	}
 }
