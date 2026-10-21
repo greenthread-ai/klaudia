@@ -625,6 +625,20 @@ func (m *Model) slashCommandsLive() bool {
 	return m.state == stateIdle || m.state == stateRunning
 }
 
+// bangRunsHere reports whether Enter on a "!" line would actually run it as a
+// shell command. Idle only: ! runs locally and its output becomes context for
+// the next turn, and there is no next turn to put it in while one is already in
+// flight. stateAnsweringOther sends its text as an answer, where a leading "!"
+// is a character like any other.
+//
+// syncPromptMarker asks this as well as the submit path, so the "$" marker
+// cannot promise an execution that Enter would not perform. It did: the marker
+// is driven from syncInputHeight, which runs in every state, so typing "!ls"
+// while the model worked showed "$" and then sent the text to the model.
+func (m *Model) bangRunsHere() bool {
+	return m.state == stateIdle
+}
+
 // inputText is what the user typed, in the two forms the rest of the code has
 // to keep straight.
 //
@@ -752,7 +766,7 @@ func (m *Model) reconcilePastes() {
 // losing track is running something you meant to say. The marker changes the
 // moment the line does, so what will happen on Enter is visible before Enter.
 func (m *Model) syncPromptMarker() {
-	bang := isBang(m.input.Value())
+	bang := m.bangRunsHere() && isBang(m.input.Value())
 	if bang == m.promptIsBang {
 		return
 	}
@@ -1166,6 +1180,35 @@ func (m *Model) onInputKey(msg tea.KeyMsg) bool {
 	return false
 }
 
+// onHistoryKey gives ↑/↓ the same meaning in every state that has a box: step
+// through earlier input. Only on a single line, so the arrows still move the
+// cursor inside a draft you are editing.
+//
+// While the model works, a queued follow-up is recalled first — it is the most
+// recent thing you typed and it is about to be sent. That is a property of the
+// queue being non-empty, not of the state, so it is asked of the queue. Before
+// this, ↑ with nothing queued simply did nothing while a turn ran, and the
+// answer box had no history at all.
+func (m *Model) onHistoryKey(msg tea.KeyMsg) bool {
+	if !m.editableInput() || m.input.LineCount() > 1 {
+		return false
+	}
+	if msg.Type != tea.KeyUp && msg.Type != tea.KeyDown {
+		return false
+	}
+	if msg.Type == tea.KeyUp {
+		if t := m.steer.takeBack(); t != "" {
+			m.input.SetValue(t)
+			m.input.CursorEnd()
+			m.syncInputHeight()
+			return true
+		}
+	}
+	m.navigateHistory(msg.Type == tea.KeyUp)
+	m.syncInputHeight()
+	return true
+}
+
 func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Any key other than Ctrl+C disarms a pending "press again to quit".
 	if msg.Type != tea.KeyCtrlC {
@@ -1178,7 +1221,9 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.onInputKey(msg) {
 		return m, nil
 	}
-
+	if m.onHistoryKey(msg) {
+		return m, nil
+	}
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m.onCtrlC()
@@ -1229,6 +1274,15 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case action == actionSubmit:
 			in := m.readInput()
+			if isBang(in.Display) {
+				// Refused rather than queued. A "!" line means "run this here",
+				// and silently sending it to the model instead would have it
+				// run something like it through Bash — a different command, in
+				// the sandbox, under the permission gate. The text stays in the
+				// box so Esc then Enter does what was asked.
+				m.appendLine(hintStyle.Render("  ! can't run while Klaudia is working — esc to interrupt, then send it"))
+				return m, nil
+			}
 			if strings.HasPrefix(in.Display, "/") {
 				m.input.Reset()
 				m.pushHistory(in.Display)
@@ -1263,13 +1317,6 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.cancelling = true // bottom view swaps to "cancelling…" so user sees the cancel registered
 					m.appendLine(toolStyle.Render("  ⊘ interrupting to send your queued message…"))
 				}
-			}
-			return m, nil
-		case msg.Type == tea.KeyUp:
-			if t := m.steer.takeBack(); t != "" { // recall the queued message to edit it
-				m.input.SetValue(t)
-				m.input.CursorEnd()
-				m.syncInputHeight()
 			}
 			return m, nil
 		}
@@ -1415,12 +1462,6 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Input history navigation (only on a fresh idle line).
-	if m.state == stateIdle && m.input.LineCount() <= 1 && (msg.Type == tea.KeyUp || msg.Type == tea.KeyDown) {
-		m.navigateHistory(msg.Type == tea.KeyUp)
-		return m, nil
-	}
-
 	if action == actionNewline && m.state == stateIdle {
 		m.input.InsertString("\n")
 		m.syncInputHeight()
@@ -1515,10 +1556,10 @@ const keyHints = `Keys:
   /                Type a slash to see matching commands
   @                Type an @ to pick a file (↑/↓ select, Tab cycles, Esc dismisses)
   Tab              Complete a /command or an @<path> reference
-  ↑ / ↓            Cycle through previous prompts (or the @ file menu)
+  ↑ / ↓            Cycle through previous prompts, or the @ file menu (a queued message comes back first)
   Ctrl+J           Newline without sending
   Ctrl+U / Ctrl+K  Delete before / after the cursor
-  Esc              Interrupt the model mid-turn
+  Esc              Dismiss the file menu, or interrupt the model mid-turn
   Ctrl+C           Interrupt, or clear the line — press twice to quit`
 
 // commandAliases are names handleSlash accepts that commandList does not list,

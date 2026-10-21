@@ -50,9 +50,9 @@
 <text x="22" y="1017" textLength="504.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /                Type a slash to see matching commands</tspan></text>
 <text x="22" y="1037" textLength="747.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  @                Type an @ to pick a file (↑/↓ select, Tab cycles, Esc dismisses)</tspan></text>
 <text x="22" y="1057" textLength="558.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Tab              Complete a /command or an @&lt;path&gt; reference</tspan></text>
-<text x="22" y="1077" textLength="630.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  ↑ / ↓            Cycle through previous prompts (or the @ file menu)</tspan></text>
+<text x="22" y="1077" textLength="945.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  ↑ / ↓            Cycle through previous prompts, or the @ file menu (a queued message comes back first)</tspan></text>
 <text x="22" y="1097" textLength="378.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Ctrl+J           Newline without sending</tspan></text>
 <text x="22" y="1117" textLength="459.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Ctrl+U / Ctrl+K  Delete before / after the cursor</tspan></text>
-<text x="22" y="1137" textLength="423.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Esc              Interrupt the model mid-turn</tspan></text>
+<text x="22" y="1137" textLength="657.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Esc              Dismiss the file menu, or interrupt the model mid-turn</tspan></text>
 <text x="22" y="1157" textLength="621.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Ctrl+C           Interrupt, or clear the line — press twice to quit</tspan></text>
 </svg>
