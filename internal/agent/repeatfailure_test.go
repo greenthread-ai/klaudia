@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -275,5 +277,48 @@ func TestDispatchBreaksSameShapeErrorLoopIdenticalInputsKeepsOriginalMessage(t *
 				t.Fatalf("call %d: identical inputs must not trigger env message, got %q", i+1, got)
 			}
 		}
+	}
+}
+
+// Loop-breaker B must not answer the call that FIXES the problem. A streak
+// built from identical inputs is evidence about that one call; a call with a
+// different input has not failed yet and gets to run.
+//
+// Real case: two Reads of "~/Desktop/Screenshot 2026-10-21 at 4.44.59 pm.png"
+// failed identically (the real filename holds U+202F where the model typed a
+// space), the model worked that out, copied the file to /tmp/wf.png and read
+// that instead — and got back the recorded error about the Desktop path, which
+// reads as "the file you just made does not exist".
+func TestBreakerBLetsACorrectedCallThrough(t *testing.T) {
+	dir := t.TempDir()
+	good := filepath.Join(dir, "wf.txt")
+	if err := os.WriteFile(good, []byte("it worked\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	read, _ := tools.NewRead()
+	l := New(nil, tools.NewRegistry(read))
+	opts := Options{Permission: permission.Context{Mode: permission.StaticMode(permission.ModeBypassPermissions)}}
+	fs := newFailureState()
+
+	bad, _ := json.Marshal(map[string]any{"file_path": filepath.Join(dir, "nope.txt")})
+	for i := 0; i < repeatFailureLimit; i++ {
+		tu := anthropic.BetaToolUseBlock{ID: "t", Name: "Read", Input: json.RawMessage(bad)}
+		if got := resultText(l.dispatch(context.Background(), tu, opts, nil, func(...string) {}, fs)); !strings.Contains(got, "does not exist") {
+			t.Fatalf("attempt %d: want the real error, got %q", i+1, got)
+		}
+	}
+
+	in, _ := json.Marshal(map[string]any{"file_path": good})
+	tu := anthropic.BetaToolUseBlock{ID: "t3", Name: "Read", Input: json.RawMessage(in)}
+	got := resultText(l.dispatch(context.Background(), tu, opts, nil, func(...string) {}, fs))
+	if !strings.Contains(got, "it worked") {
+		t.Fatalf("the corrected call was refused: %q", got)
+	}
+
+	// The identical call is still refused — breaker A, unchanged.
+	tu = anthropic.BetaToolUseBlock{ID: "t4", Name: "Read", Input: json.RawMessage(bad)}
+	if got := resultText(l.dispatch(context.Background(), tu, opts, nil, func(...string) {}, fs)); !strings.Contains(got, "already tried this exact") {
+		t.Fatalf("identical retry should still be stopped, got %q", got)
 	}
 }

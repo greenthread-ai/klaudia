@@ -704,6 +704,26 @@ func bumpErrStreak(streaks map[string]errStreak, tool, msg, input string, preExe
 	streaks[tool] = prev
 }
 
+// blocks reports whether an incoming call with this input should be refused by
+// loop-breaker B, given a streak that has reached the limit.
+//
+// The distinction is what the streak is evidence FOR. A streak whose failures
+// all carried the same input says "this call is wrong" — and a call with a
+// different input is not that call, so it gets to run. A streak whose failures
+// carried different inputs already says the error survives changing the input,
+// which is the whole claim of envFailureMsg and of the "same mistake, new
+// values" case (Read with `line_start` and fresh line numbers each time); there
+// one more variation is exactly what must not happen.
+//
+// Without this the breaker fired at the moment the model fixed the problem.
+// Real case: two Reads of a macOS screenshot path failed identically (the real
+// filename holds U+202F, not a space), the model diagnosed it, copied the file
+// to /tmp/wf.png and read THAT — and was answered with the stale error about
+// the Desktop path, which reads as "the file you just created does not exist".
+func (e errStreak) blocks(input string) bool {
+	return e.varied || input == e.firstInput
+}
+
 // repeatedShapeFailureMsg is the directive returned when loop-breaker B fires
 // AND the model kept submitting the same input — classic "stop guessing" case.
 // Quoting the recurring error forces the model to confront the real problem
@@ -872,7 +892,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	// `repeatFailureLimit` consecutive calls. Two cases — identical inputs (the
 	// model is in a guessing loop) or varied inputs (the environment is wedged
 	// and the same error shape comes back regardless). Different directives.
-	if streak := fs.streak(tu.Name); streak.count >= repeatFailureLimit {
+	if streak := fs.streak(tu.Name); streak.count >= repeatFailureLimit && streak.blocks(rawStr) {
 		// Use shortCircuit() so we don't keep growing the streak on each fired
 		// short-circuit (the model isn't actually trying — we're refusing).
 		msg := repeatedShapeFailureMsg(tu.Name, streak.count, streak.sig)
