@@ -131,7 +131,7 @@ func (e *Edit) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
-	in.FilePath = resolvePath(tctx, in.FilePath) // accept paths relative to the working dir
+	in.FilePath = resolveExistingPath(tctx, in.FilePath) // relative to the working dir; see pathrepair.go
 
 	data, err := os.ReadFile(in.FilePath)
 	if err != nil {

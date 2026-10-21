@@ -82,7 +82,7 @@ func (t *Diagnostics) Execute(ctx context.Context, tctx Context, raw json.RawMes
 	if t.pool == nil {
 		return []Result{{Content: "language servers are not available", IsError: true}}, nil
 	}
-	path := resolvePath(tctx, in.File)
+	path := resolveExistingPath(tctx, in.File)
 	diags, err := t.pool.Diagnostics(ctx, path)
 	if err != nil {
 		return []Result{{Content: "Error: " + err.Error(), IsError: true}}, nil
@@ -180,7 +180,7 @@ func (t *lspLocTool) Execute(ctx context.Context, tctx Context, raw json.RawMess
 	if t.pool == nil {
 		return []Result{{Content: "language servers are not available", IsError: true}}, nil
 	}
-	path := resolvePath(tctx, in.File)
+	path := resolveExistingPath(tctx, in.File)
 	// Convert the 1-based input to LSP's 0-based positions.
 	col := in.Character - 1
 	if col < 0 {
