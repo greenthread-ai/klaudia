@@ -83,14 +83,20 @@ func EffortNames() string {
 // a slightly cheaper one — which is why this table exists instead of sending
 // whatever the user typed and hoping.
 //
-// Only two models in the current lineup stop short of max: Opus 4.6 and Sonnet
+// Only three models in the lineup stop short of max: Opus 4.6 and Sonnet
 // 4.6 arrived before xhigh existed, and Opus 4.5 (where effort was introduced,
-// behind the effort-2025-11-24 beta) has only the original three. Keep this in
-// sync with modelContextWindows and modelMaxOutputTokens.
+// behind the effort-2025-11-24 beta) has only the original three. The 5.5
+// generation takes max — probed live rather than assumed, because a wrong
+// ceiling here is a 400 on every turn. Keep this in sync with
+// modelContextWindows and modelMaxOutputTokens.
 //
 // A model that is absent is not "unsupported" — it is unknown, which is the
 // normal case for an OpenAI-compatible endpoint. See EffortSupported.
 var modelMaxEffort = map[string]Effort{
+	"claude-opus-5-5":            EffortMax,
+	"claude-sonnet-5-5":          EffortMax,
+	"claude-haiku-5-5":           EffortMax,
+	"claude-fable-5-1":           EffortMax,
 	"claude-opus-5":              EffortMax,
 	"claude-sonnet-5":            EffortMax,
 	"claude-fable-5":             EffortMax,

@@ -80,6 +80,13 @@ blockingLimit    = effectiveWindow - 3000            // hard ceiling
 ```
 
 `DefaultContextWindow` (200000) is assumed when the model's window is unknown.
+That assumption is the expensive one on a large model: a 1M-context model whose
+id was missing from `modelContextWindows` summarised its history at a fifth of
+the room it had. `api.ResolveLimits` narrows the gap by asking the provider
+(`GET /v1/models`) for any model the table cannot size, and deliberately leaves
+the window at 0/"unknown" rather than guessing high when neither can — guessing
+high would skip compaction until the request 400s, which is unrecoverable
+whereas compacting early is merely wasteful.
 
 ## Before either stage: the per-result cap
 

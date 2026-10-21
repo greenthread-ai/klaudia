@@ -115,7 +115,7 @@ func TestEffortCommand(t *testing.T) {
 // session holding a setting that will 400 on the next turn.
 func TestSetModelLowersUnsupportedEffort(t *testing.T) {
 	m := effortModel(t, "claude-opus-5", api.EffortMax)
-	msg := m.setModel("claude-opus-4-6", 0)
+	msg := m.setModel("claude-opus-4-6", 0, 0)
 
 	if m.sess.Effort != api.EffortHigh {
 		t.Errorf("effort = %q, want it lowered to high", m.sess.Effort)
@@ -129,7 +129,7 @@ func TestSetModelLowersUnsupportedEffort(t *testing.T) {
 
 func TestSetModelKeepsSupportedEffort(t *testing.T) {
 	m := effortModel(t, "claude-opus-5", api.EffortXHigh)
-	msg := m.setModel("claude-opus-4-8", 0)
+	msg := m.setModel("claude-opus-4-8", 0, 0)
 
 	if m.sess.Effort != api.EffortXHigh {
 		t.Errorf("effort = %q, want it kept", m.sess.Effort)

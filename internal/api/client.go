@@ -48,18 +48,18 @@ var WebToolBetas = []anthropic.AnthropicBeta{
 
 // DefaultModel is used when no --model is given. Server-side resolution may
 // pick a newer snapshot; this is the alias we send.
-const DefaultModel = "claude-opus-5"
+const DefaultModel = "claude-opus-5-5"
 
 // modelAliases maps the short CLI aliases to current model IDs (resolveModelId,
 // 07-app-features.js:7901). Full IDs pass through unchanged, so users can
 // always pin a specific snapshot via `--model claude-opus-4-8` or
-// `--model claude-opus-4-5-20251101`. Bumped to track the current Claude 4.x
-// lineup — verified live against /v1/messages with a one-shot probe.
+// `--model claude-opus-4-5-20251101`. Bumped to track the current Claude 5.5
+// lineup — verified live against GET /v1/models, not assumed.
 var modelAliases = map[string]string{
-	"haiku":  "claude-haiku-4-5",
-	"sonnet": "claude-sonnet-5",
-	"opus":   "claude-opus-5",
-	"fable":  "claude-fable-5",
+	"haiku":  "claude-haiku-5-5",
+	"sonnet": "claude-sonnet-5-5",
+	"opus":   "claude-opus-5-5",
+	"fable":  "claude-fable-5-1",
 }
 
 // modelContextWindows is the offline fallback for the input-token limit, used
@@ -71,7 +71,17 @@ var modelAliases = map[string]string{
 // `context-1m-2025-08-07`, which DefaultBetas doesn't send; the API reports 1M
 // for the current lineup regardless, so the status bar's `ctx N%` had been
 // overstating context pressure roughly fivefold.
+//
+// That sweep then overcorrected on one model: Sonnet 4.5 was left at 1M when
+// the endpoint reports 200K for it, understating pressure fivefold on the one
+// model it got wrong. TestModelTablesAgreeWithEachOther catches that shape now
+// (a 1M entry whose output cap is the 200k-model 64k) without needing the
+// network.
 var modelContextWindows = map[string]int{
+	"claude-opus-5-5":            1_000_000,
+	"claude-sonnet-5-5":          1_000_000,
+	"claude-haiku-5-5":           1_000_000,
+	"claude-fable-5-1":           1_000_000,
 	"claude-opus-5":              1_000_000,
 	"claude-sonnet-5":            1_000_000,
 	"claude-fable-5":             1_000_000,
@@ -79,16 +89,19 @@ var modelContextWindows = map[string]int{
 	"claude-opus-4-7":            1_000_000,
 	"claude-opus-4-6":            1_000_000,
 	"claude-sonnet-4-6":          1_000_000,
-	"claude-sonnet-4-5-20250929": 1_000_000,
 	"claude-opus-4-5-20251101":   200_000,
+	"claude-sonnet-4-5-20250929": 200_000,
 	"claude-haiku-4-5":           200_000,
 	"claude-haiku-4-5-20251001":  200_000,
 }
 
-// ContextWindow source labels for /stats and /doctor reporting.
+// ContextWindow source labels for /stats and /doctor reporting. The first two
+// are the LimitSource* labels, not copies of their text: the context window and
+// the output cap are resolved together by ResolveLimits, and two constant sets
+// spelling the same label would drift the moment one was reworded.
 const (
-	ContextSourceConfig  = "config override"
-	ContextSourceModel   = "model default"
+	ContextSourceConfig  = LimitSourceConfig
+	ContextSourceModel   = LimitSourceModel
 	ContextSourceUnknown = "unknown — using compaction fallback"
 )
 
@@ -112,17 +125,42 @@ func ContextWindow(model string, override int) (limit int, source string) {
 // DefaultMaxOutputTokens is the per-response output cap for an UNKNOWN model
 // (e.g. an OpenAI-compatible endpoint whose limit we can't look up). Kept
 // conservative so it is safe anywhere; set cfg.MaxTokens to raise it.
+//
+// It is a floor, not a good answer: it is 15x below what the current Claude
+// models allow, and a model absent from modelMaxOutputTokens silently writes
+// less in a turn than it is able to. Prefer the live figure from ListModels
+// (ModelInfo.MaxTokens), which is what the agent loop is given at startup.
+//
+// doctor.floorOutputTokens repeats this number so /doctor can warn when a run
+// has landed on it; the doctor package is a leaf and does not import api. Keep
+// the two in step.
 const DefaultMaxOutputTokens = 8192
 
 // modelMaxOutputTokens is each model's real maximum output tokens on the
-// synchronous Messages API (docs.claude.com model pages, verified 2026-08).
-// These are the true caps, not under-approximations: on Claude 4.5+ a request
-// whose input+max_tokens exceeds the context window is accepted and simply
-// stops with stop_reason model_context_window_exceeded, so requesting the full
-// cap can't 400. Every 1M-context model generates up to 128k; the 200k-context
-// models up to 64k. Keep this in sync with modelContextWindows.
+// synchronous Messages API, verified live against GET /v1/models (2026-10)
+// rather than read off a docs page. Every 1M-context model generates up to
+// 128k; the 200k-context models up to 64k. Keep this in sync with
+// modelContextWindows — TestLiveModelTablesMatchProvider checks it for real.
+//
+// These are the true caps and must not be exceeded. An over-cap max_tokens is
+// a 400, measured:
+//
+//	claude-sonnet-4-5-20250929, max_tokens=128000 →
+//	  "max_tokens: 128000 > 64000, which is the maximum allowed number of
+//	   output tokens for claude-sonnet-4-5-20250929"
+//
+// An earlier comment here claimed such a request "can't 400" because Claude
+// 4.5+ answers an oversized request with stop_reason
+// model_context_window_exceeded. That is true of input+max_tokens against the
+// *context window* and false of max_tokens against the *output* cap, which is
+// checked up front. The 400 does name the real limit, though, which is what
+// MaxTokensTooLarge reads so a stale entry here costs one retry.
 var modelMaxOutputTokens = map[string]int{
 	// 1M-context models → 128k output.
+	"claude-opus-5-5":   128000,
+	"claude-sonnet-5-5": 128000,
+	"claude-haiku-5-5":  128000,
+	"claude-fable-5-1":  128000,
 	"claude-opus-5":     128000,
 	"claude-sonnet-5":   128000,
 	"claude-fable-5":    128000,

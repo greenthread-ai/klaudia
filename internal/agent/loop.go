@@ -262,6 +262,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	var calib compaction.Calibration
 	overflowRecovered := false
 	thinkingRecovered := false
+	maxTokensLowered := false
 	for {
 		res.NumTurns++
 
@@ -345,6 +346,28 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			if emit != nil {
 				emit(Event{Type: "notice", Content: "the previous reply could not be re-sent (its thinking blocks were repaired) — retaking that turn"})
 			}
+			continue
+		}
+		if limit, ok := api.MaxTokensTooLarge(err); ok && !maxTokensLowered && int64(limit) < maxTokens {
+			// We asked for more output than this model allows. The cap we sent
+			// comes from an offline table (or the user's config), and a wrong
+			// entry fails every resend identically — so the session would be
+			// over. The 400 names the real limit, so adopt it and retake the
+			// turn. Once per Run: a second one means the number in the error is
+			// not the number being rejected, and looping on that is worse than
+			// reporting it.
+			//
+			// Ahead of the overflow branch because this is the more specific
+			// classification of the same status code: compacting cannot help a
+			// request refused for its max_tokens, and the measured wording is
+			// one reword away from containing "maximum context".
+			maxTokensLowered = true
+			if emit != nil {
+				emit(Event{Type: "notice", Content: fmt.Sprintf(
+					"the model's output limit is %d tokens, not the %d requested — retrying this turn at %d "+
+						"(set maxTokens in .klaudia/config.toml to avoid the wasted round-trip)", limit, maxTokens, limit)})
+			}
+			maxTokens = int64(limit)
 			continue
 		}
 		if err != nil && api.IsContextOverflow(err) && !overflowRecovered {

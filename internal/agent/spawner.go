@@ -38,6 +38,7 @@ type Spawner struct {
 	hooks      *hooks.Runner
 	worktrees  bool
 	effort     api.Effort
+	limits     api.ModelLimits
 }
 
 // SetDeferred replaces the deferred-tool set. A config reload can add or drop
@@ -116,6 +117,20 @@ func (s *Spawner) WithEffort(e api.Effort) *Spawner {
 	return s
 }
 
+// WithLimits gives sub-agents the parent's resolved sizing for the model they
+// share, rather than letting the child re-derive it from the offline tables.
+//
+// The child runs the parent's model, so re-deriving can only produce a worse
+// answer: a figure the provider reported, or a maxTokens override from the
+// config, is lost and the child falls back to the table — or, for a model the
+// table does not know, to the 8192 floor. A sub-agent writing a large file is
+// exactly where that truncates. Unset (the zero value) keeps the old table
+// lookup, so a Spawner built without this still behaves sanely.
+func (s *Spawner) WithLimits(l api.ModelLimits) *Spawner {
+	s.limits = l
+	return s
+}
+
 // NewSpawner builds a Spawner. base is the registry sub-agents draw tools from
 // (typically the local tools without the Agent tool itself, to bound recursion).
 // approver resolves permission asks for sub-agents (inherited from the parent
@@ -188,8 +203,13 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 	}
 	// Give the child the model's real window. Leaving this 0 fell back to the
 	// 200k compaction default, so a sub-agent on a 1M model summarised its
-	// history at a fifth of the room it actually had.
-	ctxWindow, _ := api.ContextWindow(string(s.model), 0)
+	// history at a fifth of the room it actually had. The parent's resolved
+	// figures win when it supplied them (WithLimits); the table lookup is the
+	// fallback for a Spawner wired without them.
+	ctxWindow, maxTokens := s.limits.ContextWindow, s.limits.MaxOutputTokens
+	if ctxWindow == 0 {
+		ctxWindow, _ = api.ContextWindow(string(s.model), 0)
+	}
 
 	loop := New(s.provider, childTools)
 	res, err := loop.Run(ctx, Options{
@@ -202,6 +222,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		WorkingDir:    dir,
 		Approver:      s.approver,
 		ContextWindow: ctxWindow,
+		MaxTokens:     int64(maxTokens),
 		Effort:        s.effort,
 		DeferredTools: filterDeferred(s.deferred(), childTools),
 		Hooks:         s.hooks,

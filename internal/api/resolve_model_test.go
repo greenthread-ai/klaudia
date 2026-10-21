@@ -17,11 +17,12 @@ func TestResolveModelAliases(t *testing.T) {
 	}{
 		{"", DefaultModel},
 		{"  ", DefaultModel},
-		{"opus", "claude-opus-5"},
-		{"sonnet", "claude-sonnet-5"},
-		{"haiku", "claude-haiku-4-5"},
-		{"fable", "claude-fable-5"},
-		{"OPUS", "claude-opus-5"},                                // case-insensitive
+		{"opus", "claude-opus-5-5"},
+		{"sonnet", "claude-sonnet-5-5"},
+		{"haiku", "claude-haiku-5-5"},
+		{"fable", "claude-fable-5-1"},
+		{"OPUS", "claude-opus-5-5"},                              // case-insensitive
+		{"claude-opus-5", "claude-opus-5"},                       // the previous generation still pins
 		{"claude-opus-4-8", "claude-opus-4-8"},                   // explicit current ID passes through
 		{"claude-opus-4-7", "claude-opus-4-7"},                   // pinning an older snapshot still works
 		{"claude-opus-4-5-20251101", "claude-opus-4-5-20251101"}, // dated snapshots pass through too

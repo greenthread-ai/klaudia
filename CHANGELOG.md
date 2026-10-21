@@ -25,8 +25,87 @@ port mirrors (see `internal/version`).
   pushed by CI starts no workflow run, so nothing fails visibly either. The
   push is now `--atomic`: the remote rejects both refs or neither.
   `docs/releasing.md` claimed this case "stops before tagging"; it did not.
+- **Opus 5.5 was asking for 8192 output tokens against a cap of 128000.** A
+  real session reported `This tool call was cut off before its arguments were
+  complete: the turn reached the output-token limit (max_tokens=8192)` while
+  running a 1M-context model, and the number was genuine: the `max_tokens`
+  chain is `cfg.MaxTokens` → `modelMaxOutputTokens[model]` →
+  `DefaultMaxOutputTokens`, and the floor is reached only when the id is absent
+  from that table. The whole Claude 5.5 lineup — `claude-opus-5-5`,
+  `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-1` — was missing
+  from `modelContextWindows`, `modelMaxOutputTokens` *and* `modelMaxEffort` at
+  once, so Opus 5.5 ran 15.6× under its real limit, `ContextWindow` returned
+  "unknown" (autocompacting at the 200k default on a 1M model, ~5× early, and
+  dropping `ctx N%` from the status bar), and nothing anywhere said so. The
+  truncation guard worked; it should not have had to fire.
+
+  All three tables now carry the 5.5 ids, verified against `GET /v1/models`
+  with the maintainer's own credential rather than a docs page, and the effort
+  ceilings were probed live (all four accept `xhigh` and `max`). `DefaultModel`
+  and the `opus`/`sonnet`/`haiku`/`fable` aliases move to the 5.5 generation
+  with them.
+
+  Two corrections fell out of the same work. The comment on
+  `modelMaxOutputTokens` claimed an over-cap request "can't 400"; that is true
+  of input+`max_tokens` against the *context window* and false of `max_tokens`
+  against the *output* cap, which is checked up front — measured, Sonnet 4.5 at
+  `max_tokens=128000` returns `max_tokens: 128000 > 64000, which is the maximum
+  allowed number of output tokens for claude-sonnet-4-5-20250929`. And the
+  previous "verified against /v1/models" sweep had overcorrected on exactly one
+  model: `claude-sonnet-4-5-20250929` was listed at 1M context when the
+  endpoint reports 200k, understating context pressure fivefold.
+- **An unlisted model now gets its limits from the provider, not the floor.**
+  `api.ResolveLimits` resolves the output cap and context window in one place,
+  config → provider → built-in table → floor, and consults the provider *only*
+  for a model the table cannot size, so an ordinary run pays no extra network
+  at all. Config is applied last, so it can never be outvoted. An unknown
+  output cap still floors to 8192 because some number must go on the wire and
+  an unknown id may be a genuinely low-capped old snapshot; an unknown context
+  window deliberately stays "unknown" rather than being guessed high, because
+  guessing high skips compaction until the request 400s.
+
+  This also fixes a quieter bug: the live context window the `/model` picker
+  recorded never reached the loop's autocompact threshold, which kept reading
+  the config value. `MaxTokens` and `ContextWindow` are now per-turn settings
+  carried on the TUI session, so switching models moves both, and `/model <id>`
+  prints what it set — it was computing a confirmation line and discarding it,
+  making the one path that can land on the 8192 floor the only silent one.
+
+  Sub-agents inherit the parent's resolved figures (`Spawner.WithLimits`)
+  instead of re-deriving them. The child runs the parent's model, so
+  re-deriving could only lose the provider's answer or a `maxTokens` override
+  and fall back to the table — or to the 8192 floor for a model the table does
+  not know, which is precisely where a sub-agent writing a large file truncates
+  mid-call.
+- **`/doctor` reports the output cap on its own line**, with where the figure
+  came from (config, provider, model table, or the floor), and warns when it is
+  at the 8192 floor. It was previously printed only when an effort level was
+  set, so the run that actually failed — the floor, no effort configured —
+  showed nothing.
+- **An over-cap `max_tokens` no longer ends the session.** The cap comes from a
+  table that goes stale, and an entry that is too high fails every resend
+  identically. The 400 names the model's real limit, so `api.MaxTokensTooLarge`
+  reads it and the loop retakes the turn at that number, once per run, telling
+  the user which number was wrong. It is checked ahead of the context-overflow
+  branch: compacting cannot help a request refused for its `max_tokens`, and
+  the measured wording is one reword away from containing "maximum context".
 
 ### Changed
+- **The default model is now `claude-opus-5-5`** (was `claude-opus-5`), and the
+  short aliases follow: `opus` → `claude-opus-5-5`, `sonnet` →
+  `claude-sonnet-5-5`, `haiku` → `claude-haiku-5-5`, `fable` →
+  `claude-fable-5-1`. Full ids still pass through unchanged, so
+  `--model claude-opus-5` continues to pin the older generation.
+- **Stale model tables are now a test failure rather than a silent downgrade.**
+  `TestModelTablesAgreeWithEachOther` runs offline and requires every sizing
+  entry to exist in all three tables with the paired values (1M→128k,
+  200k→64k), in both directions, including every alias and `DefaultModel`;
+  it is what caught the Sonnet 4.5 context error above.
+  `TestLiveModelTablesMatchProvider` and `TestLiveMaxTokensTooLargeWording`
+  (both `KLAUDIA_LIVE_MODELS=1`) check the tables against `GET /v1/models` and
+  re-measure the over-cap 400's wording, the latter because the retry parses
+  that message and a reword would silently switch the recovery off. The live
+  test reports what to add, not just that something is wrong.
 - **CI actions moved to their current majors**: `actions/checkout` v4 → v7,
   `actions/setup-go` v5 → v7, `goreleaser/goreleaser-action` v6 → v7. All
   three are node24/ESM migrations with no input changes — v7 of

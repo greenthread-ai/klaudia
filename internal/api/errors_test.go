@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -442,5 +445,117 @@ func TestIsContextOverflowMatchesAnthropicWording(t *testing.T) {
 	}
 	if IsContextOverflow(nil) {
 		t.Error("IsContextOverflow(nil) should be false")
+	}
+}
+
+// oaiErr builds the error an OpenAI-compatible provider produces for a given
+// status and message, envelope and all, so providerDetail parses it the same
+// way it does in production.
+func oaiErr(status int, message string) error {
+	body, err := json.Marshal(map[string]any{
+		"error": map[string]string{"message": message, "type": "invalid_request_error"},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return &OpenAIError{StatusCode: status, Body: string(body)}
+}
+
+// Asking for more output tokens than the model allows is a 400 that names the
+// real cap. Reading that number is what lets the loop retake the turn instead
+// of failing every resend identically — the cap we send comes from an offline
+// table, and a stale entry there used to be unrecoverable.
+func TestMaxTokensTooLarge(t *testing.T) {
+	tests := []struct {
+		name      string
+		err       error
+		wantLimit int
+		wantOK    bool
+	}{
+		{
+			name:      "the measured Anthropic wording",
+			err:       oaiErr(400, "max_tokens: 128000 > 64000, which is the maximum allowed number of output tokens for claude-sonnet-4-5-20250929"),
+			wantLimit: 64000,
+			wantOK:    true,
+		},
+		{
+			name:      "OpenAI's documented wording",
+			err:       oaiErr(400, "max_tokens is too large: 128000. This model supports at most 16384 completion tokens, whereas you provided 128000."),
+			wantLimit: 16384,
+			wantOK:    true,
+		},
+		{
+			name:      "the newer max_completion_tokens field name",
+			err:       oaiErr(400, "Invalid 'max_completion_tokens': this model supports at most 32768 completion tokens."),
+			wantLimit: 32768,
+			wantOK:    true,
+		},
+		{
+			name: "an unrelated 400 is not a cap",
+			err:  oaiErr(400, "messages.0.content: Field required"),
+		},
+		{
+			name: "a context-window 400 is a different failure with a different fix",
+			err:  oaiErr(400, "prompt is too long: 1000464 tokens > 1000000 maximum"),
+		},
+		{
+			// Lowering the cap on a server error would shrink every later turn
+			// for a reason that has nothing to do with the request.
+			name: "a 5xx quoting the words is not a cap",
+			err:  oaiErr(500, "max_tokens: 128000 > 64000, which is the maximum allowed number of output tokens"),
+		},
+		{
+			name: "at most N with no max-tokens field is some other limit",
+			err:  oaiErr(400, "you may request at most 4 images per message"),
+		},
+		{
+			name: "a non-API error has no status to trust",
+			err:  errors.New("max_tokens: 128000 > 64000"),
+		},
+		{
+			name: "nil",
+			err:  nil,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			limit, ok := MaxTokensTooLarge(tc.err)
+			if ok != tc.wantOK || limit != tc.wantLimit {
+				t.Errorf("MaxTokensTooLarge() = (%d, %v), want (%d, %v)", limit, ok, tc.wantLimit, tc.wantOK)
+			}
+		})
+	}
+}
+
+// The over-cap 400 must not be classified as a context overflow: the loop's
+// recovery for that is to compact and resend, which cannot help a request
+// refused for its max_tokens and would spend a summarisation to learn nothing.
+func TestOverCapMaxTokensIsNotContextOverflow(t *testing.T) {
+	const detail = "max_tokens: 128000 > 64000, which is the maximum allowed number of output tokens for claude-sonnet-4-5-20250929"
+	if isContextOverflow(detail) {
+		t.Error("the over-cap 400 is being read as a context overflow; the loop would compact instead of lowering the cap")
+	}
+}
+
+// On the Anthropic path the message is in the response body, not in Error() —
+// so drive a real request at a 400-returning server rather than hand-rolling an
+// *anthropic.Error, whose RawJSON cannot be set from outside the SDK.
+func TestMaxTokensTooLargeReadsAnthropicBody(t *testing.T) {
+	t.Setenv("KLAUDIA_MAX_RETRIES", "0")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"type":"error","error":{"type":"invalid_request_error",` +
+			`"message":"max_tokens: 128000 > 64000, which is the maximum allowed number of output tokens for claude-sonnet-4-5-20250929"}}`))
+	}))
+	defer srv.Close()
+
+	_, err := New(Credential{APIKey: "sk-fake"}, srv.URL).StreamTurn(context.Background(), testParams(), StreamSink{})
+	if err == nil {
+		t.Fatal("a 400 should surface as an error")
+	}
+	limit, ok := MaxTokensTooLarge(err)
+	if !ok || limit != 64000 {
+		t.Errorf("MaxTokensTooLarge() = (%d, %v), want (64000, true) — the cap is in the body", limit, ok)
 	}
 }

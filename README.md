@@ -203,8 +203,9 @@ interrupt and send it now, or `↑` to edit it.
 them as a picker — Anthropic and OpenAI-compatible endpoints both answer at
 `GET /v1/models` — so you don't have to remember an exact model ID. `/model
 <alias|id>` still sets one directly (`opus`, `sonnet`, `haiku`, `fable`, or any
-full ID). Picking from the list also records that model's real context window,
-which is what the status bar's `ctx N%` measures against.
+full ID). Either way Klaudia records that model's real context window and
+output limit, which is what the status bar's `ctx N%` measures against and what
+the next turn's `max_tokens` asks for — a model switch moves both.
 
 `/theme` switches the colour theme (Markdown + chrome) for the session; set a
 durable default with `theme = "nord"` in `.klaudia/config.toml` (klaudia |
@@ -449,16 +450,21 @@ baseURL = "https://api.example.com/v1"
 apiKeyEnv = "MY_API_KEY"
 
 # Optional: set the model's context window in tokens so autocompaction kicks
-# in before the provider overflows. Defaults to 200000 (Anthropic-sized); set
-# this when running against smaller-context models (e.g. 128000 for many
-# OpenAI-compatible hosts) — otherwise long sessions can hit
+# in before the provider overflows. Klaudia resolves it for you — this key, then
+# the model's own figure from GET /v1/models, then a built-in table — and falls
+# back to 200000 when nothing can size the model. Set it when your endpoint
+# neither reports a window nor serves a model Klaudia knows (e.g. 128000 for
+# many OpenAI-compatible hosts); otherwise long sessions can hit
 # "max_tokens must be at least 1, got -N" or "context length exceeded" 400s.
 # contextWindow = 128000
 
-# Optional: cap the tokens a single turn may generate. Defaults to the model's
-# real maximum (128000 on the 1M-context Claude models, 64000 on the 200k ones,
-# 8192 for models Klaudia doesn't recognise — including most OpenAI-compatible
-# ones). Set this when your provider's limit differs from that fallback.
+# Optional: cap the tokens a single turn may generate. Resolved the same way:
+# this key, then the model's own maximum from GET /v1/models, then a built-in
+# table (128000 on the 1M-context Claude models, 64000 on the 200k ones), and
+# 8192 only when nothing can size the model. That 8192 floor is low enough to
+# truncate a large Write mid-call, so it is worth setting if your endpoint
+# reports no limit. If this is set above what the model allows, the provider
+# says so and Klaudia retakes the turn at the limit it named.
 # maxTokens = 32000
 
 # Optional: what the Return key does at the prompt. "send" (default) submits

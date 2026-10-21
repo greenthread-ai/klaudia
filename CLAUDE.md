@@ -77,6 +77,18 @@ unset sends nothing on both. Keep it that way — a provider-shaped knob would
 let the same config mean different things on the two backends, which is the
 capability skew `docs/effort.md` exists to prevent.
 
+Model sizing is **resolved once, in `api.ResolveLimits`**: config → provider
+(`GET /v1/models`) → the offline tables → floor, for the output cap and the
+context window together. The three tables in `client.go`/`effort.go` are an
+allowlist of model ids, and an allowlist goes stale the day a model ships — the
+whole Claude 5.5 lineup was missing from all three at once, so Opus 5.5 ran at
+`max_tokens=8192` against a cap of 128000 and compacted as if it had 200k of
+1M. Neither failure looked like a stale map. So: add a model to all three
+tables or none, run `KLAUDIA_LIVE_MODELS=1 go test ./internal/api` when you
+touch them, and treat a figure the provider reports as beating the table.
+`DefaultMaxOutputTokens` is a floor for a model nothing can size, not a
+default.
+
 ## Rules
 
 - Pure Go: builds must stay `CGO_ENABLED=0`-clean (no cgo, no system libs).

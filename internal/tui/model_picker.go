@@ -69,7 +69,7 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 		}
 		items = append(items, choiceItem{
 			label: label,
-			apply: func() string { return m.setModel(mi.ID, mi.ContextWindow) },
+			apply: func() string { return m.setModel(mi.ID, mi.ContextWindow, mi.MaxTokens) },
 		})
 	}
 
@@ -80,11 +80,16 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 	m.startChoice(title, items)
 }
 
-// setModel switches the model for subsequent turns. A context window from the
-// provider is recorded alongside it: that figure is authoritative, unlike the
-// static per-model table, so the status bar's `ctx N%` tracks the model the user
-// actually chose.
-func (m *Model) setModel(id string, contextWindow int) string {
+// setModel switches the model for subsequent turns. The provider's own figures
+// for the chosen model are recorded alongside it: those are authoritative,
+// unlike the static per-model tables, so the status bar's `ctx N%` tracks the
+// model the user actually chose and the next turn asks for as many output
+// tokens as that model really allows.
+//
+// contextWindow and maxTokens are 0 when the endpoint did not say — every
+// OpenAI-compatible server, and the `/model <id>` path, which has no listing to
+// read. Both then fall back to the offline table.
+func (m *Model) setModel(id string, contextWindow, maxTokens int) string {
 	id = strings.TrimSpace(id)
 	m.sess.Model = id
 	m.sess.ResolvedModel = string(api.ResolveModel(id))
@@ -95,13 +100,28 @@ func (m *Model) setModel(id string, contextWindow int) string {
 	}
 	if contextWindow > 0 {
 		m.sess.ContextWindow = contextWindow
-		m.sess.ContextWindowSource = "provider"
+		m.sess.ContextWindowSource = api.LimitSourceProvider
 	} else if limit, source := api.ContextWindow(id, 0); limit > 0 {
 		m.sess.ContextWindow, m.sess.ContextWindowSource = limit, source
+	} else {
+		// A model the table doesn't know and the endpoint didn't size. Leaving
+		// the previous model's window would report context pressure against
+		// the wrong number, which is worse than reporting none.
+		m.sess.ContextWindow, m.sess.ContextWindowSource = 0, api.ContextSourceUnknown
+	}
+	// The output cap has no "unknown" state — some number goes on the wire — so
+	// it always ends up set, and the floor is the last resort.
+	if maxTokens > 0 {
+		m.sess.MaxTokens, m.sess.MaxTokensSource = maxTokens, api.LimitSourceProvider
+	} else if n := api.MaxOutputTokens(id); n != api.DefaultMaxOutputTokens {
+		m.sess.MaxTokens, m.sess.MaxTokensSource = n, api.LimitSourceModel
+	} else {
+		m.sess.MaxTokens, m.sess.MaxTokensSource = api.DefaultMaxOutputTokens, api.LimitSourceFallback
 	}
 	if m.sess.ContextWindow > 0 {
 		msg += fmt.Sprintf(" · %s context", humanTokens(int64(m.sess.ContextWindow)))
 	}
+	msg += fmt.Sprintf(" · %s max output", humanTokens(int64(m.sess.MaxTokens)))
 	// A model switch can strand the live effort level: xhigh is fine on Opus 5
 	// and a 400 on Opus 4.6. Drop to the ceiling and say so, rather than
 	// letting the next turn fail on a setting the user made before the switch.

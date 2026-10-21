@@ -110,17 +110,13 @@ func withExtraDirs(sys string, dirs []string) string {
 // hookRunner may be nil — the common case, meaning no hook is configured
 // anywhere; doctor is told "none" rather than being left silent about a
 // subsystem that runs shell commands when it is on.
-// effectiveMaxOutputTokens mirrors the loop's own resolution (loop.go: an
-// explicit cfg.MaxTokens, else the model-aware default) so /doctor reports the
-// cap that will actually be requested rather than the configured one.
-func effectiveMaxOutputTokens(cfg config.Config, model anthropic.Model) int {
-	if cfg.MaxTokens > 0 {
-		return cfg.MaxTokens
-	}
-	return api.MaxOutputTokens(string(model))
-}
-
-func buildDoctorInput(cfg config.Config, model anthropic.Model, effort api.Effort, cwd string, mcpCfg mcp.Config, hookRunner *hooks.Runner) doctor.Input {
+//
+// limits is passed in rather than derived here. Deriving it made /doctor the
+// one place that could disagree with the run it is diagnosing: it re-resolved
+// the cap and the window from the offline tables, so a model sized by the
+// provider, or switched with /model, was reported at the table's figure (or the
+// 8192 floor) while the turn asked for something else.
+func buildDoctorInput(cfg config.Config, model anthropic.Model, limits api.ModelLimits, effort api.Effort, cwd string, mcpCfg mcp.Config, hookRunner *hooks.Runner) doctor.Input {
 	servers, hints := lsp.Survey(cwd)
 	// Loaded silently: skill.Load's warnings go to the session that owns the
 	// prompt, not to /doctor, which must stay quiet on stderr.
@@ -144,7 +140,6 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, effort api.Effor
 	for _, s := range servers {
 		lspServers = append(lspServers, doctor.LSPServer{Name: s.Bin, Language: s.Language, Version: s.Version})
 	}
-	ctxLimit, ctxSource := api.ContextWindow(string(model), cfg.ContextWindow)
 	in := doctor.Input{
 		Provider:        providerName(cfg),
 		Model:           string(model),
@@ -158,10 +153,11 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, effort api.Effor
 		Hooks:           doctorHooks(hookRunner),
 		MissingLSPHints: hints,
 		AuthKind:        "none",
-		ContextWindow:   ctxLimit,
-		ContextSource:   ctxSource,
+		ContextWindow:   limits.ContextWindow,
+		ContextSource:   limits.ContextSource,
 		Effort:          string(effort),
-		MaxOutputTokens: effectiveMaxOutputTokens(cfg, model),
+		MaxOutputTokens: limits.MaxOutputTokens,
+		MaxOutputSource: limits.MaxOutputSource,
 	}
 	if cfg.Provider == config.ProviderOpenAI {
 		if cfg.ResolveAPIKey() != "" {
@@ -556,6 +552,14 @@ type turnSettings struct {
 	Permission permission.Context
 	ExtraDirs  []string
 	Effort     api.Effort
+	// MaxTokens and ContextWindow are the resolved sizing for Model, from
+	// api.ResolveLimits. They are here rather than read from cfg inside
+	// baseOptions because they depend on the model, and the TUI's model is live
+	// — reading cfg meant a /model switch to a model with a different cap kept
+	// the old one, and that ContextWindow never reached the loop's autocompact
+	// threshold at all.
+	MaxTokens     int
+	ContextWindow int
 }
 
 // resolveEffort applies the precedence --effort > KLAUDIA_EFFORT > config.
@@ -930,6 +934,16 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	model := api.ResolveModel(modelStr)
 
+	// How big a request to make for this model. Resolved once here, where the
+	// provider and the model are both known, and handed to every frontend
+	// through turnSettings — the per-mode options blocks must not each work it
+	// out, which is how the loop ended up reading cfg.ContextWindow while the
+	// TUI status bar read a different number.
+	//
+	// Only a model the offline table does not know costs a provider lookup, so
+	// the ordinary run adds no startup latency. The TUI re-resolves on /model.
+	limits := api.ResolveLimits(ctx, provider, modelStr, cfg.MaxTokens, cfg.ContextWindow)
+
 	// Effort: --effort wins, then KLAUDIA_EFFORT, then config. Unset stays
 	// unset and sends nothing, so the provider's own default applies.
 	effort, err := resolveEffort(opts.effort, cfg.Effort)
@@ -1126,6 +1140,11 @@ func run(cmd *cobra.Command, opts *options) error {
 		subEffort = e
 	}
 	wiring.spawner.WithEffort(subEffort)
+	// The child runs the parent's model, so it gets the parent's resolved
+	// sizing rather than re-deriving it from the offline table — otherwise a
+	// provider-reported cap or a maxTokens override is lost on exactly the
+	// workload (a sub-agent writing a file) where it matters.
+	wiring.spawner.WithLimits(limits)
 
 	// MCP config hot reload. An edit to any .mcp.json that applies here takes
 	// effect in this session instead of at the next start — installing a server
@@ -1210,8 +1229,8 @@ func run(cmd *cobra.Command, opts *options) error {
 			Model:         s.Model,
 			System:        withExtraDirs(sysPrompt, s.ExtraDirs),
 			MaxTurns:      opts.maxTurns,
-			ContextWindow: cfg.ContextWindow,
-			MaxTokens:     int64(cfg.MaxTokens),
+			ContextWindow: s.ContextWindow,
+			MaxTokens:     int64(s.MaxTokens),
 			Effort:        s.Effort,
 			Permission:    s.Permission,
 			Host:          hostGate,
@@ -1229,7 +1248,6 @@ func run(cmd *cobra.Command, opts *options) error {
 	// It drives the same loop, prompting the user to resolve permission asks.
 	if interactive {
 		// Shared settings so slash commands can read/change them between turns.
-		ctxLimit, ctxSource := api.ContextWindow(string(model), cfg.ContextWindow)
 		sess := &tui.Session{
 			// Effective model (flag or config default), never "" — otherwise a
 			// non-Anthropic provider would wrongly resolve to the Anthropic default.
@@ -1249,8 +1267,10 @@ func run(cmd *cobra.Command, opts *options) error {
 			CWD:                 cwd,
 			GitBranch:           gitBranch(cwd),
 			Agents:              tuiAgents(),
-			ContextWindow:       ctxLimit,
-			ContextWindowSource: ctxSource,
+			ContextWindow:       limits.ContextWindow,
+			ContextWindowSource: limits.ContextSource,
+			MaxTokens:           limits.MaxOutputTokens,
+			MaxTokensSource:     limits.MaxOutputSource,
 			// Nil unless the provider can enumerate its models; /model falls
 			// back to type-the-id when it is.
 			ListModels: modelLister(provider),
@@ -1264,7 +1284,16 @@ func run(cmd *cobra.Command, opts *options) error {
 		// captured at startup — which is what /compact did when it closed over
 		// modelStr.
 		sess.Doctor = func() string {
-			return doctor.Format(doctor.Run(buildDoctorInput(cfg, api.ResolveModel(sess.Model), sess.Effort, cwd, mcpCfg, hookRunner)))
+			// The session's own figures, not the startup ones: /model records
+			// the chosen model's sizing there, so /doctor after a switch
+			// reports the model it switched to.
+			live := api.ModelLimits{
+				MaxOutputTokens: sess.MaxTokens,
+				MaxOutputSource: sess.MaxTokensSource,
+				ContextWindow:   sess.ContextWindow,
+				ContextSource:   sess.ContextWindowSource,
+			}
+			return doctor.Format(doctor.Run(buildDoctorInput(cfg, api.ResolveModel(sess.Model), live, sess.Effort, cwd, mcpCfg, hookRunner)))
 		}
 		sess.Compact = func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 			return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
@@ -1286,6 +1315,11 @@ func run(cmd *cobra.Command, opts *options) error {
 				// boundary.
 				ExtraDirs: sess.ExtraDirs,
 				Effort:    sess.Effort, // resolved fresh each turn, like Model
+				// Live too: /model records the new model's sizing, so a switch
+				// to a model with a different output cap takes effect on the
+				// next turn rather than keeping the startup model's.
+				MaxTokens:     sess.MaxTokens,
+				ContextWindow: sess.ContextWindow,
 			}), turn.Emit)
 		}
 		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages, sess)
@@ -1300,9 +1334,11 @@ func run(cmd *cobra.Command, opts *options) error {
 		runFn := func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
 			elicitor.SetAsker(turn.Asker)
 			return loop.Run(ctx, baseOptions(turn, turnSettings{
-				Model:      model,
-				Permission: permCtx,
-				Effort:     effort,
+				Model:         model,
+				Permission:    permCtx,
+				Effort:        effort,
+				MaxTokens:     limits.MaxOutputTokens,
+				ContextWindow: limits.ContextWindow,
 			}), turn.Emit)
 		}
 		// initialMessages, not nil: an explicit --resume/--continue was being
@@ -1321,11 +1357,12 @@ func run(cmd *cobra.Command, opts *options) error {
 				// Permission comes from the Turn: an ACP client keeps a mode
 				// per editor session, so one resolved here would be wrong for
 				// every session but the first.
-				Model:  model,
-				Effort: effort,
+				Model:         model,
+				Effort:        effort,
+				MaxTokens:     limits.MaxOutputTokens,
+				ContextWindow: limits.ContextWindow,
 			}), turn.Emit)
 		}
-		acpCtxLimit, _ := api.ContextWindow(string(model), cfg.ContextWindow)
 		srv := acp.New(acp.Options{
 			Run:  runFn,
 			CWD:  cwd,
@@ -1345,7 +1382,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			LoadHistory:   acpLoadHistory(cwd),
 			ListSessions:  func() []acp.SessionSummary { return acpSessions(cwd) },
 			Commands:      acpCommands(skills),
-			ContextWindow: acpCtxLimit,
+			ContextWindow: limits.ContextWindow,
 			Log:           func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "acp:", m) },
 		}, cmd.OutOrStdout())
 		return srv.Serve(ctx, cmd.InOrStdin())
@@ -1356,9 +1393,11 @@ func run(cmd *cobra.Command, opts *options) error {
 		return runGoalLoop(ctx, cmd, loopRun{
 			run: func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
 				return loop.Run(ctx, baseOptions(turn, turnSettings{
-					Model:      model,
-					Permission: permCtx,
-					Effort:     effort,
+					Model:         model,
+					Permission:    permCtx,
+					Effort:        effort,
+					MaxTokens:     limits.MaxOutputTokens,
+					ContextWindow: limits.ContextWindow,
 				}), turn.Emit)
 			},
 			approver:   approver,
@@ -1397,7 +1436,13 @@ func run(cmd *cobra.Command, opts *options) error {
 		History:  initialMessages,
 		Emit:     emit,
 		Approver: approver,
-	}, turnSettings{Model: model, Permission: permCtx, Effort: effort})
+	}, turnSettings{
+		Model:         model,
+		Permission:    permCtx,
+		Effort:        effort,
+		MaxTokens:     limits.MaxOutputTokens,
+		ContextWindow: limits.ContextWindow,
+	})
 	// Three fields the shared builder has no business knowing about: a headless
 	// run uses the envelope recorder rather than the plain transcript, it is the
 	// only mode that streams raw model events, and its deferred set is fixed at

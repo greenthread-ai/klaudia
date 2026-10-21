@@ -65,10 +65,18 @@ type Session struct {
 	Agents      []AgentInfo // built-in sub-agent types, for /agents
 	ExtraDirs   []string    // additional working dirs added via /add-dir
 	// ContextWindow is the input-token limit /stats reports against; resolved
-	// at startup via api.ContextWindow (config override > model default > 0).
-	// Zero means "unknown"; /stats omits the usage ratio in that case.
+	// at startup via api.ResolveLimits (config override > provider > model
+	// default > 0). Zero means "unknown"; /stats omits the usage ratio in that
+	// case.
 	ContextWindow       int
 	ContextWindowSource string
+	// MaxTokens is the output-token cap requested per turn, from the same
+	// resolution. It is carried on the session rather than read from config by
+	// the caller because /model changes it: Opus 5.5 allows 128k and an
+	// unlisted OpenAI-compatible model gets the 8192 floor, and a switch
+	// between them has to move the cap with it.
+	MaxTokens       int
+	MaxTokensSource string
 
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
@@ -1896,7 +1904,12 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		return m, m.showResult(args)
 	case "/model":
 		if len(args) > 0 {
-			m.setModel(args[0], 0)
+			// The confirmation was being computed and dropped here, so
+			// `/model <id>` was the one path that changed the model and said
+			// nothing — including when the id is one the table can't size and
+			// the turn drops to the 8192 floor, which is exactly when the user
+			// needs to be told.
+			m.appendLine(bannerStyle.Render(m.setModel(args[0], 0, 0)))
 			break
 		}
 		cur := m.sess.Model

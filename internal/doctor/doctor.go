@@ -53,8 +53,14 @@ type Input struct {
 	// default), and MaxOutputTokens the per-response cap it has to fit in.
 	// Both are reported together because the cap bounds thinking and text
 	// combined, so a high level against a small cap truncates.
+	//
+	// MaxOutputSource is where the cap came from (an api.LimitSource* label).
+	// It is reported because the floor and a real model limit are both just
+	// numbers on screen, and "unknown model" is the one that explains a model
+	// that cannot finish a long write.
 	Effort          string
 	MaxOutputTokens int
+	MaxOutputSource string
 	// MissingLSPHints are actionable suggestions for languages present in the
 	// project but lacking a server (e.g. "install gopls for go support").
 	MissingLSPHints []string
@@ -68,6 +74,13 @@ type Input struct {
 // a truncation risk rather than a setting. Anthropic's own guidance for xhigh
 // and max starts at 64k; that is the number used here rather than a guess.
 const effortMinOutputTokens = 64000
+
+// floorOutputTokens is api.DefaultMaxOutputTokens — the cap a model nothing can
+// size gets. Duplicated as a literal rather than imported because doctor is a
+// leaf package that reports facts it is given and must not depend on api; the
+// api constant's own comment points back here. A mismatch would make the
+// warning fire one notch early or late, not misreport the number.
+const floorOutputTokens = 8192
 
 // effortNeedsRoom reports whether a level is one of the two the docs call out
 // as needing a large max_tokens.
@@ -173,6 +186,24 @@ func Run(in Input) []Check {
 		add("context", StatusInfo, fmt.Sprintf("%s tokens (%s)", formatTokens(in.ContextWindow), in.ContextSource))
 	} else if in.ContextSource != "" {
 		add("context", StatusWarn, in.ContextSource)
+	}
+
+	// The output cap, on its own line. It used to be reported only alongside
+	// a set effort level, which left the case that actually bit — Opus 5.5
+	// missing from the model table and asking for the 8192 floor, truncating a
+	// large Write mid-tool-call — invisible on an ordinary run with no effort
+	// set. The floor is called out as a warning because it is 15x below what
+	// current models allow and `maxTokens` is the fix.
+	if in.MaxOutputTokens > 0 {
+		msg := fmt.Sprintf("%s tokens per turn", formatTokens(in.MaxOutputTokens))
+		if in.MaxOutputSource != "" {
+			msg += " (" + in.MaxOutputSource + ")"
+		}
+		if in.MaxOutputTokens <= floorOutputTokens {
+			add("max output", StatusWarn, msg+" — low enough to truncate a large write mid-tool-call; set maxTokens if your model allows more")
+		} else {
+			add("max output", StatusInfo, msg)
+		}
 	}
 
 	// Effort, and the one way it goes wrong quietly. max_tokens is a hard

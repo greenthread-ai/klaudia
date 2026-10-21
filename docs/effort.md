@@ -63,7 +63,11 @@ lowers the live level to the new model's ceiling and says so.
 
 The table lives in `internal/api/effort.go` (`modelMaxEffort`) and is keyed by
 resolved model id, so aliases work. Keep it in step with `modelContextWindows`
-and `modelMaxOutputTokens` — a test asserts the first of those.
+and `modelMaxOutputTokens`: `TestModelTablesAgreeWithEachOther` asserts all
+three agree offline, and `TestLiveModelTablesMatchProvider`
+(`KLAUDIA_LIVE_MODELS=1`) checks the two sizing tables against `GET /v1/models`
+and reports what to add. That test exists because the three tables missed the
+Claude 5.5 lineup simultaneously and nothing said so.
 
 A model that is **not** in the table is treated as supported, not unsupported.
 That is the normal case for an OpenAI-compatible endpoint and for a Claude
@@ -74,14 +78,21 @@ provider never stated.
 ## max_tokens is a hard limit on thinking *and* text
 
 At `xhigh` and `max` the model needs room to think before it answers, and
-`max_tokens` bounds both halves together. Klaudia already requests each Claude
-model's true cap (128k on the 1M-context models), so this is handled for them.
+`max_tokens` bounds both halves together. Klaudia requests each Claude model's
+true cap (128k on the 1M-context models), so this is handled for them.
 
-The case that bites is an unknown model: it gets `DefaultMaxOutputTokens`
-(8192), and a high level against that cap does not error — it truncates
-mid-thought, which reads as the model losing the plot rather than as a setting.
-`/doctor` warns when the resolved cap is under 64k and the level is `xhigh` or
-`max`; set `maxTokens` in the config to fix it.
+The case that bites is a model nothing can size: it gets
+`DefaultMaxOutputTokens` (8192), and a high level against that cap does not
+error — it truncates mid-thought, which reads as the model losing the plot
+rather than as a setting. `/doctor` warns when the resolved cap is under 64k and
+the level is `xhigh` or `max`; set `maxTokens` in the config to fix it.
+
+This is not hypothetical: when the 5.5 lineup shipped it was absent from
+`modelMaxOutputTokens`, so Opus 5.5 ran at 8192 against a real cap of 128000 —
+15.6× under — and the first casualty was a large `Write` truncated mid-tool-call.
+`api.ResolveLimits` now asks the provider for any model the table cannot size,
+so an unlisted model only reaches the floor when the endpoint will not say
+either.
 
 ## Changing it mid-session costs a cache read
 

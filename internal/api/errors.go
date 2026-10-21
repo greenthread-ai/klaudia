@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -306,6 +308,70 @@ func IsContextOverflow(err error) bool {
 		return true
 	}
 	return isContextOverflow(err.Error())
+}
+
+// maxTokensAnthropicRE matches the Anthropic 400 that rejects max_tokens for
+// exceeding the model's output cap, capturing the cap. Measured 2026-10 with
+// claude-sonnet-4-5-20250929 at max_tokens=128000:
+//
+//	max_tokens: 128000 > 64000, which is the maximum allowed number of output
+//	tokens for claude-sonnet-4-5-20250929
+//
+// TestLiveMaxTokensTooLargeWording re-measures it, so a reworded 400 is a test
+// failure rather than a silent loss of the retry below.
+var maxTokensAnthropicRE = regexp.MustCompile(`max_tokens:\s*\d+\s*>\s*(\d+)`)
+
+// maxTokensOpenAIRE matches OpenAI's documented phrasing for the same refusal:
+//
+//	max_tokens is too large: 128000. This model supports at most 16384
+//	completion tokens, whereas you provided 128000.
+//
+// Unlike the Anthropic pattern this one is NOT measured — we have no
+// OpenAI-compatible endpoint under test that caps lower than we ask — so treat
+// it as best-effort. It is guarded by requiring the message to mention a
+// max-tokens field, because "at most N" on its own appears in unrelated 400s
+// (per-request item limits, for one) and a wrong number here would lower the
+// cap for the rest of the run.
+var maxTokensOpenAIRE = regexp.MustCompile(`at most\s*(\d+)`)
+
+// MaxTokensTooLarge reports the model's real output cap when err is the
+// provider refusing the request for asking above it.
+//
+// This exists because the cap comes from an offline table (modelMaxOutputTokens)
+// that goes stale: an entry that is too high makes every turn fail identically,
+// which ends the session. The 400 names the real limit, so the agent loop can
+// lower max_tokens to it and retake the turn — one wasted round-trip instead of
+// a dead end. The reverse staleness (an entry too low, or a model absent from
+// the table and floored at DefaultMaxOutputTokens) is not an error at all and
+// is handled by ResolveLimits, not here.
+func MaxTokensTooLarge(err error) (limit int, ok bool) {
+	if err == nil {
+		return 0, false
+	}
+	// Only a 400 means "your request was wrong"; a 500 whose body happens to
+	// quote these words should be retried as-is, not with a lowered cap.
+	if status, found := apiStatus(err); !found || status != 400 {
+		return 0, false
+	}
+	detail := providerDetail(err)
+	if detail == "" {
+		detail = err.Error()
+	}
+	d := strings.ToLower(detail)
+	if m := maxTokensAnthropicRE.FindStringSubmatch(d); m != nil {
+		if n, convErr := strconv.Atoi(m[1]); convErr == nil && n > 0 {
+			return n, true
+		}
+	}
+	if !strings.Contains(d, "max_tokens") && !strings.Contains(d, "max_completion_tokens") {
+		return 0, false
+	}
+	if m := maxTokensOpenAIRE.FindStringSubmatch(d); m != nil {
+		if n, convErr := strconv.Atoi(m[1]); convErr == nil && n > 0 {
+			return n, true
+		}
+	}
+	return 0, false
 }
 
 // IsImmutableThinking reports whether err is the API refusing a request because
