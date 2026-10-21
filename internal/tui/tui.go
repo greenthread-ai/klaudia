@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/stopwatch"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -283,7 +284,7 @@ func skillNames(sess *Session) []string {
 // introSkillsShown caps the names listed before the line becomes noise.
 const introSkillsShown = 4
 
-func intro(model, branch, tagline string, skills []string) string {
+func intro(model, branch, tagline string, skills []string, submit key.Binding) string {
 	logo := logoStyle.Render("✦ Klaudia")
 	tag := bannerStyle.Render(" " + tagline)
 	var meta string
@@ -305,7 +306,11 @@ func intro(model, branch, tagline string, skills []string) string {
 		}
 		meta += "\n" + bannerStyle.Render("  skills: "+strings.Join(shown, ", ")+suffix)
 	}
-	tip := hintStyle.Render("\n  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C twice to quit")
+	// The send chord comes from the binding, not from the word "Enter": with
+	// input.enter = "newline" Return inserts a newline and this line was telling
+	// every one of those users to press the key that does not send.
+	tip := hintStyle.Render("\n  Type a prompt and press " + chordCase(submit.Help().Key) +
+		" · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C twice to quit")
 	return logo + tag + meta + tip + "\n"
 }
 
@@ -521,7 +526,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		sess = &Session{}
 	}
 	in := newPromptInput()
-	in.KeyMap.InsertNewline = newlineBinding(sess.EnterInserts)
+	in.KeyMap.InsertNewline = newKeymap(sess.EnterInserts).Newline
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -1153,7 +1158,7 @@ func (m *Model) onInputKey(msg tea.KeyMsg) bool {
 	}
 	// Tab completes a slash command when the line is a bare "/token", otherwise
 	// an @<path> reference.
-	if msg.Type == tea.KeyTab {
+	if key.Matches(msg, m.keymap().Complete) {
 		v := m.input.Value()
 		if m.slashCommandsLive() && strings.HasPrefix(v, "/") && !strings.ContainsAny(v, " \t") {
 			m.completeSlash()
@@ -1169,12 +1174,12 @@ func (m *Model) onInputKey(msg tea.KeyMsg) bool {
 	if !m.menuActive() {
 		return false
 	}
-	switch msg.Type {
-	case tea.KeyUp:
+	switch {
+	case key.Matches(msg, m.keymap().Prev):
 		return m.movePathMenu(-1)
-	case tea.KeyDown:
+	case key.Matches(msg, m.keymap().Next):
 		return m.movePathMenu(1)
-	case tea.KeyEsc:
+	case key.Matches(msg, m.keymap().Dismiss):
 		return m.dismissPathMenu()
 	}
 	return false
@@ -1193,10 +1198,11 @@ func (m *Model) onHistoryKey(msg tea.KeyMsg) bool {
 	if !m.editableInput() || m.input.LineCount() > 1 {
 		return false
 	}
-	if msg.Type != tea.KeyUp && msg.Type != tea.KeyDown {
+	prev := key.Matches(msg, m.keymap().Prev)
+	if !prev && !key.Matches(msg, m.keymap().Next) {
 		return false
 	}
-	if msg.Type == tea.KeyUp {
+	if prev {
 		if t := m.steer.takeBack(); t != "" {
 			m.input.SetValue(t)
 			m.input.CursorEnd()
@@ -1204,7 +1210,7 @@ func (m *Model) onHistoryKey(msg tea.KeyMsg) bool {
 			return true
 		}
 	}
-	m.navigateHistory(msg.Type == tea.KeyUp)
+	m.navigateHistory(prev)
 	m.syncInputHeight()
 	return true
 }
@@ -1254,7 +1260,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// What Return means depends on config (see keyAction). Computed once, so
 	// the idle prompt and the queue-while-running path cannot disagree about
 	// which chord sends — they did, in the first cut of this change.
-	action := keyAction(msg, m.sess.EnterInserts)
+	action := m.keymap().action(msg)
 
 	// No scrollback keys are bound. Klaudia renders inline, so PgUp/PgDn, the
 	// wheel, Home/End, tmux copy mode and the terminal's own search all operate
@@ -1551,16 +1557,21 @@ var commandList = []cmdInfo{
 	{"/quit", "", "Exit Klaudia (alias /exit)"},
 }
 
-// keyHints documents the non-command key bindings shown in /help.
-const keyHints = `Keys:
-  /                Type a slash to see matching commands
-  @                Type an @ to pick a file (↑/↓ select, Tab cycles, Esc dismisses)
-  Tab              Complete a /command or an @<path> reference
-  ↑ / ↓            Cycle through previous prompts, or the @ file menu (a queued message comes back first)
-  Ctrl+J           Newline without sending
-  Ctrl+U / Ctrl+K  Delete before / after the cursor
-  Esc              Dismiss the file menu, or interrupt the model mid-turn
-  Ctrl+C           Interrupt, or clear the line — press twice to quit`
+// keymap returns the prompt's bindings for this session's Return mode.
+//
+// Derived rather than cached on the Model. A cached field is zero-valued in any
+// Model built as a struct literal — every test helper in this package does that
+// — and a zero keymap matches nothing, so the prompt would silently stop
+// responding to Enter. Building seven bindings per keystroke is free at human
+// typing speed.
+func (m *Model) keymap() keymap {
+	return newKeymap(m.sess.EnterInserts)
+}
+
+// keyHints renders the key reference for /help from the live bindings.
+func (m *Model) keyHints() string {
+	return keyHelp(m.keymap(), m.input.KeyMap)
+}
 
 // commandAliases are names handleSlash accepts that commandList does not list,
 // because they are second spellings of a command already in it.
@@ -1588,8 +1599,11 @@ func IsBuiltinCommand(name string) bool {
 	return false
 }
 
-// slashHelp renders the command reference from commandList + keyHints.
-func slashHelp() string {
+// slashHelp renders the command reference from commandList, plus the key
+// reference rendered from the live bindings. keys is passed in rather than
+// rebuilt here because the Return chords depend on config: the help has to
+// describe the bindings this session actually installed.
+func slashHelp(keys string) string {
 	var b strings.Builder
 	b.WriteString("Available commands:")
 	for _, c := range commandList {
@@ -1600,7 +1614,7 @@ func slashHelp() string {
 		fmt.Fprintf(&b, "\n  %-16s %s", left, c.desc)
 	}
 	b.WriteString("\n\n")
-	b.WriteString(keyHints)
+	b.WriteString(keys)
 	return b.String()
 }
 
@@ -1954,7 +1968,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 
 	switch cmd {
 	case "/help", "/?":
-		m.appendLine(bannerStyle.Render(slashHelp() + m.skillHelpLines()))
+		m.appendLine(bannerStyle.Render(slashHelp(m.keyHints()) + m.skillHelpLines()))
 	case "/quit", "/exit":
 		return m, tea.Quit
 	case "/clear":
@@ -3377,7 +3391,7 @@ func (m *Model) resize(w, h int) {
 }
 
 func (m *Model) introText() string {
-	return intro(m.introModel, m.introBranch, m.introTagline, skillNames(m.sess))
+	return intro(m.introModel, m.introBranch, m.introTagline, skillNames(m.sess), m.keymap().Submit)
 }
 
 // View draws only the live region. Everything finished has already been printed
