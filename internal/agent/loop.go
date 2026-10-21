@@ -21,6 +21,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/internal/hooks"
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/schema"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
@@ -810,6 +811,18 @@ func shortCircuit(emit Emitter, tu anthropic.BetaToolUseBlock, msg string) anthr
 
 func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), fs *failureState) anthropic.BetaContentBlockParamUnion {
 	raw, _ := json.Marshal(tu.Input)
+	// Repair string-encoded scalars ("offset": "180") before anything reads the
+	// input, so the gate, the permission check, the breaker key, the hooks and
+	// the tool all see one value. Narrow by construction — see schema.Coerce.
+	if t, ok := l.tools.Lookup(tu.Name); ok {
+		if fixed, changed := schema.Coerce(t.InputSchema(), raw); len(changed) > 0 {
+			raw = fixed
+			var shown any
+			if json.Unmarshal(fixed, &shown) == nil {
+				tu.Input = shown // report what will actually run
+			}
+		}
+	}
 	if emit != nil {
 		emit(Event{Type: "tool_use", ToolName: tu.Name, ToolUseID: tu.ID, Input: tu.Input})
 	}
