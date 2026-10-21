@@ -206,3 +206,153 @@ func TestMenuGoesAwayWhenTheLineChanges(t *testing.T) {
 		t.Error("stale menu would still swallow Up/Down")
 	}
 }
+
+// The reported bug: "@ only works outside of thinking mode". You can type a
+// follow-up while the model works, but the dropdown was gated on stateIdle, so
+// the box that accepted the keystrokes offered no completion for them.
+//
+// This is the same shape as TestPasteGateMatchesTheEditableStates: what it pins
+// down is the SET of states, which is the part a future state can still get
+// wrong. Both now ask editableInput, so they cannot disagree by construction.
+func TestMenuShowsInEveryEditableState(t *testing.T) {
+	states := []struct {
+		name     string
+		state    uiState
+		editable bool
+	}{
+		{"idle", stateIdle, true},
+		{"running", stateRunning, true},
+		{"other-answer", stateAnsweringOther, true},
+		{"permission", stateAwaitingPermission, false},
+		{"answer picker", stateAwaitingAnswer, false},
+		{"plan y/n", stateAwaitingPlan, false},
+		{"confirm y/n", stateAwaitingConfirm, false},
+		{"choice", stateAwaitingChoice, false},
+	}
+	for _, tt := range states {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mustWrite(t, filepath.Join(dir, "alpha.go"))
+			m := menuModel(t, dir)
+
+			// Open the menu on the idle line, then move to the state under test.
+			// A state change can arrive (a permission prompt, a turn starting)
+			// while the dropdown is up, so this also covers the menu having to
+			// get out of the way of a prompt that owns the keyboard.
+			typeInto(m, "look at @alp")
+			if m.pathMenuView() == "" {
+				t.Fatal("menu never opened on the idle line")
+			}
+			m.setState(tt.state)
+
+			if shown := m.pathMenuView() != ""; shown != tt.editable {
+				t.Errorf("menu on screen = %v, want %v", shown, tt.editable)
+			}
+			if active := m.menuActive(); active != tt.editable {
+				t.Errorf("menu owns Up/Down = %v, want %v", active, tt.editable)
+			}
+			if inBottom := strings.Contains(m.bottomView(), "alpha.go"); inBottom != tt.editable {
+				t.Errorf("menu rendered under the box = %v, want %v", inBottom, tt.editable)
+			}
+		})
+	}
+}
+
+// Typing a reference into a queued follow-up: the whole flow through the real
+// key path while the model is working. Tab completes, the arrows pick.
+func TestMenuKeysWorkWhileTheModelIsWorking(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "alpha.go"))
+	mustWrite(t, filepath.Join(dir, "alpine.go"))
+
+	m := menuModel(t, dir)
+	m.setState(stateRunning)
+	typeInto(m, "also check @alp")
+
+	if m.pathMenuView() == "" {
+		t.Fatal("no dropdown while the model works")
+	}
+	m.onKey(tea.KeyMsg{Type: tea.KeyTab})
+	first := m.input.Value()
+	if !strings.HasPrefix(first, "also check @") || strings.HasSuffix(first, "@alp") {
+		t.Fatalf("Tab did not complete the reference: %q", first)
+	}
+	m.onKey(tea.KeyMsg{Type: tea.KeyDown})
+	if second := m.input.Value(); second == first {
+		t.Errorf("Down did not move the selection: still %q", second)
+	}
+}
+
+// Up with the menu open belongs to the menu, not to the queued message. Taking
+// the queued text back is what Up means on a line with no dropdown on it.
+func TestMenuUpDoesNotRecallTheQueuedMessage(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "alpha.go"))
+
+	m := menuModel(t, dir)
+	m.setState(stateRunning)
+	m.steer.add("queued text", "queued text")
+	typeInto(m, "@alp")
+
+	m.onKey(tea.KeyMsg{Type: tea.KeyUp})
+	if got := m.input.Value(); strings.Contains(got, "queued text") {
+		t.Errorf("Up recalled the queued message over the open menu: %q", got)
+	}
+	if !strings.Contains(m.input.Value(), "alpha.go") {
+		t.Errorf("Up did not pick from the menu: %q", m.input.Value())
+	}
+}
+
+// Esc closes the dropdown. It must not also kill the turn behind it — the
+// second Esc does that, once there is nothing on screen to close.
+func TestMenuEscDoesNotInterruptTheTurn(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "alpha.go"))
+
+	m := menuModel(t, dir)
+	m.setState(stateRunning)
+	interrupted := false
+	m.turnCancel = func() { interrupted = true }
+	typeInto(m, "@alp")
+
+	m.onKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if interrupted {
+		t.Fatal("closing the dropdown interrupted the turn")
+	}
+	if m.pathMenuView() != "" {
+		t.Error("Esc did not close the menu")
+	}
+	m.onKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if !interrupted {
+		t.Error("a second Esc, with the menu gone, did not interrupt")
+	}
+}
+
+// Slash completion follows the submit path, not the box. "Answer in your own
+// words" sends its text as an answer, so a leading "/" there is a character and
+// offering to complete it would be a lie.
+func TestSlashCompletionFollowsTheSubmitPath(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		state uiState
+		live  bool
+	}{
+		{"idle", stateIdle, true},
+		{"running", stateRunning, true},
+		{"other-answer", stateAnsweringOther, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := menuModel(t, t.TempDir())
+			m.setState(tt.state)
+			m.input.SetValue("/mod")
+			m.onKey(tea.KeyMsg{Type: tea.KeyTab})
+
+			if completed := m.input.Value() != "/mod"; completed != tt.live {
+				t.Errorf("Tab completed the command = %v, want %v (input %q)", completed, tt.live, m.input.Value())
+			}
+			if shown := strings.Contains(m.bottomView(), "/model"); shown != tt.live {
+				t.Errorf("suggestion line on screen = %v, want %v", shown, tt.live)
+			}
+		})
+	}
+}

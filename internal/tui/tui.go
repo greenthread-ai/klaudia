@@ -614,6 +614,17 @@ func (m *Model) editableInput() bool {
 	}
 }
 
+// slashCommandsLive reports whether a leading "/" in the box would actually run
+// a command. True while idle and while the model works — the running path
+// dispatches slash commands too — and false in "answer in your own words",
+// where the text is an answer and a leading slash is just a character.
+//
+// Tab completion and the suggestion line both ask this, so neither can offer a
+// command that the submit path in that state would not run.
+func (m *Model) slashCommandsLive() bool {
+	return m.state == stateIdle || m.state == stateRunning
+}
+
 // inputText is what the user typed, in the two forms the rest of the code has
 // to keep straight.
 //
@@ -715,7 +726,7 @@ func (m *Model) updateInput(msg tea.Msg) tea.Cmd {
 	m.reconcilePastes()
 	// Rank the paths here rather than in View: the menu has to be recomputed
 	// when the reference changes, and View runs on every spinner tick.
-	if m.state == stateIdle {
+	if m.editableInput() {
 		m.refreshPathMenu()
 	}
 	return cmd
@@ -1112,10 +1123,60 @@ func (m *Model) promptValue() string {
 	return m.pastes.expand(m.input.Value())
 }
 
+// onInputKey handles the keys that belong to the text box itself rather than to
+// the state that happens to be showing it: Tab completion, and the @-menu's
+// arrows and Esc. It reports whether the key was consumed.
+//
+// Keyed off editableInput and called above every per-state block, because the
+// box is the same box in each state that has one. Gating these on stateIdle is
+// what left @ completion dead while the model was working — you could type a
+// queued follow-up but not complete a path in it — and that is the same drift
+// editableInput was introduced to stop, after the paste gate and inputHeight
+// disagreed about stateAnsweringOther.
+func (m *Model) onInputKey(msg tea.KeyMsg) bool {
+	if !m.editableInput() {
+		return false
+	}
+	// Tab completes a slash command when the line is a bare "/token", otherwise
+	// an @<path> reference.
+	if msg.Type == tea.KeyTab {
+		v := m.input.Value()
+		if m.slashCommandsLive() && strings.HasPrefix(v, "/") && !strings.ContainsAny(v, " \t") {
+			m.completeSlash()
+		} else {
+			m.completeAtPath()
+		}
+		return true
+	}
+	// The menu owns Up/Down while it is open — it is on screen and it is what
+	// the keys obviously refer to. Esc closes it. Both fall through to history
+	// navigation, the queued-message edit and the usual Esc handling when it is
+	// not open.
+	if !m.menuActive() {
+		return false
+	}
+	switch msg.Type {
+	case tea.KeyUp:
+		return m.movePathMenu(-1)
+	case tea.KeyDown:
+		return m.movePathMenu(1)
+	case tea.KeyEsc:
+		return m.dismissPathMenu()
+	}
+	return false
+}
+
 func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Any key other than Ctrl+C disarms a pending "press again to quit".
 	if msg.Type != tea.KeyCtrlC {
 		m.quitArmed = false
+	}
+
+	// The text box's own keys, before any state dispatch. Esc reaching the menu
+	// ahead of the interrupt is deliberate: closing a dropdown that is on screen
+	// must not also kill the turn behind it. A second Esc does that.
+	if m.onInputKey(msg) {
+		return m, nil
 	}
 
 	switch msg.Type {
@@ -1352,37 +1413,6 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			})
 		}
 		return m, nil
-	}
-
-	// Tab completion on an idle line: slash command when the line is a "/token",
-	// otherwise an @<path> reference.
-	if m.state == stateIdle && msg.Type == tea.KeyTab {
-		if strings.HasPrefix(m.input.Value(), "/") && !strings.ContainsAny(m.input.Value(), " \t") {
-			m.completeSlash()
-		} else {
-			m.completeAtPath()
-		}
-		return m, nil
-	}
-
-	// The @-completion menu owns Up/Down while it is open — it is on screen and
-	// it is what the keys obviously refer to. Esc closes it. Both fall through
-	// to history navigation and the usual Esc handling when it is not.
-	if m.state == stateIdle && m.menuActive() {
-		switch msg.Type {
-		case tea.KeyUp:
-			if m.movePathMenu(-1) {
-				return m, nil
-			}
-		case tea.KeyDown:
-			if m.movePathMenu(1) {
-				return m, nil
-			}
-		case tea.KeyEsc:
-			if m.dismissPathMenu() {
-				return m, nil
-			}
-		}
 	}
 
 	// Input history navigation (only on a fresh idle line).
@@ -3414,7 +3444,7 @@ func (m *Model) bottomView() string {
 			}
 		}
 		m.input.SetHeight(m.inputHeight())
-		bottom = caption(work) + "\n" + m.promptBox()
+		bottom = caption(work) + "\n" + m.promptBox() + m.inputAffordanceView()
 		// Show the not-yet-committed tail of the streaming message above the
 		// working line, so the user sees text arriving even though the finished
 		// part has already gone to scrollback.
@@ -3431,7 +3461,7 @@ func (m *Model) bottomView() string {
 			hintStyle.Render(fmt.Sprintf("  (%d, or just start typing, to answer in your own words)", len(m.askOptions)+1)))
 	case stateAnsweringOther:
 		m.input.SetHeight(m.inputHeight())
-		bottom = m.promptBox() + "\n" + caption(askStyle.Render("Your answer")+
+		bottom = m.promptBox() + m.inputAffordanceView() + "\n" + caption(askStyle.Render("Your answer")+
 			hintStyle.Render("  (enter sends · esc goes back to the options)"))
 	case stateAwaitingPlan:
 		bottom = caption(askStyle.Render("Approve plan? (y)es / (n)o"))
@@ -3441,16 +3471,28 @@ func (m *Model) bottomView() string {
 		bottom = caption(askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.choiceItems))) + hintStyle.Render("  (esc to cancel)"))
 	default:
 		m.input.SetHeight(m.inputHeight())
-		bottom = m.promptBox()
-		if sug := m.slashSuggestionLine(); sug != "" {
-			bottom += "\n" + caption(sug)
-		}
-		if menu := m.pathMenuView(); menu != "" {
-			bottom += "\n" + menu
-		}
+		bottom = m.promptBox() + m.inputAffordanceView()
 	}
 	// Persistent status bar at the very bottom, in every state.
 	return bottom + "\n" + caption(m.statusLine())
+}
+
+// inputAffordanceView renders what hangs below the text box: the slash
+// suggestion line and the @-completion menu. Every state that shows the box
+// calls this one function, so the dropdown cannot be visible in one state and
+// invisible in another — which is exactly how it shipped, live on the idle line
+// and absent while the model worked.
+func (m *Model) inputAffordanceView() string {
+	var out string
+	if m.slashCommandsLive() {
+		if sug := m.slashSuggestionLine(); sug != "" {
+			out += "\n" + caption(sug)
+		}
+	}
+	if menu := m.pathMenuView(); menu != "" {
+		out += "\n" + menu
+	}
+	return out
 }
 
 // uiApprover implements agent.Approver by asking the UI and blocking for the

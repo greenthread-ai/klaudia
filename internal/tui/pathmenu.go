@@ -177,7 +177,7 @@ func quoteRef(path string) string {
 // submit, a slash command — so the menu re-checks the line it is describing
 // rather than trusting a flag set earlier.
 func (m *Model) menuActive() bool {
-	if !m.menu.open || len(m.menu.hits) == 0 {
+	if !m.editableInput() || !m.menu.open || len(m.menu.hits) == 0 {
 		return false
 	}
 	if m.input.Value() == m.menu.inserted {
