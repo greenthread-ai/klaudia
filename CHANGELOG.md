@@ -15,6 +15,26 @@ port mirrors (see `internal/version`).
   out twice, and a test fails if the two ever disagree.
 
 ### Fixed
+- **Fetching a page no longer waits for the load event, which on an ad-carrying
+  site can never arrive.** `chromedp.Navigate` returns when every subresource
+  has finished; a third-party ad or tracker is free never to finish. Measured
+  cold against Chrome 152: `theguardian.com` had its full text 650ms after the
+  navigation committed and had still not fired load 60 seconds later, and
+  `arstechnica.com` fired it at 10.8s with its text complete at 1.25s — so
+  fetching Ars failed on the 30s timeout every time, having been readable for
+  29 of them. Navigation now commits via `Page.navigate` and the settle poll
+  decides when the page is worth reading. Ten cold fetches, before → after:
+  Ars `FAIL 30.4s` → `3.2s`, BBC `4.6s` → `2.7s`, Wikipedia `6.2s` → `4.3s`,
+  Guardian `2.5s` → `1.7s`.
+- **A page that is briefly blank is no longer captured blank.** The settle
+  poll accepted two consecutive agreeing measurements, and `readyState` reaches
+  `complete` with an empty body on sites that then render: measured,
+  `stackoverflow.com/questions` did it 700ms in, so a fetch returned
+  Cloudflare's 16-byte "Just a moment..." page instead of the questions —
+  plausible-looking, and from a site that was neither slow nor down. Emptiness
+  now never counts as settled, bounded by a 3s grace for pages that really have
+  no text. The poll also accepts `interactive`, not only `complete`, because
+  the Guardian never reaches `complete` at all.
 - **A release rejected by branch protection no longer leaves a tag behind.**
   `scripts/release.sh` creates the tag locally and then pushed two refs
   non-atomically, and a protected branch is declined *per ref*: measured
