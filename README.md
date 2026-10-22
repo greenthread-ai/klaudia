@@ -610,10 +610,16 @@ when you explicitly ask Klaudia to drive the browser.
 Requires a Chrome/Chromium install (auto-discovered; set `KLAUDIA_CHROME_PATH`
 on Linux/Windows if not on `PATH`). Tunable via `.klaudia/config.toml` →
 `browser` (`engine`, `headless`, `chromePath`, `userDataDir`, `headedFallback`,
-…) or `KLAUDIA_*` env vars. When a search hits a bot-challenge page, Klaudia can
-relaunch a **headed** Chrome with a persistent profile (`~/.klaudia/browser/…`)
-so you can solve it once. Anthropic's server-side `web_search`/`web_fetch` betas
-remain available when using the Anthropic provider.
+…) or `KLAUDIA_*` env vars. When a search or a fetch comes back with a
+bot-challenge page instead of the content (Cloudflare, DataDome, a captcha),
+Klaudia says so and relaunches a **headed** Chrome with a persistent profile
+(`~/.klaudia/browser/…`) so you can clear it: the window closes as soon as the
+page comes through, and the cookie you earned means the next headless fetch of
+that site usually needs no window at all. Set `headedFallback = false` (or
+`KLAUDIA_BROWSER_HEADED_FALLBACK=0`) to never open one — the challenge page is
+then returned as-is, labelled as a challenge. Anthropic's server-side
+`web_search`/`web_fetch` betas remain available when using the Anthropic
+provider.
 
 ## MCP
 

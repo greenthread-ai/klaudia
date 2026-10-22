@@ -19,6 +19,10 @@ type BrowserFetchOutput struct {
 	URL      string `json:"url"`
 	Title    string `json:"title,omitempty"`
 	Markdown string `json:"markdown"`
+	// Note names an anti-bot interstitial when that is what came back, because
+	// the markdown of one reads like a successful fetch of a very short page.
+	// Without it the model reports "the article says: Just a moment...".
+	Note string `json:"note,omitempty"`
 }
 
 type BrowserFetch struct {
@@ -66,7 +70,7 @@ func (w *BrowserFetch) CheckPermissions(pctx permission.Context, _ permission.Pe
 	return networkClassDecision(pctx)
 }
 
-func (w *BrowserFetch) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (w *BrowserFetch) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in BrowserFetchInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
@@ -74,16 +78,21 @@ func (w *BrowserFetch) Execute(_ context.Context, _ Context, raw json.RawMessage
 	if w.engine == nil {
 		return []Result{{Content: "Error: browser engine is not configured", IsError: true}}, nil
 	}
-	if err := w.engine.Navigate(in.URL); err != nil {
-		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil
-	}
-	snap, err := w.engine.Snapshot(false, true)
+	snap, err := w.engine.Fetch(ctx, browser.FetchOptions{
+		URL:             in.URL,
+		IncludeMarkdown: true,
+		Notify:          tctx.Progress,
+	})
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil
 	}
-	out, err := json.MarshalIndent(BrowserFetchOutput{URL: snap.URL, Title: snap.Title, Markdown: snap.Markdown}, "", "  ")
+	out := BrowserFetchOutput{URL: snap.URL, Title: snap.Title, Markdown: snap.Markdown}
+	if snap.Challenge != "" {
+		out.Note = fmt.Sprintf("this is %s, not the requested page — the site did not serve its content", snap.Challenge)
+	}
+	body, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return nil, err
 	}
-	return []Result{{Content: string(out)}}, nil
+	return []Result{{Content: string(body)}}, nil
 }

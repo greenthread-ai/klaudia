@@ -2,10 +2,12 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -307,5 +309,222 @@ func TestLiveUnreachableHostStillFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "ERR_NAME_NOT_RESOLVED") {
 		t.Errorf("error should name the failure, got %v", err)
+	}
+}
+
+const challengePage = `<!doctype html><html><head><title>Just a moment...</title>
+<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script></head>
+<body><p>Checking your browser.</p></body></html>`
+
+const clearedPage = `<!doctype html><html><head><title>The article</title></head>
+<body><p>The content the fetch was for.</p></body></html>`
+
+// flipAfter serves the challenge for the first n requests to "/" and the real
+// page after that: a challenge being cleared, from the fetcher's point of view.
+func flipAfter(n int) http.Handler {
+	var mu sync.Mutex
+	served := 0
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		mu.Lock()
+		served++
+		body := challengePage
+		if served > n {
+			body = clearedPage
+		}
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(body))
+	})
+}
+
+// A challenge nobody can be asked to solve — no window allowed — still comes
+// back as content, but labelled. The markdown of an interstitial reads like a
+// successful fetch of a very short page, so without the label the model
+// reports "Just a moment..." as the article.
+func TestLiveFetchLabelsAChallengeItMayNotEscalate(t *testing.T) {
+	e, url := chromeServing(t, flipAfter(100))
+	e.Reset(withFallback(e.Options(), false))
+
+	res, err := e.Fetch(context.Background(), FetchOptions{URL: url, IncludeMarkdown: true})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if res.Challenge != "Cloudflare challenge" {
+		t.Errorf("Challenge = %q, want the interstitial named", res.Challenge)
+	}
+	if !strings.Contains(res.Markdown, "Checking your browser") {
+		t.Errorf("the page it did serve should still be returned:\n%s", res.Markdown)
+	}
+	if res.HTML != "" {
+		t.Error("HTML was not asked for; the challenge test needing it is internal")
+	}
+}
+
+// The escalation loop, run with a replacement browser that is still headless so
+// the test opens no window: relaunch, re-fetch until the challenge is gone,
+// then close what we opened and restore the engine. Only the Headless flag
+// differs from the real path, and headedOptions owns that flag (see
+// TestHeadedOptionsOpenAWindowOnThePersistentProfile).
+func TestLiveRefetchUnderClearsTheChallengeThenPutsTheBrowserBack(t *testing.T) {
+	e, url := chromeServing(t, flipAfter(1))
+	before := e.Options()
+
+	res, err := e.refetchUnder(context.Background(), before, url)
+	if err != nil {
+		t.Fatalf("refetchUnder: %v", err)
+	}
+	if res.Title != "The article" {
+		t.Errorf("title = %q, want the page served once the challenge cleared", res.Title)
+	}
+	if _, still := ChallengePage(res); still {
+		t.Error("returned the challenge it was supposed to wait out")
+	}
+
+	// Closing cleanly is the part the user cares about: the window we opened
+	// must be gone when the fetch returns, not at the next fetch or at session
+	// end. It holds the shared Chrome profile directory while it lives.
+	e.mu.Lock()
+	open := e.browser
+	e.mu.Unlock()
+	if open != nil {
+		t.Error("the replacement browser is still running after the fetch returned")
+	}
+	if e.Options() != before {
+		t.Errorf("options = %+v, want the engine back on %+v", e.Options(), before)
+	}
+	// ...and the engine is still an engine: the next fetch makes a new browser.
+	if _, err := e.Fetch(context.Background(), FetchOptions{URL: url, IncludeMarkdown: true}); err != nil {
+		t.Fatalf("engine unusable after the escalation: %v", err)
+	}
+}
+
+// Giving up has to clean up too. The budget runs to challengeWait, so this
+// cancels instead — the same path a user interrupting the turn takes.
+func TestLiveRefetchUnderCleansUpWhenCancelled(t *testing.T) {
+	e, url := chromeServing(t, flipAfter(100))
+	before := e.Options()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if _, err := e.refetchUnder(ctx, before, url); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the cancellation reported", err)
+	}
+	e.mu.Lock()
+	open := e.browser
+	e.mu.Unlock()
+	if open != nil {
+		t.Error("a cancelled escalation left its browser running")
+	}
+	if e.Options() != before {
+		t.Errorf("options = %+v, want the engine back on %+v", e.Options(), before)
+	}
+}
+
+func withFallback(opts Options, on bool) Options {
+	opts.HeadedFallback = on
+	return opts
+}
+
+// stayHeadless makes the escalation launch another headless browser instead of
+// a window, so the ordering Fetch implements can be tested where it runs.
+func stayHeadless(t *testing.T) {
+	t.Helper()
+	previous := escalateOptions
+	escalateOptions = func(opts Options) Options {
+		escalated := headedOptions(opts)
+		escalated.Headless = true
+		return escalated
+	}
+	t.Cleanup(func() { escalateOptions = previous })
+}
+
+// The ordering, end to end: a headless fetch, a challenge recognised in what
+// came back, one escalation, and the page the site was withholding.
+func TestLiveFetchEscalatesOnlyAfterTheHeadlessFetchIsChallenged(t *testing.T) {
+	stayHeadless(t)
+	e, url := chromeServing(t, flipAfter(1))
+	e.Reset(withFallback(e.Options(), true))
+
+	var lines []string
+	res, err := e.Fetch(context.Background(), FetchOptions{
+		URL:             url,
+		IncludeMarkdown: true,
+		Notify:          func(line string) { lines = append(lines, line) },
+	})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if res.Challenge != "" {
+		t.Errorf("Challenge = %q, want the escalation to have cleared it", res.Challenge)
+	}
+	if !strings.Contains(res.Markdown, "The content the fetch was for") {
+		t.Errorf("escalated but returned the wrong page:\n%s", res.Markdown)
+	}
+	if len(lines) != 1 || !strings.Contains(lines[0], "Chrome window") {
+		t.Errorf("the user was not told once, and only once, why a window opened: %q", lines)
+	}
+}
+
+// ...and a page that is not a challenge costs none of it: no relaunch, no
+// second request, no line printed at anyone.
+func TestLiveFetchLeavesAnOrdinaryPageAlone(t *testing.T) {
+	stayHeadless(t)
+	e, url := chromeEngine(t, livePage)
+	e.Reset(withFallback(e.Options(), true))
+
+	var lines []string
+	res, err := e.Fetch(context.Background(), FetchOptions{
+		URL:             url,
+		IncludeMarkdown: true,
+		Notify:          func(line string) { lines = append(lines, line) },
+	})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if res.Challenge != "" || len(lines) != 0 {
+		t.Errorf("an ordinary page escalated: challenge=%q, said %q", res.Challenge, lines)
+	}
+	if !strings.Contains(res.Markdown, "markdown should keep") {
+		t.Errorf("markdown missing the page text:\n%s", res.Markdown)
+	}
+}
+
+// The real escalation, window and all. Opt-in: it puts a Chrome window on
+// whoever is running the tests, which is not something `go test ./internal/...`
+// should do. Run it by hand with KLAUDIA_LIVE_HEADED=1 when changing any of
+// this; the window should appear, show the challenge, and vanish by itself
+// about two seconds later when the page clears.
+func TestLiveHeadedEscalationOpensAndClosesAWindow(t *testing.T) {
+	if os.Getenv("KLAUDIA_LIVE_HEADED") != "1" {
+		t.Skip("opens a visible window; set KLAUDIA_LIVE_HEADED=1")
+	}
+	e, url := chromeServing(t, flipAfter(1))
+	e.Reset(withFallback(e.Options(), true))
+
+	var lines []string
+	res, err := e.Fetch(context.Background(), FetchOptions{
+		URL:             url,
+		IncludeMarkdown: true,
+		Notify:          func(line string) { lines = append(lines, line) },
+	})
+	if err != nil {
+		t.Fatalf("fetch: %v", err)
+	}
+	if res.Challenge != "" || !strings.Contains(res.Markdown, "The content the fetch was for") {
+		t.Errorf("challenge = %q, markdown = %q; want the cleared page", res.Challenge, res.Markdown)
+	}
+	// A window appearing unannounced is the rude version of this feature.
+	if len(lines) == 0 || !strings.Contains(lines[0], "Chrome window") {
+		t.Errorf("the user was not told why a window opened: %q", lines)
+	}
+	e.mu.Lock()
+	open := e.browser
+	e.mu.Unlock()
+	if open != nil {
+		t.Error("the headed browser outlived the fetch")
 	}
 }

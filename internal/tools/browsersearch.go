@@ -68,7 +68,7 @@ func (w *BrowserSearch) CheckPermissions(pctx permission.Context, _ permission.P
 	return networkClassDecision(pctx)
 }
 
-func (w *BrowserSearch) Execute(ctx context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (w *BrowserSearch) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in BrowserSearchInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
@@ -82,6 +82,7 @@ func (w *BrowserSearch) Execute(ctx context.Context, _ Context, raw json.RawMess
 		AllowedDomains: in.AllowedDomains,
 		BlockedDomains: in.BlockedDomains,
 		MaxResults:     in.MaxResults,
+		Notify:         tctx.Progress,
 	})
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil

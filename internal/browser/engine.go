@@ -104,6 +104,17 @@ func (e *Engine) Relaunch(opts Options) error {
 	return nil
 }
 
+// Reset closes the current browser and adopts opts for the next one, which is
+// created lazily on first use. It is Relaunch without the launch: the way back
+// from a headed escalation, where the window has to close now and the headless
+// replacement is not needed until something is fetched.
+func (e *Engine) Reset(opts Options) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.closeLocked()
+	e.browserOpts = opts
+}
+
 func (e *Engine) Options() Options {
 	e.mu.Lock()
 	defer e.mu.Unlock()
