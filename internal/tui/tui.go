@@ -89,6 +89,10 @@ type Session struct {
 	// backing the /model picker. Nil when the provider can't enumerate them, in
 	// which case /model stays type-the-name only.
 	ListModels func(context.Context) ([]api.ModelInfo, error)
+	// ResolveLimits sizes a model for /model: the startup resolver with config
+	// overrides bound in, given whatever the picker already knows about the
+	// model. Nil sizes from the offline table alone.
+	ResolveLimits func(model string, known api.ModelInfo) api.ModelLimits
 	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
 	MCP MCPController
 	// OnMCPReload, if set, registers a listener for the outcome of MCP config

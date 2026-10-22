@@ -69,15 +69,10 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 	m.startChoice(fmt.Sprintf("Select a model (%d):", len(items)), items)
 }
 
-// setModel switches the model for subsequent turns. The provider's own figures
-// for the chosen model are recorded alongside it: those are authoritative,
-// unlike the static per-model tables, so the status bar's `ctx N%` tracks the
-// model the user actually chose and the next turn asks for as many output
-// tokens as that model really allows.
-//
-// contextWindow and maxTokens are 0 when the endpoint did not say — every
-// OpenAI-compatible server, and the `/model <id>` path, which has no listing to
-// read. Both then fall back to the offline table.
+// setModel switches the model for subsequent turns, sized by the same
+// resolver as startup (Session.ResolveLimits): config, then the provider's own
+// figures (contextWindow and maxTokens here, 0 when the endpoint did not say),
+// then the offline table, then the floor.
 func (m *Model) setModel(id string, contextWindow, maxTokens int) string {
 	id = strings.TrimSpace(id)
 	m.sess.Model = id
@@ -87,26 +82,18 @@ func (m *Model) setModel(id string, contextWindow, maxTokens int) string {
 	if resolved := m.sess.ResolvedModel; resolved != id {
 		msg += " (" + resolved + ")"
 	}
-	if contextWindow > 0 {
-		m.sess.ContextWindow = contextWindow
-		m.sess.ContextWindowSource = api.LimitSourceProvider
-	} else if limit, source := api.ContextWindow(id, 0); limit > 0 {
-		m.sess.ContextWindow, m.sess.ContextWindowSource = limit, source
+	known := api.ModelInfo{ID: id, ContextWindow: contextWindow, MaxTokens: maxTokens}
+	var l api.ModelLimits
+	if m.sess.ResolveLimits != nil {
+		l = m.sess.ResolveLimits(id, known)
 	} else {
-		// A model the table doesn't know and the endpoint didn't size. Leaving
-		// the previous model's window would report context pressure against
-		// the wrong number, which is worse than reporting none.
-		m.sess.ContextWindow, m.sess.ContextWindowSource = 0, api.ContextSourceUnknown
+		l = api.Resolve(context.Background(), api.LimitsInput{Model: id, Known: known, NoNetwork: true})
 	}
-	// The output cap has no "unknown" state — some number goes on the wire — so
-	// it always ends up set, and the floor is the last resort.
-	if maxTokens > 0 {
-		m.sess.MaxTokens, m.sess.MaxTokensSource = maxTokens, api.LimitSourceProvider
-	} else if n := api.MaxOutputTokens(id); n != api.DefaultMaxOutputTokens {
-		m.sess.MaxTokens, m.sess.MaxTokensSource = n, api.LimitSourceModel
-	} else {
-		m.sess.MaxTokens, m.sess.MaxTokensSource = api.DefaultMaxOutputTokens, api.LimitSourceFallback
-	}
+	// An unknown model the endpoint didn't size gets a window of 0: leaving
+	// the previous model's would report context pressure against the wrong
+	// number, which is worse than reporting none.
+	m.sess.ContextWindow, m.sess.ContextWindowSource = l.ContextWindow, l.ContextSource
+	m.sess.MaxTokens, m.sess.MaxTokensSource = l.MaxOutputTokens, l.MaxOutputSource
 	if m.sess.ContextWindow > 0 {
 		msg += fmt.Sprintf(" · %s context", humanTokens(int64(m.sess.ContextWindow)))
 	}

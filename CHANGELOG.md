@@ -6,6 +6,11 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **A weekly CI job checks the model tables against the live API.**
+  `TestLiveModelTablesMatchProvider` was opt-in and so never ran.
+  `.github/workflows/live-models.yml` runs it every Monday and on demand. It
+  needs an `ANTHROPIC_API_KEY` repository secret; without one the job warns
+  and writes "not checked" to the run summary rather than passing silently.
 - **The plan is visible in every frontend.** The loop emits a `plan` event
   whenever the step list changes. The TUI, which showed nothing, now draws a
   live panel above the prompt (`Ctrl+T` collapses it; it hides once every step
@@ -52,6 +57,19 @@ port mirrors (see `internal/version`).
   approved and so not persisted.
 
 ### Changed
+- **The provider's model figures now beat the built-in tables, and `/model`
+  sizes models the same way startup does.** The tables were only overruled for
+  models they did not list, so a wrong entry was never contradicted at runtime
+  (claude-sonnet-4-5 claimed a 1M window for months against the API's 200k).
+  The provider's list is now cached for a day under `~/.klaudia/cache/`
+  (fetching it costs about 300ms, measured) and a fresh answer wins for every
+  model it lists; a stale cache refreshes in the background, so startup stays
+  offline. `/model` used to size a model on its own, with the opposite
+  precedence and without the config file — so a configured `maxTokens`
+  silently stopped applying after any switch (reproduced: 64000 from the
+  provider instead of the configured 4096). Both now go through `api.Resolve`.
+  `/doctor` warns when the provider contradicts the table, so the stale entry
+  gets fixed.
 - **A dropped web search or fetch is a note to the model, not a notice to you.**
   The on-screen "an earlier web fetch was interrupted… re-run it if the answer
   depends on it" line is gone. It fired in sessions where nothing had been

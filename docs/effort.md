@@ -90,9 +90,9 @@ the level is `xhigh` or `max`; set `maxTokens` in the config to fix it.
 This is not hypothetical: when the 5.5 lineup shipped it was absent from
 `modelMaxOutputTokens`, so Opus 5.5 ran at 8192 against a real cap of 128000 —
 15.6× under — and the first casualty was a large `Write` truncated mid-tool-call.
-`api.ResolveLimits` now asks the provider for any model the table cannot size,
-so an unlisted model only reaches the floor when the endpoint will not say
-either.
+`api.Resolve` now prefers the provider's figures over the table (from a
+once-a-day cache) and asks live for any model the table cannot size, so an
+unlisted model only reaches the floor when the endpoint will not say either.
 
 ## Changing it mid-session costs a cache read
 

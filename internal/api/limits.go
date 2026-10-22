@@ -47,38 +47,86 @@ type ModelLimits struct {
 	MaxOutputSource string
 	ContextWindow   int
 	ContextSource   string
+	// TableMaxOutputTokens and TableContextWindow are what the offline table
+	// said when a provider figure replaced it with a different number; 0 when
+	// they agree or the table has no entry. A non-zero value means the table
+	// is wrong for this model, which /doctor reports so it gets fixed.
+	TableMaxOutputTokens int
+	TableContextWindow   int
 }
 
-// ResolveLimits determines the output cap and context window for model.
+// LimitsInput is everything Resolve may consult.
+type LimitsInput struct {
+	Model string
+	// Lister is the provider's model list, or nil. A *ModelCache is read from
+	// disk first; anything else is only called for a model the table lacks.
+	Lister ModelLister
+	// Known is what the caller already holds about this model from the
+	// provider — the /model picker has just listed it. Beats the table.
+	Known ModelInfo
+	// NoNetwork skips the synchronous lookup. For a caller on the UI
+	// goroutine, which must not stall on a 5s timeout when offline.
+	NoNetwork bool
+	// ConfigMaxTokens and ConfigContextWindow are .klaudia/config.toml
+	// overrides; they beat everything.
+	ConfigMaxTokens     int
+	ConfigContextWindow int
+}
+
+// cachedLister is implemented by *ModelCache.
+type cachedLister interface {
+	Cached() ([]ModelInfo, bool)
+}
+
+// Resolve determines the output cap and context window for a model. It is the
+// one sizing resolver: startup and /model both call it.
 //
-// Precedence, highest first: an explicit config override, the provider's own
-// answer, the offline table, the unknown-model floor.
+// Precedence, highest first: config, the provider (figures the caller already
+// holds, then a fresh cached list, then — only for a model the table lacks — a
+// live lookup), the offline table, the unknown-model floor.
 //
-// The provider is only consulted for a model the table does not know. That is
-// deliberate on both halves: a known model already has the right answer offline,
-// so the usual run pays no network at all; and an unknown model is precisely the
-// case that was silently getting the floor. p may be nil or may not implement
-// ModelLister, in which case this is pure table lookup.
-func ResolveLimits(ctx context.Context, p Provider, model string, cfgMaxTokens, cfgContextWindow int) ModelLimits {
-	resolved := string(ResolveModel(model))
+// The provider used to be consulted only for models the table did not know,
+// so a wrong table entry was never contradicted. And /model resolved sizing on
+// its own with the opposite precedence and no config, so a maxTokens override
+// silently stopped applying after any model switch.
+func Resolve(ctx context.Context, in LimitsInput) ModelLimits {
+	resolved := string(ResolveModel(in.Model))
 	out := ModelLimits{}
 
-	if n, ok := modelMaxOutputTokens[resolved]; ok {
-		out.MaxOutputTokens, out.MaxOutputSource = n, LimitSourceModel
+	tableMax, tableCtx := modelMaxOutputTokens[resolved], modelContextWindows[resolved]
+	if tableMax > 0 {
+		out.MaxOutputTokens, out.MaxOutputSource = tableMax, LimitSourceModel
 	}
-	if n, ok := modelContextWindows[resolved]; ok {
-		out.ContextWindow, out.ContextSource = n, LimitSourceModel
+	if tableCtx > 0 {
+		out.ContextWindow, out.ContextSource = tableCtx, LimitSourceModel
 	}
 
-	// Ask the endpoint only for what the table could not answer.
-	if out.MaxOutputTokens == 0 || out.ContextWindow == 0 {
-		if info, ok := lookupModel(ctx, p, resolved); ok {
-			if out.MaxOutputTokens == 0 && info.MaxTokens > 0 {
-				out.MaxOutputTokens, out.MaxOutputSource = info.MaxTokens, LimitSourceProvider
+	info, have := in.Known, in.Known.MaxTokens > 0 || in.Known.ContextWindow > 0
+	if !have {
+		if c, ok := in.Lister.(cachedLister); ok {
+			if models, fresh := c.Cached(); fresh {
+				info, have = findModel(models, resolved)
 			}
-			if out.ContextWindow == 0 && info.ContextWindow > 0 {
-				out.ContextWindow, out.ContextSource = info.ContextWindow, LimitSourceProvider
+		}
+	}
+	// The network only for what nothing else could answer, so a known model
+	// on a stale cache costs no startup latency; the caller refreshes the
+	// cache in the background instead.
+	if !have && !in.NoNetwork && (tableMax == 0 || tableCtx == 0) {
+		info, have = lookupModel(ctx, in.Lister, resolved)
+	}
+	if have {
+		if info.MaxTokens > 0 {
+			if tableMax > 0 && tableMax != info.MaxTokens {
+				out.TableMaxOutputTokens = tableMax
 			}
+			out.MaxOutputTokens, out.MaxOutputSource = info.MaxTokens, LimitSourceProvider
+		}
+		if info.ContextWindow > 0 {
+			if tableCtx > 0 && tableCtx != info.ContextWindow {
+				out.TableContextWindow = tableCtx
+			}
+			out.ContextWindow, out.ContextSource = info.ContextWindow, LimitSourceProvider
 		}
 	}
 
@@ -97,21 +145,27 @@ func ResolveLimits(ctx context.Context, p Provider, model string, cfgMaxTokens, 
 	// Config last, because it must beat every discovered value: it is the
 	// escape hatch for an endpoint that reports the wrong thing, and an
 	// override that could be silently outvoted is not an override.
-	if cfgMaxTokens > 0 {
-		out.MaxOutputTokens, out.MaxOutputSource = cfgMaxTokens, LimitSourceConfig
+	if in.ConfigMaxTokens > 0 {
+		out.MaxOutputTokens, out.MaxOutputSource = in.ConfigMaxTokens, LimitSourceConfig
 	}
-	if cfgContextWindow > 0 {
-		out.ContextWindow, out.ContextSource = cfgContextWindow, LimitSourceConfig
+	if in.ConfigContextWindow > 0 {
+		out.ContextWindow, out.ContextSource = in.ConfigContextWindow, LimitSourceConfig
 	}
 	return out
+}
+
+// ResolveLimits is Resolve for a Provider, which is a ModelLister when it can
+// list models.
+func ResolveLimits(ctx context.Context, p Provider, model string, cfgMaxTokens, cfgContextWindow int) ModelLimits {
+	lister, _ := p.(ModelLister)
+	return Resolve(ctx, LimitsInput{Model: model, Lister: lister, ConfigMaxTokens: cfgMaxTokens, ConfigContextWindow: cfgContextWindow})
 }
 
 // lookupModel finds one model in the provider's list. Any failure — no lister,
 // no credential, network, timeout, model absent — is reported as "not found",
 // because every one of them has the same correct response: use the fallback.
-func lookupModel(ctx context.Context, p Provider, model string) (ModelInfo, bool) {
-	lister, ok := p.(ModelLister)
-	if !ok || lister == nil {
+func lookupModel(ctx context.Context, lister ModelLister, model string) (ModelInfo, bool) {
+	if lister == nil {
 		return ModelInfo{}, false
 	}
 	ctx, cancel := context.WithTimeout(ctx, limitsLookupTimeout)
@@ -120,14 +174,18 @@ func lookupModel(ctx context.Context, p Provider, model string) (ModelInfo, bool
 	if err != nil {
 		return ModelInfo{}, false
 	}
+	return findModel(models, model)
+}
+
+// findModel matches an id exactly, then by suffix: a server-side alias can
+// answer under a different id than it is listed by (OpenAI-compatible
+// gateways prefix with the vendor, e.g. "openai/gpt-5.5" listed as "gpt-5.5").
+func findModel(models []ModelInfo, model string) (ModelInfo, bool) {
 	for _, m := range models {
 		if m.ID == model {
 			return m, true
 		}
 	}
-	// A server-side alias can answer under a different id than it is listed by
-	// (OpenAI-compatible gateways prefix with the vendor, e.g. "openai/gpt-5.5"
-	// listed as "gpt-5.5"), so fall back to a suffix match before giving up.
 	for _, m := range models {
 		if m.ID != "" && strings.HasSuffix(model, "/"+m.ID) {
 			return m, true

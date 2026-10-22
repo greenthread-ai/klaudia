@@ -101,15 +101,24 @@ unset sends nothing on both. Keep it that way — a provider-shaped knob would
 let the same config mean different things on the two backends, which is the
 capability skew `docs/effort.md` exists to prevent.
 
-Model sizing is **resolved once, in `api.ResolveLimits`**: config → provider
-(`GET /v1/models`) → the offline tables → floor, for the output cap and the
-context window together. The three tables in `client.go`/`effort.go` are an
+Model sizing has **one resolver, `api.Resolve`**, used at startup and by
+`/model` alike: config → provider → the offline tables → floor, for the output
+cap and the context window together. The provider's figures come from a
+once-a-day on-disk cache of `GET /v1/models` (`api.ModelCache`,
+`~/.klaudia/cache/`), so they beat the table without a network call on start;
+only a model the table lacks pays a live lookup. `/model` used to size models
+itself, with the opposite precedence and no config — a configured `maxTokens`
+stopped applying after any switch. When the provider contradicts the table,
+`/doctor` says so. The three tables in `client.go`/`effort.go` are an
 allowlist of model ids, and an allowlist goes stale the day a model ships — the
 whole Claude 5.5 lineup was missing from all three at once, so Opus 5.5 ran at
 `max_tokens=8192` against a cap of 128000 and compacted as if it had 200k of
 1M. Neither failure looked like a stale map. So: add a model to all three
-tables or none, run `KLAUDIA_LIVE_MODELS=1 go test ./internal/api` when you
-touch them, and treat a figure the provider reports as beating the table.
+tables or none, and run `KLAUDIA_LIVE_MODELS=1 go test ./internal/api` when you
+touch them. The same test runs weekly in CI (`.github/workflows/live-models.yml`)
+when the repository has an `ANTHROPIC_API_KEY` secret, and says in the run
+summary when it does not — a green check that never ran is how opt-in tests
+rot.
 `DefaultMaxOutputTokens` is a floor for a model nothing can size, not a
 default. Every assistant line in the transcript records the figures that turn
 ran with and the `LimitSource*` behind each, stamped by `baseOptions` so all

@@ -1,0 +1,48 @@
+name: Live model tables
+
+# The offline model tables (internal/api/client.go, effort.go) are an
+# allowlist, and an allowlist goes stale the day a model ships: the whole
+# Claude 5.5 lineup was once missing from all three tables at once. The test
+# that catches it needs a real credential, so it is opt-in locally — and an
+# opt-in test is one nobody runs. This runs it weekly instead.
+#
+# Requires an ANTHROPIC_API_KEY repository secret. Without it the job does not
+# fail and does not pretend to pass either: it says, in the run summary, that
+# nothing was checked.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-models:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: No credential, nothing checked
+        if: env.ANTHROPIC_API_KEY == ''
+        run: |
+          echo "::warning::ANTHROPIC_API_KEY secret is not set; the model tables were NOT checked."
+          echo "### Model tables not checked" >> "$GITHUB_STEP_SUMMARY"
+          echo "Add an \`ANTHROPIC_API_KEY\` repository secret to enable this job." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v7
+        if: env.ANTHROPIC_API_KEY != ''
+
+      - uses: actions/setup-go@v7
+        if: env.ANTHROPIC_API_KEY != ''
+        with:
+          go-version: '1.26'
+          check-latest: true
+          cache: true
+
+      - name: Compare the model tables with GET /v1/models
+        if: env.ANTHROPIC_API_KEY != ''
+        env:
+          KLAUDIA_LIVE_MODELS: '1'
+        run: go test ./internal/api -run TestLiveModelTablesMatchProvider -count=1 -v

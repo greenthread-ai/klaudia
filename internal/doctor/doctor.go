@@ -61,6 +61,12 @@ type Input struct {
 	Effort          string
 	MaxOutputTokens int
 	MaxOutputSource string
+	// TableMaxOutputTokens and TableContextWindow are what the offline model
+	// table says when the provider reported a different figure for this model
+	// (api.ModelLimits); 0 when they agree. Non-zero means the table is wrong,
+	// which nothing at runtime used to notice.
+	TableMaxOutputTokens int
+	TableContextWindow   int
 	// MissingLSPHints are actionable suggestions for languages present in the
 	// project but lacking a server (e.g. "install gopls for go support").
 	MissingLSPHints []string
@@ -204,6 +210,24 @@ func Run(in Input) []Check {
 		} else {
 			add("max output", StatusInfo, msg)
 		}
+	}
+
+	// A table entry the provider contradicts. The provider's figure is the
+	// one in use, so nothing is broken for this run; the row exists so the
+	// table gets fixed before it is relied on somewhere the provider is not
+	// consulted (a stale cache, or offline).
+	if in.TableMaxOutputTokens > 0 || in.TableContextWindow > 0 {
+		var parts []string
+		if in.TableMaxOutputTokens > 0 {
+			parts = append(parts, fmt.Sprintf("max output %s, provider says %s",
+				formatTokens(in.TableMaxOutputTokens), formatTokens(in.MaxOutputTokens)))
+		}
+		if in.TableContextWindow > 0 {
+			parts = append(parts, fmt.Sprintf("context %s, provider says %s",
+				formatTokens(in.TableContextWindow), formatTokens(in.ContextWindow)))
+		}
+		add("model table", StatusWarn, "built-in table is out of date for "+model+": "+strings.Join(parts, "; ")+
+			" — using the provider's figures")
 	}
 
 	// Effort, and the one way it goes wrong quietly. max_tokens is a hard

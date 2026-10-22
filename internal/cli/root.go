@@ -197,6 +197,9 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, limits api.Model
 		Effort:          string(effort),
 		MaxOutputTokens: limits.MaxOutputTokens,
 		MaxOutputSource: limits.MaxOutputSource,
+
+		TableMaxOutputTokens: limits.TableMaxOutputTokens,
+		TableContextWindow:   limits.TableContextWindow,
 	}
 	if cfg.Provider == config.ProviderOpenAI {
 		if cfg.ResolveAPIKey() != "" {
@@ -400,6 +403,29 @@ func acpSessions(cwd string) []acp.SessionSummary {
 // one. Both shipped providers do, but the capability is an optional interface
 // rather than part of Provider — so a future backend that can't list models
 // still satisfies Provider, and /model degrades to accepting a typed id.
+// limitsResolver is the sizing resolver /model uses: the startup one, with the
+// config overrides bound in and the network off. /model used to size a model
+// on its own — opposite precedence, and no config at all, so a maxTokens set in
+// .klaudia/config.toml silently stopped applying after any switch. Off the
+// network because it runs on the UI goroutine; the picker has just listed the
+// models through the cache, so a fresh answer is on disk anyway.
+func limitsResolver(lister api.ModelLister, cfgMaxTokens, cfgContextWindow int) func(string, api.ModelInfo) api.ModelLimits {
+	return func(model string, known api.ModelInfo) api.ModelLimits {
+		return api.Resolve(context.Background(), api.LimitsInput{
+			Model: model, Lister: lister, Known: known, NoNetwork: true,
+			ConfigMaxTokens: cfgMaxTokens, ConfigContextWindow: cfgContextWindow,
+		})
+	}
+}
+
+// cachedModelLister prefers the cache, so listing models refreshes it.
+func cachedModelLister(c *api.ModelCache, p api.Provider) func(context.Context) ([]api.ModelInfo, error) {
+	if c != nil {
+		return c.ListModels
+	}
+	return modelLister(p)
+}
+
 func modelLister(p api.Provider) func(context.Context) ([]api.ModelInfo, error) {
 	lister, ok := p.(api.ModelLister)
 	if !ok {
@@ -993,9 +1019,26 @@ func run(cmd *cobra.Command, opts *options) error {
 	// out, which is how the loop ended up reading cfg.ContextWindow while the
 	// TUI status bar read a different number.
 	//
-	// Only a model the offline table does not know costs a provider lookup, so
-	// the ordinary run adds no startup latency. The TUI re-resolves on /model.
-	limits := api.ResolveLimits(ctx, provider, modelStr, cfg.MaxTokens, cfg.ContextWindow)
+	// The provider's figures win over the offline table, read from a
+	// once-a-day cache of its model list so startup stays offline. A stale
+	// cache refreshes in the background for the next run; only a model the
+	// table does not know pays a lookup now. The TUI re-resolves on /model
+	// through the same resolver (resolveLimitsFor), config included.
+	var lister api.ModelLister
+	var modelCache *api.ModelCache
+	if l, ok := provider.(api.ModelLister); ok {
+		modelCache = api.NewModelCache(l, api.ModelCachePath(session.ConfigRoot(), providerName(cfg), resolveEndpoint(cfg)))
+		lister = modelCache
+	}
+	resolveLimitsFor := limitsResolver(lister, cfg.MaxTokens, cfg.ContextWindow)
+	limits := api.Resolve(ctx, api.LimitsInput{Model: modelStr, Lister: lister, ConfigMaxTokens: cfg.MaxTokens, ConfigContextWindow: cfg.ContextWindow})
+	if modelCache != nil && modelCache.Stale() {
+		go func() {
+			rctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			_, _ = modelCache.ListModels(rctx)
+		}()
+	}
 
 	// Effort: --effort wins, then KLAUDIA_EFFORT, then config. Unset stays
 	// unset and sends nothing, so the provider's own default applies.
@@ -1350,11 +1393,13 @@ func run(cmd *cobra.Command, opts *options) error {
 			MaxTokens:           limits.MaxOutputTokens,
 			MaxTokensSource:     limits.MaxOutputSource,
 			// Nil unless the provider can enumerate its models; /model falls
-			// back to type-the-id when it is.
-			ListModels: modelLister(provider),
-			Trust:      tui.NewTrustController(hostGate),
-			Jobs:       jobStore,
-			Executor:   executor,
+			// back to type-the-id when it is. Through the cache, so the picker
+			// keeps it current.
+			ListModels:    cachedModelLister(modelCache, provider),
+			ResolveLimits: resolveLimitsFor,
+			Trust:         tui.NewTrustController(hostGate),
+			Jobs:          jobStore,
+			Executor:      executor,
 		}
 		// Assigned after the literal rather than inside them so the closures
 		// can read the session back: /compact and /doctor then use whatever
@@ -1365,12 +1410,11 @@ func run(cmd *cobra.Command, opts *options) error {
 			// The session's own figures, not the startup ones: /model records
 			// the chosen model's sizing there, so /doctor after a switch
 			// reports the model it switched to.
-			live := api.ModelLimits{
-				MaxOutputTokens: sess.MaxTokens,
-				MaxOutputSource: sess.MaxTokensSource,
-				ContextWindow:   sess.ContextWindow,
-				ContextSource:   sess.ContextWindowSource,
-			}
+			// The table-disagreement figures come from the resolver: the
+			// session keeps only the answer, not what it overrode.
+			live := resolveLimitsFor(sess.Model, api.ModelInfo{})
+			live.MaxOutputTokens, live.MaxOutputSource = sess.MaxTokens, sess.MaxTokensSource
+			live.ContextWindow, live.ContextSource = sess.ContextWindow, sess.ContextWindowSource
 			return doctor.Format(doctor.Run(buildDoctorInput(cfg, api.ResolveModel(sess.Model), live, sess.Effort, cwd, mcpCfg, hookRunner)))
 		}
 		sess.Compact = func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {

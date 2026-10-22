@@ -301,3 +301,42 @@ func TestMCPTransportCheck(t *testing.T) {
 		})
 	}
 }
+
+// A table entry the provider contradicts was invisible: the resolved figure
+// is right (the provider's), so nothing failed, and the stale table stayed
+// stale. The claude-sonnet-4-5 1M-vs-200k entry lived that way for months.
+func TestModelTableDisagreementIsReported(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       Input
+		want     bool
+		contains []string
+	}{
+		{
+			name: "both figures disagree",
+			in: Input{Model: "claude-sonnet-4-5", MaxOutputTokens: 64000, TableMaxOutputTokens: 128000,
+				ContextWindow: 200_000, TableContextWindow: 1_000_000},
+			want: true, contains: []string{"claude-sonnet-4-5", "provider says", "200"},
+		},
+		{name: "agreement says nothing", in: Input{Model: "m", MaxOutputTokens: 64000}, want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c, ok := find(Run(tc.in), "model table")
+			if ok != tc.want {
+				t.Fatalf("model table row present = %v, want %v", ok, tc.want)
+			}
+			if !ok {
+				return
+			}
+			if c.Status != StatusWarn {
+				t.Errorf("status = %q, want warn", c.Status)
+			}
+			for _, w := range tc.contains {
+				if !strings.Contains(c.Detail, w) {
+					t.Errorf("detail %q lacks %q", c.Detail, w)
+				}
+			}
+		})
+	}
+}
