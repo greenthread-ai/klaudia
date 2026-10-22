@@ -6,11 +6,6 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
-- **A weekly CI job checks the model tables against the live API.**
-  `TestLiveModelTablesMatchProvider` was opt-in and so never ran.
-  `.github/workflows/live-models.yml` runs it every Monday and on demand. It
-  needs an `ANTHROPIC_API_KEY` repository secret; without one the job warns
-  and writes "not checked" to the run summary rather than passing silently.
 - **The plan is visible in every frontend.** The loop emits a `plan` event
   whenever the step list changes. The TUI, which showed nothing, now draws a
   live panel above the prompt (`Ctrl+T` collapses it; it hides once every step

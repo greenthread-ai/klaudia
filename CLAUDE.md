@@ -115,10 +115,9 @@ whole Claude 5.5 lineup was missing from all three at once, so Opus 5.5 ran at
 `max_tokens=8192` against a cap of 128000 and compacted as if it had 200k of
 1M. Neither failure looked like a stale map. So: add a model to all three
 tables or none, and run `KLAUDIA_LIVE_MODELS=1 go test ./internal/api` when you
-touch them. The same test runs weekly in CI (`.github/workflows/live-models.yml`)
-when the repository has an `ANTHROPIC_API_KEY` secret, and says in the run
-summary when it does not — a green check that never ran is how opt-in tests
-rot.
+touch them. It is not in CI — the repository holds no API key — so the
+runtime is the backstop: the provider's figures beat the table (cached daily),
+and `/doctor` warns when the two disagree.
 `DefaultMaxOutputTokens` is a floor for a model nothing can size, not a
 default. Every assistant line in the transcript records the figures that turn
 ran with and the `LimitSource*` behind each, stamped by `baseOptions` so all

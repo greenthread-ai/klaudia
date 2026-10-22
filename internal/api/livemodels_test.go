@@ -23,8 +23,8 @@ import (
 //	KLAUDIA_LIVE_MODELS=1 go test ./internal/api -run TestLiveModelTablesMatchProvider -v
 //
 // Run it when bumping the tables, and it reports what to write rather than just
-// that something is wrong. It also runs weekly in CI
-// (.github/workflows/live-models.yml), given an ANTHROPIC_API_KEY secret.
+// that something is wrong. Not run in CI, which has no API key; at runtime
+// the provider's figures beat the table and /doctor reports any disagreement.
 const liveModelsEnv = "KLAUDIA_LIVE_MODELS"
 
 func TestLiveModelTablesMatchProvider(t *testing.T) {
