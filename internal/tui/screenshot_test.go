@@ -72,11 +72,11 @@ func screenshotFrame() string {
 	defer applyChromeTheme(defaultChromePalette)
 
 	var b strings.Builder
-	b.WriteString(intro(shotModel, shotBranch, shotTagline, nil))
+	b.WriteString(intro(shotModel, shotBranch, shotTagline, nil, newKeymap(false).Submit))
 	b.WriteString("\n")
 	b.WriteString(userStyle.Render("› /help"))
 	b.WriteString("\n")
-	b.WriteString(slashHelp())
+	b.WriteString(slashHelp(newTestModel().keyHints()))
 	return b.String()
 }
 

@@ -52,7 +52,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Memory | 07-app-features | `tools/memory.go` + `memory/` | 🔀 divergent | Auto-memory + recall via `.klaudia/memory/`. |
 | ToolSearch (deferred loading) | 07-app-features | `tools/toolsearch.go` | ✅ done | Per-turn `buildToolParams` filter + `Context.Reveal`. |
 | SlashCommand (model-invoked) | 07-app-features | `tools/skill.go` | 🔀 divergent | Covered by the Skill tool (user-defined skills the model can invoke). |
-| BrowserSearch / BrowserFetch / browser navigation | 03-providers / 05 | `tools/browsersearch.go`, `tools/browserfetch.go`, `tools/browser.go`, `browser/` | 🟡 partial | Local default tools use lazy Chrome + DDG/Google and rendered markdown; search can relaunch headed Chrome with persistent `~/.klaudia/browser/chrome-profile` for user-assisted challenge handling. Permission-gated (allowed in autonomous; denied in plan); the engine is session-owned and Closed on exit. Navigation waits for the DOM to settle (readyState + text-stable, bounded) so JS-rendered content is captured. Google parsing filters Google's own nav/account links (DDG remains the stable default). Anthropic server-side betas still available via `agent/webtools.go`. |
+| BrowserSearch / BrowserFetch / browser navigation | 03-providers / 05 | `tools/browsersearch.go`, `tools/browserfetch.go`, `tools/browser.go`, `browser/` | 🟡 partial | Local default tools use lazy Chrome + DDG/Google and rendered markdown; a search *or a fetch* that comes back as a bot-challenge page (Cloudflare, DataDome, captcha) escalates once to headed Chrome on the persistent `~/.klaudia/browser/chrome-profile`, announces why, and closes the window when the page comes through. Permission-gated (allowed in autonomous; denied in plan); the engine is session-owned and Closed on exit. Navigation waits for the DOM to settle (readyState + text-stable, bounded) so JS-rendered content is captured. Google parsing filters Google's own nav/account links (DDG remains the stable default). Anthropic server-side betas still available via `agent/webtools.go`. |
 
 ## Agent loop & streaming
 
@@ -122,7 +122,7 @@ closed. `docs/trust.md` is the design record.
 | Interactive TUI | 04/06 | `tui/` | 🔀 divergent | Bubble Tea (JS was React+Ink). Single-reader invariant. |
 | Headless `-p` / `--print` | 08-entry | `cli/` | ✅ done | text / json / stream-json. |
 | stream-json input (embedding frontend) | 08-entry | `cli/` + `streamjson/` | ✅ done | `--input-format stream-json`. |
-| @ file autocomplete | 06-app-ui | `tui/tui.go` | 🔀 divergent | Tab-completes the trailing @<path> token (robust completion vs. JS live overlay). |
+| @ file autocomplete | 06-app-ui | `tui/pathmenu.go` | ✅ done | Live dropdown as you type `@…` (ranked, ↑↓ to pick, Tab cycles, Esc dismisses). The earlier Tab-only completion was recorded here as a deliberate divergence; it was really invisible — typing `@` showed nothing, so the feature was reported as missing. Paths with spaces are inserted quoted, and references outside the working directory complete from the filesystem. |
 | Slash command type-ahead | 06-app-ui | `tui/tui.go` | ✅ done | Live suggestions as you type `/…`; Tab completes (unique → fill, many → common prefix). |
 | Bracketed paste / drag-drop | 06-app-ui | bubbletea default | ✅ done | Bracketed paste on by default (multi-line pastes atomic). |
 | Help bar / keymap / input history | 06-app-ui | `tui/tui.go` | ✅ done | Up/Down ring-buffer history, Tab completion, key hints; /help generated from one command table. |
@@ -145,7 +145,7 @@ closed. `docs/trust.md` is the design record.
 | /stats, /status | `tui/tui.go` | ✅ done | |
 | /allow, /deny | — | 🔀 divergent | Removed with the rule model; `/trust` is the replacement. |
 | /config, /agents, /context | `tui/tui.go` | ✅ done | Group A (render-only); friendly permission labels. |
-| /mode, /permissions | `tui/tui.go` + `permission.Mode.Label` | ✅ done | Interactive numbered picker (or direct set) to change permission mode mid-session. |
+| /mode, /permissions | `tui/tui.go` + `permission.Mode.Label` | ✅ done | Interactive picker (or direct set) to change permission mode mid-session. The picker (`choice.go`) is a live filterable dropdown shared by `/model`, `/theme`, `/mode` and `/mcp`. |
 | /compact, /cost, /add-dir | `tui/tui.go` + `agent.Loop.Compact` | ✅ done | Group B. |
 | /plan, /doctor, /diff, /commit, /export | `tui/tui.go` + `doctor/` | ✅ done | Group C; /commit gated by a y/n confirm. |
 

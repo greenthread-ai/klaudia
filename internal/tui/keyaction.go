@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -33,23 +34,21 @@ const (
 // Ctrl+J is kept in both modes as the escape hatch: it needs no terminal
 // support whatsoever, so a user who cannot produce alt+Return in "newline"
 // mode is never left unable to submit.
+//
+// The chords themselves live in newKeymap, so the binding that matches here and
+// the help text that documents it are the same object.
 func keyAction(msg tea.KeyMsg, enterInserts bool) inputAction {
+	return newKeymap(enterInserts).action(msg)
+}
+
+// action is keyAction against an already-built keymap, for the hot path where
+// the Model holds one.
+func (k keymap) action(msg tea.KeyMsg) inputAction {
 	switch {
-	case msg.Type == tea.KeyEnter && msg.Alt:
-		if enterInserts {
-			return actionSubmit
-		}
-		return actionNewline
-	case msg.Type == tea.KeyCtrlJ:
-		if enterInserts {
-			return actionSubmit
-		}
-		return actionNewline
-	case msg.Type == tea.KeyEnter:
-		if enterInserts {
-			return actionNewline
-		}
+	case key.Matches(msg, k.Submit):
 		return actionSubmit
+	case key.Matches(msg, k.Newline):
+		return actionNewline
 	}
 	return actionNone
 }

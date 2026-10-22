@@ -11,7 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
 	cdpdom "github.com/chromedp/cdproto/dom"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
 
@@ -102,6 +104,17 @@ func (e *Engine) Relaunch(opts Options) error {
 	return nil
 }
 
+// Reset closes the current browser and adopts opts for the next one, which is
+// created lazily on first use. It is Relaunch without the launch: the way back
+// from a headed escalation, where the window has to close now and the headless
+// replacement is not needed until something is fetched.
+func (e *Engine) Reset(opts Options) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.closeLocked()
+	e.browserOpts = opts
+}
+
 func (e *Engine) Options() Options {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -129,50 +142,125 @@ func (e *Engine) Navigate(url string) error {
 		return fmt.Errorf("url required")
 	}
 	return e.RunWithTimeout(defaultNavigateTimeout, func(ctx context.Context) error {
-		if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {
+		if err := chromedp.Do(ctx, commitNavigation(url)); err != nil {
 			return err
 		}
-		// chromedp.Navigate returns on the load event, before JS-rendered (SPA)
-		// content appears. Wait for the DOM to settle so snapshots capture it.
 		return waitStable(ctx)
 	})
 }
 
+// commitNavigation starts the navigation and returns as soon as Chrome accepts
+// it, which is what chromedp.Navigate does before it additionally waits for the
+// load event. We do not want that wait.
+//
+// The load event means every subresource finished, including third-party ads
+// and trackers that are free never to finish. Measured cold against Chrome 152:
+// theguardian.com had its full text 650ms after the navigation committed and
+// had still not fired load 60 seconds later, so a page that was readable almost
+// immediately failed on the 30s timeout; arstechnica.com fired load at 10.8s
+// with its text complete at 1.25s. Waiting for load is not a stricter version
+// of waiting for content — on these sites it is a wait for something unrelated
+// that may never happen.
+//
+// Page.navigate still reports the failures that matter: a host that does not
+// resolve, or a refused connection, comes back as ErrorText, which is what
+// chromedp's own navigate action turns into a LoadError.
+func commitNavigation(url string) chromedp.Action[chromedp.Void] {
+	return chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
+		res, err := cdp.Call(ctx, t, page.Navigate, page.NavigateParams{URL: url})
+		if err != nil {
+			return err
+		}
+		if res.ErrorText != "" {
+			return &chromedp.LoadError{ErrorText: res.ErrorText}
+		}
+		return nil
+	})
+}
+
 const (
-	stabilizeTimeout   = 6 * time.Second
+	stabilizeTimeout   = 10 * time.Second
 	stabilizePollEvery = 250 * time.Millisecond
+	// How long a parsed document may show no text at all before we accept that
+	// it has none. Some pages really are text-free; most that look that way are
+	// a moment away from rendering.
+	emptyTextGrace = 3 * time.Second
 )
 
-// waitStable waits until the document is "complete" and its rendered text has
-// stopped growing across two consecutive polls (so client-rendered content is
-// present), bounded by stabilizeTimeout. It is best-effort: a poll error or the
-// timeout simply proceeds rather than failing the navigation.
+// pageState is one poll. The three facts are fetched in a single round trip,
+// because fetching them separately lets them describe different instants.
+type pageState struct {
+	Ready string `json:"ready"`
+	Text  int    `json:"text"`
+	Href  string `json:"href"`
+}
+
+const pageStateExpr = `({ready: document.readyState,` +
+	` text: ((document.body && document.body.innerText) || "").length,` +
+	` href: document.location.href})`
+
+// waitStable waits for the page to be worth reading: parsed, non-empty, and
+// unchanged across two consecutive polls. It is best-effort and bounded — a
+// poll error or the deadline proceeds with whatever has rendered, because a
+// partial page beats a failed fetch.
+//
+// Each rule is here because a real site needs it (measured cold on Chrome 152,
+// times from the navigation committing):
+//
+//   - "interactive" counts, not only "complete". theguardian.com stays
+//     interactive indefinitely, so requiring "complete" meant never settling
+//     and returning the page at the deadline instead, ten seconds after it was
+//     ready.
+//
+//   - Empty text never settles. stackoverflow.com/questions reports readyState
+//     "complete" with no body text at all 700ms in, then returns to "loading"
+//     and renders at 2.2s. Two polls of agreeing emptiness is exactly what the
+//     old rule accepted, so it captured a blank page from a site that was not
+//     slow.
+//
+//   - A changed URL restarts the count, so two polls that describe different
+//     documents are never counted as agreement. bbc.co.uk/news client-side
+//     redirects to bbc.com/news, and the two render nearly the same length of
+//     text; without this, the pair either side of the swap looks like a settled
+//     page and the snapshot that follows races the replacement.
+//
+// What it cannot do is wait for a redirect that has not happened yet: a page
+// that settles and only then navigates is returned as it was, because there is
+// no signal to distinguish it from one that is simply finished. That is a
+// bounded wrongness — the content is real, just from the pre-redirect URL —
+// and the alternative is a pause on every fetch for a case that is rare.
 func waitStable(ctx context.Context) error {
 	deadline := time.Now().Add(stabilizeTimeout)
-	lastLen, stable := -1, 0
+	var last pageState
+	stable, first := 0, true
+	emptySince := time.Now()
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		var ready string
-		var textLen int
-		err := chromedp.Run(ctx,
-			chromedp.Evaluate(`document.readyState`, &ready),
-			chromedp.Evaluate(`((document.body&&document.body.innerText)||"").length`, &textLen),
-		)
+		st, err := chromedp.Run(ctx, chromedp.Evaluate[pageState](pageStateExpr))
 		if err != nil {
 			return nil // best-effort; don't fail navigation on a poll hiccup
 		}
-		if ready == "complete" {
-			if textLen == lastLen {
-				if stable++; stable >= 2 {
-					return nil // settled
-				}
-			} else {
-				stable = 0
+		switch {
+		case st.Ready == "loading" || !first && st.Href != last.Href:
+			// Still being parsed, or a different document than the poll before:
+			// nothing seen so far describes the page we are going to return.
+			stable, emptySince = 0, time.Now()
+		case st.Text == 0:
+			stable = 0
+			if time.Since(emptySince) >= emptyTextGrace {
+				return nil // it really has no text
 			}
-			lastLen = textLen
+		case !first && st.Text == last.Text:
+			if stable++; stable >= 2 {
+				return nil // settled
+			}
+		default:
+			stable, emptySince = 0, time.Now()
 		}
+		last, first = st, false
+
 		if time.Now().After(deadline) {
 			return nil // bounded: proceed with whatever has rendered
 		}
@@ -187,22 +275,18 @@ func waitStable(ctx context.Context) error {
 func (e *Engine) Snapshot(includeHTML, includeMarkdown bool) (*Snapshot, error) {
 	var snap Snapshot
 	err := e.RunWithTimeout(defaultActionTimeout, func(ctx context.Context) error {
-		var actions []chromedp.Action
-		actions = append(actions,
-			chromedp.Location(&snap.URL),
-			chromedp.Title(&snap.Title),
-		)
-		if includeHTML || includeMarkdown {
-			actions = append(actions, chromedp.ActionFunc(func(ctx context.Context) error {
-				root, err := cdpdom.GetDocument().Do(ctx)
-				if err != nil {
-					return err
-				}
-				snap.HTML, err = cdpdom.GetOuterHTML().WithNodeID(root.NodeID).Do(ctx)
-				return err
-			}))
+		var err error
+		if snap.URL, err = chromedp.Run(ctx, chromedp.Location()); err != nil {
+			return err
 		}
-		return chromedp.Run(ctx, actions...)
+		if snap.Title, err = chromedp.Run(ctx, chromedp.Title()); err != nil {
+			return err
+		}
+		if !includeHTML && !includeMarkdown {
+			return nil
+		}
+		snap.HTML, err = chromedp.Run(ctx, documentHTML())
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -218,4 +302,24 @@ func (e *Engine) Snapshot(includeHTML, includeMarkdown bool) (*Snapshot, error) 
 		snap.HTML = ""
 	}
 	return &snap, nil
+}
+
+// documentHTML is the serialised document, root node included. chromedp's own
+// OuterHTML takes a selector and would give us the <html> element; the root is
+// what carries the doctype, and the markdown converter is fed the whole thing.
+func documentHTML() chromedp.Action[string] {
+	return func(ctx context.Context, t *chromedp.Target) (string, error) {
+		doc, err := cdp.Call(ctx, t, cdpdom.GetDocument, cdpdom.GetDocumentParams{})
+		if err != nil {
+			return "", err
+		}
+		if doc.Root == nil {
+			return "", fmt.Errorf("page has no document root")
+		}
+		res, err := cdp.Call(ctx, t, cdpdom.GetOuterHTML, cdpdom.GetOuterHTMLParams{NodeID: doc.Root.NodeID})
+		if err != nil {
+			return "", err
+		}
+		return res.OuterHTML, nil
+	}
 }

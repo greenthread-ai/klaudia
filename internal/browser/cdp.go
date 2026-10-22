@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/remote"
 )
 
 type Mode int
@@ -82,10 +83,15 @@ func newLaunched(parent context.Context, opts Options) (*Browser, error) {
 
 func newLaunchedWithOptions(parent context.Context, opts Options) (*Browser, error) {
 	flags := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
-	flags = append(flags,
-		chromedp.Flag("headless", opts.Headless),
-		chromedp.Flag("disable-blink-features", "AutomationControlled"),
-	)
+	flags = append(flags, chromedp.Flag("disable-blink-features", "AutomationControlled"))
+	if !opts.Headless {
+		// VisibleWindow, not Flag("headless", false): it also drops
+		// hide-scrollbars, mute-audio and enable-automation, and maximises the
+		// window. The only reason we ever run headed is the search challenge
+		// the user has to solve by hand, and that is a window they have to see,
+		// scroll, and not be flagged as automation in.
+		flags = append(flags, chromedp.VisibleWindow)
+	}
 	if opts.UserDataDir != "" {
 		if err := os.MkdirAll(opts.UserDataDir, 0o700); err != nil {
 			return nil, fmt.Errorf("create chrome profile dir: %w", err)
@@ -103,7 +109,12 @@ func newLaunchedWithOptions(parent context.Context, opts Options) (*Browser, err
 	plog := newProtocolLog()
 	allocCtx, allocCancel := chromedp.NewExecAllocator(parent, flags...)
 	ctx, cancel := chromedp.NewContext(allocCtx, plog.options()...)
-	if err := chromedp.Run(ctx); err != nil {
+	// Do with no steps still allocates the browser and opens the target, which
+	// is the point: a launch that fails has to fail here, not on first use.
+	// This context carries no timeout by design — chromedp ties the browser's
+	// lifetime to the context of the first run, so a deadline here would be a
+	// deadline on the whole session (see RunWithTimeout for per-action limits).
+	if err := chromedp.Do(ctx); err != nil {
 		cancel()
 		allocCancel()
 		return nil, plog.annotate(fmt.Errorf("launch chrome: %w", err))
@@ -128,9 +139,9 @@ func newAttached(parent context.Context, opts Options) (*Browser, error) {
 		return nil, fmt.Errorf("attach mode requires remote URL")
 	}
 	plog := newProtocolLog()
-	allocCtx, allocCancel := chromedp.NewRemoteAllocator(parent, opts.RemoteURL)
+	allocCtx, allocCancel := remote.NewAllocator(parent, opts.RemoteURL)
 	ctx, cancel := chromedp.NewContext(allocCtx, plog.options()...)
-	if err := chromedp.Run(ctx); err != nil {
+	if err := chromedp.Do(ctx); err != nil {
 		cancel()
 		allocCancel()
 		return nil, plog.annotate(fmt.Errorf("attach chrome at %s: %w", opts.RemoteURL, err))

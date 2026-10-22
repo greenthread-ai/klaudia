@@ -69,9 +69,8 @@ func TestLiveRegionNeverFillsTheLastColumn(t *testing.T) {
 			}
 		},
 		"awaiting a choice": func(m *Model) {
-			m.setState(stateAwaitingChoice)
-			m.choicePrompt = strings.Repeat("pick one of these ", 15)
-			m.choiceItems = []choiceItem{{label: strings.Repeat("option ", 30)}}
+			m.startChoice(strings.Repeat("pick one of these ", 15),
+				[]choiceItem{{label: strings.Repeat("option ", 30)}})
 		},
 		"awaiting confirmation": func(m *Model) { m.setState(stateAwaitingConfirm) },
 		"quit armed":            func(m *Model) { m.quitArmed = true },

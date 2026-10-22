@@ -16,6 +16,9 @@ type SearchOptions struct {
 	AllowedDomains []string
 	BlockedDomains []string
 	MaxResults     int
+	// Notify, if set, is told when the search stops being automatic — i.e.
+	// when a window is about to open on the user's desktop and wait for them.
+	Notify func(line string)
 }
 
 type SearchResult struct {
@@ -56,8 +59,8 @@ func (e *Engine) Search(ctx context.Context, opts SearchOptions) ([]SearchResult
 	}
 	if len(results) == 0 {
 		snap, snapErr := e.Snapshot(true, false)
-		if snapErr == nil && shouldUseHeadedFallback(engine, snap.HTML) && e.browserOpts.HeadedFallback && e.browserOpts.RemoteURL == "" {
-			results, err = e.searchWithHeadedFallback(ctx, engine, searchURL)
+		if snapErr == nil && shouldUseHeadedFallback(engine, snap.HTML) && canEscalate(e.Options()) {
+			results, err = e.searchWithHeadedFallback(ctx, engine, searchURL, opts.Notify)
 			if err != nil {
 				return nil, err
 			}
@@ -77,28 +80,25 @@ func (e *Engine) searchOnce(engine, searchURL string) ([]SearchResult, error) {
 	return parseResults(engine, snap.HTML)
 }
 
-func (e *Engine) searchWithHeadedFallback(ctx context.Context, engine, searchURL string) ([]SearchResult, error) {
-	oldOpts := e.Options()
-	headedOpts := oldOpts
-	headedOpts.Headless = false
-	headedOpts.Mode = ModeLaunch
-	headedOpts.RemoteURL = ""
-	if headedOpts.UserDataDir == "" {
-		headedOpts.UserDataDir = DefaultUserDataDir()
-	}
+func (e *Engine) searchWithHeadedFallback(ctx context.Context, engine, searchURL string, progress func(string)) ([]SearchResult, error) {
+	previous := e.Options()
+	headedOpts := headedOptions(previous)
 	if err := e.Relaunch(headedOpts); err != nil {
+		e.Reset(previous)
 		return nil, err
 	}
-	defer func() {
-		if oldOpts.Headless {
-			_ = e.Relaunch(oldOpts)
-		}
-	}()
+	// Close the window as soon as we are done with it rather than relaunching
+	// headless here: the headed browser holds the shared profile directory, and
+	// the engine makes the next browser on demand anyway.
+	defer e.Reset(previous)
+
+	notify(progress, fmt.Sprintf("%s is asking for a human — opening a Chrome window so you can clear it (up to %s); the search finishes on its own once you have",
+		hostOf(searchURL), challengeWait))
 
 	if err := e.Navigate(searchURL); err != nil {
 		return nil, err
 	}
-	deadline := time.Now().Add(2 * time.Minute)
+	deadline := time.Now().Add(challengeWait)
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -117,9 +117,9 @@ func (e *Engine) searchWithHeadedFallback(ctx context.Context, engine, searchURL
 			}
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("search challenge detected; opened headed Chrome with profile %q, but no results appeared within 2 minutes", headedOpts.UserDataDir)
+			return nil, fmt.Errorf("search challenge detected; opened headed Chrome with profile %q, but no results appeared within %s", headedOpts.UserDataDir, challengeWait)
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(challengePollEvery)
 	}
 }
 

@@ -29,14 +29,17 @@ import (
 //     handling is a hand-written type switch (target.go), while cdproto's event
 //     types are generated from the protocol, so the switch structurally trails
 //     Chrome. Every event newer than it reaches the default branch and is
-//     logged as an error. Today that is four DOM events cdproto knows and
-//     chromedp does not: AdRelatedStateUpdated, AdoptedStyleSheetsModified,
-//     AffectedByStartingStylesFlagUpdated and TopLayerElementsUpdated. All four
-//     carry state chromedp's node tree doesn't track, nothing is broken, and
-//     there is nothing for a user to do — which is why the fix belongs upstream
-//     (a case that ignores them) and the local answer is to stop calling it an
-//     error. Ad-carrying pages emit the first one per update, so it is also the
-//     highest-volume message chromedp produces.
+//     logged as an error, carrying state chromedp's node tree doesn't track —
+//     nothing is broken and there is nothing for a user to do.
+//
+//     The four that caused this file — AdRelatedStateUpdated,
+//     AdoptedStyleSheetsModified, AffectedByStartingStylesFlagUpdated and
+//     TopLayerElementsUpdated — are handled upstream as of chromedp v0.21.0,
+//     and we are on it. The filter stays because the shape that produced them
+//     has not changed: the switch is still hand-written (target.go, the two
+//     "unhandled … event %T" branches) and cdproto is still generated, so the
+//     next protocol release makes more. Matching the class rather than the
+//     names is what makes that a no-op instead of a recurrence.
 //
 //   - Everything else is kept: websocket read failures, malformed protocol
 //     messages, "could not retrieve document root", executor bookkeeping. Those

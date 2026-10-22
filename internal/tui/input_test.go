@@ -173,7 +173,7 @@ func TestSlashSuggestions(t *testing.T) {
 }
 
 func TestHelpAndSuggestionsShareSource(t *testing.T) {
-	help := slashHelp()
+	help := slashHelp(newTestModel().keyHints())
 	// Every canonical command name appears in /help (single source of truth).
 	for _, name := range builtinCommands() {
 		if !strings.Contains(help, name) {

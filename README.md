@@ -133,8 +133,15 @@ scores the transcript against the spec's checklist.
 ```
 
 A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
-type-ahead, fuzzy `@path` file completion (Tab, Tab again to cycle), input
-history (↑/↓), and `Esc` to interrupt a turn. Type `/help` for the full list.
+type-ahead, fuzzy `@path` file completion, input history (↑/↓), and `Esc` to
+interrupt a turn. Type `/help` for the full list.
+
+Typing `@` opens a ranked file menu: `↑`/`↓` pick, `Tab` inserts and cycles,
+`Esc` dismisses. Matching is fuzzy, so `@session.ts` finds
+`src/auth/session.ts`, and files Klaudia has just read or written rank first.
+A reference starting with `/`, `./` or `~/` completes from the filesystem
+instead of the project, and a path containing spaces is inserted quoted
+(`@"My Notes.md"`) so it stays one reference.
 
 ### Return, and multi-line input
 
@@ -201,7 +208,10 @@ interrupt and send it now, or `↑` to edit it.
 
 `/model` with no argument asks the provider which models it serves and offers
 them as a picker — Anthropic and OpenAI-compatible endpoints both answer at
-`GET /v1/models` — so you don't have to remember an exact model ID. `/model
+`GET /v1/models` — so you don't have to remember an exact model ID. The picker
+(`/model`, `/theme`, `/mode`, `/mcp`) is a dropdown: `↑↓` to move, Enter to
+confirm, type to filter, Esc to cancel, and `1`-`9` still pick directly until
+you start filtering. `/model
 <alias|id>` still sets one directly (`opus`, `sonnet`, `haiku`, `fable`, or any
 full ID). Either way Klaudia records that model's real context window and
 output limit, which is what the status bar's `ctx N%` measures against and what
@@ -606,10 +616,16 @@ when you explicitly ask Klaudia to drive the browser.
 Requires a Chrome/Chromium install (auto-discovered; set `KLAUDIA_CHROME_PATH`
 on Linux/Windows if not on `PATH`). Tunable via `.klaudia/config.toml` →
 `browser` (`engine`, `headless`, `chromePath`, `userDataDir`, `headedFallback`,
-…) or `KLAUDIA_*` env vars. When a search hits a bot-challenge page, Klaudia can
-relaunch a **headed** Chrome with a persistent profile (`~/.klaudia/browser/…`)
-so you can solve it once. Anthropic's server-side `web_search`/`web_fetch` betas
-remain available when using the Anthropic provider.
+…) or `KLAUDIA_*` env vars. When a search or a fetch comes back with a
+bot-challenge page instead of the content (Cloudflare, DataDome, a captcha),
+Klaudia says so and relaunches a **headed** Chrome with a persistent profile
+(`~/.klaudia/browser/…`) so you can clear it: the window closes as soon as the
+page comes through, and the cookie you earned means the next headless fetch of
+that site usually needs no window at all. Set `headedFallback = false` (or
+`KLAUDIA_BROWSER_HEADED_FALLBACK=0`) to never open one — the challenge page is
+then returned as-is, labelled as a challenge. Anthropic's server-side
+`web_search`/`web_fetch` betas remain available when using the Anthropic
+provider.
 
 ## MCP
 

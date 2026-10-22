@@ -92,7 +92,7 @@ func (n *NotebookEdit) Execute(_ context.Context, tctx Context, raw json.RawMess
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
-	in.NotebookPath = resolvePath(tctx, in.NotebookPath) // accept paths relative to the working dir
+	in.NotebookPath = resolveExistingPath(tctx, in.NotebookPath) // relative to the working dir; see pathrepair.go
 
 	data, err := os.ReadFile(in.NotebookPath)
 	if err != nil {

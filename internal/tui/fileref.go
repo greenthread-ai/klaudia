@@ -198,3 +198,35 @@ func parseFileRef(root, s string, extraDirs []string) (fileRef, bool) {
 	}
 	return fileRef{}, false
 }
+
+// headPaths is matchPaths' answer for an empty pattern: the files Klaudia
+// touched most recently, then the newest on disk. Same order the scored path
+// would produce when every candidate ties, without the sort.
+func (m *Model) headPaths(root string, files []string) []string {
+	const limit = 200
+	seen := make(map[string]bool, limit)
+	out := make([]string, 0, limit)
+	add := func(rel string) bool {
+		if rel == "" || seen[rel] {
+			return true
+		}
+		seen[rel] = true
+		out = append(out, rel)
+		return len(out) < limit
+	}
+	for _, p := range m.recentPaths {
+		if !add(p) {
+			return out
+		}
+	}
+	for _, f := range files {
+		rel, err := filepath.Rel(root, f)
+		if err != nil {
+			rel = f
+		}
+		if !add(rel) {
+			break
+		}
+	}
+	return out
+}

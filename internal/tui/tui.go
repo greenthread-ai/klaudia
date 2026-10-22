@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/stopwatch"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -291,7 +292,7 @@ func skillNames(sess *Session) []string {
 // introSkillsShown caps the names listed before the line becomes noise.
 const introSkillsShown = 4
 
-func intro(model, branch, tagline string, skills []string) string {
+func intro(model, branch, tagline string, skills []string, submit key.Binding) string {
 	logo := logoStyle.Render("✦ Klaudia")
 	tag := bannerStyle.Render(" " + tagline)
 	var meta string
@@ -313,7 +314,11 @@ func intro(model, branch, tagline string, skills []string) string {
 		}
 		meta += "\n" + bannerStyle.Render("  skills: "+strings.Join(shown, ", ")+suffix)
 	}
-	tip := hintStyle.Render("\n  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C twice to quit")
+	// The send chord comes from the binding, not from the word "Enter": with
+	// input.enter = "newline" Return inserts a newline and this line was telling
+	// every one of those users to press the key that does not send.
+	tip := hintStyle.Render("\n  Type a prompt and press " + chordCase(submit.Help().Key) +
+		" · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C twice to quit")
 	return logo + tag + meta + tip + "\n"
 }
 
@@ -486,9 +491,14 @@ type Model struct {
 	planReply chan bool
 	// Pending /commit-style confirmation: run on "y", returns a result line.
 	confirmAction func() string
-	// Pending local settings picker (e.g. /mode): numbered choices.
+	// Pending local settings picker (e.g. /mode), see choice.go. choiceHits
+	// indexes choiceItems: it is the subset matching choiceFilter, ranked, and
+	// choiceIdx selects within it.
 	choiceItems  []choiceItem
 	choicePrompt string
+	choiceFilter string
+	choiceHits   []int
+	choiceIdx    int
 	// Input history: submitted prompts (newest last), navigated with Up/Down.
 	// histPos == len(inputHistory) means "not navigating" (editing a fresh line).
 	inputHistory []string
@@ -497,10 +507,10 @@ type Model struct {
 	// Verbatim payloads for pastes shown in the input as chips (see paste.go).
 	// Session-scoped, because history recall re-shows a chip.
 	pastes pasteStore
-	// File-reference completion state (see fileref.go).
+	// File-reference completion state (see fileref.go, pathmenu.go).
 	paths       pathIndex
 	recentPaths []string
-	cycle       completeCycle
+	menu        pathMenu
 	// nav indexes the conversation for /search, /errors and /outline.
 	nav []navEntry
 	// Elapsed-run stopwatch and per-turn cancel (Esc interrupts the model).
@@ -529,7 +539,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		sess = &Session{}
 	}
 	in := newPromptInput()
-	in.KeyMap.InsertNewline = newlineBinding(sess.EnterInserts)
+	in.KeyMap.InsertNewline = newKeymap(sess.EnterInserts).Newline
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
@@ -620,6 +630,31 @@ func (m *Model) editableInput() bool {
 	default:
 		return false
 	}
+}
+
+// slashCommandsLive reports whether a leading "/" in the box would actually run
+// a command. True while idle and while the model works — the running path
+// dispatches slash commands too — and false in "answer in your own words",
+// where the text is an answer and a leading slash is just a character.
+//
+// Tab completion and the suggestion line both ask this, so neither can offer a
+// command that the submit path in that state would not run.
+func (m *Model) slashCommandsLive() bool {
+	return m.state == stateIdle || m.state == stateRunning
+}
+
+// bangRunsHere reports whether Enter on a "!" line would actually run it as a
+// shell command. Idle only: ! runs locally and its output becomes context for
+// the next turn, and there is no next turn to put it in while one is already in
+// flight. stateAnsweringOther sends its text as an answer, where a leading "!"
+// is a character like any other.
+//
+// syncPromptMarker asks this as well as the submit path, so the "$" marker
+// cannot promise an execution that Enter would not perform. It did: the marker
+// is driven from syncInputHeight, which runs in every state, so typing "!ls"
+// while the model worked showed "$" and then sent the text to the model.
+func (m *Model) bangRunsHere() bool {
+	return m.state == stateIdle
 }
 
 // inputText is what the user typed, in the two forms the rest of the code has
@@ -721,6 +756,11 @@ func (m *Model) updateInput(msg tea.Msg) tea.Cmd {
 	m.input, cmd = m.input.Update(msg)
 	m.syncInputHeight()
 	m.reconcilePastes()
+	// Rank the paths here rather than in View: the menu has to be recomputed
+	// when the reference changes, and View runs on every spinner tick.
+	if m.editableInput() {
+		m.refreshPathMenu()
+	}
 	return cmd
 }
 
@@ -744,7 +784,7 @@ func (m *Model) reconcilePastes() {
 // losing track is running something you meant to say. The marker changes the
 // moment the line does, so what will happen on Enter is visible before Enter.
 func (m *Model) syncPromptMarker() {
-	bang := isBang(m.input.Value())
+	bang := m.bangRunsHere() && isBang(m.input.Value())
 	if bang == m.promptIsBang {
 		return
 	}
@@ -1062,8 +1102,7 @@ func (m *Model) onCtrlC() (tea.Model, tea.Cmd) {
 		m.appendLine(toolStyle.Render("  → cancelled"))
 		return m, nil
 	case stateAwaitingChoice:
-		m.choiceItems, m.choicePrompt = nil, ""
-		m.setState(stateIdle)
+		m.closeChoice()
 		m.appendLine(toolStyle.Render("  → cancelled"))
 		return m, nil
 	}
@@ -1115,12 +1154,94 @@ func (m *Model) promptValue() string {
 	return m.pastes.expand(m.input.Value())
 }
 
+// onInputKey handles the keys that belong to the text box itself rather than to
+// the state that happens to be showing it: Tab completion, and the @-menu's
+// arrows and Esc. It reports whether the key was consumed.
+//
+// Keyed off editableInput and called above every per-state block, because the
+// box is the same box in each state that has one. Gating these on stateIdle is
+// what left @ completion dead while the model was working — you could type a
+// queued follow-up but not complete a path in it — and that is the same drift
+// editableInput was introduced to stop, after the paste gate and inputHeight
+// disagreed about stateAnsweringOther.
+func (m *Model) onInputKey(msg tea.KeyMsg) bool {
+	if !m.editableInput() {
+		return false
+	}
+	// Tab completes a slash command when the line is a bare "/token", otherwise
+	// an @<path> reference.
+	if key.Matches(msg, m.keymap().Complete) {
+		v := m.input.Value()
+		if m.slashCommandsLive() && strings.HasPrefix(v, "/") && !strings.ContainsAny(v, " \t") {
+			m.completeSlash()
+		} else {
+			m.completeAtPath()
+		}
+		return true
+	}
+	// The menu owns Up/Down while it is open — it is on screen and it is what
+	// the keys obviously refer to. Esc closes it. Both fall through to history
+	// navigation, the queued-message edit and the usual Esc handling when it is
+	// not open.
+	if !m.menuActive() {
+		return false
+	}
+	switch {
+	case key.Matches(msg, m.keymap().Prev):
+		return m.movePathMenu(-1)
+	case key.Matches(msg, m.keymap().Next):
+		return m.movePathMenu(1)
+	case key.Matches(msg, m.keymap().Dismiss):
+		return m.dismissPathMenu()
+	}
+	return false
+}
+
+// onHistoryKey gives ↑/↓ the same meaning in every state that has a box: step
+// through earlier input. Only on a single line, so the arrows still move the
+// cursor inside a draft you are editing.
+//
+// While the model works, a queued follow-up is recalled first — it is the most
+// recent thing you typed and it is about to be sent. That is a property of the
+// queue being non-empty, not of the state, so it is asked of the queue. Before
+// this, ↑ with nothing queued simply did nothing while a turn ran, and the
+// answer box had no history at all.
+func (m *Model) onHistoryKey(msg tea.KeyMsg) bool {
+	if !m.editableInput() || m.input.LineCount() > 1 {
+		return false
+	}
+	prev := key.Matches(msg, m.keymap().Prev)
+	if !prev && !key.Matches(msg, m.keymap().Next) {
+		return false
+	}
+	if prev {
+		if t := m.steer.takeBack(); t != "" {
+			m.input.SetValue(t)
+			m.input.CursorEnd()
+			m.syncInputHeight()
+			return true
+		}
+	}
+	m.navigateHistory(prev)
+	m.syncInputHeight()
+	return true
+}
+
 func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Any key other than Ctrl+C disarms a pending "press again to quit".
 	if msg.Type != tea.KeyCtrlC {
 		m.quitArmed = false
 	}
 
+	// The text box's own keys, before any state dispatch. Esc reaching the menu
+	// ahead of the interrupt is deliberate: closing a dropdown that is on screen
+	// must not also kill the turn behind it. A second Esc does that.
+	if m.onInputKey(msg) {
+		return m, nil
+	}
+	if m.onHistoryKey(msg) {
+		return m, nil
+	}
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m.onCtrlC()
@@ -1151,7 +1272,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// What Return means depends on config (see keyAction). Computed once, so
 	// the idle prompt and the queue-while-running path cannot disagree about
 	// which chord sends — they did, in the first cut of this change.
-	action := keyAction(msg, m.sess.EnterInserts)
+	action := m.keymap().action(msg)
 
 	// No scrollback keys are bound. Klaudia renders inline, so PgUp/PgDn, the
 	// wheel, Home/End, tmux copy mode and the terminal's own search all operate
@@ -1171,6 +1292,15 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case action == actionSubmit:
 			in := m.readInput()
+			if isBang(in.Display) {
+				// Refused rather than queued. A "!" line means "run this here",
+				// and silently sending it to the model instead would have it
+				// run something like it through Bash — a different command, in
+				// the sandbox, under the permission gate. The text stays in the
+				// box so Esc then Enter does what was asked.
+				m.appendLine(hintStyle.Render("  ! can't run while Klaudia is working — esc to interrupt, then send it"))
+				return m, nil
+			}
 			if strings.HasPrefix(in.Display, "/") {
 				m.input.Reset()
 				m.pushHistory(in.Display)
@@ -1205,13 +1335,6 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.cancelling = true // bottom view swaps to "cancelling…" so user sees the cancel registered
 					m.appendLine(toolStyle.Render("  ⊘ interrupting to send your queued message…"))
 				}
-			}
-			return m, nil
-		case msg.Type == tea.KeyUp:
-			if t := m.steer.takeBack(); t != "" { // recall the queued message to edit it
-				m.input.SetValue(t)
-				m.input.CursorEnd()
-				m.syncInputHeight()
 			}
 			return m, nil
 		}
@@ -1259,22 +1382,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingChoice {
-		if msg.Type == tea.KeyEsc {
-			m.choiceItems, m.choicePrompt = nil, ""
-			m.setState(stateIdle)
-			m.appendLine(toolStyle.Render("  → cancelled"))
-			return m, nil
-		}
-		s := msg.String()
-		if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
-			if n := int(s[0] - '0'); n <= len(m.choiceItems) {
-				item := m.choiceItems[n-1]
-				m.choiceItems, m.choicePrompt = nil, ""
-				m.setState(stateIdle)
-				m.appendLine(bannerStyle.Render("  → " + item.apply()))
-			}
-		}
-		return m, nil
+		return m, m.onChoiceKey(msg)
 	}
 
 	if m.state == stateAwaitingAnswer {
@@ -1354,28 +1462,6 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					"instead — wait for that instruction and follow it.",
 			})
 		}
-		return m, nil
-	}
-
-	// Any key other than Tab ends an in-progress completion cycle.
-	if msg.Type != tea.KeyTab {
-		m.cycle = completeCycle{}
-	}
-
-	// Tab completion on an idle line: slash command when the line is a "/token",
-	// otherwise an @<path> reference.
-	if m.state == stateIdle && msg.Type == tea.KeyTab {
-		if strings.HasPrefix(m.input.Value(), "/") && !strings.ContainsAny(m.input.Value(), " \t") {
-			m.completeSlash()
-		} else {
-			m.completeAtPath()
-		}
-		return m, nil
-	}
-
-	// Input history navigation (only on a fresh idle line).
-	if m.state == stateIdle && m.input.LineCount() <= 1 && (msg.Type == tea.KeyUp || msg.Type == tea.KeyDown) {
-		m.navigateHistory(msg.Type == tea.KeyUp)
 		return m, nil
 	}
 
@@ -1468,15 +1554,21 @@ var commandList = []cmdInfo{
 	{"/quit", "", "Exit Klaudia (alias /exit)"},
 }
 
-// keyHints documents the non-command key bindings shown in /help.
-const keyHints = `Keys:
-  /                Type a slash to see matching commands
-  Tab              Complete a /command or an @<path> reference (Tab again cycles)
-  ↑ / ↓            Cycle through previous prompts
-  Ctrl+J           Newline without sending
-  Ctrl+U / Ctrl+K  Delete before / after the cursor
-  Esc              Interrupt the model mid-turn
-  Ctrl+C           Interrupt, or clear the line — press twice to quit`
+// keymap returns the prompt's bindings for this session's Return mode.
+//
+// Derived rather than cached on the Model. A cached field is zero-valued in any
+// Model built as a struct literal — every test helper in this package does that
+// — and a zero keymap matches nothing, so the prompt would silently stop
+// responding to Enter. Building seven bindings per keystroke is free at human
+// typing speed.
+func (m *Model) keymap() keymap {
+	return newKeymap(m.sess.EnterInserts)
+}
+
+// keyHints renders the key reference for /help from the live bindings.
+func (m *Model) keyHints() string {
+	return keyHelp(m.keymap(), m.input.KeyMap)
+}
 
 // commandAliases are names handleSlash accepts that commandList does not list,
 // because they are second spellings of a command already in it.
@@ -1504,8 +1596,11 @@ func IsBuiltinCommand(name string) bool {
 	return false
 }
 
-// slashHelp renders the command reference from commandList + keyHints.
-func slashHelp() string {
+// slashHelp renders the command reference from commandList, plus the key
+// reference rendered from the live bindings. keys is passed in rather than
+// rebuilt here because the Return chords depend on config: the help has to
+// describe the bindings this session actually installed.
+func slashHelp(keys string) string {
 	var b strings.Builder
 	b.WriteString("Available commands:")
 	for _, c := range commandList {
@@ -1516,7 +1611,7 @@ func slashHelp() string {
 		fmt.Fprintf(&b, "\n  %-16s %s", left, c.desc)
 	}
 	b.WriteString("\n\n")
-	b.WriteString(keyHints)
+	b.WriteString(keys)
 	return b.String()
 }
 
@@ -1566,16 +1661,14 @@ func (m *Model) slashSuggestionLine() string {
 	return suggestStyle.Render(strings.Join(sug, "  ")) + hintStyle.Render("  (Tab to complete)")
 }
 
-// startChoice opens a numbered settings picker. The selected item's apply runs
-// when the user presses its digit (Esc cancels). Reusable for any quick toggle.
+// startChoice opens a settings picker: a live dropdown in the bottom region
+// that arrows select, typing filters and digits still pick (see choice.go).
 func (m *Model) startChoice(title string, items []choiceItem) {
 	m.choiceItems = items
 	m.choicePrompt = title
+	m.choiceFilter = ""
+	m.refilterChoices()
 	m.setState(stateAwaitingChoice)
-	m.appendLine(askStyle.Render(title))
-	for i, it := range items {
-		m.appendLine(toolStyle.Render(fmt.Sprintf("  %d) %s", i+1, it.label)))
-	}
 }
 
 // currentMode returns the live permission mode, defaulting to ModeAutonomous.
@@ -1870,7 +1963,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 
 	switch cmd {
 	case "/help", "/?":
-		m.appendLine(bannerStyle.Render(slashHelp() + m.skillHelpLines()))
+		m.appendLine(bannerStyle.Render(slashHelp(m.keyHints()) + m.skillHelpLines()))
 	case "/quit", "/exit":
 		return m, tea.Quit
 	case "/clear":
@@ -2323,57 +2416,23 @@ func (m *Model) completeSlash() {
 	m.input.CursorEnd()
 }
 
-// completeAtPath completes the trailing "@<partial>" token in the input against
-// files under the working directory. A unique match is filled in; multiple
-// matches fill the common prefix and list candidates as a banner.
-// completeAtPath completes an @<path> reference. Matching is fuzzy, so
-// "@session.ts" finds "src/auth/session.ts"; that makes commonPrefix
-// meaningless, so instead the first Tab inserts the best hit and further Tabs
-// cycle through the rest.
+// completeAtPath inserts the selected @<path> completion. Matching is fuzzy, so
+// "@session.ts" finds "src/auth/session.ts"; that makes a common-prefix
+// completion meaningless, so Tab inserts the best hit and each further Tab
+// advances to the next one. The dropdown (pathmenu.go) shows what is being
+// cycled through — before this it was a one-shot banner, and with nothing on
+// screen until Tab was pressed the whole feature was invisible.
 func (m *Model) completeAtPath() {
-	value := m.input.Value()
-	at := strings.LastIndex(value, "@")
-	if at < 0 {
+	m.menu.dismissed = "" // Tab reopens a menu Esc closed
+	cycling := m.menu.open && m.menu.inserted == m.input.Value()
+	m.refreshPathMenu()
+	if !m.menu.open || len(m.menu.hits) == 0 {
 		return
 	}
-	partial := value[at+1:]
-	if strings.ContainsAny(partial, " \t") {
-		return // the @token has already been closed by whitespace
+	if cycling {
+		m.menu.idx = (m.menu.idx + 1) % len(m.menu.hits)
 	}
-
-	// Keep any :line[:col] suffix out of the match and put it back afterwards,
-	// so a reference pasted straight from a stack trace completes cleanly.
-	stem, line, col := splitLineSuffix(partial)
-	suffix := ""
-	if line > 0 {
-		suffix = ":" + strconv.Itoa(line)
-		if col > 0 {
-			suffix += ":" + strconv.Itoa(col)
-		}
-	}
-
-	if len(m.cycle.hits) > 0 && m.cycle.last == value {
-		m.cycle.idx = (m.cycle.idx + 1) % len(m.cycle.hits)
-	} else {
-		hits := m.matchPaths(stem)
-		if len(hits) == 0 {
-			return
-		}
-		m.cycle = completeCycle{base: stem, hits: hits}
-		if len(hits) > 1 {
-			show := hits
-			if len(show) > 12 {
-				show = show[:12]
-			}
-			m.appendLine(bannerStyle.Render("candidates: " + strings.Join(show, "  ")))
-		}
-	}
-
-	chosen := m.cycle.hits[m.cycle.idx]
-	completed := value[:at+1] + chosen + suffix
-	m.cycle.last = completed
-	m.input.SetValue(completed)
-	m.input.CursorEnd()
+	m.insertPathHit()
 }
 
 // matchPaths returns working-dir-relative file paths that start with partial
@@ -2384,8 +2443,22 @@ func (m *Model) completeAtPath() {
 // alphabetically, so "the file I was just working on" ranked below "a_test.go".
 // Files Klaudia has actually read or written outrank everything.
 func (m *Model) matchPaths(partial string) []string {
+	// A reference that names a place outside the project is answered from the
+	// filesystem: the index only covers the working directory, so "@~/Desktop/…"
+	// used to match nothing and leave the user to type the path by hand.
+	if hits, isFS := matchFilesystemPaths(partial); isFS {
+		return hits
+	}
 	root := m.rootDir()
 	files := m.paths.files(root, time.Now())
+
+	// A bare "@" matches everything, so the ranking is pure recency and the
+	// scoring pass has nothing to decide. Skipping it matters now that the menu
+	// recomputes on the keystroke rather than on Tab: this is a sort of up to
+	// pathIndexMaxFiles entries, between the key and the character appearing.
+	if partial == "" {
+		return m.headPaths(root, files)
+	}
 
 	type scored struct {
 		path  string
@@ -3318,7 +3391,7 @@ func (m *Model) resize(w, h int) {
 }
 
 func (m *Model) introText() string {
-	return intro(m.introModel, m.introBranch, m.introTagline, skillNames(m.sess))
+	return intro(m.introModel, m.introBranch, m.introTagline, skillNames(m.sess), m.keymap().Submit)
 }
 
 // View draws only the live region. Everything finished has already been printed
@@ -3404,7 +3477,7 @@ func (m *Model) clampBottom(s string) string {
 
 // bottomView renders everything below the scrollback: the state-specific prompt
 // or input area, then the persistent status bar. Its measured height is what
-// relayout reserves, so the two can never drift.
+// resize reserves, so the two can never drift.
 func (m *Model) bottomView() string {
 	var bottom string
 	switch m.state {
@@ -3419,14 +3492,14 @@ func (m *Model) bottomView() string {
 		// saw. Suppressed during cancellation — "cancelling… quiet for 12s"
 		// is a worse signal than "cancelling…". 30s threshold picked so a
 		// fast turn never sees the suffix; a long API call or tool-bound
-		// stall does. Re-evaluated every spinner tick (~80ms).
+		// stall does. Re-evaluated every spinner tick (spinner.Dot, 100ms).
 		if !m.cancelling && !m.lastEventAt.IsZero() {
 			if q := time.Since(m.lastEventAt); q > 30*time.Second {
 				work += hintStyle.Render(fmt.Sprintf("  · quiet for %s", fmtDuration(q)))
 			}
 		}
 		m.input.SetHeight(m.inputHeight())
-		bottom = caption(work) + "\n" + m.promptBox()
+		bottom = caption(work) + "\n" + m.promptBox() + m.inputAffordanceView()
 		// Show the not-yet-committed tail of the streaming message above the
 		// working line, so the user sees text arriving even though the finished
 		// part has already gone to scrollback.
@@ -3443,23 +3516,38 @@ func (m *Model) bottomView() string {
 			hintStyle.Render(fmt.Sprintf("  (%d, or just start typing, to answer in your own words)", len(m.askOptions)+1)))
 	case stateAnsweringOther:
 		m.input.SetHeight(m.inputHeight())
-		bottom = m.promptBox() + "\n" + caption(askStyle.Render("Your answer")+
+		bottom = m.promptBox() + m.inputAffordanceView() + "\n" + caption(askStyle.Render("Your answer")+
 			hintStyle.Render("  (enter sends · esc goes back to the options)"))
 	case stateAwaitingPlan:
 		bottom = caption(askStyle.Render("Approve plan? (y)es / (n)o"))
 	case stateAwaitingConfirm:
 		bottom = caption(askStyle.Render("Confirm? (y)es / (n)o"))
 	case stateAwaitingChoice:
-		bottom = caption(askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.choiceItems))) + hintStyle.Render("  (esc to cancel)"))
+		bottom = m.choiceView()
 	default:
 		m.input.SetHeight(m.inputHeight())
-		bottom = m.promptBox()
-		if sug := m.slashSuggestionLine(); sug != "" {
-			bottom += "\n" + caption(sug)
-		}
+		bottom = m.promptBox() + m.inputAffordanceView()
 	}
 	// Persistent status bar at the very bottom, in every state.
 	return bottom + "\n" + caption(m.statusLine())
+}
+
+// inputAffordanceView renders what hangs below the text box: the slash
+// suggestion line and the @-completion menu. Every state that shows the box
+// calls this one function, so the dropdown cannot be visible in one state and
+// invisible in another — which is exactly how it shipped, live on the idle line
+// and absent while the model worked.
+func (m *Model) inputAffordanceView() string {
+	var out string
+	if m.slashCommandsLive() {
+		if sug := m.slashSuggestionLine(); sug != "" {
+			out += "\n" + caption(sug)
+		}
+	}
+	if menu := m.pathMenuView(); menu != "" {
+		out += "\n" + menu
+	}
+	return out
 }
 
 // uiApprover implements agent.Approver by asking the UI and blocking for the

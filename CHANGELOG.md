@@ -15,6 +15,26 @@ port mirrors (see `internal/version`).
   out twice, and a test fails if the two ever disagree.
 
 ### Fixed
+- **Fetching a page no longer waits for the load event, which on an ad-carrying
+  site can never arrive.** `chromedp.Navigate` returns when every subresource
+  has finished; a third-party ad or tracker is free never to finish. Measured
+  cold against Chrome 152: `theguardian.com` had its full text 650ms after the
+  navigation committed and had still not fired load 60 seconds later, and
+  `arstechnica.com` fired it at 10.8s with its text complete at 1.25s — so
+  fetching Ars failed on the 30s timeout every time, having been readable for
+  29 of them. Navigation now commits via `Page.navigate` and the settle poll
+  decides when the page is worth reading. Ten cold fetches, before → after:
+  Ars `FAIL 30.4s` → `3.2s`, BBC `4.6s` → `2.7s`, Wikipedia `6.2s` → `4.3s`,
+  Guardian `2.5s` → `1.7s`.
+- **A page that is briefly blank is no longer captured blank.** The settle
+  poll accepted two consecutive agreeing measurements, and `readyState` reaches
+  `complete` with an empty body on sites that then render: measured,
+  `stackoverflow.com/questions` did it 700ms in, so a fetch returned
+  Cloudflare's 16-byte "Just a moment..." page instead of the questions —
+  plausible-looking, and from a site that was neither slow nor down. Emptiness
+  now never counts as settled, bounded by a 3s grace for pages that really have
+  no text. The poll also accepts `interactive`, not only `complete`, because
+  the Guardian never reaches `complete` at all.
 - **A release rejected by branch protection no longer leaves a tag behind.**
   `scripts/release.sh` creates the tag locally and then pushed two refs
   non-atomically, and a protected branch is declined *per ref*: measured
@@ -106,6 +126,23 @@ port mirrors (see `internal/version`).
   re-measure the over-cap 400's wording, the latter because the retry parses
   that message and a reword would silently switch the recovery off. The live
   test reports what to add, not just that something is wrong.
+- **chromedp v0.16.0 → v0.21.0** (and cdproto to v0.158.3), which is an API
+  rewrite, not a bump: actions are generic (`Action[T]`), `Run` takes one
+  action and returns its value, `Location`/`Title` return strings instead of
+  filling pointers, and the remote allocator moved to `chromedp/remote`. Taken
+  deliberately — the intermediate releases do not build either, so the break
+  predates the fix and there was no cheaper step. Upstream now handles the four
+  DOM events that used to be logged as errors on every ad-carrying page; the
+  local filter in `internal/browser/log.go` stays, because the hand-written
+  event switch it works around is still hand-written and cdproto is still
+  generated. Headed Chrome now launches with `VisibleWindow` rather than
+  `Flag("headless", false)`, which also drops `hide-scrollbars`, `mute-audio`
+  and the automation infobar — the only reason Klaudia ever runs headed is a
+  search challenge a human has to solve, and that is a window they have to be
+  able to use. The browser package now has live Chrome tests
+  (`internal/browser/live_test.go`, skipped with `-short` or without Chrome),
+  because the whole port compiled on the first attempt and compiling says
+  nothing about whether a navigation still ends with the page in hand.
 - **CI actions moved to their current majors**: `actions/checkout` v4 → v7,
   `actions/setup-go` v5 → v7, `goreleaser/goreleaser-action` v6 → v7. All
   three are node24/ESM migrations with no input changes — v7 of

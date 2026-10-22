@@ -143,7 +143,7 @@ func (r *Read) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
-	in.FilePath = resolvePath(tctx, in.FilePath) // accept paths relative to the working dir
+	in.FilePath = resolveExistingPath(tctx, in.FilePath) // relative to the working dir; see pathrepair.go
 
 	if info, statErr := os.Stat(in.FilePath); statErr == nil && info.IsDir() {
 		return []Result{{Content: fmt.Sprintf("Path is a directory, not a file: %s. Use Glob or `ls` via Bash to list its contents.", in.FilePath), IsError: true}}, nil
