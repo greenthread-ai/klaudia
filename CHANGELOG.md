@@ -52,6 +52,11 @@ port mirrors (see `internal/version`).
   approved and so not persisted.
 
 ### Changed
+- **`/doctor` says how old the cached model list is.** The provider's
+  figures beat the built-in tables through a once-a-day cache
+  (`~/.klaudia/cache/`), so its age says how current the sizing is: a
+  `model list` row reads e.g. "14 models, checked 31m ago", and past a day
+  adds "stale, refreshes on the next start". No cache, no row.
 - **The provider's model figures now beat the built-in tables, and `/model`
   sizes models the same way startup does.** The tables were only overruled for
   models they did not list, so a wrong entry was never contradicted at runtime

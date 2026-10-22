@@ -94,6 +94,23 @@ func (c *ModelCache) Cached() ([]ModelInfo, bool) {
 	return models, age >= 0 && age < c.maxAge
 }
 
+// FetchedAt reports when the stored list was fetched, and how many models it
+// holds. ok is false when there is no readable cache.
+func (c *ModelCache) FetchedAt() (at time.Time, models int, ok bool) {
+	if c == nil || c.path == "" {
+		return time.Time{}, 0, false
+	}
+	data, err := os.ReadFile(c.path)
+	if err != nil {
+		return time.Time{}, 0, false
+	}
+	var f modelCacheFile
+	if json.Unmarshal(data, &f) != nil {
+		return time.Time{}, 0, false
+	}
+	return f.FetchedAt, len(f.Models), true
+}
+
 // Stale reports whether the cache should be refreshed.
 func (c *ModelCache) Stale() bool {
 	_, fresh := c.Cached()

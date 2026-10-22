@@ -201,6 +201,9 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, limits api.Model
 		TableMaxOutputTokens: limits.TableMaxOutputTokens,
 		TableContextWindow:   limits.TableContextWindow,
 	}
+	// Read-only: the cache is only consulted for its age, never refreshed here.
+	cache := api.NewModelCache(nil, api.ModelCachePath(session.ConfigRoot(), providerName(cfg), resolveEndpoint(cfg)))
+	in.ModelsFetchedAt, in.ModelsCount, in.ModelsCached = cache.FetchedAt()
 	if cfg.Provider == config.ProviderOpenAI {
 		if cfg.ResolveAPIKey() != "" {
 			in.AuthOK, in.AuthKind = true, "api-key"

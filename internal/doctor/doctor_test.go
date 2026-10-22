@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func find(checks []Check, name string) (Check, bool) {
@@ -336,6 +337,46 @@ func TestModelTableDisagreementIsReported(t *testing.T) {
 				if !strings.Contains(c.Detail, w) {
 					t.Errorf("detail %q lacks %q", c.Detail, w)
 				}
+			}
+		})
+	}
+}
+
+// The model-list cache is what lets the provider's figures beat the table, so
+// /doctor says how old it is. No cache, no row: there is nothing to date.
+func TestModelListAgeIsReported(t *testing.T) {
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name     string
+		in       Input
+		want     bool
+		contains []string
+		absent   string
+	}{
+		{name: "never fetched", in: Input{Now: now}, want: false},
+		{name: "fresh", in: Input{Now: now, ModelsCached: true, ModelsCount: 14, ModelsFetchedAt: now.Add(-3 * time.Hour)},
+			want: true, contains: []string{"14 models", "checked 3h ago"}, absent: "stale"},
+		{name: "minutes", in: Input{Now: now, ModelsCached: true, ModelsCount: 14, ModelsFetchedAt: now.Add(-5 * time.Minute)},
+			want: true, contains: []string{"checked 5m ago"}},
+		{name: "stale", in: Input{Now: now, ModelsCached: true, ModelsCount: 14, ModelsFetchedAt: now.Add(-30 * time.Hour)},
+			want: true, contains: []string{"checked 30h ago", "stale, refreshes on the next start"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c, ok := find(Run(tc.in), "model list")
+			if ok != tc.want {
+				t.Fatalf("model list row present = %v, want %v", ok, tc.want)
+			}
+			for _, w := range tc.contains {
+				if !strings.Contains(c.Detail, w) {
+					t.Errorf("detail %q lacks %q", c.Detail, w)
+				}
+			}
+			if tc.absent != "" && strings.Contains(c.Detail, tc.absent) {
+				t.Errorf("detail %q should not say %q", c.Detail, tc.absent)
+			}
+			if ok && c.Status != StatusInfo {
+				t.Errorf("status = %q, want info", c.Status)
 			}
 		})
 	}

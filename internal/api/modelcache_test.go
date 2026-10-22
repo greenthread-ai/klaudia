@@ -145,3 +145,14 @@ func TestModelCache(t *testing.T) {
 		}
 	})
 }
+
+func TestModelCacheFetchedAt(t *testing.T) {
+	if _, _, ok := NewModelCache(nil, filepath.Join(t.TempDir(), "none.json")).FetchedAt(); ok {
+		t.Error("a missing cache reported a fetch time")
+	}
+	c := seededCache(t, nil, 3*time.Hour, []ModelInfo{{ID: "a"}, {ID: "b"}})
+	at, n, ok := c.FetchedAt()
+	if !ok || n != 2 || c.now().Sub(at) != 3*time.Hour {
+		t.Errorf("FetchedAt() = %v, %d, %v; want 3h ago, 2 models", at, n, ok)
+	}
+}

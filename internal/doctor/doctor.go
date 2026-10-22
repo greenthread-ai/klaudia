@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/greenthread-ai/klaudia/internal/version"
 )
@@ -67,6 +68,15 @@ type Input struct {
 	// which nothing at runtime used to notice.
 	TableMaxOutputTokens int
 	TableContextWindow   int
+	// ModelsCached reports whether the provider's model list is cached
+	// (api.ModelCache), and if so when it was fetched and how many models it
+	// holds. The cache is what lets the provider's figures beat the table, so
+	// its age says how current the sizing above is.
+	ModelsCached    bool
+	ModelsFetchedAt time.Time
+	ModelsCount     int
+	// Now is the clock for ages; zero means time.Now. Set by tests.
+	Now time.Time
 	// MissingLSPHints are actionable suggestions for languages present in the
 	// project but lacking a server (e.g. "install gopls for go support").
 	MissingLSPHints []string
@@ -228,6 +238,22 @@ func Run(in Input) []Check {
 		}
 		add("model table", StatusWarn, "built-in table is out of date for "+model+": "+strings.Join(parts, "; ")+
 			" — using the provider's figures")
+	}
+
+	// When the provider's model list was last fetched. Stale is informational,
+	// not a warning: it refreshes in the background on the next start, and
+	// until then the table answers, which is what it did before the cache.
+	if in.ModelsCached {
+		now := in.Now
+		if now.IsZero() {
+			now = time.Now()
+		}
+		age := now.Sub(in.ModelsFetchedAt)
+		msg := fmt.Sprintf("%d models, checked %s ago", in.ModelsCount, humanAge(age))
+		if age >= 24*time.Hour {
+			msg += " — stale, refreshes on the next start"
+		}
+		add("model list", StatusInfo, msg)
 	}
 
 	// Effort, and the one way it goes wrong quietly. max_tokens is a hard
@@ -411,4 +437,18 @@ func Format(checks []Check) string {
 		out += fmt.Sprintf("\n  %s %-16s %s", mark, c.Name, c.Detail)
 	}
 	return out
+}
+
+// humanAge renders a duration at the coarsest unit that still says something.
+func humanAge(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "under a minute"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
 }
