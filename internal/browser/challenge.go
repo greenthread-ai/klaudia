@@ -29,12 +29,12 @@ var challengeMarkers = []struct {
 	name   string
 	needle string
 }{
-	{"Cloudflare challenge", "cdn-cgi/challenge-platform"},
-	{"Cloudflare challenge", "just a moment..."},
-	{"Cloudflare challenge", "checking your browser before accessing"},
-	{"Cloudflare challenge", "enable javascript and cookies to continue"},
-	{"DataDome captcha", "captcha-delivery.com"},
-	{"DataDome captcha", "datadome"},
+	{"a Cloudflare challenge", "cdn-cgi/challenge-platform"},
+	{"a Cloudflare challenge", "just a moment..."},
+	{"a Cloudflare challenge", "checking your browser before accessing"},
+	{"a Cloudflare challenge", "enable javascript and cookies to continue"},
+	{"a DataDome captcha", "captcha-delivery.com"},
+	{"a DataDome captcha", "datadome"},
 	{"Reddit's human check", "prove your humanity"},
 	{"Google's unusual-traffic check", "our systems have detected unusual traffic"},
 	{"a reCAPTCHA", "google.com/recaptcha"},

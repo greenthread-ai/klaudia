@@ -1,6 +1,9 @@
 package browser
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestChallengePageNamesWhatIsBlocking(t *testing.T) {
 	cases := []struct {
@@ -14,7 +17,7 @@ func TestChallengePageNamesWhatIsBlocking(t *testing.T) {
 			HTML:     `<html><head><title>Just a moment...</title><script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script></head><body></body></html>`,
 			Markdown: "Just a moment...",
 		},
-		want: "Cloudflare challenge",
+		want: "a Cloudflare challenge",
 	}, {
 		// nytimes.com, measured: an iframe that renders as 11 bytes of
 		// markdown. The evidence is entirely in the markup, which is why the
@@ -25,7 +28,7 @@ func TestChallengePageNamesWhatIsBlocking(t *testing.T) {
 			HTML:     `<html><body><iframe src="https://geo.captcha-delivery.com/captcha/?initialCid=xyz"></iframe></body></html>`,
 			Markdown: "nytimes.com",
 		},
-		want: "DataDome captcha",
+		want: "a DataDome captcha",
 	}, {
 		// reddit.com, measured: the whole challenge is in the title.
 		name: "reddit human check",
@@ -82,6 +85,17 @@ var longText = func() string {
 	}
 	return s
 }()
+
+// The names are spliced into sentences the user and the model read ("x is
+// serving a Cloudflare challenge, not the page"), so each must be a complete
+// noun phrase. The first live run printed "is serving Cloudflare challenge".
+func TestChallengeNamesReadAsNounPhrases(t *testing.T) {
+	for _, m := range challengeMarkers {
+		if !strings.HasPrefix(m.name, "a ") && !strings.HasPrefix(m.name, "an ") && !strings.Contains(m.name, "'s ") {
+			t.Errorf("%q (for %q) needs an article or a possessive to read in a sentence", m.name, m.needle)
+		}
+	}
+}
 
 func TestHeadedOptionsOpenAWindowOnThePersistentProfile(t *testing.T) {
 	headed := headedOptions(Options{

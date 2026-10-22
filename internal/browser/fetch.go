@@ -35,9 +35,10 @@ const (
 	// enough to read a puzzle and solve it, short enough that a fetch left
 	// running by an unattended agent eventually gives up.
 	challengeWait = 2 * time.Minute
-	// challengePollEvery is how often the open window is re-read. The user is
-	// clicking, not typing into a form field we are racing.
-	challengePollEvery = 2 * time.Second
+	// challengePollEvery is how often the open window is read. A read is cheap
+	// and never navigates, so this is just the lag between the user clearing
+	// the challenge and the fetch noticing.
+	challengePollEvery = time.Second
 )
 
 // escalateOptions is headedOptions, indirected so the tests can exercise the
@@ -115,9 +116,9 @@ func (e *Engine) fetchOnce(url string) (*Snapshot, error) {
 	return e.Snapshot(true, true)
 }
 
-// refetchUnder swaps the browser for one launched with opts, fetches url again,
-// and polls until the challenge is gone or the budget runs out — then puts the
-// previous browser back whatever happened.
+// refetchUnder swaps the browser for one launched with opts, opens url in it
+// once, and watches until the challenge is gone or the budget runs out — then
+// puts the previous browser back whatever happened.
 //
 // The restore closes the replacement rather than relaunching the old one: the
 // engine creates a browser on first use, so the window shuts the moment it is
@@ -130,17 +131,35 @@ func (e *Engine) refetchUnder(ctx context.Context, opts Options, url string) (*S
 	}
 	defer e.Reset(previous)
 
+	// Navigate once, then only read. The person in the window is in the middle
+	// of solving something, and a navigation per poll reloads the puzzle under
+	// them every couple of seconds — a challenge with a timer or a press-and-
+	// hold never clears at all. The site navigates by itself when it is done.
+	if err := e.Navigate(url); err != nil {
+		return nil, err
+	}
 	deadline := time.Now().Add(challengeWait)
+	var last *Snapshot
 	for {
-		snap, err := e.fetchOnce(url)
-		if err != nil {
-			return nil, err
-		}
-		if _, challenged := ChallengePage(snap); !challenged {
-			return snap, nil
+		// A read can land mid-navigation as the challenge hands over to the
+		// page, and fail because the document it asked about has gone. That is
+		// the moment we are waiting for, not an error.
+		if snap, err := e.Snapshot(true, true); err == nil {
+			last = snap
+			if _, challenged := ChallengePage(snap); !challenged {
+				// The handover has started, not finished: let the real page
+				// settle the way any fetch does before reading it for keeps.
+				if err := e.RunWithTimeout(defaultNavigateTimeout, waitStable); err != nil {
+					return nil, err
+				}
+				return e.Snapshot(true, true)
+			}
 		}
 		if time.Now().After(deadline) {
-			return snap, nil
+			if last == nil {
+				return nil, fmt.Errorf("the challenge window never produced a readable page")
+			}
+			return last, nil
 		}
 		select {
 		case <-ctx.Done():

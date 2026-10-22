@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -312,33 +313,53 @@ func TestLiveUnreachableHostStillFails(t *testing.T) {
 	}
 }
 
-const challengePage = `<!doctype html><html><head><title>Just a moment...</title>
-<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script></head>
-<body><p>Checking your browser.</p></body></html>`
-
 const clearedPage = `<!doctype html><html><head><title>The article</title></head>
 <body><p>The content the fetch was for.</p></body></html>`
 
-// flipAfter serves the challenge for the first n requests to "/" and the real
-// page after that: a challenge being cleared, from the fetcher's point of view.
-func flipAfter(n int) http.Handler {
-	var mu sync.Mutex
-	served := 0
+// challengeSite is a site behind a challenge, shaped the way the real ones
+// are: the challenge page is served until the browser presents a clearance
+// cookie, and it is the page itself — its script, or the human using it —
+// that sets the cookie and reloads. A fetcher only ever has to watch.
+type challengeSite struct {
+	mu     sync.Mutex
+	served int // challenge pages served, i.e. navigations that were turned away
+}
+
+func (c *challengeSite) challenges() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.served
+}
+
+// handler serves the site; clear is the markup that lets a visitor through,
+// and empty means a challenge that never clears.
+func (c *challengeSite) handler(clear string) http.Handler {
+	page := `<!doctype html><html><head><title>Just a moment...</title>
+<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script></head>
+<body><p>Checking your browser.</p>` + clear + `</body></html>`
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		mu.Lock()
-		served++
-		body := challengePage
-		if served > n {
-			body = clearedPage
+		body := clearedPage
+		if _, err := r.Cookie("cleared"); err != nil {
+			c.mu.Lock()
+			c.served++
+			c.mu.Unlock()
+			body = page
 		}
-		mu.Unlock()
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(body))
 	})
+}
+
+// clearsAfter is a challenge that solves itself after ms milliseconds on the
+// page — Cloudflare's non-interactive check. Longer than one poll on purpose:
+// a fetcher that reloads the page while it waits restarts the clock each time
+// and never gets through, which is exactly what a person mid-captcha suffers.
+func clearsAfter(ms int) string {
+	return fmt.Sprintf(`<script>setTimeout(() => { document.cookie = "cleared=1; path=/"; location.reload(); }, %d);</script>`, ms)
 }
 
 // A challenge nobody can be asked to solve — no window allowed — still comes
@@ -346,14 +367,15 @@ func flipAfter(n int) http.Handler {
 // successful fetch of a very short page, so without the label the model
 // reports "Just a moment..." as the article.
 func TestLiveFetchLabelsAChallengeItMayNotEscalate(t *testing.T) {
-	e, url := chromeServing(t, flipAfter(100))
+	site := new(challengeSite)
+	e, url := chromeServing(t, site.handler(""))
 	e.Reset(withFallback(e.Options(), false))
 
 	res, err := e.Fetch(context.Background(), FetchOptions{URL: url, IncludeMarkdown: true})
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
 	}
-	if res.Challenge != "Cloudflare challenge" {
+	if res.Challenge != "a Cloudflare challenge" {
 		t.Errorf("Challenge = %q, want the interstitial named", res.Challenge)
 	}
 	if !strings.Contains(res.Markdown, "Checking your browser") {
@@ -370,12 +392,20 @@ func TestLiveFetchLabelsAChallengeItMayNotEscalate(t *testing.T) {
 // differs from the real path, and headedOptions owns that flag (see
 // TestHeadedOptionsOpenAWindowOnThePersistentProfile).
 func TestLiveRefetchUnderClearsTheChallengeThenPutsTheBrowserBack(t *testing.T) {
-	e, url := chromeServing(t, flipAfter(1))
+	site := new(challengeSite)
+	e, url := chromeServing(t, site.handler(clearsAfter(2500)))
 	before := e.Options()
 
-	res, err := e.refetchUnder(context.Background(), before, url)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	res, err := e.refetchUnder(ctx, before, url)
 	if err != nil {
-		t.Fatalf("refetchUnder: %v", err)
+		t.Fatalf("refetchUnder: %v (challenge served %d times)", err, site.challenges())
+	}
+	// Once: the page cleared itself. More than once means the fetcher reloaded
+	// it while it was being solved.
+	if n := site.challenges(); n != 1 {
+		t.Errorf("challenge served %d times; waiting must not reload the page being solved", n)
 	}
 	if res.Title != "The article" {
 		t.Errorf("title = %q, want the page served once the challenge cleared", res.Title)
@@ -405,10 +435,11 @@ func TestLiveRefetchUnderClearsTheChallengeThenPutsTheBrowserBack(t *testing.T) 
 // Giving up has to clean up too. The budget runs to challengeWait, so this
 // cancels instead — the same path a user interrupting the turn takes.
 func TestLiveRefetchUnderCleansUpWhenCancelled(t *testing.T) {
-	e, url := chromeServing(t, flipAfter(100))
+	site := new(challengeSite)
+	e, url := chromeServing(t, site.handler(""))
 	before := e.Options()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 	if _, err := e.refetchUnder(ctx, before, url); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want the cancellation reported", err)
@@ -446,11 +477,14 @@ func stayHeadless(t *testing.T) {
 // came back, one escalation, and the page the site was withholding.
 func TestLiveFetchEscalatesOnlyAfterTheHeadlessFetchIsChallenged(t *testing.T) {
 	stayHeadless(t)
-	e, url := chromeServing(t, flipAfter(1))
+	site := new(challengeSite)
+	e, url := chromeServing(t, site.handler(clearsAfter(3000)))
 	e.Reset(withFallback(e.Options(), true))
 
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	var lines []string
-	res, err := e.Fetch(context.Background(), FetchOptions{
+	res, err := e.Fetch(ctx, FetchOptions{
 		URL:             url,
 		IncludeMarkdown: true,
 		Notify:          func(line string) { lines = append(lines, line) },
@@ -466,6 +500,10 @@ func TestLiveFetchEscalatesOnlyAfterTheHeadlessFetchIsChallenged(t *testing.T) {
 	}
 	if len(lines) != 1 || !strings.Contains(lines[0], "Chrome window") {
 		t.Errorf("the user was not told once, and only once, why a window opened: %q", lines)
+	}
+	// Twice: the headless fetch that found it, and the window that cleared it.
+	if n := site.challenges(); n != 2 {
+		t.Errorf("challenge served %d times, want one per browser", n)
 	}
 }
 
@@ -495,21 +533,28 @@ func TestLiveFetchLeavesAnOrdinaryPageAlone(t *testing.T) {
 
 // The real escalation, window and all. Opt-in: it puts a Chrome window on
 // whoever is running the tests, which is not something `go test ./internal/...`
-// should do. Run it by hand with KLAUDIA_LIVE_HEADED=1 when changing any of
-// this; the window should appear, show the challenge, and vanish by itself
-// about two seconds later when the page clears.
+// should do, and it waits for a person. Run it by hand with
+// KLAUDIA_LIVE_HEADED=1 when changing any of this: a window opens on a
+// challenge with an "I am a human" button, which stays put (no reloading under
+// you) until it is pressed, and the window closes itself within a second or
+// two of pressing it.
 func TestLiveHeadedEscalationOpensAndClosesAWindow(t *testing.T) {
 	if os.Getenv("KLAUDIA_LIVE_HEADED") != "1" {
 		t.Skip("opens a visible window; set KLAUDIA_LIVE_HEADED=1")
 	}
-	e, url := chromeServing(t, flipAfter(1))
+	site := new(challengeSite)
+	e, url := chromeServing(t, site.handler(`<button style="font-size:32px;padding:24px"
+onclick="document.cookie = 'cleared=1; path=/'; location.reload();">I am a human</button>`))
 	e.Reset(withFallback(e.Options(), true))
 
 	var lines []string
 	res, err := e.Fetch(context.Background(), FetchOptions{
 		URL:             url,
 		IncludeMarkdown: true,
-		Notify:          func(line string) { lines = append(lines, line) },
+		Notify: func(line string) {
+			lines = append(lines, line)
+			t.Log(line)
+		},
 	})
 	if err != nil {
 		t.Fatalf("fetch: %v", err)
@@ -520,6 +565,9 @@ func TestLiveHeadedEscalationOpensAndClosesAWindow(t *testing.T) {
 	// A window appearing unannounced is the rude version of this feature.
 	if len(lines) == 0 || !strings.Contains(lines[0], "Chrome window") {
 		t.Errorf("the user was not told why a window opened: %q", lines)
+	}
+	if n := site.challenges(); n != 2 {
+		t.Errorf("challenge served %d times, want one per browser — the window reloaded it while you were on it", n)
 	}
 	e.mu.Lock()
 	open := e.browser
