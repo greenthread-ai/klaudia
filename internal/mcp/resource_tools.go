@@ -121,3 +121,18 @@ func (t *readResourceTool) Execute(ctx context.Context, _ tools.Context, raw jso
 	}
 	return []tools.Result{{Content: out}}, nil
 }
+
+// ResourceToolSchemas is tools.BuiltinSchemas for the two resource tools, which
+// live here because they need the Manager. Built with no Manager: only the
+// schema is read.
+func ResourceToolSchemas() (map[string]json.RawMessage, error) {
+	list, err := newListResourcesTool(nil)
+	if err != nil {
+		return nil, err
+	}
+	read, err := newReadResourceTool(nil)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]json.RawMessage{list.Name(): list.InputSchema(), read.Name(): read.InputSchema()}, nil
+}

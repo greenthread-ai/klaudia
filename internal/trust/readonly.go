@@ -148,7 +148,7 @@ func inspectOne(c bashparser.Command, depth int) (Mutation, string) {
 		}
 		return MutationNone, ""
 	}
-	if readOnlyPrograms[prog] {
+	if readOnlyPrograms[prog] || directoryBuiltins[prog] {
 		return MutationNone, ""
 	}
 	return MutationUnclear, fmt.Sprintf("nothing here classifies %s, so whether it writes is unknown", prog)
@@ -332,3 +332,14 @@ func set(names ...string) map[string]bool {
 	}
 	return m
 }
+
+// directoryBuiltins change the shell's working directory and nothing else.
+//
+// Kept here rather than in readOnlyPrograms because that table also feeds the
+// host classifier, which treats cd as a directory change to track, not as a
+// program. Missing, it made plan mode ask about the most common research
+// shape there is — `cd <repo> && grep … | cut …` — measured on a real goal
+// session where every other component of the line was already read-only.
+// Moving somewhere cannot write; a redirect after it is still judged on its
+// own, so `cd /etc && echo x > passwd` stays a write.
+var directoryBuiltins = map[string]bool{"cd": true, "pushd": true, "popd": true}

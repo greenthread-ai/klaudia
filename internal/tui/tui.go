@@ -2714,10 +2714,9 @@ func (m *Model) permissionPrompt() string {
 	}
 	// No "always". Standing rules are gone: one in a config demoted the next
 	// session to a mode that asked about everything, so the answer offered to
-	// stop the prompting was the thing that caused more of it. Nothing
-	// built-in reaches this branch now — the host card above is the prompt
-	// users see — but an MCP server or an embedding frontend can still return
-	// Ask, and this is what they get.
+	// stop the prompting was the thing that caused more of it. Plan mode
+	// reaches this branch for a command its classifier cannot place (see
+	// trust.InspectCommand); so can an MCP server or an embedding frontend.
 	return fmt.Sprintf("Allow %s? (y)es / (n)o", m.permissionSummary(m.pendingReq))
 }
 
@@ -2735,7 +2734,15 @@ func permissionDetail(req agent.ApprovalRequest) string {
 		}
 	case "Bash":
 		if cmd := stringField(req.Input, "command"); cmd != "" {
-			return "command: " + oneline(cmd, 220)
+			// The reason goes with the command. Plan mode asks about a command
+			// it cannot classify, and returning early here hid the one line
+			// saying so — the prompt read as an arbitrary refusal-in-waiting
+			// rather than "nothing here classifies cd".
+			detail := "command: " + oneline(cmd, 220)
+			if req.Suggestion != "" {
+				detail += "\n  why: " + oneline(req.Suggestion, 220)
+			}
+			return detail
 		}
 	}
 	if req.Suggestion != "" {

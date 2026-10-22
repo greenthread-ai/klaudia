@@ -62,6 +62,13 @@ func TestInspectCommand(t *testing.T) {
 		{name: "a redirection at the end of a chain", cmd: "git status && git log > out", want: MutationPresent, reason: "out"},
 		{name: "a redirection to an unreadable target", cmd: "git log > $OUT", want: MutationPresent, reason: "redirects output"},
 
+		// Changing directory writes nothing. Its absence made plan mode ask
+		// about `cd <repo> && grep …`, the commonest research line there is.
+		{name: "cd before a read", cmd: `cd /repo && grep -n "^T1" docs/BACKLOG.md | cut -c1-230; grep -n Kind internal/*.go | head`, want: MutationNone},
+		{name: "pushd and popd", cmd: "pushd internal && git log -1 && popd", want: MutationNone},
+		{name: "cd does not launder a write", cmd: "cd /etc && echo x > passwd", want: MutationPresent, reason: "passwd"},
+		{name: "cd before a mutating program", cmd: "cd build && rm -rf out", want: MutationPresent, reason: "rm writes"},
+
 		// Discarding output writes nothing. `2>/dev/null` was refused in a real
 		// planning session; /tmp is a real file and stays a write, and a
 		// traversal out of /dev/fd must not pass as a descriptor.

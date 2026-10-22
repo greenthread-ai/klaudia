@@ -83,6 +83,21 @@ port mirrors (see `internal/version`).
   frontend show the plan at all.
 
 ### Fixed
+- **Plan mode no longer asks about `cd`, and says why when it does ask.** The
+  mutation classifier had no entry for `cd`/`pushd`/`popd`, so the commonest
+  research line there is — `cd <repo> && grep … | cut …` — came back as
+  "cannot classify" and prompted for permission, although every other part of
+  it was read-only (reported from a goal session in another repo). Moving
+  directory writes nothing; a redirect or mutating program after it is still
+  judged on its own. Separately, a Bash permission prompt showed the command
+  but not the reason, which the classifier always supplies; it now shows both.
+- **The per-tool display maps are checked against the real tools.** ACP's
+  title, kind and location maps and the TUI's header-summary map are keyed by
+  tool name and point at input fields, and nothing verified either. ACP still
+  carried `WebSearch` and `WebFetch`, which no tool is called; they are
+  removed. A test now requires every key to be a real tool
+  (`tools.BuiltinSchemas`, plus `mcp.ResourceToolSchemas`) and every field to
+  be one that tool's schema declares.
 - **Enter in the `@` file menu takes the file instead of sending.** The menu
   handled `↑`/`↓`/`Esc` but not Enter, which fell through to submit: the
   half-typed prompt went out with its partial `@alp` reference, and the menu

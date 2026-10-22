@@ -371,3 +371,31 @@ func TestIntroListsLoadedSkills(t *testing.T) {
 		t.Errorf("intro should not list past the cap:\n%s", long)
 	}
 }
+
+// Plan mode asks about a command it cannot classify, and says why in the
+// request's Suggestion. The Bash branch returned the command alone, so the
+// prompt never showed the reason and read as arbitrary.
+func TestBashPermissionDetailShowsWhyItAsks(t *testing.T) {
+	tests := []struct {
+		name, suggestion string
+		want             []string
+	}{
+		{name: "the reason follows the command", suggestion: "Plan mode is read-only and nothing here classifies cargo.",
+			want: []string{"command: cargo check", "why: Plan mode is read-only and nothing here classifies cargo."}},
+		{name: "no reason, just the command", want: []string{"command: cargo check"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, _ := json.Marshal(map[string]string{"command": "cargo check"})
+			got := permissionDetail(agent.ApprovalRequest{ToolName: "Bash", Input: raw, Suggestion: tc.suggestion})
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("detail %q lacks %q", got, w)
+				}
+			}
+			if tc.suggestion == "" && strings.Contains(got, "why:") {
+				t.Errorf("detail %q has an empty reason line", got)
+			}
+		})
+	}
+}

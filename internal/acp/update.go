@@ -323,8 +323,6 @@ var salientKey = map[string]string{
 	"References":      "file",
 	"Glob":            "pattern",
 	"Grep":            "pattern",
-	"WebSearch":       "query",
-	"WebFetch":        "url",
 	"BrowserSearch":   "query",
 	"BrowserFetch":    "url",
 	"BrowserNavigate": "url",
@@ -411,7 +409,6 @@ var toolKinds = map[string]string{
 	"Glob":          kindSearch,
 	"Grep":          kindSearch,
 	"ToolSearch":    kindSearch,
-	"WebSearch":     kindSearch,
 	"BrowserSearch": kindSearch,
 
 	"Bash":       kindExecute,
@@ -419,7 +416,6 @@ var toolKinds = map[string]string{
 	"RestartJob": kindExecute,
 	"Skill":      kindExecute,
 
-	"WebFetch":        kindFetch,
 	"BrowserFetch":    kindFetch,
 	"BrowserNavigate": kindFetch,
 
