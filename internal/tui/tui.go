@@ -1200,6 +1200,12 @@ func (m *Model) onInputKey(msg tea.KeyMsg) bool {
 		return m.movePathMenu(1)
 	case key.Matches(msg, m.keymap().Dismiss):
 		return m.dismissPathMenu()
+	case key.Matches(msg, m.keymap().Submit):
+		// Enter on a highlighted file means "that one". It used to fall
+		// through to submit, so the half-typed prompt was sent with the
+		// partial @token still in it and the menu was left open over the
+		// reply.
+		return m.acceptPathMenu()
 	}
 	return false
 }

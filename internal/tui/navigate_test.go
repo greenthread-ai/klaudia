@@ -1,7 +1,11 @@
 package tui
 
 import (
+	"context"
+	tea "github.com/charmbracelet/bubbletea"
 	"os"
+
+	"github.com/greenthread-ai/klaudia/internal/agent"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -332,5 +336,60 @@ func TestOpenRejectsMissingFile(t *testing.T) {
 	m.openInEditor([]string{"does/not/exist.go:12"})
 	if !strings.Contains(visibleText(m.transcript.String()), "no such file") {
 		t.Error("/open should report a missing file clearly")
+	}
+}
+
+// Enter on a highlighted @-menu entry fell through to submit: the half-typed
+// prompt went out with the partial "@alp" in it and the menu stayed open over
+// the reply. Enter must take the highlighted file, close the menu and send
+// nothing; only the next Enter sends.
+func TestEnterAcceptsTheHighlightedPath(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{name: "a reference at the end gets a closing space", line: "look at @alpha", want: "look at @alpha.go "},
+		{name: "a line suffix is kept and the reference still closed", line: "@alpha:12", want: "@alpha.go:12 "},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mustWrite(t, filepath.Join(dir, "alpha.go"))
+
+			m := newTestModel()
+			m.ready = true
+			m.resize(80, 24)
+			m.sess.CWD = dir
+			// What a real send needs, so the old fall-through to submit shows
+			// up as a state change, not a nil-context panic in the test.
+			m.ctx = context.Background()
+			m.run = func(context.Context, agent.Turn) (agent.Result, error) { return agent.Result{}, nil }
+			m.events = make(chan tea.Msg, 16)
+			m.setState(stateIdle)
+			m.input.SetValue(tc.line)
+			m.input.CursorEnd()
+			m.refreshPathMenu()
+			if !m.menuActive() {
+				t.Fatal("the @ menu did not open")
+			}
+
+			m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+
+			if m.state != stateIdle {
+				t.Errorf("Enter on the menu sent the prompt (state %v)", m.state)
+			}
+			if got := m.input.Value(); got != tc.want {
+				t.Errorf("input = %q, want %q", got, tc.want)
+			}
+			if m.menuActive() || m.pathMenuView() != "" {
+				t.Error("the menu is still open after Enter accepted a path")
+			}
+			// The reference is closed: typing on must not bring it back.
+			m.refreshPathMenu()
+			if m.menuActive() {
+				t.Error("the menu reopened on the completed reference")
+			}
+		})
 	}
 }

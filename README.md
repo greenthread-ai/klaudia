@@ -137,6 +137,7 @@ type-ahead, fuzzy `@path` file completion, input history (↑/↓), and `Esc` to
 interrupt a turn. Type `/help` for the full list.
 
 Typing `@` opens a ranked file menu: `↑`/`↓` pick, `Tab` inserts and cycles,
+`Enter` takes the highlighted file and closes the menu (it does not send),
 `Esc` dismisses. Matching is fuzzy, so `@session.ts` finds
 `src/auth/session.ts`, and files Klaudia has just read or written rank first.
 A reference starting with `/`, `./` or `~/` completes from the filesystem

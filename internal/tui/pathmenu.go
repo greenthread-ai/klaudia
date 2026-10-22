@@ -135,6 +135,25 @@ func (m *Model) dismissPathMenu() bool {
 	return true
 }
 
+// acceptPathMenu writes the selected hit into the input and closes the menu.
+// A trailing space ends the reference so the next keystroke starts a new word
+// rather than reopening the menu on a longer stem.
+func (m *Model) acceptPathMenu() bool {
+	if !m.menuActive() {
+		return false
+	}
+	m.insertPathHit()
+	// Always, including after a ":12" suffix: without it the token is still
+	// open, and the next keystroke reopens the menu on the completed path.
+	if v := m.input.Value(); !strings.HasSuffix(v, " ") {
+		m.input.SetValue(v + " ")
+		m.input.CursorEnd()
+		m.syncInputHeight()
+	}
+	m.menu = pathMenu{}
+	return true
+}
+
 // movePathMenu steps the selection and writes it into the input, so what is
 // highlighted and what will be sent are never two different things.
 func (m *Model) movePathMenu(delta int) bool {

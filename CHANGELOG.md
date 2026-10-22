@@ -83,6 +83,11 @@ port mirrors (see `internal/version`).
   frontend show the plan at all.
 
 ### Fixed
+- **Enter in the `@` file menu takes the file instead of sending.** The menu
+  handled `↑`/`↓`/`Esc` but not Enter, which fell through to submit: the
+  half-typed prompt went out with its partial `@alp` reference, and the menu
+  stayed open over the reply. Enter now inserts the highlighted path, closes
+  the reference with a space, and closes the menu; the next Enter sends.
 - **A successful web fetch is no longer reported as dropped, and no longer
   makes the model re-ask questions.** When a fetch ran alongside a local tool,
   its result arrived at the start of the next assistant message, and the live
