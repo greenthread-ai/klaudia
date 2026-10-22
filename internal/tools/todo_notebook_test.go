@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/greenthread-ai/klaudia/internal/plan"
 )
 
 func TestTodoWriteStoresAndRenders(t *testing.T) {
-	store := &TodoStore{}
+	store := plan.New(plan.PathFor(t.TempDir(), "sess"))
 	tw, err := NewTodoWrite(store)
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +30,7 @@ func TestTodoWriteStoresAndRenders(t *testing.T) {
 }
 
 func TestTodoWriteRejectsBadStatus(t *testing.T) {
-	tw, _ := NewTodoWrite(&TodoStore{})
+	tw, _ := NewTodoWrite(plan.New(plan.PathFor(t.TempDir(), "sess")))
 	raw, _ := json.Marshal(TodoInput{Todos: []TodoItem{{Content: "x", Status: "bogus"}}})
 	if err := tw.ValidateInput(raw); err == nil {
 		t.Error("expected invalid status to be rejected")

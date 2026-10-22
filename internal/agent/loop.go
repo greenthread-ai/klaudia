@@ -10,6 +10,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -21,6 +22,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/internal/hooks"
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/schema"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
@@ -31,7 +33,7 @@ type Emitter func(event Event)
 
 // Event is a streaming event emitted during a run (stream-json mode).
 type Event struct {
-	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_progress" | "tool_result" | "usage" | "compaction" | "notice" | "permission_mode"
+	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_progress" | "tool_result" | "usage" | "compaction" | "notice" | "permission_mode" | "plan"
 	Text      string `json:"text,omitempty"`        // assistant text
 	ToolName  string `json:"tool_name,omitempty"`   // tool_use / tool_result
 	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use / tool_result
@@ -58,6 +60,11 @@ type Event struct {
 	InputDelta  int64 `json:"input_delta,omitempty"`
 	OutputDelta int64 `json:"output_delta,omitempty"`
 	TurnDelta   int   `json:"turn_delta,omitempty"`
+	// Plan is the session's plan after a change, on a "plan" event. A full
+	// snapshot rather than a diff: frontends replace what they show, so a
+	// dropped or reordered event cannot leave one drawing a list that never
+	// existed.
+	Plan *plan.Snapshot `json:"plan,omitempty"`
 }
 
 // Recorder persists conversation messages to a transcript as the loop runs.
@@ -66,14 +73,28 @@ type Recorder interface {
 	Record(role string, message json.RawMessage) error
 }
 
+// CompactionRecorder is a Recorder that can also mark where history was
+// replaced by a summary. Optional, and asserted on the turn's own Recorder
+// rather than reached through OnSummary: OnSummary is one per process, and an
+// ACP process records each session to its own transcript.
+type CompactionRecorder interface {
+	RecordCompaction(summary string) error
+}
+
 // Options configures a single Run.
 type Options struct {
-	Prompt     string
-	Model      anthropic.Model
-	System     string
-	MaxTurns   int   // 0 = unlimited
-	MaxTokens  int64 // 0 = model-aware default via api.MaxOutputTokens
-	Permission permission.Context
+	Prompt    string
+	Model     anthropic.Model
+	System    string
+	MaxTurns  int   // 0 = unlimited
+	MaxTokens int64 // 0 = model-aware default via api.MaxOutputTokens
+	// MaxTokensSource is the api.LimitSource* label behind MaxTokens. It exists
+	// for the truncation note: "max_tokens=8192" alone told nobody that 8192 was
+	// the unknown-model floor rather than the model's cap, which is how Opus 5.5
+	// ran under a stale table without anyone noticing. Empty is allowed and
+	// prints the number alone.
+	MaxTokensSource string
+	Permission      permission.Context
 	// Host is the trust gate: it classifies each tool call and refuses changes
 	// to this machine that the user has not agreed to. Nil disables the whole
 	// feature, which is what every caller that has not been wired up yet gets.
@@ -147,6 +168,11 @@ type Options struct {
 	// alternative is a formatter that runs on every edit except the ones a
 	// sub-agent made.
 	SubAgent bool
+	// Plan is the conversation's step list: the store TodoWrite and
+	// ExitPlanMode write to (passed on as tools.Context.Plans), and the one the
+	// loop announces with a "plan" event whenever it changes; see planevent.go.
+	// Nil leaves those tools on the store they were built with.
+	Plan *plan.Store
 }
 
 // Result is the outcome of a Run.
@@ -179,13 +205,15 @@ func New(provider api.Provider, registry *tools.Registry) *Loop {
 
 // Run executes the loop until the model stops calling tools or MaxTurns is hit.
 func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, error) {
-	maxTokens := opts.MaxTokens
+	maxTokens, maxTokensSource := opts.MaxTokens, opts.MaxTokensSource
 	if maxTokens <= 0 {
 		// Model-aware default: the flat 8192 was low enough that an ordinary
 		// large write hit the output limit mid-tool-call and was dispatched with
-		// empty arguments. api.MaxOutputTokens raises it on models that support
-		// more, staying a safe under-approximation of each model's real cap.
-		maxTokens = int64(api.MaxOutputTokens(string(opts.Model)))
+		// empty arguments. ResolveLimits with no provider is the same table
+		// lookup as api.MaxOutputTokens, but it also says whether the number
+		// was a table hit or the floor — and the truncation note needs that.
+		l := api.ResolveLimits(ctx, nil, string(opts.Model), 0, 0)
+		maxTokens, maxTokensSource = int64(l.MaxOutputTokens), l.MaxOutputSource
 	}
 
 	// Deferred tools are withheld from the request until ToolSearch reveals them.
@@ -199,6 +227,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	// change mid-run — approving a plan flips it — and the model has to be
 	// told; see mode.go.
 	var modes modeTracker
+	var plans planTracker
 
 	// The loop-breaker counters: how many times each IDENTICAL tool call
 	// (name+input) has failed within this Run, and how many consecutive
@@ -207,9 +236,6 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	// call or the same kind of mistake keeps recurring. Behind a mutex because
 	// a concurrent group's calls reach them together; see failureState.
 	fs := newFailureState()
-	// Server-tool exchanges already announced as dropped, so an inherited
-	// broken transcript is mentioned once rather than every turn.
-	reportedDrops := map[string]bool{}
 
 	messages := append([]anthropic.BetaMessageParam{}, opts.InitialMessages...)
 
@@ -257,15 +283,21 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	// calib corrects the local token estimate using the input sizes the API
 	// reports; overflowRecovered ensures the compact-and-retry path fires at
 	// most once per Run, so a genuinely oversized request still surfaces.
-	// Captured before the first turn: what was already broken on arrival, as
-	// opposed to what this session interrupted.
-	resumedDrops := resumedUnpairedIDs(messages)
 	var calib compaction.Calibration
 	overflowRecovered := false
 	thinkingRecovered := false
 	maxTokensLowered := false
+	// The last batch of a Run that stops on MaxTurns or a halt has no next turn
+	// to report it, and the panel would show the step before until the user
+	// typed again.
+	defer announcePlan(opts.Plan, emit, &plans)
 	for {
 		res.NumTurns++
+
+		// First thing in the turn, ahead of steering and compaction: the
+		// previous batch's TodoWrite is what the user wants to see, and
+		// autocompaction is a model call that can take a minute.
+		announcePlan(opts.Plan, emit, &plans)
 
 		// A correction the user typed mid-turn goes in before the request is
 		// built, so the model sees it while deciding what to do next rather
@@ -284,7 +316,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// Compaction runs at the top of every turn (docs/compaction.md):
 		// microcompact first (cheap, local), then autocompact (model-based) if
 		// near the context limit.
-		messages = l.compact(ctx, messages, opts, emit, &calib, false)
+		messages = l.compact(ctx, messages, opts, maxTokens, emit, &calib, false)
 
 		// Build the tool list for this turn: eager tools plus any deferred tools
 		// revealed so far (via ToolSearch). Rebuilt per turn so reveals take
@@ -302,16 +334,11 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		announceMode(mode, emit, &modes)
 		system := systemFor(opts.System, mode)
 
-		// Say so when a web search or fetch has gone missing, before the
-		// repair quietly papers over it; see servertool.go.
-		announceDroppedServerTools(messages, emit, reportedDrops, resumedDrops)
-
 		// Keep the repair, rather than repairing a copy on the way out. The
 		// sanitised version used to be built for the request alone, so the
 		// orphans stayed in the conversation and were rediscovered on every
-		// later turn — and because reportedDrops is per Run while a TUI turn is
-		// a Run, the same three notices reappeared above every reply for the
-		// rest of the session. Sanitising is idempotent, so doing it here costs
+		// later turn. Kept, the model's note about a dropped search
+		// (droppedServerToolPlaceholder) is added once and stays. Sanitising is idempotent, so doing it here costs
 		// nothing on a clean history.
 		messages = sanitizeMessages(messages)
 
@@ -368,7 +395,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 					"the model's output limit is %d tokens, not the %d requested — retrying this turn at %d "+
 						"(set maxTokens in .klaudia/config.toml to avoid the wasted round-trip)", limit, maxTokens, limit)})
 			}
-			maxTokens = int64(limit)
+			maxTokens, maxTokensSource = int64(limit), api.LimitSourceRejected
 			continue
 		}
 		if err != nil && api.IsContextOverflow(err) && !overflowRecovered {
@@ -379,7 +406,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			if emit != nil {
 				emit(Event{Type: "compaction"})
 			}
-			messages = l.compact(ctx, messages, opts, emit, &calib, true)
+			messages = l.compact(ctx, messages, opts, maxTokens, emit, &calib, true)
 			if emit != nil {
 				emit(Event{Type: "compaction", Content: "context overflowed the model's window — summarised and retried"})
 			}
@@ -416,7 +443,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// has its tool_result paired up — see the record calls below. Persisting
 		// here, then dying mid-dispatch (Ctrl+C / SIGTERM / OOM), would leak an
 		// orphan tool_use to disk and poison the next resume.
-		messages = append(messages, assistant.ToParam())
+		messages = append(messages, historyParam(assistant))
 
 		// pause_turn: the API paused a long-running server-side tool (e.g. web
 		// search). Re-send the accumulated turn to let it continue. The
@@ -466,7 +493,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		truncID, wasTruncated := truncatedToolUseID(assistant)
 		preempt := func(tu anthropic.BetaToolUseBlock) (string, bool) {
 			if wasTruncated && tu.ID == truncID {
-				return truncatedToolNote(maxTokens), true
+				return truncatedToolNote(maxTokens, maxTokensSource), true
 			}
 			return "", false
 		}
@@ -529,7 +556,7 @@ func elisionSpiller(content string) (string, bool) {
 // compact applies microcompact then (if near the limit) autocompact to the
 // message list. Honors DISABLE_COMPACT / DISABLE_MICROCOMPACT /
 // DISABLE_AUTO_COMPACT, matching the JS env switches.
-func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, emit Emitter, calib *compaction.Calibration, force bool) []anthropic.BetaMessageParam {
+func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64, emit Emitter, calib *compaction.Calibration, force bool) []anthropic.BetaMessageParam {
 	if os.Getenv("DISABLE_COMPACT") != "" {
 		return messages
 	}
@@ -557,11 +584,18 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 		if emit != nil {
 			emit(Event{Type: "compaction"})
 		}
-		if out, ok := l.autocompact(ctx, messages, opts); ok {
+		out, err := l.autocompact(ctx, messages, opts, maxTokens)
+		switch {
+		case err == nil:
 			messages = out
 			if emit != nil {
 				emit(Event{Type: "compaction", Content: "autocompact: summarized prior conversation"})
 			}
+		case errors.Is(err, errSummaryTruncated) && emit != nil:
+			// Said out loud because keeping the full history is the visible
+			// half of this failure: the user sees no compaction and a context
+			// that keeps growing, and otherwise has no way to know why.
+			emit(Event{Type: "notice", Content: err.Error() + " — kept the full history instead of a partial summary"})
 		}
 	}
 	return messages
@@ -570,38 +604,66 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 // Compact unconditionally summarizes the conversation via the model and returns
 // the replacement history plus the summary text. Used by the TUI's /compact
 // command (the loop's own autocompact runs automatically near the context
-// limit). Returns an error if the summary call fails or yields no text.
-func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model, effort api.Effort) ([]anthropic.BetaMessageParam, string, error) {
-	req := compaction.BuildSummaryRequest(messages, model, 4096, effort)
-	req.Betas = api.DefaultBetas
-	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+// limit). maxTokens is the session's resolved output cap; <= 0 sizes it from
+// the model. Returns an error if the summary call fails, yields no text, or was
+// cut off.
+func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model, maxTokens int64, effort api.Effort) ([]anthropic.BetaMessageParam, string, error) {
+	summary, err := l.summarize(ctx, messages, model, maxTokens, effort)
 	if err != nil {
 		return nil, "", err
-	}
-	summary := finalAssistantText(assistant)
-	if summary == "" {
-		return nil, "", fmt.Errorf("compaction produced no summary")
 	}
 	return compaction.ReplaceWithSummary(summary), summary, nil
 }
 
 // autocompact summarizes the conversation via the model and replaces history
-// with the summary. Returns (messages, false) if the summary call fails.
-func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options) ([]anthropic.BetaMessageParam, bool) {
-	req := compaction.BuildSummaryRequest(messages, opts.Model, 4096, opts.Effort)
-	req.Betas = api.DefaultBetas
-	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+// with the summary. On error the caller keeps messages unchanged.
+func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64) ([]anthropic.BetaMessageParam, error) {
+	summary, err := l.summarize(ctx, messages, opts.Model, maxTokens, opts.Effort)
 	if err != nil {
-		return messages, false
-	}
-	summary := finalAssistantText(assistant)
-	if summary == "" {
-		return messages, false
+		return messages, err
 	}
 	if opts.OnSummary != nil {
 		opts.OnSummary(summary)
 	}
-	return compaction.ReplaceWithSummary(summary), true
+	// Without the boundary, --resume could not tell where the summary stops
+	// and the rest of the transcript begins.
+	if cr, ok := opts.Recorder.(CompactionRecorder); ok {
+		_ = cr.RecordCompaction(summary)
+	}
+	return compaction.ReplaceWithSummary(summary), nil
+}
+
+// errSummaryTruncated: the summary hit its output cap and stopped mid-text.
+var errSummaryTruncated = errors.New("compaction summary was cut off at the output limit")
+
+// summarize is the one summary call behind both /compact and autocompact.
+//
+// It used to send a hard-coded max_tokens of 4096 and never look at the stop
+// reason. A long session's summary — thinking included, which counts against
+// the same cap — ran out mid-sentence ("**Goal m") and was accepted as the
+// whole history. The session carried on from a summary missing everything
+// after the cut, including the user's answers to questions it then asked
+// again. So the cap is the session's own resolved one, and a summary that
+// reached it is refused: an unsummarised history is recoverable, a silently
+// truncated one is not.
+func (l *Loop) summarize(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model, maxTokens int64, effort api.Effort) (string, error) {
+	if maxTokens <= 0 {
+		maxTokens = int64(api.MaxOutputTokens(string(model)))
+	}
+	req := compaction.BuildSummaryRequest(messages, model, maxTokens, effort)
+	req.Betas = api.DefaultBetas
+	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	if assistant.StopReason == "max_tokens" {
+		return "", fmt.Errorf("%w (%d tokens)", errSummaryTruncated, maxTokens)
+	}
+	summary := finalAssistantText(assistant)
+	if summary == "" {
+		return "", fmt.Errorf("compaction produced no summary")
+	}
+	return summary, nil
 }
 
 // streamTurn issues one streaming request via the provider, emitting
@@ -708,6 +770,17 @@ const (
 	// failureHostGate: refused by the host gate. A decision about one call,
 	// not a malfunction; kept out of the shape streak entirely.
 	failureHostGate
+	// failurePermission: refused by the permission check — plan mode's
+	// read-only rule, or the frontend's Approver answering no.
+	//
+	// Separate from failurePreExec because the conclusion the breakers may draw
+	// is different again. A bad input says the call was wrong; a permission
+	// refusal says only that policy forbade it *at that moment*, and the policy
+	// is the one thing in the loop that a user changes mid-Run. Counting it is
+	// what made an approved plan's first command be refused with the plan-mode
+	// error it had already escaped. Neither breaker counts it; MaxTurns remains
+	// the backstop against a model that will not stop asking.
+	failurePermission
 )
 
 // bumpErrStreak records a new failure for tool. If the message matches the
@@ -837,12 +910,34 @@ func isEmptyToolInput(raw json.RawMessage) bool {
 	return false
 }
 
-func truncatedToolNote(maxTokens int64) string {
-	return fmt.Sprintf("This tool call was cut off before its arguments were complete: "+
-		"the turn reached the output-token limit (max_tokens=%d) mid-call, so it did NOT "+
+// truncatedToolNote is what a cut-off tool call returns instead of running.
+//
+// It names where the limit came from because two of the sources mean the
+// advice "produce less" is the wrong fix. Under a config override or the
+// unknown-model floor the cap is ours, not the model's, and raising it is the
+// real remedy — the Opus 5.5 floor bug showed only "max_tokens=8192", which
+// read as the model's limit and sent the model splitting files it could have
+// written whole. The other sources are the model's real cap, so they get the
+// label and no hint.
+func truncatedToolNote(maxTokens int64, source string) string {
+	limit := fmt.Sprintf("max_tokens=%d", maxTokens)
+	if source != "" {
+		limit += ", from " + source
+	}
+	note := fmt.Sprintf("This tool call was cut off before its arguments were complete: "+
+		"the turn reached the output-token limit (%s) mid-call, so it did NOT "+
 		"run — nothing was written or changed. Produce less in one turn: write a large file "+
 		"in smaller pieces (create it, then append/edit the rest), or shorten the content, "+
-		"then continue.", maxTokens)
+		"then continue.", limit)
+	switch source {
+	case api.LimitSourceConfig:
+		note += " This limit is set by maxTokens in .klaudia/config.toml; if the model allows more, " +
+			"tell the user it can be raised there."
+	case api.LimitSourceFallback:
+		note += " The model id was not recognised, so this is a conservative floor rather than " +
+			"the model's real limit; tell the user to set maxTokens in .klaudia/config.toml."
+	}
+	return note
 }
 
 func shortCircuit(emit Emitter, tu anthropic.BetaToolUseBlock, msg string) anthropic.BetaContentBlockParamUnion {
@@ -873,7 +968,6 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	key := tu.Name + "\x00" + string(raw)
 	rawStr := string(raw)
 	errResultKind := func(msg string, kind failureKind) anthropic.BetaContentBlockParamUnion {
-		fs.fail(key)
 		// A refusal by the host gate is a decision, not a malfunction. Its text
 		// is identical whatever the command was, so feeding it to the same-shape
 		// streak makes two unrelated refused commands look like proof the
@@ -882,8 +976,17 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		// reset is a successful execution and B is what prevents one. Count the
 		// exact call (breaker A still stops a literal retry) but leave the shape
 		// streak out of it.
-		if kind != failureHostGate {
-			fs.bumpStreak(tu.Name, msg, rawStr, kind == failurePreExec)
+		//
+		// A permission refusal is the same decision-not-malfunction case and is
+		// kept out of BOTH counters, because unlike a host-gate refusal it is
+		// routinely revoked in the middle of a Run — by an approved
+		// ExitPlanMode, or by /mode — through a route the loop never observes,
+		// so there is nothing to hang an fs.clear on. See docs/plan-mode.md.
+		if kind != failurePermission {
+			fs.fail(key)
+			if kind != failureHostGate {
+				fs.bumpStreak(tu.Name, msg, rawStr, kind == failurePreExec)
+			}
 		}
 		if emit != nil {
 			emit(Event{
@@ -901,6 +1004,11 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	// about the environment may be drawn from a run of these.
 	errBadCall := func(msg string) anthropic.BetaContentBlockParamUnion {
 		return errResultKind(msg, failurePreExec)
+	}
+	// errDenied: refused by the permission check (plan mode, or the frontend's
+	// Approver). Neither breaker counts it.
+	errDenied := func(msg string) anthropic.BetaContentBlockParamUnion {
+		return errResultKind(msg, failurePermission)
 	}
 
 	// Loop-breaker A: this exact call has already failed repeatedly. Don't run
@@ -971,7 +1079,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		if msg == "" {
 			msg = fmt.Sprintf("Permission denied for tool %s", tu.Name)
 		}
-		return errBadCall(msg)
+		return errDenied(msg)
 	case permission.Ask:
 		// Delegate the decision to the frontend's Approver.
 		approver := opts.Approver
@@ -990,7 +1098,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 			if msg == "" {
 				msg = fmt.Sprintf("Permission denied for tool %s", tu.Name)
 			}
-			return errBadCall(msg)
+			return errDenied(msg)
 		}
 	}
 
@@ -1048,6 +1156,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		WorkingDir: opts.WorkingDir,
 		Ask:        opts.Asker,
 		Plan:       opts.Planner,
+		Plans:      opts.Plan,
 		Reveal:     reveal,
 		HostChange: hostChangeFor(opts),
 		Progress:   progress,
@@ -1267,6 +1376,33 @@ func record(r Recorder, role string, msg any) {
 	if b, err := json.Marshal(msg); err == nil {
 		_ = r.Record(role, b)
 	}
+}
+
+// historyParam is the assistant turn as it goes into the running history:
+// ToParam() and then a JSON round-trip, so the live conversation holds exactly
+// what a resumed one rebuilds from the transcript.
+//
+// ToParam() alone is not that. For a web_fetch result it keeps the content in
+// a form that marshals correctly but leaves OfRequestWebFetchResultBlock nil,
+// so brokenResultToolUseID read a healthy fetch as corrupt. The repair then
+// dropped the fetch, and the turn it arrived in, which carries thinking, went
+// with it. That was the "an earlier web fetch was interrupted" notice in a
+// session that had fetched successfully, and with the turn gone the API
+// delivered the same fetch again and the model re-asked the questions the
+// user had already answered (measured: one fetch delivered in 9 assistant
+// messages of a goal-setting session). Replaying the transcript never showed
+// it, because the replay path decodes from JSON.
+func historyParam(m anthropic.BetaMessage) anthropic.BetaMessageParam {
+	p := m.ToParam()
+	b, err := json.Marshal(p)
+	if err != nil {
+		return p
+	}
+	var out anthropic.BetaMessageParam
+	if err := json.Unmarshal(b, &out); err != nil {
+		return p
+	}
+	return out
 }
 
 // toolUseBlocks returns the tool_use blocks in an assistant message.

@@ -88,6 +88,15 @@ the window at 0/"unknown" rather than guessing high when neither can — guessin
 high would skip compaction until the request 400s, which is unrecoverable
 whereas compacting early is merely wasteful.
 
+The summary call (`agent.summarize`, behind both autocompact and `/compact`)
+runs at the session's resolved output cap, and a summary that stops with
+`max_tokens` is **refused**: the history is kept and a notice says why. It
+used to request a fixed 4096 tokens and ignore the stop reason, so a long
+session's summary ended mid-word and silently replaced everything after the
+cut — the model then re-asked questions the user had already answered. An
+unsummarised history can still be compacted later; a truncated one cannot be
+recovered.
+
 ## Before either stage: the per-result cap
 
 Compaction deals with history that has already accumulated. The cheaper defence
@@ -140,6 +149,21 @@ shows what the tool produced.
 
 Beyond the JS scheme, each autocompact summary is offered to the CLI via
 `agent.Options.OnSummary` and written alongside the transcript in
-`~/.klaudia/sessions/<encoded-cwd>/<id>.summary.md`. On resume, Klaudia seeds the
-conversation from that summary instead of replaying the whole transcript
-(token-saving); `--full` forces a full replay. See `internal/session/summary.go`.
+`~/.klaudia/sessions/<encoded-cwd>/<id>.summary.md`, and the turn's own
+transcript gets a boundary line, `{"type":"system","subtype":"compact_boundary",
+"content":<summary>}` (Claude Code's name for the same line; `/compact` writes
+one too). On resume, Klaudia rebuilds the conversation as it stood live — the
+last boundary's summary, then every entry recorded after it — instead of
+replaying the whole transcript; `--full` forces a full replay.
+
+Resume used to seed from the summary file **alone**, dropping everything after
+the compaction: one restart lost 572 entries, 80 minutes of work, that the
+resumed session then could not remember doing. Transcripts written before
+boundary lines existed are cut at the summary file's `_Compacted <ts>_` stamp
+instead. The boundary is written through the turn's recorder
+(`agent.CompactionRecorder`), not `OnSummary`, because `OnSummary` is one per
+process and an ACP process records each session to its own transcript. The
+seeded summary also ends with an explicit closing line: the next prompt merges
+into the same user message, and a summary ending `**Goal m` once reached the
+model as `**Goal malright…`. See `internal/session/summary.go` and
+`session.ReadForResume`.

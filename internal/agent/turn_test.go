@@ -9,6 +9,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
@@ -37,6 +38,7 @@ func fullTurn() Turn {
 		BeforeEdit: func(string, []string) {},
 		Mode:       permission.StaticMode(permission.ModeBypassPermissions),
 		Recorder:   stubRecorder{},
+		Plan:       plan.New(""),
 		ReadText: func(context.Context, string, int, int) (string, error) {
 			return "", nil
 		},
@@ -58,6 +60,7 @@ func TestTurnApplyCopiesEveryField(t *testing.T) {
 		"BeforeEdit": "BeforeEdit",
 		"Mode":       "Permission",
 		"Recorder":   "Recorder",
+		"Plan":       "Plan",
 		"ReadText":   "ReadText",
 	}
 

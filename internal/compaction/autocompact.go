@@ -1,6 +1,8 @@
 package compaction
 
 import (
+	"strings"
+
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread-ai/klaudia/internal/api"
@@ -55,9 +57,15 @@ func SummaryEffort(session api.Effort) api.Effort {
 // ReplaceWithSummary returns the post-compaction conversation: a single user
 // message carrying the summary, mirroring how the JS replaces history with a
 // compact-boundary + summary (here condensed to one carried-forward message).
+//
+// The closing line exists because the next user prompt is merged into this
+// same message as an adjacent text block, and nothing marked where the
+// summary stopped: a summary ending "**Goal m" followed by a prompt "alright…"
+// reached the model as "**Goal malright…".
 func ReplaceWithSummary(summary string) []anthropic.BetaMessageParam {
 	const preamble = "[Conversation compacted to save context. Summary of the prior conversation follows.]\n\n"
+	const closing = "\n\n[End of summary. The conversation continues below.]"
 	return []anthropic.BetaMessageParam{
-		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(preamble + summary)),
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(preamble + strings.TrimSpace(summary) + closing)),
 	}
 }

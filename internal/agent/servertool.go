@@ -76,7 +76,10 @@ func serverToolResultID(b anthropic.BetaContentBlockParamUnion) (string, bool) {
 // back. Its call therefore sits unanswered on purpose, and deleting it throws
 // away a search the model asked for. Once the conversation has moved past that
 // turn, an unanswered call is one nobody is coming back for.
-func unpairedServerToolIDs(content []anthropic.BetaContentBlockParamUnion, pending bool) map[string]bool {
+//
+// split names the ids whose call and result sit in different assistant messages
+// of one conversation (splitServerToolPairs); those are paired, not orphans.
+func unpairedServerToolIDs(content []anthropic.BetaContentBlockParamUnion, pending bool, split map[string]bool) map[string]bool {
 	answered := map[string]bool{}
 	for _, b := range content {
 		if id, ok := serverToolResultID(b); ok {
@@ -94,14 +97,14 @@ func unpairedServerToolIDs(content []anthropic.BetaContentBlockParamUnion, pendi
 	for _, b := range content {
 		if su := b.OfServerToolUse; su != nil && webServerToolNames[su.Name] {
 			called[su.ID] = true
-			if !answered[su.ID] && !pending { // a call nobody is coming back for
+			if !answered[su.ID] && !pending && !split[su.ID] { // a call nobody is coming back for
 				drop(su.ID)
 			}
 			continue
 		}
 		// A result must be preceded by its call, so `called` is consulted as it
 		// stands here rather than over the whole message.
-		if id, ok := serverToolResultID(b); ok && !called[id] {
+		if id, ok := serverToolResultID(b); ok && !called[id] && !split[id] {
 			drop(id)
 		}
 	}
@@ -112,7 +115,7 @@ func unpairedServerToolIDs(content []anthropic.BetaContentBlockParamUnion, pendi
 // content did not survive round-tripping, along with the server_tool_use it
 // answers, with a single text note. Returns the repaired content and whether
 // anything changed. The original blocks are never mutated.
-func repairServerToolResults(content []anthropic.BetaContentBlockParamUnion, pending bool) ([]anthropic.BetaContentBlockParamUnion, bool) {
+func repairServerToolResults(content []anthropic.BetaContentBlockParamUnion, pending bool, split map[string]bool) ([]anthropic.BetaContentBlockParamUnion, bool) {
 	drop := map[string]bool{}
 	for _, b := range content {
 		if id, ok := brokenResultToolUseID(b); ok {
@@ -121,7 +124,7 @@ func repairServerToolResults(content []anthropic.BetaContentBlockParamUnion, pen
 	}
 	// A server-tool block with no partner is the other half of the problem: the
 	// API rejects it just as hard as a corrupt result, in either direction.
-	for id := range unpairedServerToolIDs(content, pending) {
+	for id := range unpairedServerToolIDs(content, pending, split) {
 		drop[id] = true
 	}
 	if len(drop) == 0 {
@@ -182,6 +185,7 @@ func brokenResultToolUseID(b anthropic.BetaContentBlockParamUnion) (string, bool
 // sanitize fast path.
 func hasBrokenServerToolResult(messages []anthropic.BetaMessageParam) bool {
 	pending := pendingAssistantIndex(messages)
+	split := splitServerToolPairs(messages)
 	for i, m := range messages {
 		for _, b := range m.Content {
 			if _, ok := brokenResultToolUseID(b); ok {
@@ -190,11 +194,56 @@ func hasBrokenServerToolResult(messages []anthropic.BetaMessageParam) bool {
 		}
 		// An unpaired server-tool block counts too — without this the fast path
 		// short-circuits and the repair below never runs.
-		if len(unpairedServerToolIDs(m.Content, i == pending)) > 0 {
+		if len(unpairedServerToolIDs(m.Content, i == pending, split)) > 0 {
 			return true
 		}
 	}
 	return false
+}
+
+// splitServerToolPairs returns the server-tool ids whose call is in one
+// assistant message and whose result arrives in a later one.
+//
+// This is the parallel-call shape after it completes, not a corruption. When the
+// model calls a server tool and a client tool in one batch, the API withholds
+// the search, and once the client results come back it opens the NEXT assistant
+// message with the result. pending protects the call while it waits; nothing
+// protected the pair once the result had arrived. Each half then read as an
+// orphan of its own message, both were dropped, and because the newest
+// assistant message carries thinking, dropUneditableTrailingTurn threw away the
+// whole turn — with the tool_results answering it, i.e. the user's reply to
+// AskUserQuestion. The history was then exactly what it had been before the
+// search returned, so the API delivered the same search again and the model
+// asked the same question again. Measured: one search re-delivered 622 times
+// over six hours, and a four-time question loop until the session was killed.
+//
+// Measured live, too: the API accepts the split pair as it stands across
+// a five-request continuation chain, so the right repair is none.
+func splitServerToolPairs(messages []anthropic.BetaMessageParam) map[string]bool {
+	callAt := map[string]int{}
+	var split map[string]bool
+	for i, m := range messages {
+		if m.Role != anthropic.BetaMessageParamRoleAssistant {
+			continue
+		}
+		for _, b := range m.Content {
+			if su := b.OfServerToolUse; su != nil && webServerToolNames[su.Name] {
+				callAt[su.ID] = i
+				continue
+			}
+			// The result must still come after its call, so only calls seen in
+			// an EARLIER message count.
+			if id, ok := serverToolResultID(b); ok {
+				if at, seen := callAt[id]; seen && at < i {
+					if split == nil {
+						split = map[string]bool{}
+					}
+					split[id] = true
+				}
+			}
+		}
+	}
+	return split
 }
 
 // pendingAssistantIndex returns the index of the assistant turn that is still in
@@ -232,105 +281,13 @@ func pendingAssistantIndex(messages []anthropic.BetaMessageParam) int {
 	return last
 }
 
-// Announcing the repair
+// Telling the user
 //
-// The repairs above are correct and they are silent, and the silence turned out
-// to be the bigger problem in practice. A dropped web search leaves the model a
-// placeholder it sees on the *next* request, so it can recover — but the user
-// sees a search in the transcript with no results, no error and no explanation,
-// and has no way to know the answer that followed was reasoned without it. The
-// failure that prompted this was exactly that: several searches in a session
-// came back empty, and nothing anywhere said so.
-//
-// So the same detection is run for the user's benefit before the request is
-// built, and each dropped exchange is announced once.
-
-// serverToolLabel names the tool a dropped id belonged to, for the notice.
-// Either half may be the one that survived, so both are consulted; the generic
-// label covers the case where neither did.
-func serverToolLabel(content []anthropic.BetaContentBlockParamUnion, id string) string {
-	for _, b := range content {
-		if su := b.OfServerToolUse; su != nil && su.ID == id {
-			switch su.Name {
-			case anthropic.BetaServerToolUseBlockParamNameWebSearch:
-				return "web search"
-			case anthropic.BetaServerToolUseBlockParamNameWebFetch:
-				return "web fetch"
-			}
-		}
-		if r := b.OfWebSearchToolResult; r != nil && r.ToolUseID == id {
-			return "web search"
-		}
-		if r := b.OfWebFetchToolResult; r != nil && r.ToolUseID == id {
-			return "web fetch"
-		}
-	}
-	return "web search/fetch"
-}
-
-// announceDroppedServerTools emits one notice per server-tool exchange that
-// sanitizeMessages is about to drop, skipping any already announced.
-//
-// It merges first and consults pendingAssistantIndex for the same reasons
-// sanitizeMessages does: before merging, a paused search looks unpaired when it
-// is not, and a server tool withheld because the batch also held client tools
-// is waiting legitimately rather than lost. Announcing either would be a false
-// alarm about work that is about to happen.
-//
-// reported is keyed by tool_use_id and lives for the Run, so a broken exchange
-// inherited from a resumed transcript is mentioned once rather than on every
-// turn for the rest of the session.
-// resumedUnpairedIDs collects the unpaired server-tool ids already present when
-// a Run starts. Those came off disk; anything that goes unpaired later did so
-// in front of the user, which is a different thing to say.
-func resumedUnpairedIDs(messages []anthropic.BetaMessageParam) map[string]bool {
-	out := map[string]bool{}
-	merged := mergeSameRole(messages)
-	pending := pendingAssistantIndex(merged)
-	for i, m := range merged {
-		for id := range unpairedServerToolIDs(m.Content, i == pending) {
-			out[id] = true
-		}
-		for _, b := range m.Content {
-			if id, ok := brokenResultToolUseID(b); ok {
-				out[id] = true
-			}
-		}
-	}
-	return out
-}
-
-func announceDroppedServerTools(messages []anthropic.BetaMessageParam, emit Emitter, reported, resumed map[string]bool) {
-	if emit == nil {
-		return
-	}
-	merged := mergeSameRole(messages)
-	pending := pendingAssistantIndex(merged)
-	for i, m := range merged {
-		lost := unpairedServerToolIDs(m.Content, i == pending)
-		for _, b := range m.Content {
-			if id, ok := brokenResultToolUseID(b); ok {
-				if lost == nil {
-					lost = map[string]bool{}
-				}
-				lost[id] = true
-			}
-		}
-		for id := range lost {
-			if reported[id] {
-				continue
-			}
-			reported[id] = true
-			// Two causes, and conflating them sent a user hunting a bug that
-			// had already been fixed. A search that was in flight when the
-			// turn was interrupted is ordinary; one that arrived broken from
-			// a saved transcript is the corruption this package repairs.
-			cause := "was interrupted before it returned"
-			if resumed[id] {
-				cause = "could not be restored from the saved transcript"
-			}
-			emit(Event{Type: "notice", Content: "an earlier " + serverToolLabel(m.Content, id) +
-				" " + cause + " and was dropped from the conversation — re-run it if the answer depends on it"})
-		}
-	}
-}
+// There is no user-facing notice for a dropped search or fetch any more. There
+// was one, and it fired in sessions where nothing had gone wrong: a misread of
+// a healthy deferred fetch (see historyParam) put "an earlier web fetch was
+// interrupted…" on screen, and users reasonably went looking for a fault. The
+// model is what has to act on a lost result, and it is told exactly once:
+// repairServerToolResults leaves droppedServerToolPlaceholder where the
+// exchange was, and the loop keeps the repaired history, so the note is in
+// the conversation from then on and is never re-added.

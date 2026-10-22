@@ -142,12 +142,35 @@ var hostPrefixes = []string{
 // being reported as "writes /dev/null" and gated. The block devices are
 // deliberately NOT here: `dd of=/dev/disk2` really does destroy a disk, and
 // catching that is why /dev is a host prefix at all.
-var hostExceptions = []string{
+var hostExceptions = append([]string{
 	"/tmp", "/private/tmp",
 	"/var/tmp", "/var/folders", "/private/var/tmp", "/private/var/folders",
+}, pseudoDevices...)
+
+// pseudoDevices are the /dev entries a redirect can target without changing
+// anything on disk. Split out of hostExceptions because plan mode needs this
+// half and not the other: `2>/dev/null` was refused as a write during a real
+// planning session, while `> /tmp/x` really is a file write and stays refused.
+var pseudoDevices = []string{
 	"/dev/null", "/dev/zero", "/dev/full", "/dev/random", "/dev/urandom",
 	"/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty",
 	"/dev/fd", "/dev/pts", "/dev/ptmx",
+}
+
+// isPseudoDevice reports whether a literal redirect target is one of
+// pseudoDevices. Cleaned first because under is a plain prefix test, and
+// `/dev/fd/../../etc/x` would otherwise pass as a descriptor.
+func isPseudoDevice(target string) bool {
+	if !filepath.IsAbs(target) {
+		return false
+	}
+	p := filepath.Clean(target)
+	for _, d := range pseudoDevices {
+		if under(p, d) {
+			return true
+		}
+	}
+	return false
 }
 
 // toolCaches are per-user directories that build tooling writes to as a matter

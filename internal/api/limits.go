@@ -33,6 +33,10 @@ const (
 	LimitSourceProvider = "provider"
 	LimitSourceModel    = "model default"
 	LimitSourceFallback = "unknown model — using the safe floor"
+	// LimitSourceRejected is set mid-run, not by ResolveLimits: the provider
+	// refused the cap we sent and named its own, and the loop adopted it. The
+	// startup label is wrong from that point, so it cannot be kept.
+	LimitSourceRejected = "provider rejected the requested cap"
 )
 
 // ModelLimits is the per-request sizing for one model: how many output tokens

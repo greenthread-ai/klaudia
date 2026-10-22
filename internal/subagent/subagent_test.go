@@ -35,7 +35,9 @@ func TestFilterAllVsRestricted(t *testing.T) {
 	explore, _ := Lookup("Explore")
 	names := explore.Filter(base).Names()
 	sort.Strings(names)
-	want := []string{"Glob", "Grep", "Read"}
+	// Bash is in the list on purpose: the research agents are held read-only
+	// by Mode, not by having the shell withheld. See Type.Mode.
+	want := []string{"Bash", "Glob", "Grep", "Read"}
 	if len(names) != len(want) {
 		t.Fatalf("Explore tools = %v, want %v", names, want)
 	}
@@ -96,17 +98,27 @@ func TestReadOnlyAgentsGetReadOnlyMCPToolsAndNothingElse(t *testing.T) {
 		if !ok {
 			t.Fatalf("no %s type", name)
 		}
+		// Bash is granted and plan mode is what makes that safe. Without the
+		// mode this is a research agent with an unrestricted shell, so the two
+		// assertions belong together.
+		if typ.Mode != permission.ModePlan {
+			t.Errorf("%s: Mode = %q, want %q — it is granted Bash", name, typ.Mode, permission.ModePlan)
+		}
 		got := map[string]bool{}
 		for _, n := range typ.Filter(base).Names() {
 			got[n] = true
 		}
-		for _, want := range []string{"Read", "Glob", "Grep",
+		for _, want := range []string{"Read", "Glob", "Grep", "Bash",
 			"mcp__gitea__get_file_contents", "mcp__gitea__search_issues"} {
 			if !got[want] {
 				t.Errorf("%s: missing %s", name, want)
 			}
 		}
-		for _, banned := range []string{"Edit", "Bash",
+		// Edit stays out of the registry even though plan mode would refuse it
+		// too. A tool the child cannot use is one it will not spend a turn
+		// discovering it cannot use, and the mode is a session setting while
+		// the registry is the agent's definition.
+		for _, banned := range []string{"Edit",
 			"mcp__gitea__delete_branch", "mcp__gitea__create_or_update_file"} {
 			if got[banned] {
 				t.Errorf("%s: has %s, which writes", name, banned)

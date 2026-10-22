@@ -78,6 +78,8 @@ func (b *Bash) ValidateInput(raw json.RawMessage) error {
 
 // PermissionRequest derives a rule specifier from the command via the bash
 // parser (e.g. "git status"), falling back to the raw command on parse error.
+// Raw carries the whole line, which is what plan mode's read-only rule needs:
+// the prefix of `git status && rm -rf build` is `git status`.
 func (b *Bash) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
 	var in BashInput
 	_ = json.Unmarshal(raw, &in)
@@ -87,12 +89,12 @@ func (b *Bash) PermissionRequest(raw json.RawMessage) permission.PermissionReque
 			spec = p
 		}
 	}
-	return permission.PermissionRequest{Specifier: spec}
+	return permission.PermissionRequest{Specifier: spec, Raw: in.Command}
 }
 
 // CheckPermissions: Bash is a command-executing (exec-class) tool.
-func (b *Bash) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
-	return execClassDecision(pctx)
+func (b *Bash) CheckPermissions(pctx permission.Context, req permission.PermissionRequest) permission.Decision {
+	return execClassDecision(pctx, req)
 }
 
 func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {

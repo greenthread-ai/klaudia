@@ -6,41 +6,73 @@ import (
 	"testing"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 )
 
 func TestTodoWriteBecomesAPlanNotAToolCall(t *testing.T) {
 	// The whole point of the tool is the checklist. Reported as a tool call the
-	// user gets a JSON array in a collapsed widget instead.
-	var r recorder
-	tr := newTranslator(&r, "sess_1")
-	tr.event(agent.Event{
-		Type: "tool_use", ToolName: "TodoWrite", ToolUseID: "tu_1",
-		Input: map[string]any{"todos": []any{
-			map[string]any{"content": "write the test", "status": "in_progress"},
-			map[string]any{"content": "run it", "status": "pending"},
-			map[string]any{"content": "read the spec", "status": "completed"},
-		}},
-	})
-	if len(r.updates) != 1 {
-		t.Fatalf("got %d updates, want 1: %v", len(r.updates), r.updates)
+	// user gets a JSON array in a collapsed widget instead. And the checklist
+	// comes from the plan event — the stored list — not from the call's input,
+	// which arrives before the tool has validated anything: a TodoWrite the
+	// tool rejected used to show the client a plan that never existed.
+	snap := plan.Snapshot{Items: []plan.Item{
+		{Content: "write the test", Status: plan.StatusInProgress},
+		{Content: "run it", Status: plan.StatusPending},
+		{Content: "read the spec", Status: plan.StatusCompleted},
+	}, Rev: 1}
+	tests := []struct {
+		name   string
+		events []agent.Event
+		want   []string
+	}{
+		{
+			name: "a stored list is posted from the plan event",
+			events: []agent.Event{
+				{Type: "tool_use", ToolName: "TodoWrite", ToolUseID: "tu_1",
+					Input: map[string]any{"todos": []any{map[string]any{"content": "write the test", "status": "in_progress"}}}},
+				{Type: "tool_result", ToolName: "TodoWrite", ToolUseID: "tu_1", Content: "3 todos"},
+				{Type: "plan", Plan: &snap},
+			},
+			want: []string{`{"sessionUpdate":"plan","entries":[
+				{"content":"write the test","priority":"medium","status":"in_progress"},
+				{"content":"run it","priority":"medium","status":"pending"},
+				{"content":"read the spec","priority":"medium","status":"completed"}
+			]}`},
+		},
+		{
+			name: "a rejected call posts nothing",
+			// No plan event follows: the store did not change.
+			events: []agent.Event{
+				{Type: "tool_use", ToolName: "TodoWrite", ToolUseID: "tu_2",
+					Input: map[string]any{"todos": []any{map[string]any{"content": "x", "status": "pending"}, map[string]any{"content": "y", "status": "in_progress"}, map[string]any{"content": "z", "status": "in_progress"}}}},
+				{Type: "tool_result", ToolName: "TodoWrite", ToolUseID: "tu_2", Content: "only one item may be in_progress", IsError: true},
+			},
+		},
+		{
+			name:   "a cleared plan is an empty plan, not silence",
+			events: []agent.Event{{Type: "plan", Plan: &plan.Snapshot{Items: []plan.Item{}, Rev: 2}}},
+			want:   []string{`{"sessionUpdate":"plan","entries":[]}`},
+		},
 	}
-	want := `{"sessionUpdate":"plan","entries":[
-		{"content":"write the test","priority":"medium","status":"in_progress"},
-		{"content":"run it","priority":"medium","status":"pending"},
-		{"content":"read the spec","priority":"medium","status":"completed"}
-	]}`
-	if !jsonEqual(t, r.updates[0], want) {
-		t.Errorf("got %v\nwant %s", r.updates[0], want)
-	}
-
-	// The result of a suppressed call must be suppressed too: a
-	// tool_call_update for an id the client never received as a tool_call is a
-	// patch to nothing, and clients log it as a protocol error.
-	tr.event(agent.Event{
-		Type: "tool_result", ToolName: "TodoWrite", ToolUseID: "tu_1", Content: "4 todos",
-	})
-	if len(r.updates) != 1 {
-		t.Errorf("the suppressed call's result was sent: %v", r.updates[1:])
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var r recorder
+			tr := newTranslator(&r, "sess_1")
+			for _, ev := range tc.events {
+				tr.event(ev)
+			}
+			// The suppressed call's result must not be sent either: a
+			// tool_call_update for an id the client never received as a
+			// tool_call is a patch to nothing, which clients log as an error.
+			if len(r.updates) != len(tc.want) {
+				t.Fatalf("got %d updates, want %d: %v", len(r.updates), len(tc.want), r.updates)
+			}
+			for i, w := range tc.want {
+				if !jsonEqual(t, r.updates[i], w) {
+					t.Errorf("update %d = %v\nwant %s", i, r.updates[i], w)
+				}
+			}
+		})
 	}
 }
 

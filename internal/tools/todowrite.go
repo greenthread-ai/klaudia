@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/schema"
 )
 
@@ -23,39 +23,32 @@ type TodoInput struct {
 	Todos []TodoItem `json:"todos" jsonschema:"description=The complete, updated todo list"`
 }
 
-// TodoStore holds the current todo list for a session. It is safe for
-// concurrent use so streaming/concurrent tool execution can update it.
-type TodoStore struct {
-	mu    sync.Mutex
-	items []TodoItem
-}
-
-// Items returns a copy of the current todo list.
-func (s *TodoStore) Items() []TodoItem {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]TodoItem(nil), s.items...)
-}
-
-func (s *TodoStore) set(items []TodoItem) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.items = items
-}
-
-// TodoWrite replaces the session todo list, mirroring the JS TodoWrite tool.
+// TodoWrite replaces the session plan's step list, mirroring the JS TodoWrite
+// tool. The store is owned by the caller rather than built here: a list nobody
+// outside the registry can read is a list no frontend can show, which is how
+// this one went unrendered everywhere but ACP.
 type TodoWrite struct {
 	schema *schema.Schema
-	store  *TodoStore
+	store  *plan.Store
 }
 
 // NewTodoWrite constructs the TodoWrite tool backed by store.
-func NewTodoWrite(store *TodoStore) (*TodoWrite, error) {
+func NewTodoWrite(store *plan.Store) (*TodoWrite, error) {
 	s, err := schema.For[TodoInput]()
 	if err != nil {
 		return nil, fmt.Errorf("todowrite: build schema: %w", err)
 	}
 	return &TodoWrite{schema: s, store: store}, nil
+}
+
+// planFor is the store a plan tool writes to: the conversation's, when the
+// loop supplied one (see Context.Plans), else the one the tool was built
+// with — which is the right answer only for a process with one conversation.
+func planFor(tctx Context, built *plan.Store) *plan.Store {
+	if tctx.Plans != nil {
+		return tctx.Plans
+	}
+	return built
 }
 
 func (t *TodoWrite) Name() string { return "TodoWrite" }
@@ -77,9 +70,7 @@ func (t *TodoWrite) ValidateInput(raw json.RawMessage) error {
 		return err
 	}
 	for i, it := range in.Todos {
-		switch it.Status {
-		case "pending", "in_progress", "completed":
-		default:
+		if !plan.ValidStatus(it.Status) {
 			return fmt.Errorf("todos[%d].status %q is invalid (want pending|in_progress|completed)", i, it.Status)
 		}
 	}
@@ -95,13 +86,23 @@ func (t *TodoWrite) CheckPermissions(pctx permission.Context, _ permission.Permi
 	return allowAlways(pctx)
 }
 
-func (t *TodoWrite) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (t *TodoWrite) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in TodoInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
-	t.store.set(in.Todos)
-	return []Result{{Content: renderTodos(in.Todos)}}, nil
+	items := make([]plan.Item, 0, len(in.Todos))
+	for _, it := range in.Todos {
+		items = append(items, plan.Item{Content: it.Content, Status: it.Status, ActiveForm: it.ActiveForm})
+	}
+	// A write failure is reported to the model but does not fail the call: the
+	// list is updated in memory either way, and losing the plan because
+	// .klaudia is read-only would be a worse outcome than a stale file.
+	note := ""
+	if err := planFor(tctx, t.store).Replace(items); err != nil {
+		note = "\n\n(The plan file could not be updated: " + err.Error() + ")"
+	}
+	return []Result{{Content: renderTodos(in.Todos) + note}}, nil
 }
 
 // renderTodos formats the list with status checkboxes for the tool_result.

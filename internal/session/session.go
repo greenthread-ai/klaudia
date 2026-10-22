@@ -109,7 +109,39 @@ type Entry struct {
 	PermissionMode string `json:"permissionMode,omitempty"`
 	// assistant-only
 	RequestID string `json:"requestId,omitempty"`
+
+	// Resolved model sizing, assistant-only. These five have no counterpart in
+	// the JS schema — they are a deliberate Klaudia divergence from the tag
+	// parity the doc comment above claims.
+	//
+	// They exist because a transcript recorded everything about a turn except
+	// the three numbers that decide what the turn can do. When Opus 5.5 ran at
+	// max_tokens=8192 against a real cap of 128000, the saved session named the
+	// permission mode, the version, the git branch and the request id, and not
+	// the model, the cap or the window; the diagnosis came from the user
+	// remembering which model they had picked. Recording the figures and the
+	// LimitSource* that produced each one makes that answerable from the file.
+	//
+	// Assistant-only for the same reason as RequestID: they describe what
+	// produced this content, and a user line was not produced by a model.
+	// Repeating them there would double the bytes per turn for no new fact.
+	Model               string `json:"model,omitempty"`
+	MaxTokens           int    `json:"maxTokens,omitempty"`
+	MaxTokensSource     string `json:"maxTokensSource,omitempty"`
+	ContextWindow       int    `json:"contextWindow,omitempty"`
+	ContextWindowSource string `json:"contextWindowSource,omitempty"`
+
+	// system-only: a compaction boundary ("compact_boundary", Claude Code's
+	// name for the same line). Content is the summary that replaced every
+	// entry above it. Read skips system lines, so existing readers never see
+	// one; ReadForResume is the reader that does.
+	Subtype string `json:"subtype,omitempty"`
+	Content string `json:"content,omitempty"`
 }
+
+// SubtypeCompactBoundary marks the point where history was replaced by a
+// summary.
+const SubtypeCompactBoundary = "compact_boundary"
 
 // Now returns an RFC3339 millisecond UTC timestamp matching the JS format
 // (e.g. "2026-05-24T03:58:31.020Z").
@@ -202,6 +234,66 @@ func Read(path string) ([]Entry, error) {
 		}
 	}
 	return entries, sc.Err()
+}
+
+// ResumePoint is what --resume rebuilds a conversation from.
+type ResumePoint struct {
+	// Summary is the last compaction's summary, "" when the transcript was
+	// never compacted (or predates boundary lines).
+	Summary string
+	// After holds the user/assistant entries recorded after that compaction —
+	// all of them when there was none.
+	After []Entry
+}
+
+// ReadForResume reads a transcript the way the live conversation stood when
+// it was last written: the last compaction's summary, then every entry after
+// it.
+//
+// --resume used to seed from the .summary.md file alone and drop the rest, so
+// everything said after the most recent compaction was lost — measured on one
+// restart as 572 entries and 80 minutes of work, which the resumed session
+// then could not remember doing.
+func ReadForResume(path string) (ResumePoint, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return ResumePoint{}, err
+	}
+	defer f.Close()
+
+	var rp ResumePoint
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	for sc.Scan() {
+		line := sc.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var e Entry
+		if err := json.Unmarshal(line, &e); err != nil {
+			continue
+		}
+		switch {
+		case e.Type == "system" && e.Subtype == SubtypeCompactBoundary && strings.TrimSpace(e.Content) != "":
+			rp.Summary, rp.After = e.Content, nil
+		case e.Type == "user" || e.Type == "assistant":
+			rp.After = append(rp.After, e)
+		}
+	}
+	return rp, sc.Err()
+}
+
+// EntriesAfter returns the entries timestamped strictly after ts. It is the
+// fallback for transcripts written before boundary lines existed, cut at the
+// summary file's "_Compacted <ts>_" stamp. Timestamps are all Now()'s
+// fixed-width UTC form, so string order is time order.
+func EntriesAfter(entries []Entry, ts string) []Entry {
+	for i, e := range entries {
+		if e.Timestamp > ts {
+			return entries[i:]
+		}
+	}
+	return nil
 }
 
 // MostRecent returns the session ID of the most recently modified transcript in

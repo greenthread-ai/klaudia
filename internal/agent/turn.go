@@ -6,6 +6,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
@@ -77,6 +78,11 @@ type Turn struct {
 	// conversations into one, so session/load replayed something that never
 	// happened. Nil keeps the caller's recorder.
 	Recorder Recorder
+	// Plan, if set, is this conversation's plan store, overriding the
+	// process-wide one the caller built. The same reason again: the ACP
+	// frontend holds several conversations, and with one store they shared
+	// one step list and one plan file. Nil keeps the caller's store.
+	Plan *plan.Store
 	// ReadText, if set, reads a text file on the frontend's behalf instead of
 	// from disk: path, a 1-based start line and a line limit (0 for "all"),
 	// returning the requested window.
@@ -112,6 +118,9 @@ func (t Turn) Apply(opts *Options) {
 	// rather than turning persistence off.
 	if t.Recorder != nil {
 		opts.Recorder = t.Recorder
+	}
+	if t.Plan != nil {
+		opts.Plan = t.Plan
 	}
 }
 

@@ -198,7 +198,9 @@ a prompt, or clear the line — and only quits when pressed twice in a row.
 Tool calls show their key input (e.g. `⚙ Bash go test ./...`) and a `-`/`+`
 preview for edits; a status bar tracks model · mode · turns · tokens. Long
 output is kept in full: the preview tells you its number and `/last <n>` opens
-it in `$PAGER`, where searching and copying are your pager's job. `/search`,
+it in `$PAGER`, where searching and copying are your pager's job. While the
+model works through a plan its step list sits above the prompt — `Ctrl+T`
+collapses it to one line — and disappears once every step is done. `/search`,
 `/outline` and `/errors` index the session, and `/open <path:line>` sends a
 reference copied from a stack trace straight to `$EDITOR`.
 
@@ -313,8 +315,8 @@ pass `--continue` or `-r <id>`. An ACP client has `session/list` and
 Sessions are JSONL transcripts under `~/.klaudia/sessions/<encoded-cwd>/`
 (override the base with `KLAUDIA_CONFIG_DIR`). Klaudia still reads legacy
 transcripts from `~/.klaudia/projects/<encoded-cwd>/` during migration. When a
-session has a persisted compaction summary, resume seeds from it (token-saving)
-unless `--full`.
+session has been compacted, resume seeds from the last summary plus everything
+said after it (token-saving) unless `--full`.
 
 ## Long-running commands, logs, and your shell
 

@@ -48,6 +48,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/api"
 	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 )
 
 // Transcript is a session's persistent record: the agent.Recorder the loop
@@ -90,6 +91,11 @@ type Options struct {
 	// appending to the same file, so session/load replayed an interleaving that
 	// never happened.
 	Transcript func(sessionID string) Transcript
+	// Plan opens a session's plan store. Nil gives each session an in-memory
+	// one with no file. Per session for the transcript's reason: with the
+	// process-wide store two threads shared one step list, and each approval
+	// rewrote the other's plan file.
+	Plan func(sessionID string) *plan.Store
 	// Commands are the /commands offered to the client (Klaudia's skills). See
 	// commands.go for why the built-in slash commands are not among them.
 	Commands []Command
@@ -185,6 +191,8 @@ type session struct {
 	mode    permission.Mode
 	// transcript is this conversation's own persistent record. May be nil.
 	transcript Transcript
+	// plan is this conversation's step list. Never nil.
+	plan *plan.Store
 	// cancel aborts the in-flight prompt; nil when idle.
 	cancel context.CancelFunc
 	// cancelled records that the client asked to stop. The spec requires the
@@ -432,6 +440,12 @@ func (a *Agent) open(id string) (s *session, first bool) {
 	if a.opts.Transcript != nil {
 		s.transcript = a.opts.Transcript(id)
 	}
+	if a.opts.Plan != nil {
+		s.plan = a.opts.Plan(id)
+	}
+	if s.plan == nil {
+		s.plan = plan.New("")
+	}
 	return s, first
 }
 
@@ -602,6 +616,7 @@ func (a *Agent) prompt(ctx context.Context, raw json.RawMessage) (any, error) {
 		}},
 		Mode:     s.currentMode,
 		Recorder: recorder,
+		Plan:     s.plan,
 		ReadText: func(ctx context.Context, path string, line, limit int) (string, error) {
 			return a.readTextFile(ctx, s.id, path, line, limit)
 		},

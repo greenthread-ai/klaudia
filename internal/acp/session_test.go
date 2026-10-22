@@ -13,6 +13,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 )
 
 // fakeTranscript records what a session persisted, and whether it was closed.
@@ -535,6 +536,82 @@ func TestEachSessionRecordsToItsOwnTranscript(t *testing.T) {
 		if len(got) != 1 || got[0] != want {
 			t.Errorf("session %s recorded %v, want exactly [%s]", sid, got, want)
 		}
+	}
+}
+
+func TestEachSessionHasItsOwnPlan(t *testing.T) {
+	// The plan store was built once per process and wired into the shared
+	// registry, so two editor threads shared one step list — and, after
+	// approval, one plan file keyed by the process's session id rather than
+	// either thread's. Each turn must carry its own session's store.
+	tests := []struct {
+		name    string
+		factory bool // whether the CLI supplied Options.Plan
+	}{
+		{name: "stores from the CLI's factory", factory: true},
+		{name: "in-memory stores when no factory is given", factory: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cwd := t.TempDir()
+			var mu sync.Mutex
+			opened := map[string]*plan.Store{}
+			byPrompt := map[string]*plan.Store{}
+			opts := Options{
+				CWD: cwd,
+				Run: func(_ context.Context, turn agent.Turn) (agent.Result, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					byPrompt[turn.Prompt] = turn.Plan
+					if turn.Plan != nil {
+						// What TodoWrite does through tools.Context.Plans.
+						_ = turn.Plan.Replace([]plan.Item{{Content: turn.Prompt, Status: plan.StatusPending}})
+					}
+					return agent.Result{Text: "ok", StopReason: "end_turn"}, nil
+				},
+			}
+			if tc.factory {
+				opts.Plan = func(id string) *plan.Store {
+					mu.Lock()
+					defer mu.Unlock()
+					s := plan.New("")
+					opened[id] = s
+					return s
+				}
+			}
+			p := serveAgent(t, opts)
+			first := p.newSession(cwd)
+			res := p.call("session/new", newSessionParams{CWD: cwd})
+			var out newSessionResult
+			if err := json.Unmarshal(res.Result, &out); err != nil {
+				t.Fatal(err)
+			}
+			second := out.SessionID
+
+			for _, step := range []struct{ sid, text string }{{first, "one"}, {second, "two"}} {
+				if r := p.call("session/prompt", promptParams{
+					SessionID: step.sid, Prompt: []contentBlock{textBlock(step.text)},
+				}); r.Error != nil {
+					t.Fatalf("session/prompt: %+v", r.Error)
+				}
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			one, two := byPrompt["one"], byPrompt["two"]
+			if one == nil || two == nil {
+				t.Fatalf("a turn carried no plan store (one=%v two=%v); the shared one would be used", one, two)
+			}
+			if one == two {
+				t.Fatal("both sessions' turns carried the same plan store")
+			}
+			if got := one.Items(); len(got) != 1 || got[0].Content != "one" {
+				t.Errorf("the first session's plan = %v, want only its own step", got)
+			}
+			if tc.factory && (opened[first] != one || opened[second] != two) {
+				t.Error("a session's turns did not use the store opened for that session's id")
+			}
+		})
 	}
 }
 

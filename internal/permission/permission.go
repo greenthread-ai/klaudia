@@ -133,6 +133,15 @@ type PermissionRequest struct {
 	// before the rules were removed, and now only reaches a frontend that is
 	// showing the user what is being asked about.
 	Specifier string
+	// Raw is the complete, unabridged action: the whole command line for Bash,
+	// where Specifier is only the "git status" prefix.
+	//
+	// A checker that must decide what the action *does* needs all of it.
+	// Plan mode's read-only rule turns on writing redirections and on the
+	// later components of a pipeline or `&&` chain, and neither survives into
+	// Specifier — `git status` is the prefix of `git status && rm -rf build`.
+	// Optional: a tool whose Specifier is the whole action leaves it empty.
+	Raw string
 }
 
 // Check evaluates the permission flow for a tool invocation: bypass allows

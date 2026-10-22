@@ -21,6 +21,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/api"
 	"github.com/greenthread-ai/klaudia/internal/browser"
+	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/doctor"
 	"github.com/greenthread-ai/klaudia/internal/hooks"
@@ -28,6 +29,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/mcp"
 	"github.com/greenthread-ai/klaudia/internal/memory"
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/prompt"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/internal/session"
@@ -39,6 +41,43 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/tui"
 	"github.com/greenthread-ai/klaudia/internal/version"
 )
+
+// resumeFromSummary rebuilds a compacted session as it stood live: the last
+// compaction's summary, then every entry recorded after it. ok is false when
+// the session was never compacted, which means a full replay.
+//
+// It used to seed from the summary alone and drop everything after it, so a
+// restart lost all work since the last compaction — 572 entries, 80 minutes,
+// in the session that found this.
+//
+// A transcript written before boundary lines existed is cut at the summary
+// file's "_Compacted <ts>_" stamp instead; one with a summary file but no
+// stamp keeps the old summary-only behaviour, as nothing better is knowable.
+func resumeFromSummary(cwd, sessionID string) ([]anthropic.BetaMessageParam, bool, error) {
+	path := session.ExistingPath(cwd, sessionID)
+	rp, err := session.ReadForResume(path)
+	if err != nil {
+		return nil, false, err
+	}
+	summary, after := rp.Summary, rp.After
+	if summary == "" {
+		body, at, ok := session.ReadSummaryStamped(cwd, sessionID)
+		if !ok {
+			return nil, false, nil
+		}
+		summary = body
+		if at == "" {
+			after = nil
+		} else {
+			after = session.EntriesAfter(rp.After, at)
+		}
+	}
+	rest, err := agent.MessagesFromEntries(after)
+	if err != nil {
+		return nil, false, err
+	}
+	return append(compaction.ReplaceWithSummary(summary), rest...), true, nil
+}
 
 func compactAndPersist(ctx context.Context, history []anthropic.BetaMessageParam, compact tui.CompactFunc, onSummary func(string)) ([]anthropic.BetaMessageParam, string, error) {
 	newHistory, summary, err := compact(ctx, history)
@@ -299,7 +338,14 @@ func acpCommands(skills []skill.Skill) []acp.Command {
 // Best effort, matching every other transcript call site: a record that cannot
 // be opened is reported to the client's log and the session runs unrecorded,
 // because losing the history is not a reason to refuse the work.
-func acpTranscript(cwd string, mode permission.Mode) func(string) acp.Transcript {
+//
+// It takes the resolved sizing because an ACP session's recorder is installed
+// per session via Turn.Recorder, which overrides the process-wide one — so the
+// SetSizing that baseOptions performs never reaches these transcripts and they
+// would be the one frontend recording a turn without its figures. Stamped at
+// construction rather than per turn because ACP has no /model: the model is
+// fixed for the life of the process.
+func acpTranscript(cwd string, mode permission.Mode, model string, limits api.ModelLimits) func(string) acp.Transcript {
 	return func(sessionID string) acp.Transcript {
 		tr, err := session.NewTranscript(session.Meta{
 			SessionID:      sessionID,
@@ -311,6 +357,7 @@ func acpTranscript(cwd string, mode permission.Mode) func(string) acp.Transcript
 		if err != nil {
 			return nil
 		}
+		tr.SetSizing(model, limits.MaxOutputTokens, limits.MaxOutputSource, limits.ContextWindow, limits.ContextSource)
 		return tr
 	}
 }
@@ -560,6 +607,13 @@ type turnSettings struct {
 	// threshold at all.
 	MaxTokens     int
 	ContextWindow int
+	// MaxTokensSource and ContextSource are the matching api.LimitSource*
+	// labels. They are carried alongside the figures purely so the transcript
+	// can record whether each number was authoritative or the unknown-model
+	// floor — the figure alone does not say, and 8192 looks like a deliberate
+	// cap rather than a missing table entry.
+	MaxTokensSource string
+	ContextSource   string
 }
 
 // resolveEffort applies the precedence --effort > KLAUDIA_EFFORT > config.
@@ -899,11 +953,10 @@ func run(cmd *cobra.Command, opts *options) error {
 		// Token-saving resume: if a persisted compaction summary exists and the
 		// user didn't ask for a --full replay, seed from the summary instead of
 		// the entire transcript. Falls back to full replay when no summary exists.
-		if summary, ok := session.ReadSummary(cwd, resumeID); ok && !opts.fullResume {
-			initialMessages = []anthropic.BetaMessageParam{
-				anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(
-					"Summary of the earlier conversation in this session:\n\n" + summary)),
-			}
+		if seeded, ok, rerr := resumeFromSummary(cwd, resumeID); rerr != nil {
+			return fmt.Errorf("resume %s: %w", resumeID, rerr)
+		} else if ok && !opts.fullResume {
+			initialMessages = seeded
 			fmt.Fprintln(cmd.ErrOrStderr(), "resuming from compacted summary (--full for the entire transcript)")
 		} else {
 			entries, rerr := session.Read(session.ExistingPath(cwd, resumeID))
@@ -1019,10 +1072,18 @@ func run(cmd *cobra.Command, opts *options) error {
 	// first use, and shut down at session end. Not downloaded.
 	lspPool := lsp.NewPool(ctx, cwd, cfg.LSP.Disabled, nil)
 	defer lspPool.Close()
+	// The session plan, held here rather than inside the registry so a
+	// frontend can render it. TodoWrite writes the step list to it and
+	// ExitPlanMode writes the approved plan through to
+	// ~/.klaudia/plans/<session-id>.md — keyed by session so two sessions in
+	// one repo cannot overwrite each other's plan, and resolved after the
+	// resume branch above so --resume keeps writing the same file.
+	planStore := plan.New(plan.PathFor(session.ConfigRoot(), sessionID))
 	base, err := tools.DefaultRegistry(executor,
 		tools.WithBrowserEngine(browserEngine),
 		tools.WithJobStore(jobStore),
 		tools.WithLSP(lspPool),
+		tools.WithPlanStore(planStore),
 	)
 	if err != nil {
 		return err
@@ -1195,7 +1256,13 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Open the transcript for this session (best effort: a transcript failure
 	// should not abort the run).
+	//
+	// transcript holds the concrete type as well as the interface because
+	// agent.Recorder is deliberately just Record — SetSizing is Klaudia's own,
+	// and widening the interface would push model sizing into every recorder
+	// implementation and into the agent package that has no use for it.
 	var recorder agent.Recorder
+	var transcript *session.Transcript
 	if tr, terr := session.NewTranscript(session.Meta{
 		SessionID:      sessionID,
 		CWD:            cwd,
@@ -1205,6 +1272,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	}); terr == nil {
 		defer func() { _ = tr.Close() }()
 		recorder = tr
+		transcript = tr
 	}
 
 	loop := agent.New(provider, registry)
@@ -1224,21 +1292,31 @@ func run(cmd *cobra.Command, opts *options) error {
 	// which is small enough to read at a glance and lists only what genuinely
 	// differs between modes.
 	baseOptions := func(turn agent.Turn, s turnSettings) agent.Options {
+		// Stamp the resolved sizing on the transcript before the turn runs.
+		// Here rather than at transcript construction because this is the one
+		// choke point all five frontends pass through, and because the TUI
+		// passes sess.* fresh every turn — so /model is tracked for free
+		// instead of needing a hook of its own.
+		if transcript != nil {
+			transcript.SetSizing(string(s.Model), s.MaxTokens, s.MaxTokensSource, s.ContextWindow, s.ContextSource)
+		}
 		opts := agent.Options{
-			WorkingDir:    cwd,
-			Model:         s.Model,
-			System:        withExtraDirs(sysPrompt, s.ExtraDirs),
-			MaxTurns:      opts.maxTurns,
-			ContextWindow: s.ContextWindow,
-			MaxTokens:     int64(s.MaxTokens),
-			Effort:        s.Effort,
-			Permission:    s.Permission,
-			Host:          hostGate,
-			DeferredTools: currentDeferred(),
-			Recorder:      recorder,
-			WebTools:      true,
-			OnSummary:     onSummary,
-			Hooks:         hookRunner,
+			WorkingDir:      cwd,
+			Model:           s.Model,
+			System:          withExtraDirs(sysPrompt, s.ExtraDirs),
+			MaxTurns:        opts.maxTurns,
+			ContextWindow:   s.ContextWindow,
+			MaxTokens:       int64(s.MaxTokens),
+			MaxTokensSource: s.MaxTokensSource,
+			Effort:          s.Effort,
+			Permission:      s.Permission,
+			Host:            hostGate,
+			DeferredTools:   currentDeferred(),
+			Recorder:        recorder,
+			WebTools:        true,
+			OnSummary:       onSummary,
+			Hooks:           hookRunner,
+			Plan:            planStore,
 		}
 		turn.Apply(&opts)
 		return opts
@@ -1297,8 +1375,16 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 		sess.Compact = func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 			return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
-				return loop.Compact(ctx, history, api.ResolveModel(sess.Model), sess.Effort)
-			}, onSummary)
+				return loop.Compact(ctx, history, api.ResolveModel(sess.Model), int64(sess.MaxTokens), sess.Effort)
+			}, func(summary string) {
+				onSummary(summary)
+				// /compact runs outside the loop, so autocompact's boundary
+				// write never sees it; the TUI is one session, so the process
+				// transcript is the right one.
+				if transcript != nil {
+					_ = transcript.RecordCompaction(summary)
+				}
+			})
 		}
 		extraDirs = func() []string { return sess.ExtraDirs }
 		runFn := func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
@@ -1318,8 +1404,10 @@ func run(cmd *cobra.Command, opts *options) error {
 				// Live too: /model records the new model's sizing, so a switch
 				// to a model with a different output cap takes effect on the
 				// next turn rather than keeping the startup model's.
-				MaxTokens:     sess.MaxTokens,
-				ContextWindow: sess.ContextWindow,
+				MaxTokens:       sess.MaxTokens,
+				ContextWindow:   sess.ContextWindow,
+				MaxTokensSource: sess.MaxTokensSource,
+				ContextSource:   sess.ContextWindowSource,
 			}), turn.Emit)
 		}
 		return tui.Run(ctx, tui.RunFunc(runFn), initialMessages, sess)
@@ -1334,11 +1422,13 @@ func run(cmd *cobra.Command, opts *options) error {
 		runFn := func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
 			elicitor.SetAsker(turn.Asker)
 			return loop.Run(ctx, baseOptions(turn, turnSettings{
-				Model:         model,
-				Permission:    permCtx,
-				Effort:        effort,
-				MaxTokens:     limits.MaxOutputTokens,
-				ContextWindow: limits.ContextWindow,
+				Model:           model,
+				Permission:      permCtx,
+				Effort:          effort,
+				MaxTokens:       limits.MaxOutputTokens,
+				ContextWindow:   limits.ContextWindow,
+				MaxTokensSource: limits.MaxOutputSource,
+				ContextSource:   limits.ContextSource,
 			}), turn.Emit)
 		}
 		// initialMessages, not nil: an explicit --resume/--continue was being
@@ -1357,10 +1447,12 @@ func run(cmd *cobra.Command, opts *options) error {
 				// Permission comes from the Turn: an ACP client keeps a mode
 				// per editor session, so one resolved here would be wrong for
 				// every session but the first.
-				Model:         model,
-				Effort:        effort,
-				MaxTokens:     limits.MaxOutputTokens,
-				ContextWindow: limits.ContextWindow,
+				Model:           model,
+				Effort:          effort,
+				MaxTokens:       limits.MaxOutputTokens,
+				ContextWindow:   limits.ContextWindow,
+				MaxTokensSource: limits.MaxOutputSource,
+				ContextSource:   limits.ContextSource,
 			}), turn.Emit)
 		}
 		srv := acp.New(acp.Options{
@@ -1378,7 +1470,12 @@ func run(cmd *cobra.Command, opts *options) error {
 			// Recorder overrides the process one for every ACP turn, so the
 			// outer transcript stays unused — and because a Writer creates its
 			// file on the first append, an unused one leaves nothing behind.
-			Transcript:    acpTranscript(cwd, mode),
+			Transcript: acpTranscript(cwd, mode, string(model), limits),
+			// Keyed by the ACP session id, not the process's: the process-wide
+			// planStore is the one plan per process, and ACP runs many.
+			Plan: func(id string) *plan.Store {
+				return plan.New(plan.PathFor(session.ConfigRoot(), id))
+			},
 			LoadHistory:   acpLoadHistory(cwd),
 			ListSessions:  func() []acp.SessionSummary { return acpSessions(cwd) },
 			Commands:      acpCommands(skills),
@@ -1393,11 +1490,13 @@ func run(cmd *cobra.Command, opts *options) error {
 		return runGoalLoop(ctx, cmd, loopRun{
 			run: func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
 				return loop.Run(ctx, baseOptions(turn, turnSettings{
-					Model:         model,
-					Permission:    permCtx,
-					Effort:        effort,
-					MaxTokens:     limits.MaxOutputTokens,
-					ContextWindow: limits.ContextWindow,
+					Model:           model,
+					Permission:      permCtx,
+					Effort:          effort,
+					MaxTokens:       limits.MaxOutputTokens,
+					ContextWindow:   limits.ContextWindow,
+					MaxTokensSource: limits.MaxOutputSource,
+					ContextSource:   limits.ContextSource,
 				}), turn.Emit)
 			},
 			approver:   approver,
@@ -1437,11 +1536,13 @@ func run(cmd *cobra.Command, opts *options) error {
 		Emit:     emit,
 		Approver: approver,
 	}, turnSettings{
-		Model:         model,
-		Permission:    permCtx,
-		Effort:        effort,
-		MaxTokens:     limits.MaxOutputTokens,
-		ContextWindow: limits.ContextWindow,
+		Model:           model,
+		Permission:      permCtx,
+		Effort:          effort,
+		MaxTokens:       limits.MaxOutputTokens,
+		ContextWindow:   limits.ContextWindow,
+		MaxTokensSource: limits.MaxOutputSource,
+		ContextSource:   limits.ContextSource,
 	})
 	// Three fields the shared builder has no business knowing about: a headless
 	// run uses the envelope recorder rather than the plain transcript, it is the

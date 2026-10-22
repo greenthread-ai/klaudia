@@ -11,6 +11,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/api"
 	"github.com/greenthread-ai/klaudia/internal/hooks"
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/subagent"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/worktree"
@@ -168,13 +169,27 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 	}
 	childTools := t.Filter(s.base)
 
+	// A read-only sub-agent is held to it by mode, not by a short tool list.
+	// Bypass is left alone: it means the user has taken responsibility for the
+	// session, and a child gate they could not switch off would be the single
+	// exception to that.
+	childPerm := s.permission
+	readOnly := t.Mode != "" && permission.CurrentMode(s.permission) != permission.ModeBypassPermissions
+	if readOnly {
+		childPerm = permission.Context{Mode: permission.StaticMode(t.Mode)}
+	}
+
 	// Give a writing child its own checkout, so two of them running at once do
 	// not edit one tree. Isolation is an improvement on sharing, never a
 	// precondition for working: every way it can fail falls back to the shared
 	// tree with a note, because refusing the task would be worse.
+	//
+	// A child that cannot write needs none of it. writesFiles answers from the
+	// registry, and the registry now says "has Bash" for the two research
+	// agents, which would buy them a checkout to do nothing in.
 	dir := s.workingDir
 	var tree *worktree.Tree
-	if s.worktrees && writesFiles(childTools) && worktree.Supported(ctx, dir) {
+	if s.worktrees && !readOnly && writesFiles(childTools) && worktree.Supported(ctx, dir) {
 		if wt, err := worktree.New(ctx, dir, subagentType); err != nil {
 			reportf(progress, "  (sharing the working tree: %v)", err)
 		} else {
@@ -213,16 +228,22 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 
 	loop := New(s.provider, childTools)
 	res, err := loop.Run(ctx, Options{
-		Prompt:        prompt,
-		Model:         s.model,
-		System:        t.SystemPrompt,
-		MaxTurns:      maxTurns,
-		Permission:    s.permission,
-		Host:          s.hostGate,
-		WorkingDir:    dir,
-		Approver:      s.approver,
-		ContextWindow: ctxWindow,
-		MaxTokens:     int64(maxTokens),
+		Prompt:          prompt,
+		Model:           s.model,
+		System:          t.SystemPrompt,
+		MaxTurns:        maxTurns,
+		Permission:      childPerm,
+		Host:            s.hostGate,
+		WorkingDir:      dir,
+		Approver:        s.approver,
+		ContextWindow:   ctxWindow,
+		MaxTokens:       int64(maxTokens),
+		MaxTokensSource: s.limits.MaxOutputSource,
+		// Its own list, in memory and never written. A general-purpose child
+		// gets every tool, TodoWrite included, and without this it wrote to
+		// the store the registry was built with — the user's — replacing the
+		// approved plan with the child's working notes.
+		Plan:          plan.New(""),
 		Effort:        s.effort,
 		DeferredTools: filterDeferred(s.deferred(), childTools),
 		Hooks:         s.hooks,

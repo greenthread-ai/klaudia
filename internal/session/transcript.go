@@ -23,6 +23,21 @@ type Meta struct {
 	GitBranch      string
 	PermissionMode string
 	UserType       string // defaults to "external"
+
+	// Resolved model sizing, stamped onto assistant entries by Record.
+	//
+	// Held per-entry rather than written once as a session header because
+	// /model switches the model mid-session: a header would be correct for the
+	// first turn and a lie for every turn after the first switch. Version and
+	// GitBranch already repeat on every line for the same reason.
+	//
+	// Plain scalars rather than an api.ModelLimits so session stays a leaf
+	// package — the same call doctor.floorOutputTokens makes.
+	Model               string
+	MaxTokens           int
+	MaxTokensSource     string
+	ContextWindow       int
+	ContextWindowSource string
 }
 
 // NewTranscript opens the transcript for a session and returns a recorder.
@@ -57,8 +72,58 @@ func (t *Transcript) Record(role string, message json.RawMessage) error {
 	if role == "user" {
 		e.PermissionMode = t.meta.PermissionMode
 	}
+	if role == "assistant" {
+		e.Model = t.meta.Model
+		e.MaxTokens = t.meta.MaxTokens
+		e.MaxTokensSource = t.meta.MaxTokensSource
+		e.ContextWindow = t.meta.ContextWindow
+		e.ContextWindowSource = t.meta.ContextWindowSource
+	}
 	t.lastUUID = &id
 	return t.w.Append(e)
+}
+
+// RecordCompaction appends a compaction boundary carrying summary: the point
+// where the live conversation was replaced by it. ReadForResume rebuilds from
+// the last one, so a resumed session is the summary plus what came after,
+// not the summary alone.
+//
+// The summary goes in the transcript rather than relying on .summary.md for
+// the same reason this is per transcript at all: the summary file is keyed by
+// the process's session id, and an ACP process records many sessions.
+func (t *Transcript) RecordCompaction(summary string) error {
+	id := uuid.NewString()
+	e := Entry{
+		Type:       "system",
+		Subtype:    SubtypeCompactBoundary,
+		Content:    summary,
+		UUID:       id,
+		ParentUUID: t.lastUUID,
+		SessionID:  t.meta.SessionID,
+		Timestamp:  Now(),
+		CWD:        t.meta.CWD,
+		GitBranch:  t.meta.GitBranch,
+		UserType:   t.meta.UserType,
+		Version:    t.meta.Version,
+	}
+	t.lastUUID = &id
+	return t.w.Append(e)
+}
+
+// SetSizing records the resolved model sizing stamped onto subsequent
+// assistant entries. Safe to never call: the fields are omitempty, so a
+// transcript that never learns its sizing writes exactly the bytes it wrote
+// before these fields existed, which is what keeps old transcripts and
+// --resume unaffected.
+//
+// Called per turn rather than at construction because /model can change the
+// answer between turns.
+func (t *Transcript) SetSizing(model string, maxTokens int, maxTokensSource string, contextWindow int, contextWindowSource string) {
+	t.meta.Model = model
+	t.meta.MaxTokens = maxTokens
+	t.meta.MaxTokensSource = maxTokensSource
+	t.meta.ContextWindow = contextWindow
+	t.meta.ContextWindowSource = contextWindowSource
 }
 
 // Path returns the transcript file path.

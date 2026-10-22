@@ -37,6 +37,7 @@ reason `-buildvcs=false` must never appear in the build flags.
 - **skill** - User-defined skills (`.klaudia/skills`)
 - **hooks** - Lifecycle hooks: the four events, project-hook trust, execution
 - **memory** - Auto-memory store
+- **plan** - The session plan: step list + the approved-plan artefact
 - **doctor** - `/doctor` environment diagnostics
 - **streamjson** - Bidirectional stream-json frontend
 - **acp** - Agent Client Protocol v1 agent (editor-driven sessions)
@@ -53,8 +54,31 @@ reason `-buildvcs=false` must never appear in the build flags.
 `docs/ux-spec.md` is the authoritative record of the two terminal-UX specs and
 where the implementation deliberately differs from them — read it before
 "fixing" something that looks unimplemented. `docs/trust.md`, `docs/jobs.md`,
-`docs/working-tree.md`, `docs/hooks.md`, `docs/acp.md`, `docs/effort.md` and
-`docs/releasing.md` cover seven subsystems in detail.
+`docs/working-tree.md`, `docs/hooks.md`, `docs/acp.md`, `docs/effort.md`,
+`docs/plan-mode.md` and `docs/releasing.md` cover eight subsystems in detail.
+
+`docs/plan-mode.md` is a design record in progress rather than a description of
+what is built. Two of its four decisions have landed: a permission refusal
+feeds neither loop-breaker (a refusal is a decision, not a malfunction, and
+unlike a host-gate refusal it is revoked mid-run by routes the loop never
+sees), and plan mode gates **mutation** rather than execution via
+`trust.InspectCommand`. That classifier has three verdicts and the third is the
+point: a command it cannot read *asks* rather than being refused, because an
+allowlist that denies what it has not got round to classifying is the bug plan
+mode opened with. D3 landed too: `internal/plan` is now the one answer to
+"where does the plan live", replacing three unconnected ones (plan-mode prose,
+goal mode's checkbox file, and an in-memory todo list built inside the registry
+that only ACP rendered — from the tool *input*, not from any store). A fourth,
+the `Task*` tools over `internal/tasks`, was registered and read by nothing and
+is retired. Read that doc before adding another. The store is owned by the
+caller and passed in with `tools.WithPlanStore`; an **approved** plan is
+written to `~/.klaudia/plans/<session-id>.md` (session-keyed: a per-project
+file let concurrent sessions clobber each other). It uses goal mode's checkbox
+format so `goal.CountUnchecked` *can* read it — nothing calls it on a plan
+yet, so treat that as latent, not wiring, but don't drift the format. D4 landed: the loop emits a `plan`
+event when the store's revision moves, and the TUI, stream-json and ACP all render from it. The store is
+**per conversation** — `agent.Turn.Plan` → `Options.Plan` → `tools.Context.Plans` — because a
+process-wide one let ACP threads share a list and let a sub-agent's `TodoWrite` replace the user's plan.
 
 Hooks are the one subsystem that executes a string from a config file, so
 `docs/hooks.md` is where the reasoning for the trust prompt lives. A hook runs
@@ -87,7 +111,10 @@ whole Claude 5.5 lineup was missing from all three at once, so Opus 5.5 ran at
 tables or none, run `KLAUDIA_LIVE_MODELS=1 go test ./internal/api` when you
 touch them, and treat a figure the provider reports as beating the table.
 `DefaultMaxOutputTokens` is a floor for a model nothing can size, not a
-default.
+default. Every assistant line in the transcript records the figures that turn
+ran with and the `LimitSource*` behind each, stamped by `baseOptions` so all
+five frontends get it from one place — the next sizing bug is answerable from
+the session file instead of from what the user remembers choosing.
 
 ## Rules
 

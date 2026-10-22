@@ -9,7 +9,10 @@
 //	in:  {"type":"control_response","response":{"subtype":"success",
 //	      "request_id":"<id>","response":{...}}}
 //	out: assistant / tool_use / tool_result / compaction / notice /
-//	     permission_mode events (agent.Event)
+//	     permission_mode / plan events (agent.Event)
+//	out: {"type":"plan","plan":{"items":[{"content","status","active_form"}],
+//	      "approved":bool,"path","rev"}} — the whole list, sent whenever it
+//	      changes; "items":[] is a cleared plan. A Klaudia extension.
 //	out: {"type":"control_request","request_id":"<id>","request":{...}}
 //	out: {"type":"result", ...}
 //

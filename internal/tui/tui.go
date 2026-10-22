@@ -34,6 +34,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/mcp"
 	"github.com/greenthread-ai/klaudia/internal/memory"
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
@@ -453,6 +454,12 @@ type Model struct {
 	lastEventAt     time.Time
 	activeToolName  string
 	activeToolStart time.Time
+	// plan is the last plan snapshot the loop sent; planCollapsed is the
+	// Ctrl+T toggle. A copy, not the store: the store is written from the agent
+	// goroutine and the snapshot is immutable, so reading it here takes no
+	// lock. See planview.go.
+	plan          plan.Snapshot
+	planCollapsed bool
 	// residentTokens is the last estimated input-context size, refreshed at
 	// doneMsg after history is reconciled. The status bar reads this as a
 	// `· ctx N%` indicator against sess.ContextWindow so users see context
@@ -1233,9 +1240,18 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitArmed = false
 	}
 
+	// Ctrl+T toggles the plan panel, but only while there is one. The text
+	// box binds Ctrl+T to transpose-characters, and taking the key outright
+	// (as Claude Code does) would remove that from everyone who never makes a
+	// plan. Ahead of onInputKey, which would otherwise hand it to the box.
+	//
 	// The text box's own keys, before any state dispatch. Esc reaching the menu
 	// ahead of the interrupt is deliberate: closing a dropdown that is on screen
 	// must not also kill the turn behind it. A second Esc does that.
+	if msg.Type == tea.KeyCtrlT && planVisible(m.plan) {
+		m.planCollapsed = !m.planCollapsed
+		return m, nil
+	}
 	if m.onInputKey(msg) {
 		return m, nil
 	}
@@ -2967,6 +2983,8 @@ func (m *Model) renderEvent(ev agent.Event) {
 		case ev.IsError:
 			style = errStyle
 			prefix = "✗ " + ev.ToolName
+		case ev.ToolName == "TodoWrite":
+			s = todoResultLine(s)
 		}
 		// Append the tool's wall-clock duration to its result line so users
 		// can see whether a tool was fast or slow without reading timestamps.
@@ -3022,6 +3040,10 @@ func (m *Model) renderEvent(ev agent.Event) {
 		if ev.Content != "" {
 			m.appendLine(noticeStyle.Render("! " + ev.Content))
 			m.noteNav(navError, oneline(ev.Content, 60), "", 0)
+		}
+	case "plan":
+		if ev.Plan != nil {
+			m.plan = *ev.Plan
 		}
 	case "usage":
 		// One inner LLM call's usage. Update both the session counters and the
@@ -3480,6 +3502,17 @@ func (m *Model) clampBottom(s string) string {
 // resize reserves, so the two can never drift.
 func (m *Model) bottomView() string {
 	var bottom string
+	// The plan panel sits directly above the input, while idle and while
+	// running — nowhere else. Every other state is a question whose options
+	// were just printed in scrollback directly above its prompt, and a
+	// checklist wedged between the two reads as part of the question.
+	panel := renderPlan(m.plan, m.planCollapsed, m.width)
+	withPanel := func(s string) string {
+		if panel == "" {
+			return s
+		}
+		return panel + "\n" + s
+	}
 	switch m.state {
 	case stateRunning:
 		label := " " + m.phaseLabel() + "… "
@@ -3499,7 +3532,10 @@ func (m *Model) bottomView() string {
 			}
 		}
 		m.input.SetHeight(m.inputHeight())
-		bottom = caption(work) + "\n" + m.promptBox() + m.inputAffordanceView()
+		bottom = withPanel(caption(work) + "\n" + m.promptBox() + m.inputAffordanceView())
+		// Above the panel, so clampBottom — which trims from the top — gives
+		// up the streaming preview before any of the plan.
+		//
 		// Show the not-yet-committed tail of the streaming message above the
 		// working line, so the user sees text arriving even though the finished
 		// part has already gone to scrollback.
@@ -3526,7 +3562,7 @@ func (m *Model) bottomView() string {
 		bottom = m.choiceView()
 	default:
 		m.input.SetHeight(m.inputHeight())
-		bottom = m.promptBox() + m.inputAffordanceView()
+		bottom = withPanel(m.promptBox() + m.inputAffordanceView())
 	}
 	// Persistent status bar at the very bottom, in every state.
 	return bottom + "\n" + caption(m.statusLine())

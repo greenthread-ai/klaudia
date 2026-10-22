@@ -31,7 +31,6 @@ var summaryKey = map[string]string{
 	"Glob": "pattern", "Grep": "pattern",
 	"BrowserSearch": "query", "BrowserFetch": "url", "BrowserNavigate": "url",
 	"Skill": "name", "ToolSearch": "query",
-	"TaskCreate": "description", "TaskGet": "task_id", "TaskUpdate": "task_id",
 }
 
 // toolFields decodes a tool_use Input (any) into a flat string map.

@@ -41,6 +41,16 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 	// the result unpaired — trading one 400 for its mirror image.
 	out := mergeSameRole(messages)
 
+	// (0b) one server-tool call, one result. Before historyParam the live loop
+	// misread a deferred web_fetch result as corrupt and dropped it, so the API
+	// delivered it again on every later turn, and the transcript kept each
+	// copy: one session recorded one call and ten results. Resuming sent them
+	// all, and the API pairs a call with its first result only — the second is
+	// a 400, "unexpected tool_use_id found in web_fetch_tool_result blocks",
+	// and the session could not continue at all. The first copy is the one in
+	// the call's position, so it is the one kept.
+	out = dropRepeatedServerToolResults(out)
+
 	// (1a) The latest assistant message cannot be edited if it carries thinking
 	// blocks: the API validates them against what it produced and rejects the
 	// request outright — "`thinking` or `redacted_thinking` blocks in the
@@ -54,9 +64,9 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 	// (1) drop server-tool blocks that would be rejected on send. Done before
 	// the empty-content repair, so a message left empty by the drop is caught
 	// there rather than slipping through.
-	pendingTurn := pendingAssistantIndex(out)
+	pendingTurn, split := pendingAssistantIndex(out), splitServerToolPairs(out)
 	for i := range out {
-		if repaired, changed := repairServerToolResults(out[i].Content, i == pendingTurn); changed {
+		if repaired, changed := repairServerToolResults(out[i].Content, i == pendingTurn, split); changed {
 			out[i].Content = repaired
 		}
 		// (1b) drop web-search citations whose URL was lost to the SDK bug
@@ -148,7 +158,7 @@ func hasToolResultAt(messages []anthropic.BetaMessageParam, i int, toolUseID str
 // needsSanitize is the fast path — when it returns false, sanitizeMessages
 // returns the input unchanged with no allocation.
 func needsSanitize(messages []anthropic.BetaMessageParam) bool {
-	if hasBrokenServerToolResult(messages) {
+	if hasBrokenServerToolResult(messages) || hasRepeatedServerToolResult(messages) {
 		return true
 	}
 	if hasEmptyWebSearchCitation(messages) {
@@ -186,7 +196,7 @@ func dropUneditableTrailingTurn(messages []anthropic.BetaMessageParam) []anthrop
 	if last < 0 || !hasThinkingBlock(messages[last].Content) {
 		return messages
 	}
-	if _, changed := repairServerToolResults(messages[last].Content, last == pendingAssistantIndex(messages)); !changed {
+	if _, changed := repairServerToolResults(messages[last].Content, last == pendingAssistantIndex(messages), splitServerToolPairs(messages)); !changed {
 		return messages
 	}
 
@@ -240,6 +250,52 @@ func hasThinkingBlock(content []anthropic.BetaContentBlockParamUnion) bool {
 	for _, b := range content {
 		if b.OfThinking != nil || b.OfRedactedThinking != nil {
 			return true
+		}
+	}
+	return false
+}
+
+// dropRepeatedServerToolResults keeps the first web_search / web_fetch result
+// for each server-tool id and removes later ones. The input is never mutated.
+func dropRepeatedServerToolResults(messages []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
+	if !hasRepeatedServerToolResult(messages) {
+		return messages
+	}
+	seen := map[string]bool{}
+	out := make([]anthropic.BetaMessageParam, len(messages))
+	copy(out, messages)
+	for i, m := range out {
+		var kept []anthropic.BetaContentBlockParamUnion
+		changed := false
+		for _, b := range m.Content {
+			if id, ok := serverToolResultID(b); ok {
+				if seen[id] {
+					changed = true
+					continue
+				}
+				seen[id] = true
+			}
+			kept = append(kept, b)
+		}
+		if changed {
+			out[i].Content = kept
+		}
+	}
+	return out
+}
+
+// hasRepeatedServerToolResult reports whether any server-tool id has more
+// than one result, for the sanitize fast path.
+func hasRepeatedServerToolResult(messages []anthropic.BetaMessageParam) bool {
+	seen := map[string]bool{}
+	for _, m := range messages {
+		for _, b := range m.Content {
+			if id, ok := serverToolResultID(b); ok {
+				if seen[id] {
+					return true
+				}
+				seen[id] = true
+			}
 		}
 	}
 	return false

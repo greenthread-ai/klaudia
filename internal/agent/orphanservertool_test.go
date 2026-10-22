@@ -53,7 +53,7 @@ func TestSanitizeDropsOrphanServerToolUse(t *testing.T) {
 	out := sanitizeMessages(msgs)
 
 	for _, m := range out {
-		if len(unpairedServerToolIDs(m.Content, false)) > 0 {
+		if len(unpairedServerToolIDs(m.Content, false, nil)) > 0 {
 			t.Error("orphan server_tool_use survived sanitize; the request would still 400")
 		}
 		for _, b := range m.Content {
@@ -106,7 +106,7 @@ func TestOrphanRepairIgnoresOtherServerTools(t *testing.T) {
 		anthropic.NewBetaServerToolUseBlock("srvtoolu_code", map[string]any{"code": "1+1"},
 			anthropic.BetaServerToolUseBlockParamNameCodeExecution),
 	}
-	if len(unpairedServerToolIDs(content, false)) != 0 {
+	if len(unpairedServerToolIDs(content, false, nil)) != 0 {
 		t.Error("a non-web server tool was wrongly treated as an orphan")
 	}
 }
@@ -117,7 +117,7 @@ func TestOrphanRepairIsPerToolUseID(t *testing.T) {
 		webSearchUse("done"), webSearchResult("done"),
 		webSearchUse("cut_off"),
 	}
-	orphans := unpairedServerToolIDs(content, false)
+	orphans := unpairedServerToolIDs(content, false, nil)
 	if len(orphans) != 1 || !orphans["cut_off"] {
 		t.Errorf("orphans = %v, want only cut_off", orphans)
 	}
@@ -152,7 +152,7 @@ func TestSanitizeKeepsAPairSplitAcrossPauseTurnMessages(t *testing.T) {
 
 	out := sanitizeMessages(msgs)
 	for _, m := range out {
-		if bad := unpairedServerToolIDs(m.Content, false); len(bad) > 0 {
+		if bad := unpairedServerToolIDs(m.Content, false, nil); len(bad) > 0 {
 			t.Fatalf("sanitize broke a valid pause_turn pair: %v", bad)
 		}
 	}
@@ -200,7 +200,7 @@ func TestResultBeforeItsCallIsUnpaired(t *testing.T) {
 	content := []anthropic.BetaContentBlockParamUnion{
 		webSearchResult("backwards"), webSearchUse("backwards"),
 	}
-	if bad := unpairedServerToolIDs(content, false); !bad["backwards"] {
+	if bad := unpairedServerToolIDs(content, false, nil); !bad["backwards"] {
 		t.Errorf("a result preceding its call was accepted: %v", bad)
 	}
 }
@@ -267,5 +267,70 @@ func TestPendingOnlyAppliesWhileTheTurnIsStillBeingAnswered(t *testing.T) {
 	}
 	if got := pendingAssistantIndex(movedOn); got != -1 {
 		t.Errorf("moved on: pending index = %d, want -1 (abandoned)", got)
+	}
+}
+
+// The spiral, from the real transcript. Search + Bash in one batch; the API
+// opens the NEXT assistant message with the search result, and that message
+// (thinking + result + AskUserQuestion) is answered by the user. Each half of
+// the split pair read as an orphan, so sanitize rewound the history to before
+// the result — dropping the user's answer — and the model asked again.
+func TestSanitizeKeepsAPairSplitAcrossAParallelBatch(t *testing.T) {
+	const search = "srvtoolu_01HmiyaTkSKqzBt2N88bscGS"
+	thinking := anthropic.NewBetaThinkingBlock("sig", "plan where plans live")
+	msgs := []anthropic.BetaMessageParam{
+		anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("where should plans live?")),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			thinking, webSearchUse(search),
+			{OfToolUse: &anthropic.BetaToolUseBlockParam{ID: "toolu_bash", Name: "Bash", Input: map[string]any{}}},
+		}},
+		anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock("toolu_bash", "ok", false)),
+		{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{
+			thinking, webSearchResult(search),
+			{OfToolUse: &anthropic.BetaToolUseBlockParam{ID: "toolu_ask", Name: "AskUserQuestion", Input: map[string]any{}}},
+		}},
+		anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock("toolu_ask", "Mirror Claude Code", false)),
+	}
+
+	out := sanitizeMessages(msgs)
+	if len(out) != len(msgs) {
+		t.Fatalf("sanitize rewrote the history %d -> %d messages; the user's answer is gone", len(msgs), len(out))
+	}
+	var call, result, answer bool
+	for _, m := range out {
+		for _, b := range m.Content {
+			call = call || (b.OfServerToolUse != nil && b.OfServerToolUse.ID == search)
+			if id, ok := serverToolResultID(b); ok && id == search {
+				result = true
+			}
+			answer = answer || (b.OfToolResult != nil && b.OfToolResult.ToolUseID == "toolu_ask")
+		}
+	}
+	if !call || !result || !answer {
+		t.Errorf("kept call=%v result=%v answer=%v; want all three", call, result, answer)
+	}
+}
+
+// A result split from its call is paired only when the call came FIRST: the
+// split rule must not launder a result that precedes its call into a pair.
+func TestSplitPairRequiresTheCallFirst(t *testing.T) {
+	asst := func(b anthropic.BetaContentBlockParamUnion) anthropic.BetaMessageParam {
+		return anthropic.BetaMessageParam{Role: anthropic.BetaMessageParamRoleAssistant, Content: []anthropic.BetaContentBlockParamUnion{b}}
+	}
+	tests := []struct {
+		name  string
+		msgs  []anthropic.BetaMessageParam
+		split bool
+	}{
+		{name: "call then result", msgs: []anthropic.BetaMessageParam{asst(webSearchUse("x")), asst(webSearchResult("x"))}, split: true},
+		{name: "result then call", msgs: []anthropic.BetaMessageParam{asst(webSearchResult("x")), asst(webSearchUse("x"))}, split: false},
+		{name: "same message is not split", msgs: []anthropic.BetaMessageParam{asst(webSearchUse("x")), asst(anthropic.NewBetaTextBlock("t"))}, split: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := splitServerToolPairs(tc.msgs)["x"]; got != tc.split {
+				t.Errorf("split = %v, want %v", got, tc.split)
+			}
+		})
 	}
 }

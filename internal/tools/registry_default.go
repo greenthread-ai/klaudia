@@ -6,8 +6,8 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/browser"
 	"github.com/greenthread-ai/klaudia/internal/lsp"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
-	"github.com/greenthread-ai/klaudia/internal/tasks"
 )
 
 // regOptions holds the caller-owned, session-scoped resources the registry's
@@ -16,6 +16,7 @@ type regOptions struct {
 	browser *browser.Engine
 	shells  *JobStore
 	lsp     *lsp.Pool
+	plans   *plan.Store
 }
 
 // RegOption configures DefaultRegistry.
@@ -28,6 +29,12 @@ func WithBrowserEngine(e *browser.Engine) RegOption { return func(o *regOptions)
 // WithJobStore supplies the managed-job store backing run_in_background,
 // BashOutput/KillShell/Jobs/RestartJob. The caller KillAll()s it at session end.
 func WithJobStore(s *JobStore) RegOption { return func(o *regOptions) { o.shells = s } }
+
+// WithPlanStore supplies the session plan shared by TodoWrite and
+// ExitPlanMode. Pass it when the caller wants to render the plan or persist it:
+// the store built by default is reachable only from inside the registry, which
+// is how the todo list came to be rendered by exactly one frontend.
+func WithPlanStore(s *plan.Store) RegOption { return func(o *regOptions) { o.plans = s } }
 
 // WithLSP supplies the language-server pool backing Diagnostics/Definition/
 // References. The caller Close()s it at session end. When omitted, the LSP tools
@@ -47,10 +54,14 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 	for _, o := range opts {
 		o(&cfg)
 	}
-	// Per-session todo state shared with the TodoWrite tool.
-	todos := &TodoStore{}
-	// Per-session task state shared with task tools.
-	taskStore := tasks.New()
+	// The session plan, shared with TodoWrite and ExitPlanMode. Built here only
+	// when the caller did not supply one; a caller that wants to render the
+	// plan passes WithPlanStore and keeps the handle. The fallback writes no
+	// artefact: plans are keyed by session and the registry has no session id.
+	plans := cfg.plans
+	if plans == nil {
+		plans = plan.New("")
+	}
 
 	// Shared lazy browser engine for local web tools. Chrome launches only when a
 	// browser-backed tool call needs it.
@@ -79,14 +90,10 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 		{"KillShell", func() (Tool, error) { return NewKillShell(shells) }},
 		{"Jobs", func() (Tool, error) { return NewJobs(shells) }},
 		{"RestartJob", func() (Tool, error) { return NewRestartJob(shells) }},
-		{"TodoWrite", func() (Tool, error) { return NewTodoWrite(todos) }},
-		{"TaskCreate", func() (Tool, error) { return NewTaskCreate(taskStore) }},
-		{"TaskList", func() (Tool, error) { return NewTaskList(taskStore) }},
-		{"TaskGet", func() (Tool, error) { return NewTaskGet(taskStore) }},
-		{"TaskUpdate", func() (Tool, error) { return NewTaskUpdate(taskStore) }},
+		{"TodoWrite", func() (Tool, error) { return NewTodoWrite(plans) }},
 		{"NotebookEdit", func() (Tool, error) { return NewNotebookEdit() }},
 		{"AskUserQuestion", func() (Tool, error) { return NewAskUserQuestion() }},
-		{"ExitPlanMode", func() (Tool, error) { return NewExitPlanMode() }},
+		{"ExitPlanMode", func() (Tool, error) { return NewExitPlanMode(plans) }},
 		{"RequestHostChange", func() (Tool, error) { return NewRequestHostChange() }},
 		{"BrowserSearch", func() (Tool, error) { return NewBrowserSearch(engine) }},
 		{"BrowserFetch", func() (Tool, error) { return NewBrowserFetch(engine) }},

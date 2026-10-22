@@ -6,6 +6,25 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **The plan is visible in every frontend.** The loop emits a `plan` event
+  whenever the step list changes. The TUI, which showed nothing, now draws a
+  live panel above the prompt (`Ctrl+T` collapses it; it hides once every step
+  is done) and folds each `TodoWrite` result to `plan updated · n/m done`.
+  stream-json clients get the event with a snake_case payload (`items`,
+  `content`, `status`, `active_form`, `approved`, `path`, `rev`; a cleared plan
+  is `"items":[]`). ACP's native plan is now built from the stored list rather
+  than from `TodoWrite`'s input.
+- **The session transcript now records the sizing each turn actually ran
+  with**: the resolved model id, `maxTokens`, `contextWindow` and the source
+  label behind each figure, on every assistant line. This is the gap the
+  Opus 5.5 output-cap bug exposed from the other side — the saved transcript
+  named the permission mode, the version, the git branch and the request id,
+  and not one of the three numbers that decided what the turn could do, so the
+  diagnosis rested on the user remembering which model they had picked. Written
+  per entry rather than as a session header because `/model` changes the answer
+  mid-session. Five `omitempty` fields, so a transcript whose sizing was never
+  set is byte-identical to one written before they existed and `--resume` is
+  unaffected.
 - **A `klaudia` theme, and it is the default.** Sky blue and bronze on
   near-black. The startup colours were previously a palette no theme owned:
   `currentThemeID()` returned `"dark"`, which is not in `renderThemes`, so the
@@ -14,7 +33,169 @@ port mirrors (see `internal/version`).
   real entry, `defaultChromePalette` is derived from it rather than written
   out twice, and a test fails if the two ever disagree.
 
+- **An approved plan is now a durable artefact.** `ExitPlanMode` used to return
+  the sentence "Plan approved. Plan mode is now off — proceed with the
+  implementation" and throw the plan away: it survived only as prose in the
+  message history, where compaction could summarise it away and `--resume`
+  never saw it. Approval now writes `~/.klaudia/plans/<session-id>.md` — Claude
+  Code's shape: one file per session, outside the project, so two sessions in
+  one repo cannot overwrite each other's plan and `--resume` keeps writing the
+  same file. The user can edit it when the plan is wrong. The body uses goal
+  mode's checkbox format, so `goal.CountUnchecked` *could* read it, but
+  nothing calls it on a plan yet. The approval result also tells
+  the model to record the steps with `TodoWrite` before starting the first one
+  and to revise them as it goes, because approving a plan should begin working
+  through a visible list rather than merely unlock the tools. A failed write is
+  reported to the model but never costs it the plan: the list stays in memory
+  and a read-only `.klaudia` degrades to a session with no artefact. Headless
+  `-p` runs still have no approver, so a plan there is recorded but not
+  approved and so not persisted.
+
+### Changed
+- **A dropped web search or fetch is a note to the model, not a notice to you.**
+  The on-screen "an earlier web fetch was interrupted… re-run it if the answer
+  depends on it" line is gone. It fired in sessions where nothing had been
+  interrupted (see Fixed), and the model is the one that has to act on a lost
+  result. It is still told: the dropped exchange is replaced with a note in
+  the conversation, once, and that note is never re-added on later turns.
+- **A tool call cut off at the output limit now says where that limit came
+  from.** The refusal used to read `max_tokens=8192` and nothing else; under
+  the Opus 5.5 stale-table bug that number was the unknown-model floor, and the
+  note gave no way to tell it from the model's real cap. It now names the
+  source (`config override`, `provider`, `model default`, the floor, or the
+  new `provider rejected the requested cap` once the loop has adopted a figure
+  from a 400). Only the two caps that are ours rather than the model's (a
+  config override and the floor) add a hint that `maxTokens` in
+  `.klaudia/config.toml` can raise it. `agent.Options` gained `MaxTokensSource`,
+  filled from the resolved limits by the CLI and by sub-agent spawning. The
+  loop's own default path now goes through `api.ResolveLimits` so the number
+  and its label come from one lookup.
+- **The four `Task*` tools are retired, and `TodoWrite` is backed by the new
+  `internal/plan` store.** Klaudia had two parallel task systems, both
+  registered and neither authoritative: `TodoWrite`'s whole-list store, and
+  `TaskCreate`/`TaskGet`/`TaskList`/`TaskUpdate` over `internal/tasks`. Nothing
+  read the second one — not the TUI, not stream-json, not ACP; it was
+  registered and given label-table entries, and that was the whole of its
+  existence. The first was barely better off: it was constructed *inside*
+  `DefaultRegistry` and handed to nobody, so the only frontend that rendered it
+  was ACP, and it did so from the tool input rather than from the store. The
+  store now belongs to the caller (`tools.WithPlanStore`), which is what lets a
+  frontend show the plan at all.
+
 ### Fixed
+- **A successful web fetch is no longer reported as dropped, and no longer
+  makes the model re-ask questions.** When a fetch ran alongside a local tool,
+  its result arrived at the start of the next assistant message, and the live
+  loop added that message to history with `ToParam()` alone. That keeps a
+  healthy `web_fetch` result in a form the repair code reads as corrupt, so it
+  dropped the fetch and the turn it came in, printed "an earlier web fetch was
+  interrupted before it returned…" in a session where nothing had been
+  interrupted, and rewound the conversation far enough that a goal-setting
+  session asked the user the same `AskUserQuestion`s three times (measured: one
+  fetch delivered in 9 assistant messages). The live history now goes through
+  the same JSON round-trip a resumed session rebuilds from, which is also why
+  replaying the transcript never reproduced it.
+- **Sessions damaged by the bug above can be resumed again.** Each time the
+  fetch was dropped the API delivered it again, and the transcript kept every
+  copy — one session holds one `web_fetch` call and ten results. Resuming sent
+  them all, and the API rejected the second with `unexpected tool_use_id found
+  in web_fetch_tool_result blocks`, so the session could not continue at all.
+  Sanitising now sends only the first result for each server-tool call.
+  Verified live: that session, resumed from a scratch copy, answers again.
+- **`--resume` no longer forgets everything since the last compaction.** A
+  compacted session was resumed from the summary file alone, and every entry
+  recorded after it was dropped — measured on one restart as 572 entries and
+  80 minutes of work, which the resumed session could not remember doing.
+  Each compaction (auto or `/compact`) now writes a `compact_boundary` line
+  carrying the summary into that conversation's own transcript, and resume
+  rebuilds the last summary plus everything after it. Older transcripts are
+  cut at the summary file's `_Compacted <ts>_` stamp, so sessions compacted
+  before this change recover too. The seeded summary also ends with an
+  explicit closing line, since the next prompt is merged into the same
+  message: a summary ending `**Goal m` reached the model as
+  `**Goal malright…`.
+- **A sub-agent can no longer overwrite your plan.** The plan store was one per
+  process, wired into the registry every conversation shares. A
+  general-purpose sub-agent gets every tool, so its own `TodoWrite` replaced
+  the user's step list — and after approval, rewrote the plan file. The store
+  is now per conversation (`agent.Turn.Plan`, passed to the tools as
+  `tools.Context.Plans`); each sub-agent gets a private in-memory one, and each
+  ACP session its own store and its own `~/.klaudia/plans/<session-id>.md`
+  instead of sharing the process's.
+- **ACP no longer shows a plan the tool rejected.** It posted the plan from
+  `TodoWrite`'s input, which arrives before the tool validates anything; a
+  call refused for, say, two in-progress steps still drew its list in the
+  editor. The plan now comes from the store.
+- **Plan mode no longer refuses `2>/dev/null`.** The mutation classifier
+  treated every output redirection as a file write, so `grep … 2>/dev/null`
+  was refused during a real planning session. Redirects to the pseudo-devices
+  (`/dev/null`, `/dev/stdout`, `/dev/fd/*`, …) now count as writing nothing;
+  the list is shared with the host gate, which had already fixed the same
+  false positive. `/tmp` stays a write in plan mode (it is a real file), and
+  a target is cleaned before matching so `/dev/fd/../../etc/x` cannot pass as
+  a descriptor.
+- **A web search run alongside a local tool no longer rewinds the conversation.**
+  When the model calls `web_search`/`web_fetch` and a client tool in one batch,
+  the API returns the search result at the start of the *next* assistant
+  message. The pre-send repair read each half of that split pair as an orphan,
+  dropped them, and — because that message carries thinking and cannot be
+  edited — dropped the whole turn along with the reply to it. The history then
+  stood where it was before the result arrived, so the same search came back
+  and the model repeated itself. Measured from transcripts: one search
+  re-delivered 622 times over six hours, and an `AskUserQuestion` asked four
+  times with the user's answers discarded each time. Measured live: the API
+  accepts the split pair as-is, so it is now left alone.
+- **A compaction summary that runs out of room is no longer accepted as the
+  whole history.** Both `/compact` and autocompact requested a fixed 4096
+  output tokens and never checked the stop reason. Measured: a real session's
+  summary ended mid-word ("**Goal m", 11,317 bytes) and replaced its history,
+  losing the user's answers to questions the model then asked again. The
+  summary now runs at the session's resolved output cap, and one that hits it
+  is refused with a notice; the full history is kept.
+- **Plan mode now gates mutation rather than execution, so research works.**
+  It refused *every* Bash call, and executing is how you research: `Read`,
+  `Glob` and `Grep` cover files, but `git log`, `git diff`, `go doc` and
+  `go list -m` have no tool equivalent at all. Measured, a planning session in
+  this repository was refused all of those and shipped a plan carrying the
+  caveat that it had not looked at what was on the branch it was planning
+  against — the mode had made checking impossible. The axis was wrong, not the
+  strictness: the host gate already stops changes to this machine in every
+  mode, so what plan mode uniquely protects is the user's files. A command is
+  now classified by `trust.InspectCommand` and gets one of three verdicts — it
+  only inspects and runs silently, it is known to write and is denied with a
+  message naming what it would have changed, or it cannot be determined and
+  *asks*. The third verdict is load-bearing: the classifier is an allowlist,
+  and one that refuses what it has not got round to classifying is this bug
+  with a longer fuse. Redirections disqualify a line whatever the program
+  (`echo` inspects; `echo x > main.go` does not), every component of a pipeline
+  or `&&` chain has to clear the bar on its own, and `bash -c '…'` is read
+  inside. `go build` and `go test` are denied: `go build ./cmd/klaudia` drops a
+  binary in the working directory and `go test` runs arbitrary code. See
+  `docs/plan-mode.md`.
+- **The `Explore` and `Plan` sub-agents can run commands.** They were held
+  read-only by being denied Bash, which denied them the same `git log` and
+  `go doc` the main loop was missing, so delegating research was no way round
+  it. They now carry Bash and are held read-only by mode instead — a stronger
+  guarantee than a short tool list, and a far less crippling one. Not applied
+  over `--dangerously-skip-permissions`, which means the user has taken
+  responsibility for the session. They also stop taking a `git worktree`: a
+  child that cannot write has nothing to isolate.
+- **Approving a plan no longer leaves the first command refused by the plan
+  mode you just left.** A permission refusal was recorded as a tool *failure*,
+  and plan mode's message is byte-identical whatever the command was — so two
+  refused commands looked to loop-breaker B like one error shape across
+  different inputs, which is the environment-is-wedged signature. The second
+  refused command latched Bash for the rest of the turn. After `ExitPlanMode`
+  flipped the session to autonomous the next call never reached the permission
+  check at all: the breaker answered it with a quote of the plan-mode error the
+  session had just escaped, wrapped in "Bash has failed with the SAME error 2
+  times in a row", blaming the model for a refusal the harness had generated.
+  The exclusion already existed for host-gate refusals with reasoning that
+  applied verbatim; permission denials were never added to it. They are now
+  kept out of *both* breakers rather than just the shape streak, because unlike
+  a host-gate refusal a permission decision is routinely revoked mid-run — by
+  an approved plan, or by `/mode` — through a route the loop never observes, so
+  there is nothing to hang a counter reset on. See `docs/plan-mode.md`.
 - **Fetching a page no longer waits for the load event, which on an ad-carrying
   site can never arrive.** `chromedp.Navigate` returns when every subresource
   has finished; a third-party ad or tracker is free never to finish. Measured

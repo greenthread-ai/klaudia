@@ -41,6 +41,20 @@ func (e *envelopeRecorder) Record(role string, message json.RawMessage) error {
 // writer plus the stream-json envelope emitter). A nil entry is skipped.
 type multiRecorder []agent.Recorder
 
+// RecordCompaction forwards to every recorder that can mark a boundary. The
+// headless path wraps the transcript in a multiRecorder, so without this the
+// assertion in autocompact would fail and the boundary would never be written.
+func (m multiRecorder) RecordCompaction(summary string) error {
+	for _, r := range m {
+		if cr, ok := r.(agent.CompactionRecorder); ok {
+			if err := cr.RecordCompaction(summary); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (m multiRecorder) Record(role string, message json.RawMessage) error {
 	for _, r := range m {
 		if r == nil {

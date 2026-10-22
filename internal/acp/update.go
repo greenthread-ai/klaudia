@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 )
 
 // Translating Klaudia's event stream into ACP session/update notifications.
@@ -93,10 +94,12 @@ func (t *translator) event(ev agent.Event) {
 
 	case "tool_use":
 		// A plan, not a tool call. The id is remembered so its tool_result does
-		// not arrive as a patch to a call the client never saw.
-		if entries, ok := planEntries(ev.ToolName, ev.Input); ok {
+		// not arrive as a patch to a call the client never saw. Nothing is
+		// posted here: this event fires before the tool validates or stores
+		// anything, so a TodoWrite the tool rejected used to show the client a
+		// plan that never existed. The "plan" event below is the stored list.
+		if ev.ToolName == "TodoWrite" {
 			t.suppress(ev.ToolUseID)
-			t.post(planUpdate{Kind: "plan", Entries: entries})
 			return
 		}
 		// status pending, not in_progress. ACP defines pending as "has not
@@ -156,6 +159,11 @@ func (t *translator) event(ev agent.Event) {
 			t.post(agentThought(text))
 		}
 
+	case "plan":
+		if ev.Plan != nil {
+			t.post(planUpdate{Kind: "plan", Entries: snapshotEntries(*ev.Plan)})
+		}
+
 	case "permission_mode":
 		if ev.Content == "" {
 			return
@@ -165,7 +173,8 @@ func (t *translator) event(ev agent.Event) {
 }
 
 // planEntries renders TodoWrite's input as ACP plan entries, reporting false for
-// any other tool.
+// any other tool. Only session/load replay uses it now: a reloaded history has
+// the call's input and no store to read, so the input is all there is.
 //
 // Status is passed through rather than mapped: TodoWrite's three statuses are
 // spelled exactly as ACP's, and anything else the model invents becomes pending
@@ -203,6 +212,26 @@ func planEntries(name string, input any) ([]planEntry, bool) {
 	// so ok is true even with no entries. Returning false there would leak the
 	// call back out as a raw tool call.
 	return entries, true
+}
+
+// snapshotEntries renders the stored plan as ACP plan entries. The store
+// only holds the three valid statuses (TodoWrite rejects anything else), but
+// the same unknown-becomes-pending rule as planEntries is kept so the two
+// paths cannot disagree about what a client is allowed to receive.
+func snapshotEntries(snap plan.Snapshot) []planEntry {
+	entries := make([]planEntry, 0, len(snap.Items))
+	for _, it := range snap.Items {
+		if strings.TrimSpace(it.Content) == "" {
+			continue
+		}
+		status := planPending
+		switch it.Status {
+		case planInProgress, planCompleted:
+			status = it.Status
+		}
+		entries = append(entries, planEntry{Content: it.Content, Priority: planPriorityMedium, Status: status})
+	}
+	return entries
 }
 
 // diffContent builds the diff a client renders as a side-by-side change, for the
@@ -301,9 +330,6 @@ var salientKey = map[string]string{
 	"BrowserNavigate": "url",
 	"Skill":           "name",
 	"ToolSearch":      "query",
-	"TaskCreate":      "subject",
-	"TaskGet":         "id",
-	"TaskUpdate":      "id",
 	"Memory":          "operation",
 	"BashOutput":      "bash_id",
 	"KillShell":       "shell_id",
@@ -372,8 +398,6 @@ var toolKinds = map[string]string{
 	"Diagnostics":      kindRead,
 	"Definition":       kindRead,
 	"References":       kindRead,
-	"TaskGet":          kindRead,
-	"TaskList":         kindRead,
 	"ListMcpResources": kindRead,
 	"ReadMcpResource":  kindRead,
 	"BrowserSnapshot":  kindRead,
@@ -382,8 +406,6 @@ var toolKinds = map[string]string{
 	"Edit":         kindEdit,
 	"NotebookEdit": kindEdit,
 	"TodoWrite":    kindEdit,
-	"TaskCreate":   kindEdit,
-	"TaskUpdate":   kindEdit,
 	"Memory":       kindEdit,
 
 	"Glob":          kindSearch,

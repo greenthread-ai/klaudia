@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 )
 
 // Result is a single tool_result content block produced by a tool execution.
@@ -79,6 +80,16 @@ type Context struct {
 	Ask Asker
 	// Plan, if non-nil, handles ExitPlanMode approval.
 	Plan Planner
+	// Plans, if non-nil, is the conversation's plan store, and TodoWrite and
+	// ExitPlanMode write there instead of the store they were built with.
+	//
+	// The registry is shared by every conversation in the process, so a store
+	// fixed at construction was shared too: two ACP sessions overwrote each
+	// other's plan, and a general-purpose sub-agent (which gets every tool)
+	// replaced the user's approved plan with its own list. The loop sets this
+	// from Options.Plan, which is also the store it announces, so the list a
+	// frontend shows is by construction the one the tools changed.
+	Plans *plan.Store
 	// HostChange, if non-nil, handles RequestHostChange approval. Nil means
 	// there is no one to ask, and the tool says so rather than pretending.
 	HostChange HostApprover

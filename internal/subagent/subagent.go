@@ -3,7 +3,10 @@
 // by the Agent tool and run their own agentic loop with a restricted toolset.
 package subagent
 
-import "github.com/greenthread-ai/klaudia/internal/tools"
+import (
+	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/tools"
+)
 
 // Type describes a sub-agent kind selectable via the Agent tool's
 // subagent_type, mirroring the JS built-in agents (general-purpose/Explore/Plan).
@@ -26,6 +29,20 @@ type Type struct {
 	// system prompt. An instruction not to write is a request; this is the
 	// registry the sub-agent is handed.
 	ReadOnlyMCP bool
+	// Mode, when set, is the permission mode the child runs under regardless of
+	// the parent's.
+	//
+	// It is how a read-only agent can be given Bash. Withholding the tool was
+	// the old enforcement, and it made the two research agents unable to run
+	// `git log` or `go doc` — the commands research is actually made of, and
+	// the ones with no Read/Glob/Grep equivalent. Plan mode now refuses
+	// mutation rather than execution (docs/plan-mode.md), so the mode is both a
+	// stronger guarantee than a short tool list and a less crippling one.
+	//
+	// Deliberately not applied over ModeBypassPermissions: that flag means the
+	// user has taken responsibility for the session, and a child gate they
+	// could not switch off would be the one exception to it.
+	Mode permission.Mode
 }
 
 // readOnlyTool is implemented by tools that can state they only read. MCP tools
@@ -54,21 +71,26 @@ func Builtin() []Type {
 			Name: "Explore",
 			Description: "Read-only search agent for broad fan-out searches across many files and " +
 				"read-only MCP sources. It locates code and answers questions but does not modify anything.",
-			Tools:       []string{"Read", "Glob", "Grep"},
+			Tools:       []string{"Read", "Glob", "Grep", "Bash"},
 			ReadOnlyMCP: true,
-			SystemPrompt: "You are a read-only exploration agent for Klaudia. You may ONLY read and search; " +
-				"never modify files or run mutating commands. Thoroughly investigate and return a concise, " +
-				"well-organized summary of your findings with file paths and line references.",
+			Mode:        permission.ModePlan,
+			SystemPrompt: "You are a read-only exploration agent for Klaudia. You may read, search and run " +
+				"commands that only inspect — anything that would change a file is refused. Thoroughly " +
+				"investigate and return a concise, well-organized summary of your findings with file paths " +
+				"and line references.",
 		},
 		{
 			Name: "Plan",
 			Description: "Read-only architect agent that designs an implementation plan and returns it. " +
 				"Use to plan a change before implementing.",
-			Tools:       []string{"Read", "Glob", "Grep"},
+			Tools:       []string{"Read", "Glob", "Grep", "Bash"},
 			ReadOnlyMCP: true,
-			SystemPrompt: "You are a software architect agent for Klaudia. Explore the codebase (read-only) and " +
-				"produce a concrete, step-by-step implementation plan. Identify the critical files and trade-offs. " +
-				"Return the plan as your final message; do not modify anything.",
+			Mode:        permission.ModePlan,
+			SystemPrompt: "You are a software architect agent for Klaudia. Explore the codebase and produce a " +
+				"concrete, step-by-step implementation plan. You may run commands that only inspect — " +
+				"`git log`, `git diff`, `go doc`, `go list` — but anything that would change a file is " +
+				"refused, so note explicitly anything you could not verify. Identify the critical files and " +
+				"trade-offs. Return the plan as your final message.",
 		},
 	}
 }

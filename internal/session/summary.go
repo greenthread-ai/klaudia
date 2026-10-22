@@ -43,21 +43,45 @@ func WriteSummary(cwd, sessionID, summary, gitCommit string) error {
 // if none exists. The stamped header line is stripped so the body can seed a
 // resumed conversation directly.
 func ReadSummary(cwd, sessionID string) (string, bool) {
+	body, _, ok := ReadSummaryStamped(cwd, sessionID)
+	return body, ok
+}
+
+// ReadSummaryStamped is ReadSummary plus the "_Compacted <ts>_" stamp, which
+// is where a transcript without boundary lines is cut on resume. at is "" for
+// a file with no stamp.
+func ReadSummaryStamped(cwd, sessionID string) (body, at string, ok bool) {
 	data, err := os.ReadFile(SummaryPath(cwd, sessionID))
 	if err != nil {
 		data, err = os.ReadFile(legacySummaryPath(cwd, sessionID))
 		if err != nil {
 			data, err = os.ReadFile(localLegacySummaryPath(cwd, sessionID))
 			if err != nil {
-				return "", false
+				return "", "", false
 			}
 		}
 	}
-	body := stripSummaryHeader(string(data))
+	body = stripSummaryHeader(string(data))
 	if strings.TrimSpace(body) == "" {
-		return "", false
+		return "", "", false
 	}
-	return body, true
+	return body, summaryStamp(string(data)), true
+}
+
+// summaryStamp extracts the timestamp from WriteSummary's header line,
+// "_Compacted <ts>[ at <commit>]_".
+func summaryStamp(s string) string {
+	for _, ln := range strings.Split(s, "\n") {
+		t := strings.TrimSpace(ln)
+		if !strings.HasPrefix(t, "_Compacted ") {
+			continue
+		}
+		f := strings.Fields(strings.Trim(strings.TrimPrefix(t, "_Compacted "), "_"))
+		if len(f) > 0 {
+			return f[0]
+		}
+	}
+	return ""
 }
 
 // stripSummaryHeader removes the leading "# Session summary …" + "_Compacted …_"
