@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -820,6 +821,27 @@ func (e errStreak) blocks(input string) bool {
 	return e.varied || input == e.firstInput
 }
 
+// bareExitStatus matches a result that is nothing but Bash's exit-status line.
+var bareExitStatus = regexp.MustCompile(`^\[exit code -?\d+\]$`)
+
+// streakSignature is the "shape" a failure is compared on.
+//
+// Usually the error text: identical text across different inputs is what
+// suggests the environment rather than the call. A silent non-zero exit has
+// no text — just "[exit code 1]" — so it is identical for every silent
+// failure there is: grep with no match, a failing test, diff -q finding a
+// difference. Two of those in a row read as a wedged shell, and the breaker
+// then refused the model's next command — in the case that found this, the
+// `git status` it was running to see which edits had landed. A bare exit
+// status says nothing about the environment, so it is told apart by its
+// input: the same command failing twice still counts, different ones do not.
+func streakSignature(content, input string) string {
+	if bareExitStatus.MatchString(strings.TrimSpace(content)) {
+		return strings.TrimSpace(content) + "\x00" + input
+	}
+	return content
+}
+
 // repeatedShapeFailureMsg is the directive returned when loop-breaker B fires
 // AND the model kept submitting the same input — classic "stop guessing" case.
 // Quoting the recurring error forces the model to confront the real problem
@@ -1226,7 +1248,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	}
 	if isErr {
 		fs.fail(key)
-		fs.bumpStreak(tu.Name, content, rawStr, false)
+		fs.bumpStreak(tu.Name, streakSignature(content, rawStr), rawStr, false)
 	} else {
 		// A clean run resets both counters: this exact call's retry count and
 		// the per-tool same-shape streak (the tool clearly isn't fundamentally

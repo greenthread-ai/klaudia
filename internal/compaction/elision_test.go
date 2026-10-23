@@ -131,3 +131,58 @@ func elidedPlaceholders(msgs []anthropic.BetaMessageParam) []string {
 	}
 	return out
 }
+
+// Every turn re-elided every earlier placeholder: a fresh spill file each, a
+// placeholder wrapped around a placeholder, and the lot reported as new. The
+// floor was cleared by pricing new placeholders without their path while the
+// old ones had one, which only adds up past ~1,180 elisions — so it appeared
+// only in very long sessions (measured: 1,208, 1,209, 1,210 "elided" on
+// successive turns, saving ~-22 tokens, ~1,200 files written per turn).
+func TestMicrocompactLeavesItsOwnPlaceholdersAlone(t *testing.T) {
+	spillPath := func(n int) string {
+		return "/Users/someone/.klaudia/outputs/elided-" + strings.Repeat("7", 10) + ".log"
+	}
+	tests := []struct {
+		name        string
+		placeholder int // already-elided results, as a previous pass left them
+		fresh       int // new results big enough to be worth eliding
+		wantElided  int
+	}{
+		{name: "a long session with nothing new is left alone", placeholder: 1300, fresh: 0, wantElided: 0},
+		{name: "only the genuinely new results are elided", placeholder: 1300, fresh: 3, wantElided: 3},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var msgs []anthropic.BetaMessageParam
+			for i := 0; i < tc.placeholder; i++ {
+				msgs = append(msgs, toolResult("t", elidedPlaceholder(strings.Repeat("y", 250), spillPath(i))))
+			}
+			for i := 0; i < tc.fresh; i++ {
+				msgs = append(msgs, toolResult("t", strings.Repeat("x", 60000)))
+			}
+			// The most recent results are kept verbatim, and are big enough
+			// that the tool-result total clears the threshold.
+			for i := 0; i < KeepLastNResults; i++ {
+				msgs = append(msgs, toolResult("t", strings.Repeat("z", 60000)))
+			}
+
+			spilled := 0
+			out, res := Microcompact(msgs, func(string) (string, bool) { spilled++; return spillPath(spilled), true })
+
+			if res.ElidedCount != tc.wantElided {
+				t.Errorf("elided %d, want %d", res.ElidedCount, tc.wantElided)
+			}
+			if spilled != tc.wantElided {
+				t.Errorf("wrote %d spill files, want %d", spilled, tc.wantElided)
+			}
+			if res.Compacted && res.TokensSaved <= 0 {
+				t.Errorf("reported saving %d; a pass that saves nothing must not run", res.TokensSaved)
+			}
+			for _, p := range elidedPlaceholders(out) {
+				if strings.Count(p, elidedMarker) > 1 {
+					t.Fatalf("a placeholder was wrapped in another: %.160s", p)
+				}
+			}
+		})
+	}
+}

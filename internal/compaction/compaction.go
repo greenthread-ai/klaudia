@@ -57,7 +57,7 @@ const elidedPreviewBytes = 120
 // reclaims.
 func elidedPlaceholder(content, path string) string {
 	var b strings.Builder
-	b.WriteString("[Old tool result elided to save context")
+	b.WriteString(elidedMarker)
 	if n := len(content); n > 0 {
 		fmt.Fprintf(&b, "; %d bytes", n)
 	}
@@ -170,20 +170,40 @@ func Microcompact(messages []anthropic.BetaMessageParam, spill Spiller) ([]anthr
 		return messages, Result{}
 	}
 
-	// Candidates to elide: all but the last KeepLastNResults.
-	elide := locs[:len(locs)-KeepLastNResults]
+	// Candidates to elide: all but the last KeepLastNResults, minus anything a
+	// previous pass already elided.
+	//
+	// Skipping those is load-bearing. Without it every turn re-elided every
+	// earlier placeholder: spilled it to a fresh file, wrapped it in another
+	// placeholder, and reported the lot as new. While the placeholder was one
+	// fixed string that was a no-op the savings floor refused; once it carried
+	// a preview and a path it was not. Measured in a long goal session: ~1,200
+	// files written per turn, 15,728 of 20,200 spill files holding nothing but
+	// an earlier placeholder, and each original reachable only by one hop per
+	// turn since it was elided — i.e. lost.
+	var elide []loc
+	for _, l := range locs[:len(locs)-KeepLastNResults] {
+		if !isElided(messages[l.m].Content[l.b].OfToolResult) {
+			elide = append(elide, l)
+		}
+	}
+	if len(elide) == 0 {
+		return messages, Result{}
+	}
 
 	// Two passes, because spilling has a side effect on disk and the floor
 	// below can still say no. compact() runs at the top of every turn, so a
 	// single pass that spilled first would write a fresh set of files every
-	// turn a conversation sat just under MinTokensToSave. Pass one prices the
-	// placeholders without paths — the only part that is free to compute.
+	// turn a conversation sat just under MinTokensToSave. Pass one prices each
+	// placeholder with a path-sized allowance: pricing it with no path at all
+	// understated every placeholder by its path, which on its own was enough
+	// to clear the floor once a session had ~1,200 elisions.
 	content := make([]string, len(elide))
 	saved := 0
 	for i, l := range elide {
 		tr := messages[l.m].Content[l.b].OfToolResult
 		content[i] = toolResultText(tr)
-		saved += toolResultTokens(tr) - charTokens(elidedPlaceholder(content[i], ""))
+		saved += toolResultTokens(tr) - charTokens(elidedPlaceholder(content[i], spillPathAllowance))
 	}
 	if saved < MinTokensToSave {
 		return messages, Result{}
@@ -222,6 +242,20 @@ func Microcompact(messages []anthropic.BetaMessageParam, spill Spiller) ([]anthr
 	}
 
 	return out, Result{Compacted: true, TokensSaved: saved, ElidedCount: len(elide)}
+}
+
+// spillPathAllowance stands in for a spill path when pricing a placeholder
+// before anything is spilled. Its length is what matters: a little longer than
+// a real ~/.klaudia/outputs/elided-<n>.log path, so the floor errs towards no.
+var spillPathAllowance = strings.Repeat("x", 80)
+
+// elidedMarker opens every placeholder elidedPlaceholder builds, old and new.
+const elidedMarker = "[Old tool result elided to save context"
+
+// isElided reports whether a tool result is already a microcompact
+// placeholder.
+func isElided(tr *anthropic.BetaToolResultBlockParam) bool {
+	return strings.HasPrefix(toolResultText(tr), elidedMarker)
 }
 
 // toolResultText concatenates the text blocks of a tool result. Images carry

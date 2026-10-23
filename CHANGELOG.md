@@ -101,6 +101,23 @@ port mirrors (see `internal/version`).
   frontend show the plan at all.
 
 ### Fixed
+- **Microcompact no longer re-elides its own placeholders every turn.** It
+  never skipped results it had already elided. While the placeholder was one
+  fixed string that was harmless; since placeholders carry a preview and a
+  spill path (6 October), re-pricing the old ones without their path cleared
+  the savings floor once a session passed ~1,180 elisions. Every turn after
+  that rewrote every placeholder: a new spill file each (~1,200 per turn,
+  measured), a placeholder nested inside a placeholder, "elided 1208… 1209…"
+  with a negative saving — and each original reachable only by one hop per
+  turn since it was elided, so in practice lost. Already-elided results are now
+  skipped, and the savings estimate allows for the path.
+- **Two different commands failing silently no longer read as a wedged shell.**
+  A Bash failure with no output is just `[exit code 1]`, the same text for
+  every silent failure (grep with no match, a failing test). Two in a row
+  looked like one error across different inputs, and the repeat-error breaker
+  refused the next command — the `git status` the model was running to see
+  what had landed. A bare exit status is now compared together with its
+  command: the same command failing repeatedly is still stopped.
 - **Plan mode no longer asks about `cd`, and says why when it does ask.** The
   mutation classifier had no entry for `cd`/`pushd`/`popd`, so the commonest
   research line there is — `cd <repo> && grep … | cut …` — came back as
