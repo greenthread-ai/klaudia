@@ -27,5 +27,13 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # Code nothing calls, tests included. vet does not look for it, and
+      # eight such functions had accumulated before this step existed.
+      # Functions only tests reach are not flagged: some are deliberate seams.
+      - name: Dead code
+        run: |
+          out=$(go run golang.org/x/tools/cmd/deadcode@v0.49.0 -test ./...)
+          if [ -n "$out" ]; then echo "$out"; exit 1; fi
+
       - name: Test
         run: go test ./internal/... -count=1
