@@ -61,9 +61,9 @@ func TestEverySlashCaseIsClaimed(t *testing.T) {
 // slashCasesFromSource returns the case literals of handleSlash's switch.
 func slashCasesFromSource(t *testing.T) []string {
 	t.Helper()
-	file, err := parser.ParseFile(token.NewFileSet(), "tui.go", nil, 0)
+	file, err := parser.ParseFile(token.NewFileSet(), "commands.go", nil, 0)
 	if err != nil {
-		t.Fatalf("parsing tui.go: %v", err)
+		t.Fatalf("parsing commands.go: %v", err)
 	}
 	var fn *ast.FuncDecl
 	for _, d := range file.Decls {
@@ -73,7 +73,7 @@ func slashCasesFromSource(t *testing.T) []string {
 		}
 	}
 	if fn == nil {
-		t.Fatal("no handleSlash in tui.go")
+		t.Fatal("no handleSlash in commands.go")
 	}
 	var out []string
 	ast.Inspect(fn, func(n ast.Node) bool {

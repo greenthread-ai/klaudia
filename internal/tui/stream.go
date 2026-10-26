@@ -3,6 +3,8 @@ package tui
 import (
 	"bytes"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Progressive flushing of a streaming assistant message.
@@ -187,4 +189,95 @@ func continues(prev, cur blockKind) bool {
 		return true // indented code or a list continuation paragraph
 	}
 	return prev == cur && (prev == kindList || prev == kindQuote)
+}
+
+// appendText buffers a streamed assistant delta (rendered raw live, then
+// prettified through glamour on flush).
+func (m *Model) appendText(s string) {
+	m.streamBuf.WriteString(s)
+	m.flushSafeChunks()
+}
+
+// streamFlushMin is how many complete lines a message must reach before we
+// start committing it in pieces. Below it we hold everything and render once at
+// the end, which keeps ordinary short answers byte-identical to a single
+// glamour pass; above it, waiting would leave a long answer stuck in a
+// few-row preview.
+const streamFlushMin = 12
+
+// streamTailLines caps the live preview of the unflushed remainder.
+const streamTailLines = 6
+
+// flushSafeChunks commits any prefix of the in-progress message that later
+// tokens cannot change (see stream.go).
+func (m *Model) flushSafeChunks() {
+	m.scan.advance(m.streamBuf.bytes())
+	if m.scan.lines < streamFlushMin || m.scan.safe <= 0 {
+		return
+	}
+	n := m.scan.safe
+	m.emitChunk(string(m.streamBuf.bytes()[:n]))
+	m.streamBuf.trim(n)
+	m.scan.rebase(n)
+}
+
+// emitChunk renders and commits one piece of an assistant message. Glamour puts
+// a margin and a leading newline on every document it renders, so chunks are
+// trimmed and the inter-chunk blank line is emitted deliberately — otherwise a
+// chunked message would be spaced differently from a single-pass one.
+func (m *Model) emitChunk(text string) {
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	m.msgAccum.WriteString(text)
+	rendered := strings.Trim(m.markdown(text), "\n")
+	if m.chunked {
+		rendered = "\n" + rendered
+	}
+	m.chunked = true
+	m.commit(transcriptBlock{text: text, markdown: true, rendered: rendered})
+}
+
+// truncateToWidth clips one line to w cells, preserving ANSI. The live region
+// must never soft-wrap: Bubble Tea's inline renderer tracks it by line count,
+// so a wrapped line desynchronises the cursor arithmetic and corrupts the frame.
+func truncateToWidth(s string, w int) string {
+	if w <= 0 {
+		return s
+	}
+	return lipgloss.NewStyle().MaxWidth(w).Render(s)
+}
+
+// streamTail is the live preview of the not-yet-committed remainder.
+func (m *Model) streamTail() string {
+	raw := strings.TrimRight(m.streamBuf.String(), "\n")
+	if raw == "" {
+		return ""
+	}
+	lines := strings.Split(raw, "\n")
+	if len(lines) > streamTailLines {
+		lines = lines[len(lines)-streamTailLines:]
+	}
+	for i, ln := range lines {
+		// width-1, not width: a preview line that fills the last column is the
+		// case that strands the live region in scrollback (see fitLiveRegion).
+		lines[i] = truncateToWidth(ln, m.width-1)
+	}
+	return toolStyle.Render(strings.Join(lines, "\n"))
+}
+
+// flushAssistant commits the buffered assistant message to the transcript,
+// rendered as Markdown via glamour. No-op when nothing is buffered.
+func (m *Model) flushAssistant() {
+	if m.streamBuf.Len() > 0 {
+		m.emitChunk(m.streamBuf.String())
+		m.streamBuf.Reset()
+	}
+	if m.msgAccum.Len() > 0 {
+		m.lastAssistantText = m.msgAccum.String()
+		m.noteNav(navAssistant, firstLine(strings.TrimSpace(m.lastAssistantText)), m.lastAssistantText, 0)
+		m.msgAccum.Reset()
+	}
+	m.scan.reset()
+	m.chunked = false
 }

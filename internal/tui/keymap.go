@@ -138,3 +138,19 @@ func capitalise(s string) string {
 	}
 	return string(unicode.ToUpper(r[0])) + string(r[1:])
 }
+
+// keymap returns the prompt's bindings for this session's Return mode.
+//
+// Derived rather than cached on the Model. A cached field is zero-valued in any
+// Model built as a struct literal — every test helper in this package does that
+// — and a zero keymap matches nothing, so the prompt would silently stop
+// responding to Enter. Building seven bindings per keystroke is free at human
+// typing speed.
+func (m *Model) keymap() keymap {
+	return newKeymap(m.sess.EnterInserts)
+}
+
+// keyHints renders the key reference for /help from the live bindings.
+func (m *Model) keyHints() string {
+	return keyHelp(m.keymap(), m.input.KeyMap)
+}
