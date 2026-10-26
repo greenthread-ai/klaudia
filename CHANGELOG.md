@@ -6,6 +6,14 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Clickable links.** URLs and paths to existing files in the transcript are
+  OSC 8 hyperlinks, so Cmd/Ctrl+click opens them. A URL glamour wrapped across
+  rows is one link carrying the whole URL (terminal detection opened the first
+  fragment), and a relative `path:line` resolves against the working directory.
+  On in terminals known to support OSC 8; `KLAUDIA_HYPERLINKS=0/1` or
+  `[links] enabled` overrides. `[links] file` sends file clicks to an editor at
+  the line (`vscode://file/{path}:{line}:{col}`). Screen only: the transcript
+  that `/copy`, `/export` and `$PAGER` read is unchanged.
 - **The plan is visible in every frontend.** The loop emits a `plan` event
   whenever the step list changes. The TUI, which showed nothing, now draws a
   live panel above the prompt (`Ctrl+T` collapses it; it hides once every step

@@ -44,6 +44,14 @@ The spec's own principle called it: *"Do not replace terminal-native behaviour
 merely because Klaudia can implement its own version."* The viewport, the follow
 flag, the paging keys and the mouse handler were all deleted rather than fixed.
 
+Clicking came back later without the mouse handler: committed output carries
+OSC 8 hyperlinks on URLs and on paths to existing files
+(`internal/tui/hyperlink.go`), so the terminal still owns the click as it owns
+selection. They are added at the `commit` choke point and go to the screen only;
+the transcript, which `/copy`, `/export` and `$PAGER` read, stays plain. Do not
+reach for `tea.WithMouseCellMotion` to make something clickable — it takes
+drag-select away from every user to give a click to some.
+
 Other notable pieces: byte-exact paste with placeholder chips (bubbles' textarea
 sanitises input, mapping `\r` and `\n` independently), copy fidelity through
 OSC 52 with glamour's document padding stripped at commit time, long output

@@ -144,6 +144,29 @@ A reference starting with `/`, `./` or `~/` completes from the filesystem
 instead of the project, and a path containing spaces is inserted quoted
 (`@"My Notes.md"`) so it stays one reference.
 
+### Clickable links
+
+URLs and paths to files that exist are hyperlinks: Cmd+click (iTerm2, Ghostty,
+WezTerm, VS Code) or Ctrl+click (kitty, Windows Terminal, GNOME/VTE) opens
+them. The terminal still owns the mouse — selection, scrolling and search are
+untouched — Klaudia only tells it where a click should go. That fixes two
+things terminal URL detection gets wrong: a long URL wrapped across rows opens
+in full rather than as its first fragment, and `internal/tui/tui.go:3303` opens
+the file even though the terminal does not know Klaudia's working directory.
+In a Markdown link only the printed URL is clickable, never the label, so what
+you click always shows where it goes.
+
+Links are on when the terminal is known to support them (also inside tmux 3.4+
+when the outer terminal is detectable). `KLAUDIA_HYPERLINKS=0` or `=1` overrides
+detection, as does `[links] enabled` in the config. A file link targets
+`file://` by default, which the OS opens without a line number; to land on the
+line in your editor:
+
+```toml
+[links]
+file = "vscode://file/{path}:{line}:{col}"   # or cursor://file/{path}:{line}
+```
+
 ### Return, and multi-line input
 
 `Return` sends; `Ctrl+J` and `Alt+Return` insert a newline. To swap them:
@@ -486,6 +509,14 @@ apiKeyEnv = "MY_API_KEY"
 # terminals cannot send one.
 # [input]
 # enter = "newline"
+
+# Optional: clickable links. URLs and paths to existing files are OSC 8
+# hyperlinks (Cmd/Ctrl+click) in terminals known to support them; enabled
+# forces it either way, as does KLAUDIA_HYPERLINKS=0/1. A path links to
+# file:// by default — set file to open your editor at the line instead.
+# [links]
+# enabled = true
+# file = "vscode://file/{path}:{line}:{col}"   # or cursor://file/{path}:{line}
 ```
 
 Create a commented starter config with `./klaudia --create-config=global` for

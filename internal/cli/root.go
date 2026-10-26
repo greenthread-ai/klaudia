@@ -1382,6 +1382,8 @@ func run(cmd *cobra.Command, opts *options) error {
 			Theme:               themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
 			PermissionMode:      string(mode),
 			EnterInserts:        tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
+			Hyperlinks:          tui.HyperlinksEnabled(cfg.Links.Enabled, os.Getenv),
+			FileLinks:           cfg.Links.File,
 			Memory:              memStore,
 			MCP:                 mcpController{mgr: mcpMgr, ctx: ctx},
 			OnMCPReload:         mcpReloads.register,

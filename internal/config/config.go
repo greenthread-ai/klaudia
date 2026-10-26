@@ -74,6 +74,8 @@ type Config struct {
 	Permissions Permissions `toml:"permissions,omitempty"`
 	// Input configures the prompt's key handling.
 	Input Input `toml:"input,omitempty"`
+	// Links configures clickable (OSC 8) links in the TUI.
+	Links Links `toml:"links,omitempty"`
 	// Subagents configures how sub-agents run.
 	Subagents Subagents `toml:"subagents,omitempty"`
 	// Hooks are lifecycle hooks: shell commands run at fixed points in a turn.
@@ -127,6 +129,18 @@ type Subagents struct {
 // SubagentWorktrees resolves the default: on unless the config says otherwise.
 func (c Config) SubagentWorktrees() bool {
 	return c.Subagents.Worktree == nil || *c.Subagents.Worktree
+}
+
+// Links configures OSC 8 hyperlinks on URLs and file paths in TUI output.
+type Links struct {
+	// Enabled forces links on or off. Unset detects the terminal; the
+	// KLAUDIA_HYPERLINKS environment variable overrides both.
+	Enabled *bool `toml:"enabled,omitempty"`
+	// File is the URL a file path links to, with {path}, {line} and {col}
+	// substituted — e.g. "vscode://file/{path}:{line}:{col}" or
+	// "cursor://file/{path}:{line}" to open the editor at the line. Empty
+	// links to file://, which the OS opens without a line number.
+	File string `toml:"file,omitempty"`
 }
 
 // Input configures how the prompt treats the Return key.
@@ -329,6 +343,12 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Effort != "" {
 		dst.Effort = src.Effort
+	}
+	if src.Links.Enabled != nil {
+		dst.Links.Enabled = src.Links.Enabled
+	}
+	if src.Links.File != "" {
+		dst.Links.File = src.Links.File
 	}
 	if src.Sandbox.Mode != "" {
 		dst.Sandbox.Mode = src.Sandbox.Mode

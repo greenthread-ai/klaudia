@@ -57,6 +57,8 @@ type Session struct {
 	Goal           string         // standing goal re-injected each turn (Ralph-style)
 	Theme          string         // markdown render theme ("" = dark)
 	EnterInserts   bool           // Return inserts a newline; alt+Return/ctrl+j submit
+	Hyperlinks     bool           // OSC 8 links on URLs and file paths (see HyperlinksEnabled)
+	FileLinks      string         // file-link URL format; "" = file:// (see fileLinkURL)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
 
 	// Render-only context for /config and /context (set once at startup).
@@ -3321,7 +3323,7 @@ func (m *Model) appendLine(s string) {
 func (m *Model) commit(b transcriptBlock) {
 	b.rendered = trimRenderedPadding(b.rendered)
 	m.transcript.add(b)
-	m.out.push(m.fitScrollback(b.rendered))
+	m.out.push(m.linkify(m.fitScrollback(b.rendered), b.text))
 }
 
 // fitScrollback hard-wraps a block so no line reaches the terminal's last
