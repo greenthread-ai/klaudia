@@ -51,8 +51,6 @@ func (p *pathIndex) files(root string, now time.Time) []string {
 	return p.paths
 }
 
-func (p *pathIndex) invalidate() { p.builtAt = time.Time{} }
-
 // noteRecentPath records a file Klaudia touched, so completion can rank it
 // first. "The file we just edited" beats "the file with the newest mtime", and
 // it also makes a brand-new file completable before the index expires.

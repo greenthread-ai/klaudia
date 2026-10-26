@@ -229,21 +229,6 @@ func ProjectPath(cwd string) string {
 	return filepath.Join(ProjectDir(cwd), "config.toml")
 }
 
-// ProjectDirExists reports whether cwd/.klaudia exists and is a directory.
-func ProjectDirExists(cwd string) bool {
-	st, err := os.Stat(ProjectDir(cwd))
-	return err == nil && st.IsDir()
-}
-
-func contains(ss []string, s string) bool {
-	for _, v := range ss {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
 // Load reads ~/.klaudia/config.toml then overlays ./.klaudia/config.toml
 // (project settings win). Missing files are ignored.
 func Load(cwd string) Config {

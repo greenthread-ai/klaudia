@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
 // The host-change card.
@@ -160,16 +159,6 @@ func hostAnswerLine(hc *agent.HostChange, allowed, redirect bool) string {
 		return "approved for this session"
 	}
 	return "approved for this session — " + scope
-}
-
-// hostGrantLine reports what an approval actually bought, which is not always
-// what was asked for: the scope is widened to the operation and bounded away
-// from anything that would hand over a system directory.
-func hostGrantLine(g *trust.Grant) string {
-	if g == nil {
-		return ""
-	}
-	return fmt.Sprintf("approved · %s", g.Describe())
 }
 
 // hostReportLine renders one classifier finding for observe mode and /trust.

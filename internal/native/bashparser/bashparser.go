@@ -194,13 +194,6 @@ func word(w *syntax.Word) Word {
 	return Word{Text: text, Literal: literal}
 }
 
-// wordText is the legacy literal-only accessor, kept for callers that already
-// tolerate partial text.
-func wordText(w *syntax.Word) string {
-	t, _ := wordParts(w)
-	return t
-}
-
 // wordParts joins a word's literal fragments and reports whether every part was
 // literal.
 func wordParts(w *syntax.Word) (string, bool) {

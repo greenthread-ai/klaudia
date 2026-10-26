@@ -197,9 +197,6 @@ func (s span) svg() string {
 
 var sgrRe = regexp.MustCompile(`\x1b\[([0-9;]*)m`)
 
-// stripSGR removes colour escapes, for measuring printable width.
-func stripSGR(s string) string { return sgrRe.ReplaceAllString(s, "") }
-
 // parseSGR splits an ANSI line into styled spans. It handles exactly what
 // lipgloss emits under a TrueColor profile — reset, bold, faint, italic, and
 // 24-bit foreground — and ignores anything else rather than guessing.

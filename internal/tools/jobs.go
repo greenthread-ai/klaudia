@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -618,12 +617,6 @@ func oneLineCommand(cmd string, width int) string {
 		return cmd[:width-1] + "…"
 	}
 	return cmd
-}
-
-// sortJobsByName is used where a stable alphabetical order reads better than
-// start order (completions).
-func sortJobsByName(jobs []JobStatus) {
-	sort.Slice(jobs, func(i, j int) bool { return jobs[i].Name < jobs[j].Name })
 }
 
 // unknownJobMsg names the jobs that do exist. A bare "no such job" makes the

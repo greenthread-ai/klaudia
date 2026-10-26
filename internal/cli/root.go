@@ -1680,8 +1680,6 @@ func hostChangeWasBlocked(g *agent.HostGate) bool {
 	return false
 }
 
-func Execute() int { return ExecuteContext(context.Background()) }
-
 // ExecuteContext runs the root command against ctx. Cancelling ctx (SIGINT /
 // SIGTERM from main) unwinds the run, which tears down background jobs,
 // browsers, MCP servers and the transcript through the existing defers.
