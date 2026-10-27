@@ -835,6 +835,7 @@ type options struct {
 	prompt           string
 	model            string
 	fallbackModels   []string
+	restricted       bool
 	effort           string
 	outputFormat     string
 	inputFormat      string
@@ -913,6 +914,7 @@ func NewRootCommand() *cobra.Command {
 	f := cmd.Flags()
 	f.BoolVarP(&opts.print, "print", "p", false, "Non-interactive mode: print result to stdout and exit")
 	f.StringVar(&opts.model, "model", "", "Model alias (haiku|sonnet|opus) or full model ID")
+	f.BoolVar(&opts.restricted, "restricted", false, "Run without this machine's state: an empty config root (no user config, global instructions, global MCP, skills, approvals or session history), no memory and no hooks — for evals and reproducible runs")
 	f.StringSliceVar(&opts.fallbackModels, "fallback-model", nil, "Model to continue on when the model is overloaded or the provider fails (repeat or comma-separate for a chain; default: config fallbackModels)")
 	f.StringVar(&opts.effort, "effort", "", "How hard the model works per response: "+api.EffortNames()+" (default: the provider's own, usually high)")
 	f.StringVar(&opts.outputFormat, "output-format", "text", "Output format: text|json|stream-json")
@@ -941,6 +943,25 @@ func run(cmd *cobra.Command, opts *options) error {
 	format, err := ParseOutputFormat(opts.outputFormat)
 	if err != nil {
 		return err
+	}
+	// --restricted: every user-level file Klaudia reads or writes lives under
+	// the config root, so pointing that at an empty directory for this
+	// process removes them all at once — user config, global AGENTS.md and
+	// .mcp.json, skills, hook and MCP approvals, transcripts, job logs —
+	// rather than a switch per subsystem that the next subsystem forgets.
+	// Memory and hooks are off as well, project ones included: both carry
+	// state from earlier runs or execute it. Credentials still come from the
+	// environment (and the keychain login), so a key kept only in the user
+	// config.toml must be passed as ANTHROPIC_API_KEY.
+	if opts.restricted {
+		dir, err := os.MkdirTemp("", "klaudia-restricted-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(dir)
+		if err := os.Setenv("KLAUDIA_CONFIG_DIR", dir); err != nil {
+			return err
+		}
 	}
 
 	cwd, _ := os.Getwd()
@@ -1025,6 +1046,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Lifecycle hooks, if any are configured. Nil when neither config file
 	// declares one, which every hook call site treats as "do nothing".
 	hookRunner := hooks.Load(cwd, sessionID)
+	if opts.restricted {
+		hookRunner = nil
+	}
 	if resumeID != "" {
 		// Token-saving resume: if a persisted compaction summary exists and the
 		// user didn't ask for a --full replay, seed from the summary instead of
@@ -1247,8 +1271,11 @@ func run(cmd *cobra.Command, opts *options) error {
 	// and the /memory command.
 	staticTools := base.All()
 	memStore := memory.New(filepath.Join(cwd, ".klaudia"))
-	if memTool, merr := tools.NewMemoryForProject(memStore, cwd); merr == nil {
-		staticTools = append(staticTools, memTool)
+	if opts.restricted {
+		memStore = memory.Disabled()
+	}
+	if memTool, merr := tools.NewMemoryForProject(memStore, cwd); merr == nil && !opts.restricted {
+		staticTools = append(staticTools, memTool) // restricted: no tool that only says it is off
 	}
 
 	// User-defined skills (~/.klaudia/skills overlaid by .klaudia/skills) become a

@@ -376,3 +376,20 @@ func TestRewindUndoesATurn(t *testing.T) {
 		return strings.Contains(s.All(), "› use the tools") && s.InputBox()
 	})
 }
+
+// --restricted runs on project files alone: it still answers (the project
+// config names the provider), and leaves nothing in the user's config root.
+func TestRestrictedLeavesNoState(t *testing.T) {
+	env := newEnv(t)
+	sessions := filepath.Join(env.Config, "sessions")
+	cmd := exec.Command(klaudiaBin, "--restricted", "-p", "hello")
+	cmd.Dir, cmd.Env = env.Project, env.environ()
+	env.prompts++
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "Hello from the mock model.") {
+		t.Fatalf("restricted run: %v\n%s", err, out)
+	}
+	if entries, _ := os.ReadDir(sessions); len(entries) != 0 {
+		t.Errorf("a restricted run wrote %d session dir(s) under the config root", len(entries))
+	}
+}
