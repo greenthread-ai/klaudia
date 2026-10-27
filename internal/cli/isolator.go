@@ -3,8 +3,8 @@ package cli
 import (
 	"context"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/worktree"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // gitIsolator gives the spawner's writing sub-agents a git worktree each

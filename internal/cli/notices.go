@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/mcp"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // noticeWriter surfaces notice events on stderr during a headless run.

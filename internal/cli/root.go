@@ -18,10 +18,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/greenthread-ai/klaudia/internal/acp"
-	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/anthropicauth"
 	"github.com/greenthread-ai/klaudia/internal/browser"
-	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/doctor"
 	"github.com/greenthread-ai/klaudia/internal/hooks"
@@ -39,7 +37,9 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/trust"
 	"github.com/greenthread-ai/klaudia/internal/tui"
 	"github.com/greenthread-ai/klaudia/internal/version"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 	"github.com/greenthread-ai/klaudia/pkg/api"
+	"github.com/greenthread-ai/klaudia/pkg/compaction"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/plan"
 )

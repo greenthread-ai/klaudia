@@ -1,8 +1,8 @@
 package hostgate
 
 import (
-	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/trust"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // HostChange describes a change to this machine for the approval UI.

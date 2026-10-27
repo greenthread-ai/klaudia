@@ -27,20 +27,20 @@ reason `-buildvcs=false` must never appear in the build flags.
 other products (see docs/roadmap.md, "The extraction"); it must not import
 `internal/`. `internal/` is Klaudia the product.
 
+- **pkg/agent** - The agent loop: dispatch, gate/hooks/isolator interfaces, sub-agent spawning, background runs
+- **pkg/compaction** - Context/history compression (micro + auto)
 - **pkg/api** - Provider abstraction: Anthropic client + OpenAI-compatible shim, model sizing, tuning
 - **pkg/permission** - The three permission modes (a leaf package)
 - **pkg/plan** - The session plan: step list + the approved-plan artefact
 - **pkg/schema** - Type/schema definitions
 - **pkg/tool** - The tool contract: `Tool`, `Registry`, `Context`, `Result`, the spill store and the approver interfaces (`internal/tools` aliases them)
 
-- **agent** - Main event loop, orchestration, and sub-agent spawning
 - **anthropicauth** - Klaudia's Anthropic client: credential discovery (env, Keychain login) and the request shaping it sends; kept out of `pkg/api`
 - **tools** - Klaudia's built-in tool implementations (the contract is `pkg/tool`)
 - **browser** - Lazy headless-Chrome engine + web search
 - **trust** - Zones, command/tool classification, session-scoped grants
 - **hostgate** - Klaudia's `agent.Gate`: the host gate, its approval card (`CardOf`), headless approver
 - **session** - Transcripts, resume, persisted compaction summaries
-- **compaction** - Context/history compression (micro + auto)
 - **mcp** - Model Context Protocol client (2026-07-28) + form elicitation
 - **subagent** - Built-in sub-agent types
 - **worktree** - Per-sub-agent git checkouts: seed, adopt, conflict reporting

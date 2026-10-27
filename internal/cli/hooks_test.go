@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/hooks"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // No runner is no hooks: a nil interface, not one holding a nil pointer.

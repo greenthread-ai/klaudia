@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // A sub-agent's relayed tool calls belong in scrollback, indented under the tool

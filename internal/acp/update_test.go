@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // recorder collects session/update payloads as decoded JSON, because the JSON

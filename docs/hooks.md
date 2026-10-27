@@ -190,4 +190,4 @@ operator's problem to fix, and telling the model about it only invites it to
 work around a broken script.
 
 Implementation: `internal/hooks` (events, trust, execution) and
-`internal/agent/hooks.go` (the four call sites in the loop).
+`pkg/agent/hooks.go` (the four call sites in the loop).

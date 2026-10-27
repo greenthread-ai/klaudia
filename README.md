@@ -999,7 +999,7 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 
 | Package | Responsibility |
 |---------|----------------|
-| `agent` | the agentic loop + sub-agent spawning |
+| `pkg/agent` | the agentic loop + sub-agent spawning |
 | `pkg/api` | provider abstraction (Anthropic client + OpenAI-compatible shim), model sizing |
 | `anthropicauth` | Klaudia's credential discovery (env, Keychain login) and Anthropic request shaping |
 | `tools` | local tool implementations |
@@ -1008,7 +1008,7 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 | `pkg/permission` | the three permission modes (a leaf package) |
 | `trust` | zones, command/tool classification, session-scoped grants |
 | `session` | JSONL transcripts, resume, persisted summaries |
-| `compaction` | micro + auto context compaction |
+| `pkg/compaction` | micro + auto context compaction |
 | `mcp` | Model Context Protocol client (2026-07-28) + form elicitation |
 | `subagent` | built-in sub-agent types |
 | `worktree` | per-sub-agent git checkouts: seed, adopt, conflict reporting |

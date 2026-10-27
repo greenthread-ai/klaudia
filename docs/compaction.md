@@ -1,7 +1,7 @@
 # Context Compaction
 
 How Klaudia keeps a conversation within the model's context window.
-Implemented in `internal/compaction` and driven from `internal/agent/loop.go`.
+Implemented in `pkg/compaction` and driven from `pkg/agent/loop.go`.
 
 ## Two stages, every turn
 
@@ -20,7 +20,7 @@ ever for debugging.
 
 Token counts are estimates (~4 chars/token for text, a flat per-item estimate
 for images/documents) — close enough to drive the thresholds without a real
-tokenizer. See `EstimateTokens` in `internal/compaction`.
+tokenizer. See `EstimateTokens` in `pkg/compaction`.
 
 ## Microcompact
 
@@ -43,7 +43,7 @@ size, quotes its first non-empty line, and points at a spill file holding the
 full text:
 
 ```
-[Old tool result elided to save context; 70 bytes; began: ./internal/agent/loop.go:349: for _, tu := range toolUses {; full text: /…/outputs/elided-123.log]
+[Old tool result elided to save context; 70 bytes; began: ./pkg/agent/loop.go:349: for _, tu := range toolUses {; full text: /…/outputs/elided-123.log]
 ```
 
 Without that, a pass left several byte-identical markers and the model had no
@@ -133,7 +133,7 @@ twenty well-behaved `Grep`s is most of a 200K window, with nothing in the
 per-result path finding anything wrong. Parallel dispatch makes that shape
 common rather than theoretical.
 
-`capMessage` (`internal/agent/batchcap.go`) holds one turn's combined
+`capMessage` (`pkg/agent/batchcap.go`) holds one turn's combined
 tool-result text to `maxMessageOutput` (200000 bytes, ~50K tokens). Shares are
 allotted by water-filling, not an equal split: a result already under its share
 keeps every byte and the remainder goes to the ones that need it, because

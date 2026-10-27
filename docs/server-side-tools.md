@@ -6,7 +6,7 @@ of a request, with results streamed back as special content-block types.
 This is a wire-format reference for the Anthropic provider. Klaudia ships its own
 **local** web search/fetch/browse tools (lazy headless Chrome — see the README),
 so it does not depend on these. On the Anthropic provider it can still enable the
-server-side `web_search` / `web_fetch` betas (`internal/agent/webtools.go`); the
+server-side `web_search` / `web_fetch` betas (`pkg/agent/webtools.go`); the
 shapes below document what those return.
 
 ---
@@ -330,4 +330,4 @@ Server-side features are gated behind beta headers sent as `anthropic-beta`:
 | Browser Automation | the local browser tools above; an MCP browser server can be registered for richer control |
 
 The Anthropic server-side `web_search` / `web_fetch` betas remain available when
-running on the Anthropic provider (`internal/agent/webtools.go`).
+running on the Anthropic provider (`pkg/agent/webtools.go`).

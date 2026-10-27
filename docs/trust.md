@@ -269,7 +269,7 @@ not everything: a run that asked to install nginx has not asked to reboot.
 - `internal/hostgate` — the gate, Klaudia's `agent.Gate`, plus the host-change
   card frontends render, the `RequestHostChange` approver, the headless
   approver and the hooks trust prompt. The loop calls it in `dispatch`
-  **before** `permission.Check` (`internal/agent/gate.go` says why); the loop
+  **before** `permission.Check` (`pkg/agent/gate.go` says why); the loop
   itself knows nothing of zones, so a host embedding it in a sandbox passes no
   gate.
 - `internal/tools/hostchange.go` — the `RequestHostChange` tool.

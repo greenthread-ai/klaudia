@@ -4,7 +4,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // steerBox is the handoff between the two goroutines that both care about what

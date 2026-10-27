@@ -13,7 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/greenthread-ai/klaudia/pkg/api"
-	"github.com/greenthread-ai/klaudia/internal/compaction"
+	"github.com/greenthread-ai/klaudia/pkg/compaction"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 

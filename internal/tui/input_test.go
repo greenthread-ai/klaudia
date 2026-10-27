@@ -12,8 +12,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/memory"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 func newTestModel() *Model {

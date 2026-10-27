@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 

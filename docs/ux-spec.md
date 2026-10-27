@@ -142,7 +142,7 @@ file untouched, `/etc/hosts` unmodified, no job outliving the session.
 
 Two items are marked unjudgeable rather than passed: "did the conversation
 remain readable" needs a human, and "could the user redirect Klaudia" is not
-reachable headlessly (steering has its own tests in `internal/agent`).
+reachable headlessly (steering has its own tests in `pkg/agent`).
 
 ### What it found
 

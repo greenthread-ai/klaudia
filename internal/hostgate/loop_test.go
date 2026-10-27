@@ -7,9 +7,9 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 // These tests drive the loop the way any host does — agent.New and Run, with

@@ -3,9 +3,9 @@ package cli
 import (
 	"context"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/hooks"
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // loopHooks adapts Klaudia's hook runner to the loop's agent.Hooks. The loop
