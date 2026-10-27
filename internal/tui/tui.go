@@ -517,6 +517,8 @@ type Model struct {
 	chunked   bool
 	glam      *glamour.TermRenderer
 	glamWidth int
+	// glamTables are renderers sized for individual tables (tableRenderer).
+	glamTables map[int]*glamour.TermRenderer
 	// Intro banner inputs, so it can be regenerated (recoloured) on theme change.
 	// introTagline is chosen once so it stays stable across regenerations.
 	introModel, introBranch, introTagline string

@@ -231,12 +231,28 @@ func (m *Model) emitChunk(text string) {
 		return
 	}
 	m.msgAccum.WriteString(text)
-	rendered := strings.Trim(m.markdown(text), "\n")
+	rendered := trimBlankLines(m.markdown(text))
 	if m.chunked {
 		rendered = "\n" + rendered
 	}
 	m.chunked = true
 	m.commit(transcriptBlock{text: text, markdown: true, rendered: rendered})
+}
+
+// trimBlankLines drops the visually blank lines at either end of a rendered
+// block. glamour pads its blank lines with spaces (and colour codes), so
+// trimming "\n" left them in place, and every chunk boundary next to a code
+// block or a list showed two blank lines where the Markdown had one.
+func trimBlankLines(s string) string {
+	lines := strings.Split(s, "\n")
+	blank := func(l string) bool { return strings.TrimSpace(ansi.Strip(l)) == "" }
+	for len(lines) > 0 && blank(lines[0]) {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && blank(lines[len(lines)-1]) {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // truncateToWidth clips one line to w cells, preserving ANSI. The live region

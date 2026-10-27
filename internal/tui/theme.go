@@ -176,6 +176,7 @@ func (m *Model) setTheme(id string) {
 	}
 	applyChromeTheme(chromePaletteFor(id)) // recolour banner/pickers/prompts too
 	m.glam = nil
+	m.glamTables = nil
 	if m.ready {
 		m.buildGlamour(m.width)
 	}

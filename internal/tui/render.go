@@ -14,11 +14,122 @@ func (m *Model) markdown(s string) string {
 	if m.glam == nil {
 		return s
 	}
-	out, err := m.glam.Render(s)
-	if err != nil {
-		return s
+	var parts []string
+	for _, seg := range splitTables(s) {
+		r := m.glam
+		if seg.table > 0 && seg.table+2 < m.glamWidth {
+			r = m.tableRenderer(seg.table + 2)
+		}
+		out, err := r.Render(seg.text)
+		if err != nil {
+			out = seg.text
+		}
+		if out = trimBlankLines(out); out != "" {
+			parts = append(parts, out)
+		}
 	}
-	return strings.TrimRight(out, "\n")
+	return strings.Join(parts, "\n\n")
+}
+
+// mdSegment is a run of Markdown; table is the content width a table segment
+// needs, or 0 for anything else.
+type mdSegment struct {
+	text  string
+	table int
+}
+
+// splitTables cuts Markdown into table and non-table runs, so each table can
+// be rendered at its own width. glamour sizes every table to the full wrap
+// width, so a two-column table of short cells spread across 100 columns with
+// the second column a long way from the first. Fenced code is never split.
+func splitTables(s string) []mdSegment {
+	lines := strings.Split(s, "\n")
+	var out []mdSegment
+	var cur []string
+	flush := func(table int) {
+		if len(cur) > 0 {
+			out = append(out, mdSegment{strings.Join(cur, "\n"), table})
+			cur = nil
+		}
+	}
+	inFence := false
+	for i := 0; i < len(lines); i++ {
+		ln := lines[i]
+		if t := strings.TrimSpace(ln); strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
+			inFence = !inFence
+		}
+		if !inFence && isTableRow(ln) && i+1 < len(lines) && isTableDivider(lines[i+1]) {
+			flush(0)
+			j := i
+			for j < len(lines) && isTableRow(lines[j]) {
+				j++
+			}
+			cur = lines[i:j]
+			flush(tableWidth(lines[i:j]))
+			i = j - 1
+			continue
+		}
+		cur = append(cur, ln)
+	}
+	flush(0)
+	return out
+}
+
+func isTableRow(ln string) bool {
+	t := strings.TrimSpace(ln)
+	return strings.HasPrefix(t, "|") && strings.Count(t, "|") >= 2
+}
+
+func isTableDivider(ln string) bool {
+	t := strings.TrimSpace(ln)
+	return isTableRow(t) && strings.Trim(t, "|-: ") == ""
+}
+
+// tableWidth estimates the columns a table needs: each column's widest cell,
+// with inline markup removed, plus glamour's padding and borders.
+func tableWidth(rows []string) int {
+	var widths []int
+	for _, r := range rows {
+		if isTableDivider(r) {
+			continue
+		}
+		cells := strings.Split(strings.Trim(strings.TrimSpace(r), "|"), "|")
+		for c, cell := range cells {
+			w := lipgloss.Width(strings.NewReplacer("`", "", "**", "", "__", "").Replace(strings.TrimSpace(cell)))
+			if c >= len(widths) {
+				widths = append(widths, 0)
+			}
+			if w > widths[c] {
+				widths[c] = w
+			}
+		}
+	}
+	total := 0
+	for _, w := range widths {
+		total += w + 3 // a space either side and a border
+	}
+	return total + 1
+}
+
+// tableRenderer returns a renderer wrapping at width, built once per width
+// and dropped with the main renderer (theme or size change).
+func (m *Model) tableRenderer(width int) *glamour.TermRenderer {
+	if r, ok := m.glamTables[width]; ok {
+		return r
+	}
+	r, err := glamour.NewTermRenderer(
+		m.glamourThemeOption(),
+		glamour.WithWordWrap(width),
+		glamour.WithColorProfile(lipgloss.ColorProfile()),
+	)
+	if err != nil {
+		return m.glam
+	}
+	if m.glamTables == nil {
+		m.glamTables = map[int]*glamour.TermRenderer{}
+	}
+	m.glamTables[width] = r
+	return r
 }
 
 // looksLineNumbered reports whether s is cat -n style output — the Read tool's
@@ -71,6 +182,7 @@ func (m *Model) buildGlamour(width int) {
 	); err == nil {
 		m.glam = r
 		m.glamWidth = width
+		m.glamTables = nil
 	}
 }
 

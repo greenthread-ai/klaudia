@@ -42,6 +42,10 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **Markdown spacing.** A code block or list at a streaming chunk boundary
+  sat between two blank lines: glamour pads blank lines with spaces, so
+  trimming newlines kept them. Rendered blocks now lose their visually blank
+  edges. Tables are sized to their content instead of the full width.
 - **Parallel tool calls print in order.** When the first call of a parallel
   batch finished while the second was still running, the second's result
   printed above its own `⚙` line (its buffered tool_use was left behind).
