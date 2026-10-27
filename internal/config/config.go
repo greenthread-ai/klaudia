@@ -211,6 +211,11 @@ type Sandbox struct {
 	ReadOnly bool `toml:"readOnly,omitempty"`
 	// Network is the container's --network value (e.g. "none" to isolate).
 	Network string `toml:"network,omitempty"`
+	// Egress, when set, is the allowlist of hosts commands may connect to
+	// ("github.com", "*.npmjs.org", "host:443"); everything else is refused
+	// by an in-process proxy (internal/egress). Enforced under the macOS OS
+	// sandbox, advisory elsewhere — /doctor says which. Unset: no limit.
+	Egress []string `toml:"egress,omitempty"`
 }
 
 // Browser engines.
@@ -402,6 +407,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Sandbox.Network != "" {
 		dst.Sandbox.Network = src.Sandbox.Network
+	}
+	if len(src.Sandbox.Egress) > 0 {
+		dst.Sandbox.Egress = src.Sandbox.Egress
 	}
 	if len(src.Sandbox.WriteRoots) > 0 {
 		dst.Sandbox.WriteRoots = append(dst.Sandbox.WriteRoots, src.Sandbox.WriteRoots...)

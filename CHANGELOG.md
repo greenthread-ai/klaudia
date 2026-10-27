@@ -6,6 +6,13 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Egress control.** `[sandbox] egress = ["github.com", "*.npmjs.org", …]`
+  routes every command through an in-process proxy that forwards to those
+  hosts and refuses the rest with a 403 naming the host and the setting.
+  Enforced under the macOS OS sandbox (the profile allows outbound traffic to
+  the proxy only); advisory in local mode and under bubblewrap; not applied —
+  with a warning — in a container or with `network = "none"`. `/doctor`
+  shows which, and the hosts refused.
 - **`--restricted`** for evals and reproducible runs: an empty config root for
   the process (no user config, global instructions or MCP, skills,
   approvals, session history or job logs, and nothing written back), and no

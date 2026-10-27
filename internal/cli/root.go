@@ -1172,6 +1172,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Build the tool registry. Sub-agents draw from the base tools (incl. any
 	// MCP tools); the top-level registry adds the Agent tool.
 	executor := buildExecutor(cfg.Sandbox, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
+	egressProxy := startEgress(ctx, cfg.Sandbox, executor, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) })
 	// Lazy browser engine for the web tools, tied to the run context and closed
 	// at session end so any launched Chrome is reliably terminated (it launches
 	// nothing until a web tool actually runs).
@@ -1614,7 +1615,9 @@ func run(cmd *cobra.Command, opts *options) error {
 			live := resolveLimitsFor(sess.Model, api.ModelInfo{})
 			live.MaxOutputTokens, live.MaxOutputSource = sess.MaxTokens, sess.MaxTokensSource
 			live.ContextWindow, live.ContextSource = sess.ContextWindow, sess.ContextWindowSource
-			return doctor.Format(doctor.Run(buildDoctorInput(cfg, api.ResolveModel(sess.Model), live, sess.Effort, cwd, mcpCfg, hookRunner)))
+			in := buildDoctorInput(cfg, api.ResolveModel(sess.Model), live, sess.Effort, cwd, mcpCfg, hookRunner)
+			in.Egress = egressDoctor(cfg.Sandbox, executor, egressProxy)
+			return doctor.Format(doctor.Run(in))
 		}
 		// 1024 is plenty for a subject and a few lines; Complete refuses a
 		// reply that hits it rather than committing half a message.

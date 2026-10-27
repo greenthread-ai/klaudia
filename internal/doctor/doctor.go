@@ -49,6 +49,9 @@ type Input struct {
 	// override, the config, or the terminal it detected (or did not).
 	Hyperlinks    bool
 	HyperlinksWhy string
+	// Egress describes the [sandbox] egress allowlist and how hard it is
+	// enforced with this sandbox; "" when there is none.
+	Egress string
 	// Context-window facts resolved by the CLI (api.ContextWindow). Zero limit
 	// means the model isn't in our table and no config override was set — we
 	// fall back to compaction's default at request time.
@@ -293,6 +296,13 @@ func Run(in Input) []Check {
 
 	// Clickable paths and URLs depend on detecting the terminal; when they do
 	// not work, the reason is the fix.
+	if in.Egress != "" {
+		status := StatusOK
+		if !strings.Contains(in.Egress, "enforced") {
+			status = StatusWarn // advisory or not applied: say so where it is seen
+		}
+		checks = append(checks, Check{"egress", status, in.Egress})
+	}
 	if in.HyperlinksWhy != "" {
 		state := "off"
 		if in.Hyperlinks {

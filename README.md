@@ -489,7 +489,10 @@ available to it.
 boundary.** It reads command lines and tool inputs; it does not watch what
 programs do, so a command that builds its own target or a package's install
 script can change things without being seen. For enforcement the kernel applies,
-set `[sandbox] mode = "os"`.
+set `[sandbox] mode = "os"`. To limit where data can go, list the hosts a
+project needs in `[sandbox] egress`; everything else is refused by an
+in-process proxy — enforced under the macOS OS sandbox, advisory elsewhere
+(see [docs/trust.md](docs/trust.md#where-data-may-go-sandbox-egress)).
 
 | Flag | Mode | Behavior |
 |------|------|----------|

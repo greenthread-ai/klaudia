@@ -28,6 +28,20 @@ var termSize Terminal
 // user is actually looking at rather than the 80 columns a pipe implies.
 func SetTerminalSize(cols, rows int) { termSize = Terminal{Cols: cols, Rows: rows} }
 
+// egressEnv points children at the egress proxy (internal/egress), and
+// egressPort is the port a confining sandbox lets them reach. Process-wide,
+// like termSize: there is one proxy per process. Empty and 0 when [sandbox]
+// egress is not set.
+var (
+	egressEnv  []string
+	egressPort int
+)
+
+// SetEgress routes every command through the egress proxy: env is layered
+// over the user's own (a user's HTTPS_PROXY must not route around the
+// allowlist), and port is what the OS sandbox allows outbound connections to.
+func SetEgress(env []string, port int) { egressEnv, egressPort = env, port }
+
 // nonInteractiveEnv are the hints added to every child.
 //
 // These are forced rather than merely defaulted. A user who exported
@@ -65,7 +79,7 @@ func nonInteractiveEnv() []string {
 // Returns nil when there is nothing to add, so the common case keeps exec's
 // inherit-everything behaviour rather than materialising a copy of os.Environ.
 func childEnv(req Request) []string {
-	extra := append(nonInteractiveEnv(), req.Env...)
+	extra := append(append(nonInteractiveEnv(), egressEnv...), req.Env...)
 	if len(extra) == 0 {
 		return nil
 	}

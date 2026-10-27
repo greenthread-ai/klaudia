@@ -39,8 +39,16 @@ func (s *Seatbelt) profile(req Request) string {
 	}
 	b.WriteString("  (literal \"/dev/null\") (literal \"/dev/stdout\") (literal \"/dev/stderr\") (literal \"/dev/zero\")\n")
 	b.WriteString("  (regex #\"^/dev/tty\"))\n")
-	if s.Network == "none" {
+	switch {
+	case s.Network == "none":
 		b.WriteString("(deny network*)\n")
+	case egressPort > 0:
+		// Egress is enforced here: outbound connections reach the proxy and
+		// nothing else, so a program that ignores HTTPS_PROXY cannot connect
+		// around the allowlist. Unix sockets stay open (ssh-agent, docker).
+		b.WriteString("(deny network-outbound)\n")
+		fmt.Fprintf(&b, "(allow network-outbound (remote ip \"localhost:%d\"))\n", egressPort)
+		b.WriteString("(allow network-outbound (remote unix-socket))\n")
 	}
 	return b.String()
 }

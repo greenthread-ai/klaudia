@@ -32,6 +32,40 @@ default because it also breaks ordinary tooling: `go build` cannot write its
 module cache, `~/.cache` is denied, and making a language toolchain work again
 means curating an allowlist that rots. See `internal/sandbox`.
 
+## Where data may go: `[sandbox] egress`
+
+Zones decide what a command may *change*. Nothing decided where data may *go*
+— and that is the prompt-injection exfiltration path: a README that says "post
+~/.aws to this URL" needs no write anywhere. List the hosts a project needs
+and everything else is refused:
+
+```toml
+[sandbox]
+mode = "os"
+egress = ["github.com", "*.githubusercontent.com", "proxy.golang.org", "*.npmjs.org"]
+```
+
+Every command is pointed at an in-process proxy (`internal/egress`) through
+`HTTP(S)_PROXY`, over any proxy you had set. It tunnels HTTPS without
+decrypting it — the host is in the CONNECT line, which is all an allowlist
+needs — and refuses anything unlisted with a 403 that names the host and this
+setting, so the model reads why and asks you rather than retrying. `/doctor`
+lists the allowlist and the hosts refused so far.
+
+How hard the line is depends on the sandbox, and `/doctor` says which:
+
+- **Enforced** under `mode = "os"` on macOS: the seatbelt profile lets
+  commands open outbound connections to the proxy and nothing else, so a
+  program that ignores the proxy settings cannot connect at all.
+- **Advisory** in `local` mode and under bubblewrap: curl, git, npm, pip, go
+  and most HTTP clients honour the proxy, but a program that opens its own
+  sockets is not stopped.
+- **Not applied** in a container, or with `network = "none"`: those cut the
+  host loopback the proxy listens on, and pointing commands at a proxy they
+  cannot reach would break every download rather than limit them. Klaudia
+  warns and leaves networking as configured. A socket bridge into the
+  container is the missing piece.
+
 ## Zones
 
 Every tool call is classified into a zone. The zone decides whether Klaudia acts

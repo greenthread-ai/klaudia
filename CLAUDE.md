@@ -56,6 +56,7 @@ other products (see docs/roadmap.md, "The extraction"); it must not import
 - **cli** - CLI entry point and wiring
 - **native** - Pure-Go search / bash-parsing / PDF
 - **sandbox** - Local / OS-confined / container Bash execution
+- **egress** - `[sandbox] egress`: the allowlisting proxy commands are pointed at (enforced under the macOS OS sandbox)
 - **config** - `config.toml` schema and loading (user file under the config root, project overlay)
 - **goal** - Goal specs and the loop's prompts and gates (also drives plan runs)
 - **lsp** - Language-server pool behind the code-intelligence tools
