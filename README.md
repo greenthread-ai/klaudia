@@ -253,7 +253,7 @@ confirm, type to filter, Esc to cancel, and `1`-`9` still pick directly until
 you start filtering. `/model
 <alias|id>` still sets one directly (`opus`, `sonnet`, `haiku`, `fable`, or any
 full ID). Either way Klaudia records that model's real context window and
-output limit, which is what the status bar's `ctx N%` measures against and what
+output limit, which is what auto-compaction (and the status bar's `ctx N%`) is sized from and what
 the next turn's `max_tokens` asks for — a model switch moves both.
 
 `/theme` switches the colour theme (Markdown + chrome) for the session; set a
