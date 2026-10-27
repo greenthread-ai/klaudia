@@ -450,7 +450,7 @@ set `[sandbox] mode = "os"`.
 |------|------|----------|
 | *(default)* | `autonomous` | Finish the task; ask before changing this machine |
 | `--permission-mode plan` | `plan` | Read-only; mutations and network blocked |
-| `--dangerously-skip-permissions` | `bypassPermissions` | Allow everything, including host changes |
+| `--permission-mode bypassPermissions` | `bypassPermissions` | Allow everything, including host changes — the one way past the gate |
 
 `/mode` switches interactively; `/trust` shows and revokes approvals. Headless
 runs do project and remote work but refuse host changes unless you pass
@@ -946,10 +946,11 @@ Two complementary modes for working toward an objective:
     two checks — a mechanical count of remaining `- [ ]` items, and a one-shot
     verification turn that re-reads the spec from disk and cross-references it
     against git/build/tests — and only honours completion if both agree.
-  - Headless/scriptable: `klaudia --loop --dangerously-skip-permissions
-    [--max-iterations N]` runs the same loop without the TUI (each iteration with
-    a fresh context). It needs a spec in the cwd and bypass permissions (no human
-    to approve), and also stops if it stalls (no new commits for a few
+  - Headless/scriptable: `klaudia --loop [--max-iterations N]` runs the same
+    loop without the TUI (each iteration with a fresh context). It needs a spec
+    in the cwd and a mode that does not ask — autonomous, the default, or
+    bypassPermissions — plus `--allow-host-changes` if the work changes this
+    machine, and also stops if it stalls (no new commits for a few
     iterations).
 
 ## Project instructions (AGENTS.md / CLAUDE.md)

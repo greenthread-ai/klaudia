@@ -17,7 +17,7 @@ import (
 )
 
 // bypassPerm is a permission context that allows everything, matching
-// --dangerously-skip-permissions. Used so the loop dispatches mutating tools
+// --permission-mode bypassPermissions. Used so the loop dispatches mutating tools
 // without an interactive Approver.
 func bypassPerm() permission.Context {
 	return permission.Context{Mode: func() permission.Mode { return permission.ModeBypassPermissions }}

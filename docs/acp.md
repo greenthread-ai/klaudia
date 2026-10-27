@@ -35,8 +35,8 @@ JetBrains IDEs — `~/.jetbrains/acp.json` (same shape, no `type`, and the comma
 wants an absolute path). Neovim: point `acp.nvim` at the same command.
 
 Klaudia's own flags still apply, because they run before the agent starts:
-`--model`, `--permission-mode`, `--resume`/`--continue`, `--allow-host-changes`,
-`--dangerously-skip-permissions`. Two combinations are refused rather than
+`--model`, `--permission-mode`, `--resume`/`--continue`, `--allow-host-changes`.
+Two combinations are refused rather than
 half-honoured:
 
 - `--output-format` with `acp`. ACP owns stdout — every byte on it is a JSON-RPC

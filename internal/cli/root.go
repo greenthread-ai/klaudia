@@ -796,7 +796,6 @@ type options struct {
 	inputFormat      string
 	permissionMode   string
 	allowHostChanges bool
-	dangerouslySkip  bool
 	verbose          bool
 	maxTurns         int
 	resume           string // --resume <session-id>
@@ -875,7 +874,6 @@ func NewRootCommand() *cobra.Command {
 	f.StringVar(&opts.inputFormat, "input-format", "text", "Input format: text|stream-json|acp (stream-json and acp both drive a persistent agent over stdin; acp speaks the Agent Client Protocol for editors such as Zed)")
 	f.StringVar(&opts.permissionMode, "permission-mode", "", "Permission mode: autonomous|plan|bypassPermissions (default: config [permissions] mode, else autonomous)")
 	f.BoolVar(&opts.allowHostChanges, "allow-host-changes", false, "Non-interactive runs: permit changes to this machine (packages, services, /etc, …) without a human to approve them")
-	f.BoolVar(&opts.dangerouslySkip, "dangerously-skip-permissions", false, "Skip all permission checks (sets bypassPermissions)")
 	f.BoolVar(&opts.verbose, "verbose", false, "Verbose output (required for stream-json)")
 	f.IntVar(&opts.maxTurns, "max-turns", 0, "Limit the number of agentic loop turns (0 = unlimited)")
 	f.StringVarP(&opts.resume, "resume", "r", "", "Resume a session by ID")
@@ -1073,9 +1071,6 @@ func run(cmd *cobra.Command, opts *options) error {
 	mode := permission.Mode(modeStr)
 	if !mode.Valid() {
 		return usageErrorf("invalid permission mode %q (autonomous|plan|bypassPermissions)", modeStr)
-	}
-	if opts.dangerouslySkip {
-		mode = permission.ModeBypassPermissions
 	}
 
 	var extraDirs func() []string

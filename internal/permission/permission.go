@@ -34,7 +34,10 @@ const (
 	// is consulted.
 	ModeAutonomous Mode = "autonomous"
 	// ModeBypassPermissions allows everything, including the host gate
-	// (--dangerously-skip-permissions).
+	// (--permission-mode bypassPermissions, or /mode). It is the one way past
+	// the gate, so it has no shorthand flag: the old
+	// --dangerously-skip-permissions was removed once autonomous mode plus
+	// --allow-host-changes covered unattended runs.
 	ModeBypassPermissions Mode = "bypassPermissions"
 	// ModePlan is read-only exploration; mutations are blocked.
 	ModePlan Mode = "plan"

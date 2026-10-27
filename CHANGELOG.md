@@ -67,6 +67,13 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed (breaking)
+- **`--dangerously-skip-permissions` is removed.** It was a shorthand for
+  `--permission-mode bypassPermissions`, and the docs and the `--loop` error
+  still pointed unattended runs at it long after autonomous mode (the
+  default) plus `--allow-host-changes` covered them. `bypassPermissions`
+  remains — via `--permission-mode` or `/mode` — as the one, explicit way
+  past the gate; it just no longer has a flag that reads like the normal
+  route. `scripts/smoke.sh` uses the explicit form.
 - **Environment settings the core read at runtime are gone.** They were
   process-wide, which an embedded loop cannot live with.
   `KLAUDIA_MAX_RETRIES` and `KLAUDIA_STREAM_IDLE_TIMEOUT` are now the config

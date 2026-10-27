@@ -14,7 +14,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$(mktemp -d)/klaudia"
 WORK="$(mktemp -d)"
-COMMON=(--dangerously-skip-permissions --max-turns 6 --model haiku)
+COMMON=(--permission-mode bypassPermissions --max-turns 6 --model haiku)
 trap 'rm -rf "$WORK" "$(dirname "$BIN")"' EXIT
 
 pass() { printf '  \033[32m✓\033[0m %s\n' "$1"; }

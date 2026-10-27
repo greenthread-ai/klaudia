@@ -43,11 +43,11 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 	// No human is present to approve tool use, so the loop can only do real work
 	// in a mode that does not ask. Autonomous qualifies now that the host gate
 	// is what stops a host change: before it existed, the only way to run
-	// unattended was --dangerously-skip-permissions, which turned off every
-	// check to get past prompts about editing files in the project.
+	// unattended was bypassPermissions, which turned off every check to get
+	// past prompts about editing files in the project.
 	if p.mode != permission.ModeAutonomous && p.mode != permission.ModeBypassPermissions {
 		return fmt.Errorf("--loop runs unattended and cannot answer prompts; use --permission-mode autonomous "+
-			"(host changes still need --allow-host-changes) or --dangerously-skip-permissions. Current mode: %s", p.mode)
+			"(host changes still need --allow-host-changes) or bypassPermissions. Current mode: %s", p.mode)
 	}
 
 	iters := goal.Iterations(p.iterations)
