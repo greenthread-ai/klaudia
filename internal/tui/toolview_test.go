@@ -38,10 +38,6 @@ func TestToolSummary(t *testing.T) {
 }
 
 func TestToolDiff(t *testing.T) {
-	edit := toolDiff("Edit", map[string]any{"old_string": "a := 1", "new_string": "a := 2"})
-	if !strings.Contains(edit, "- ") || !strings.Contains(edit, "+ ") {
-		t.Errorf("edit diff missing -/+ hunk: %q", edit)
-	}
 	write := toolDiff("Write", map[string]any{"content": "line1\nline2\nline3\nline4\nline5"})
 	if !strings.Contains(write, "+ ") || !strings.Contains(write, "(5 lines)") {
 		t.Errorf("write summary wrong: %q", write)

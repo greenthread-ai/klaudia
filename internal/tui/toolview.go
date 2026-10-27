@@ -122,45 +122,18 @@ func oneline(s string, n int) string {
 	return s
 }
 
-// toolDiff renders a compact, indented change preview for mutating tools
-// (Edit shows a -/+ hunk; Write/NotebookEdit a "+N lines" summary). Empty
-// otherwise.
+// toolDiff renders a compact, indented preview for Write and NotebookEdit (a
+// "+N lines" summary). An Edit's hunk needs the file, so it is the Model's
+// editHunk. Empty otherwise.
 func toolDiff(name string, input any) string {
 	f := toolFields(input)
 	switch name {
-	case "Edit":
-		return diffHunk(f["old_string"], f["new_string"])
 	case "Write":
 		return addedSummary(f["content"])
 	case "NotebookEdit":
 		return addedSummary(f["new_source"])
 	}
 	return ""
-}
-
-func diffHunk(oldS, newS string) string {
-	var rows []string
-	add := func(prefix string, st lipgloss.Style, text string) {
-		for _, ln := range strings.Split(text, "\n") {
-			if len(rows) >= maxDiffRows {
-				return
-			}
-			rows = append(rows, "  "+st.Render(prefix+oneline(ln, maxDiffLine)))
-		}
-	}
-	if oldS != "" {
-		add("- ", diffDelStyle, oldS)
-	}
-	if newS != "" {
-		add("+ ", diffAddStyle, newS)
-	}
-	if len(rows) == 0 {
-		return ""
-	}
-	if len(rows) >= maxDiffRows {
-		rows = append(rows, "  "+bannerStyle.Render("…"))
-	}
-	return strings.Join(rows, "\n")
 }
 
 func addedSummary(content string) string {

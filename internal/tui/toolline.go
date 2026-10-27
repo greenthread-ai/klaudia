@@ -68,7 +68,11 @@ func (m *Model) showTool(p *pendingTool) {
 	}
 	p.shown = true
 	m.appendLine(toolStyle.Render("⚙ " + p.header()))
-	if diff := toolDiff(p.name, p.input); diff != "" {
+	diff := toolDiff(p.name, p.input)
+	if p.name == "Edit" {
+		diff = m.editPreview(p.input)
+	}
+	if diff != "" {
 		m.appendLine(diff)
 	}
 }
@@ -156,7 +160,7 @@ func (m *Model) renderToolResult(ev agent.Event, p *pendingTool, seq int) {
 		}
 		m.appendLine(toolStyle.Render(indent + "✓ " + head))
 		if !p.shown {
-			if diff := editDiff(ev.ToolName, p.input); diff != "" {
+			if diff := m.editDiff(ev.ToolName, p.input); diff != "" {
 				m.appendLine(diff)
 			}
 		}
@@ -191,11 +195,20 @@ func (m *Model) appendPreview(s, indent string, style interface{ Render(...strin
 // editDiff is the change preview written under a finished edit. Write's is
 // left out: the line already says how many lines it wrote, and its first three
 // lines told nobody anything.
-func editDiff(name string, input any) string {
-	if name == "Write" {
+func (m *Model) editDiff(name string, input any) string {
+	switch name {
+	case "Write":
 		return ""
+	case "Edit":
+		return m.editPreview(input)
 	}
 	return toolDiff(name, input)
+}
+
+// editPreview is an Edit's numbered hunk.
+func (m *Model) editPreview(input any) string {
+	f := toolFields(input)
+	return m.editHunk(f["file_path"], f["old_string"], f["new_string"])
 }
 
 // readLineRe matches a line of Read's numbered output.

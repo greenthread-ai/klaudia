@@ -144,6 +144,12 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **Edits show a real hunk.** An Edit printed all of `old_string` as `-`
+  lines and all of `new_string` as `+` lines, with no position and the
+  indentation collapsed. A one-word change inside ten lines read as twenty
+  changed lines. Now only the lines that differ are marked, numbered where
+  they sit in the file, with a line of context either side, indentation
+  kept and tabs at four columns.
 - **`/help` is 21 lines instead of 60.** Commands are listed by group
   (Session, Work, Context, Shell, Find, Setup, and Skills when any are
   loaded), names only, followed by the keys. `/help <command>` (or a skill
