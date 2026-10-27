@@ -59,8 +59,18 @@ func toolFields(input any) map[string]string {
 
 // toolSummary returns a short " <salient input>" suffix for a tool_use header,
 // e.g. " go test ./..." for Bash. Empty when there's nothing useful to show.
-func toolSummary(name string, input any) string {
+func toolSummary(name string, input any) string { return toolSummaryWith(name, input, nil) }
+
+// toolSummaryWith is toolSummary with short applied to each value before it is
+// truncated. Shortening after truncation misses: an absolute path cut to fit
+// no longer starts with the prefix that would have shortened it.
+func toolSummaryWith(name string, input any, short func(string) string) string {
 	f := toolFields(input)
+	if short != nil {
+		for k, v := range f {
+			f[k] = short(v)
+		}
+	}
 	if name == "Agent" {
 		sub := f["subagent_type"]
 		desc := oneline(f["description"], maxSummary)

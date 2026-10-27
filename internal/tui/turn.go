@@ -75,11 +75,16 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	case m.sess != nil && m.sess.Goal != "":
 		prompt = fmt.Sprintf("Standing goal for this session: %s\n\nCurrent instruction: %s", m.sess.Goal, prompt)
 	}
-	// The completion block describes this turn, not the session.
-	m.turnTouched = map[string]bool{}
-	m.turnLabel = oneline(prompt, 60)
-	m.turnResultsFrom = m.results.seq
-	m.turnReportsFrom = m.hostReportCount()
+	// The completion block describes this turn, not the session — or, in a
+	// goal loop, the whole run: only its first turn resets the markers.
+	inLoop := m.loopRemaining > 0 || m.loopWrapUp
+	if !inLoop || !m.loopSpanOpen {
+		m.turnTouched = map[string]bool{}
+		m.turnLabel = oneline(prompt, 60)
+		m.turnResultsFrom = m.results.seq
+		m.turnReportsFrom = m.hostReportCount()
+	}
+	m.loopSpanOpen = inLoop
 
 	approver := &uiApprover{events: m.events}
 	asker := &uiAsker{events: m.events}
@@ -119,7 +124,7 @@ func (m *Model) renderEvent(ev agent.Event) {
 	case "tool_use":
 		m.flushAssistant() // the assistant message before a tool call is complete
 		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
-		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + m.displayPaths(toolSummary(ev.ToolName, ev.Input))))
+		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + toolSummaryWith(ev.ToolName, ev.Input, m.displayPaths)))
 		// Remember files Klaudia touches so @-completion can rank them first.
 		// Ownership is NOT recorded here: this event is emitted before the tool
 		// runs, so stamping the file now would capture its pre-write state and
@@ -205,6 +210,8 @@ func (m *Model) renderEvent(ev agent.Event) {
 			prefix = "✗ " + ev.ToolName
 		case ev.ToolName == "TodoWrite":
 			s = todoResultLine(s)
+		case ev.ToolName == "ExitPlanMode":
+			s = exitPlanResultLine(s)
 		}
 		// Append the tool's wall-clock duration to its result line so users
 		// can see whether a tool was fast or slow without reading timestamps.
@@ -234,7 +241,7 @@ func (m *Model) renderEvent(ev agent.Event) {
 		if ev.IsError && !ev.HostBlocked {
 			kind = navError
 		}
-		m.noteNav(kind, ev.ToolName+toolSummary(ev.ToolName, ev.Input)+" → "+oneline(s, 60), "", seq)
+		m.noteNav(kind, ev.ToolName+toolSummaryWith(ev.ToolName, ev.Input, m.displayPaths)+" → "+oneline(s, 60), "", seq)
 		m.activeToolName = ""
 		m.phase = "thinking"
 	case "compaction":

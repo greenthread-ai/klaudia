@@ -280,6 +280,10 @@ type Model struct {
 	ready  bool
 	width  int
 	height int
+	// loopSpanOpen is set once a goal loop's first turn has reset the
+	// completion-block markers, so later iterations accumulate into one block
+	// for the whole run instead of each printing their own.
+	loopSpanOpen bool
 	// unsized holds blocks committed before the first resize (see commit).
 	unsized []transcriptBlock
 	// out queues finished blocks for printing into the terminal's own
@@ -747,11 +751,21 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.appendLine(bannerStyle.Render("  ✓ done in " + fmtDuration(elapsed) + throughput(msg.res.OutputTokens, elapsed)))
 		}
+		// Goal loop: decide now whether another iteration follows, because
+		// that decides whether this turn gets a completion block of its own.
+		var loopPrompt string
+		if m.loopRemaining > 0 || m.loopWrapUp {
+			loopPrompt = m.loopNext(msg.res, msg.err)
+		}
 		// Results before accounting: what changed and what was verified, if
 		// anything was. A turn that only read files prints nothing here rather
-		// than an empty ceremony.
-		if s := m.turnSummaryBlock(); s != "" {
-			m.appendLine(s)
+		// than an empty ceremony. Mid-loop it prints nothing either: the block
+		// covers the whole run (see loopSpanOpen) and comes once, at the end —
+		// five lines per iteration buried the iterations themselves.
+		if loopPrompt == "" {
+			if s := m.turnSummaryBlock(); s != "" {
+				m.appendLine(s)
+			}
 		}
 		if msg.res.Messages != nil {
 			m.history = msg.res.Messages
@@ -782,11 +796,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pending, m.askReply, m.planReply = nil, nil, nil
 		// Goal loop: run the next iteration (or the wrap-up turn) unless the goal
 		// is complete, the turn errored/was interrupted, or we've fully stopped.
-		if m.loopRemaining > 0 || m.loopWrapUp {
-			if next := m.loopNext(msg.res, msg.err); next != "" {
-				m.setState(stateRunning)
-				return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
-			}
+		if loopPrompt != "" {
+			m.setState(stateRunning)
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(loopPrompt), stopSW)
 		}
 		// A queued message becomes the next turn. Two sources, in priority
 		// order: one the user escalated to "interrupt and send now" (captured at

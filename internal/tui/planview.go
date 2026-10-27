@@ -143,3 +143,27 @@ func todoResultLine(content string) string {
 	}
 	return strings.Join(append([]string{fmt.Sprintf("plan updated · %d/%d done", done, total)}, rest...), "\n")
 }
+
+// exitPlanResultLine folds ExitPlanMode's result to what the user needs. The
+// result is written for the model — "record the plan's steps with TodoWrite
+// now…", six lines of it — and the user has just answered the question it
+// reports, so all that is news to them is where the plan was saved. Anything
+// that is not an approval (a refusal, a save error) is shown as written.
+func exitPlanResultLine(content string) string {
+	const savedAt = "The approved plan is saved at "
+	if !strings.HasPrefix(content, "Plan approved") {
+		return content
+	}
+	line := "plan approved"
+	if i := strings.Index(content, savedAt); i >= 0 {
+		path := content[i+len(savedAt):]
+		if j := strings.IndexAny(path, ", \n"); j >= 0 {
+			path = path[:j]
+		}
+		line += " · saved to " + path
+	}
+	if i := strings.Index(content, "(The plan could not be saved"); i >= 0 {
+		line += " " + strings.TrimSpace(content[i:])
+	}
+	return line
+}

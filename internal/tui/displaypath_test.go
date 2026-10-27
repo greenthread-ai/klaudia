@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/greenthread-ai/klaudia/internal/agent"
 )
 
 func TestDisplayPathsShortensUnderCWDAndHome(t *testing.T) {
@@ -41,5 +43,19 @@ func TestToolResultShowsRelativePaths(t *testing.T) {
 	}
 	if last := m.results.items[len(m.results.items)-1].content; !strings.Contains(last, abs) {
 		t.Errorf("/last lost the absolute path: %q", last)
+	}
+}
+
+// Battletest regression: a long absolute path in a tool header was truncated
+// before it was shortened, so the prefix no longer matched and the header
+// showed "⚙ Edit /private/tmp/…b8…" instead of the relative path.
+func TestToolHeaderShortensBeforeTruncating(t *testing.T) {
+	dir := "/very/long/working/directory/that/pushes/the/path/past/the/summary/limit/proj"
+	m := newTestModel()
+	m.resize(100, 30)
+	m.sess.CWD = dir
+	m.renderEvent(agent.Event{Type: "tool_use", ToolName: "Edit", Input: map[string]any{"file_path": dir + "/.klaudia/GOAL.md"}})
+	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "⚙ Edit .klaudia/GOAL.md") {
+		t.Errorf("header = %q, want the relative path", out)
 	}
 }

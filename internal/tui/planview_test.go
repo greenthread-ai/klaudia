@@ -200,3 +200,22 @@ func TestPlanPanelInTheLiveRegion(t *testing.T) {
 		}
 	})
 }
+
+// Battletest: approving a plan printed ExitPlanMode's six-line, model-facing
+// result. The user sees that it was approved and where it was saved.
+func TestExitPlanResultFoldsToOneLine(t *testing.T) {
+	full := "Plan approved. Plan mode is now off — proceed with the implementation.\n\n" +
+		"Record the plan's steps with TodoWrite now, before starting the first one.\n\n" +
+		"The approved plan is saved at ~/.klaudia/plans/abc.md, and TodoWrite keeps its checklist in step with your list."
+	if got := exitPlanResultLine(full); got != "plan approved · saved to ~/.klaudia/plans/abc.md" {
+		t.Errorf("got %q", got)
+	}
+	refused := "The user did not approve the plan. Keep refining it in plan mode; do not modify anything yet."
+	if got := exitPlanResultLine(refused); got != refused {
+		t.Errorf("a refusal was folded: %q", got)
+	}
+	failed := "Plan approved. Plan mode is now off.\n\n(The plan could not be saved: disk full)"
+	if got := exitPlanResultLine(failed); got != "plan approved (The plan could not be saved: disk full)" {
+		t.Errorf("save error lost: %q", got)
+	}
+}
