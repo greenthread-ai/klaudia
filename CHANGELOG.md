@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.3.0 — 2026-10-27
+
 ### Added
 
 - **Shift+Return inserts a newline** (and, with `input.enter = "newline"`,
