@@ -1358,23 +1358,17 @@ func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[strin
 		if err != nil {
 			return nil, fmt.Errorf("tool %s description: %w", name, err)
 		}
-		props, required := splitSchema(t.InputSchema())
 		out = append(out, anthropic.BetaToolUnionParam{
 			OfTool: &anthropic.BetaToolParam{
 				Name:        t.Name(),
 				Description: anthropic.String(desc),
-				InputSchema: anthropic.BetaToolInputSchemaParam{
-					Properties: props,
-					Required:   required,
-				},
+				InputSchema: inputSchemaParam(t.InputSchema()),
 			},
 		})
 	}
 	return out, nil
 }
 
-// splitSchema pulls "properties" and "required" out of a generated JSON Schema
-// object so they can be placed into BetaToolInputSchemaParam.
 // schemaFieldList renders a tool's accepted input fields as
 // "file_path (required), offset, limit" — appended to validation errors so the
 // model sees what's correct, not just what was wrong. Returns "" when the
@@ -1405,6 +1399,36 @@ func schemaFieldList(raw json.RawMessage) string {
 	return strings.Join(parts, ", ")
 }
 
+// structuralKeys are the top-level schema keywords that must travel with
+// properties for the schema to mean anything: the definitions a "$ref"
+// points into, and top-level unions. MCP servers built on Pydantic or zod
+// emit "$ref": "#/$defs/X", and sending properties alone left every such ref
+// dangling. additionalProperties is deliberately not here: every built-in
+// tool declares it, and dropping it only ever loosened a schema, so carrying
+// it would change every request for no fix.
+var structuralKeys = []string{"$defs", "definitions", "anyOf", "oneOf", "allOf"}
+
+// inputSchemaParam turns a tool's JSON Schema into the API's input_schema:
+// properties and required, plus the structural keywords above.
+func inputSchemaParam(raw json.RawMessage) anthropic.BetaToolInputSchemaParam {
+	props, required := splitSchema(raw)
+	p := anthropic.BetaToolInputSchemaParam{Properties: props, Required: required}
+	var all map[string]json.RawMessage
+	if json.Unmarshal(raw, &all) == nil {
+		for _, k := range structuralKeys {
+			if v, ok := all[k]; ok {
+				if p.ExtraFields == nil {
+					p.ExtraFields = map[string]any{}
+				}
+				p.ExtraFields[k] = v
+			}
+		}
+	}
+	return p
+}
+
+// splitSchema pulls "properties" and "required" out of a generated JSON Schema
+// object so they can be placed into BetaToolInputSchemaParam.
 func splitSchema(raw json.RawMessage) (properties any, required []string) {
 	var s struct {
 		Properties json.RawMessage `json:"properties"`

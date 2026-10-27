@@ -50,6 +50,11 @@ port mirrors (see `internal/version`).
   context was killing their stream); tool and resource lists read every page;
   startup and config-reload connects time out (60s) instead of hanging; and a
   reload no longer orphans a session a revive installed meanwhile.
+- **MCP tool schemas keep their `$defs` and top-level unions.** Only
+  `properties` and `required` reached the API, so a server built on Pydantic
+  or zod — whose properties say `"$ref": "#/$defs/X"` — sent refs to nothing.
+  `$defs`, `definitions`, `anyOf`, `oneOf` and `allOf` now travel with them;
+  built-in tool requests are byte-for-byte unchanged.
 - **Read-only MCP tools work in plan mode, and so in Explore and Plan.** Those
   sub-agents run in plan mode and are handed MCP tools marked read-only, but
   plan mode refused every MCP call, so they could never use them. Plan mode
