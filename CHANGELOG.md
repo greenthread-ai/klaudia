@@ -5,6 +5,80 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Highlights
+- **The TUI reads like a review, not a log.** One line per tool call (reads
+  batched), numbered edit hunks, a one-line resume card, a 21-line `/help`,
+  paged and coloured `/diff`, honest context and token figures.
+- **`/rewind`** goes back to before an earlier prompt, files and conversation
+  together; **`/commit`** drafts its own message.
+- **Long-running work**: background jobs report their exit (and, with
+  `watch`, matching output) to the model in every frontend, `BashOutput` can
+  wait instead of polling, logs rotate, and background and forked sub-agents
+  work in the TUI, headless and stream-json.
+- **MCP**: project servers ask before they start, HTTP `headers`, images and
+  structured results, titled and multi-select elicitation, and a dozen fixes.
+- **Operations**: OpenTelemetry tracing, a fallback model chain, `maxEffort`,
+  `--restricted` for reproducible runs, `[sandbox] egress` (enforced on macOS),
+  idle compaction.
+- **The core is embeddable**: the agent loop and what it needs live in
+  `pkg/`, with no dependency on Klaudia's own packages.
+
+### Changed (breaking)
+- **The core's advice is neutral unless the host words it.** `api.Hints`
+  carries a host's names for its settings, its compact command and the
+  sign-in whose token is often shared; `api.FriendlyError` uses neutral
+  wording and `Hints.FriendlyError` the host's. The loop takes the same value
+  as `agent.Options.Hints` (and `Spawner.WithHints`) for its two notes about
+  the output-token setting. Klaudia passes `config.Hints`, so its messages
+  are unchanged word for word.
+- **The provider layer is `pkg/api`, and the core's leaf packages are in
+  `pkg/`** (`permission`, `plan`, `schema`, and `tool` — the tool contract,
+  aliased from `internal/tools`). The Anthropic client there is neutral: no
+  Claude Code beta, `x-app` header, OAuth beta or billing block. Klaudia
+  adds exactly what it sent before through the client's new `WithPrepare` /
+  `WithRequestOptions` / `WithListOptions` hooks, in
+  `internal/anthropicauth`, which also owns credential discovery
+  (`ResolveCredential`). Live API tests (`KLAUDIA_LIVE_MODELS=1`) now take
+  `ANTHROPIC_API_KEY` from the environment and no longer run by default —
+  two of them used to call the real API with the Keychain login whenever
+  one was found.
+- **The agent loop no longer knows about Klaudia's product packages.**
+  `internal/agent` now imports only `api`, `compaction`, `permission`,
+  `plan`, `schema` and `tools` (it also imported `trust`, `hooks`,
+  `subagent`, `worktree` and `session`). The seams are interfaces with
+  Klaudia's implementations in the wiring: `agent.Gate` (the host gate moved
+  wholesale to `internal/hostgate`, and `ApprovalRequest.HostChange` became
+  `Detail`, read with `hostgate.CardOf`), `agent.Hooks`, `Spawner.WithTypes`,
+  `Spawner.WithIsolator`, and `session.Messages` in place of
+  `agent.MessagesFromEntries`. Behaviour is unchanged, except that `/trust`
+  no longer counts a parallel-batched read-only call (a credential read, say)
+  twice.
+- **`--dangerously-skip-permissions` is removed.** It was a shorthand for
+  `--permission-mode bypassPermissions`, and the docs and the `--loop` error
+  still pointed unattended runs at it long after autonomous mode (the
+  default) plus `--allow-host-changes` covered them. `bypassPermissions`
+  remains — via `--permission-mode` or `/mode` — as the one, explicit way
+  past the gate; it just no longer has a flag that reads like the normal
+  route. `scripts/smoke.sh` uses the explicit form.
+- **Environment settings the core read at runtime are gone.** They were
+  process-wide, which an embedded loop cannot live with.
+  `KLAUDIA_MAX_RETRIES` and `KLAUDIA_STREAM_IDLE_TIMEOUT` are now the config
+  keys `maxRetries` and `streamIdleTimeout` (seconds); the error messages that
+  suggested the variables now name the keys. `KLAUDIA_DISABLE_PROMPT_CACHE`
+  and `DISABLE_COMPACT` / `DISABLE_MICROCOMPACT` / `DISABLE_AUTO_COMPACT` were
+  debugging switches and have no CLI replacement; embedders get
+  `api.Tuning.NoPromptCache` and `agent.Options.NoMicrocompact` /
+  `NoAutocompact`. `api.New` and `api.NewOpenAIProvider` take an `api.Tuning`.
+- **The host chooses where the core writes spills and job logs.** The agent
+  loop, the tools and compaction no longer resolve `~/.klaudia` (or
+  `KLAUDIA_CONFIG_DIR`) themselves. `tools.Spill`, `tools.Cap` and
+  `tools.CapTo` are now methods on `tools.SpillStore{Dir}`, which reaches the
+  loop as `agent.Options.Spill`, Bash as `tools.Context.Spill` and sub-agents
+  through `Spawner.WithSpill`. `tools.NewJobStore(ctx, root, session)` takes
+  the job-log root. The CLI passes the same `outputs/` and `jobs/` directories
+  as before, so nothing moves for users; an embedder that passes none gets
+  clamped output with no spill file and in-memory job logs.
+
 ### Added
 - **`maxEffort`** in config caps every effort setting — `--effort`,
   `KLAUDIA_EFFORT`, `effort`, `[subagents] effort` and `/effort`, which
@@ -118,6 +192,221 @@ port mirrors (see `internal/version`).
   command, oldest first, up to three (then "+N more · /jobs"). The status line
   only counted them. It ticks once a second while a job runs and not at all
   otherwise.
+- **Clickable links.** URLs and paths to existing files in the transcript are
+  OSC 8 hyperlinks, so Cmd/Ctrl+click opens them. A URL glamour wrapped across
+  rows is one link carrying the whole URL (terminal detection opened the first
+  fragment), and a relative `path:line` resolves against the working directory.
+  On in terminals known to support OSC 8; `KLAUDIA_HYPERLINKS=0/1` or
+  `[links] enabled` overrides. `[links] file` sends file clicks to an editor at
+  the line (`vscode://file/{path}:{line}:{col}`). Screen only: the transcript
+  that `/copy`, `/export` and `$PAGER` read is unchanged.
+- **The plan is visible in every frontend.** The loop emits a `plan` event
+  whenever the step list changes. The TUI, which showed nothing, now draws a
+  live panel above the prompt (`Ctrl+T` collapses it; it hides once every step
+  is done) and folds each `TodoWrite` result to `plan updated · n/m done`.
+  stream-json clients get the event with a snake_case payload (`items`,
+  `content`, `status`, `active_form`, `approved`, `path`, `rev`; a cleared plan
+  is `"items":[]`). ACP's native plan is now built from the stored list rather
+  than from `TodoWrite`'s input.
+- **The session transcript now records the sizing each turn actually ran
+  with**: the resolved model id, `maxTokens`, `contextWindow` and the source
+  label behind each figure, on every assistant line. This is the gap the
+  Opus 5.5 output-cap bug exposed from the other side — the saved transcript
+  named the permission mode, the version, the git branch and the request id,
+  and not one of the three numbers that decided what the turn could do, so the
+  diagnosis rested on the user remembering which model they had picked. Written
+  per entry rather than as a session header because `/model` changes the answer
+  mid-session. Five `omitempty` fields, so a transcript whose sizing was never
+  set is byte-identical to one written before they existed and `--resume` is
+  unaffected.
+- **A `klaudia` theme, and it is the default.** Sky blue and bronze on
+  near-black. The startup colours were previously a palette no theme owned:
+  `currentThemeID()` returned `"dark"`, which is not in `renderThemes`, so the
+  theme picker marked nothing current and switching away from the default was
+  a one-way door — there was no name to switch back to. The default is now a
+  real entry, `defaultChromePalette` is derived from it rather than written
+  out twice, and a test fails if the two ever disagree.
+
+- **An approved plan is now a durable artefact.** `ExitPlanMode` used to return
+  the sentence "Plan approved. Plan mode is now off — proceed with the
+  implementation" and throw the plan away: it survived only as prose in the
+  message history, where compaction could summarise it away and `--resume`
+  never saw it. Approval now writes `~/.klaudia/plans/<session-id>.md` — Claude
+  Code's shape: one file per session, outside the project, so two sessions in
+  one repo cannot overwrite each other's plan and `--resume` keeps writing the
+  same file. The user can edit it when the plan is wrong. The body uses goal
+  mode's checkbox format, so `goal.CountUnchecked` *could* read it, but
+  nothing calls it on a plan yet. The approval result also tells
+  the model to record the steps with `TodoWrite` before starting the first one
+  and to revise them as it goes, because approving a plan should begin working
+  through a visible list rather than merely unlock the tools. A failed write is
+  reported to the model but never costs it the plan: the list stays in memory
+  and a read-only `.klaudia` degrades to a session with no artefact. Headless
+  `-p` runs still have no approver, so a plan there is recorded but not
+  approved and so not persisted.
+
+### Changed
+- **Starting a background job is one line** (`✓ Bash ./provision.sh ·
+  started as provision.sh`); the how-to text stays with the model. The done
+  line's tok/s now excludes the time tools were running, so a turn that
+  waited 39s on a job no longer reads "7 tok/s", and it is left out when the
+  model itself ran for under a second.
+- **`/diff` pages and colours.** It printed the whole diff, uncoloured, into
+  scrollback. It now uses git's colours (none under `NO_COLOR`), opens a long
+  diff in `$PAGER` as `/last` does, and names untracked files, which `git
+  diff` leaves out and which are often what Klaudia just created.
+- **An approval shows the change once, and a Write shows what it changes.**
+  An Edit awaiting approval printed its numbered hunk above the card and then
+  again inside it as `replace "old" → "new"`; the card now adds only what the
+  line above does not say. A Write over an existing file (`~/.zshrc`, say)
+  previews the lines it changes, numbered with context and `+N -M`, instead
+  of the new file's first three lines.
+- **Context in the status bar only when it matters.** It is measured against
+  the auto-compact point rather than the raw window: hidden under 50%, a
+  quiet `ctx 62%` up to 80%, then amber `12% to auto-compact`, moved up the
+  line so a narrow terminal keeps it.
+- **A batch of reads is one line**: `✓ Read 3 files · main.go, main_test.go,
+  go.mod`. Consecutive successful Reads are held until the next thing is
+  written (shown in the live region meanwhile); a lone Read keeps its line
+  count.
+- **Edits show a real hunk.** An Edit printed all of `old_string` as `-`
+  lines and all of `new_string` as `+` lines, with no position and the
+  indentation collapsed. A one-word change inside ten lines read as twenty
+  changed lines. Now only the lines that differ are marked, numbered where
+  they sit in the file, with a line of context either side, indentation
+  kept and tabs at four columns. The Edit tool reports the line its change
+  starts on (`tool_result` events gain an optional `data` field carrying
+  `tool.Result.Data`), so the numbers survive the next call rewriting the
+  same file while this one renders.
+- **`/help` is 21 lines instead of 60.** Commands are listed by group
+  (Session, Work, Context, Shell, Find, Setup, and Skills when any are
+  loaded), names only, followed by the keys. `/help <command>` (or a skill
+  name) prints its usage and description. Typing `/` still filters every
+  command with its description.
+- **Resuming says so, in one line.** A resumed session with a clean working
+  tree showed nothing, so the model carried on from history the user could
+  not see. With anything to reconcile, the card was ten lines restating the
+  mode. Every resume now opens with `↻ continuing the last session here · N
+  messages · approvals start fresh · /clear to start over`, plus one line
+  each for a goal, uncommitted work and stopped jobs when there are any.
+- **One line per tool call.** A call's line used to be written when it started
+  (`⚙ Read main.go`) and its result under it (`✓ Read · 0ms:` and eight
+  lines of the file). It is now written once, when the result is in:
+  `✓ Read main.go · 35 lines`, `✓ Glob **/* · 3 files`, `✓ Write main.go ·
+  103 lines`, `✓ Edit main.go` over its hunk, `✓ Bash go test ./... · 7.2s`
+  over its output. Durations appear from one second up, timed per call
+  rather than matched by tool name. The live status line names the running
+  call. The Agent tool still writes its line first, so its steps have
+  something to sit under, and a call that stops for approval writes its
+  line and diff before the card. Calls still running when a turn stops
+  are listed as stopped.
+- **Project MCP servers ask before they start.** A server in a project's
+  `.mcp.json` or `.klaudia/.mcp.json` launched as soon as Klaudia started in
+  the clone. It now waits for the same remembered approval project hooks get:
+  the first message shows each server's command or URL (and env names), the
+  answer is kept in `~/.klaudia/mcp-approvals.json` until the set changes, and
+  a no lasts the session. Servers in `~/.klaudia/.mcp.json` start as before.
+  `/mcp` lists held servers with their commands and can approve them before
+  the first message (or after a no). Headless runs start project servers
+  only with `--allow-host-changes`. The
+  approval card's `hooks` flag became `repo_config` (`"hooks"` or `"MCP
+  servers"`) on stream-json and ACP; `hooks: true` is still sent for hooks.
+- **Newline is Option+Return (Alt+Enter off the Mac), or end the line with
+  `\`.** The help and intro named Ctrl+J, which nobody remembers; it still
+  works but is no longer advertised. A trailing backslash then Return now
+  inserts a newline in any terminal with no setup, as in Claude Code — the
+  one chord Apple Terminal (Option+Return needs *Use Option as Meta*, which
+  costs `#` on a UK keyboard) and Windows Terminal (Alt+Enter is fullscreen)
+  cannot swallow. Only at the very end of the input, and only on plain
+  Return.
+- **`/doctor` says how old the cached model list is.** The provider's
+  figures beat the built-in tables through a once-a-day cache
+  (`~/.klaudia/cache/`), so its age says how current the sizing is: a
+  `model list` row reads e.g. "14 models, checked 31m ago", and past a day
+  adds "stale, refreshes on the next start". No cache, no row.
+- **The provider's model figures now beat the built-in tables, and `/model`
+  sizes models the same way startup does.** The tables were only overruled for
+  models they did not list, so a wrong entry was never contradicted at runtime
+  (claude-sonnet-4-5 claimed a 1M window for months against the API's 200k).
+  The provider's list is now cached for a day under `~/.klaudia/cache/`
+  (fetching it costs about 300ms, measured) and a fresh answer wins for every
+  model it lists; a stale cache refreshes in the background, so startup stays
+  offline. `/model` used to size a model on its own, with the opposite
+  precedence and without the config file — so a configured `maxTokens`
+  silently stopped applying after any switch (reproduced: 64000 from the
+  provider instead of the configured 4096). Both now go through `api.Resolve`.
+  `/doctor` warns when the provider contradicts the table, so the stale entry
+  gets fixed.
+- **A dropped web search or fetch is a note to the model, not a notice to you.**
+  The on-screen "an earlier web fetch was interrupted… re-run it if the answer
+  depends on it" line is gone. It fired in sessions where nothing had been
+  interrupted (see Fixed), and the model is the one that has to act on a lost
+  result. It is still told: the dropped exchange is replaced with a note in
+  the conversation, once, and that note is never re-added on later turns.
+- **A tool call cut off at the output limit now says where that limit came
+  from.** The refusal used to read `max_tokens=8192` and nothing else; under
+  the Opus 5.5 stale-table bug that number was the unknown-model floor, and the
+  note gave no way to tell it from the model's real cap. It now names the
+  source (`config override`, `provider`, `model default`, the floor, or the
+  new `provider rejected the requested cap` once the loop has adopted a figure
+  from a 400). Only the two caps that are ours rather than the model's (a
+  config override and the floor) add a hint that `maxTokens` in
+  `.klaudia/config.toml` can raise it. `agent.Options` gained `MaxTokensSource`,
+  filled from the resolved limits by the CLI and by sub-agent spawning. The
+  loop's own default path now goes through `api.ResolveLimits` so the number
+  and its label come from one lookup.
+- **The four `Task*` tools are retired, and `TodoWrite` is backed by the new
+  `internal/plan` store.** Klaudia had two parallel task systems, both
+  registered and neither authoritative: `TodoWrite`'s whole-list store, and
+  `TaskCreate`/`TaskGet`/`TaskList`/`TaskUpdate` over `internal/tasks`. Nothing
+  read the second one — not the TUI, not stream-json, not ACP; it was
+  registered and given label-table entries, and that was the whole of its
+  existence. The first was barely better off: it was constructed *inside*
+  `DefaultRegistry` and handed to nobody, so the only frontend that rendered it
+  was ACP, and it did so from the tool input rather than from the store. The
+  store now belongs to the caller (`tools.WithPlanStore`), which is what lets a
+  frontend show the plan at all.
+- **The default model is now `claude-opus-5-5`** (was `claude-opus-5`), and the
+  short aliases follow: `opus` → `claude-opus-5-5`, `sonnet` →
+  `claude-sonnet-5-5`, `haiku` → `claude-haiku-5-5`, `fable` →
+  `claude-fable-5-1`. Full ids still pass through unchanged, so
+  `--model claude-opus-5` continues to pin the older generation.
+- **Stale model tables are now a test failure rather than a silent downgrade.**
+  `TestModelTablesAgreeWithEachOther` runs offline and requires every sizing
+  entry to exist in all three tables with the paired values (1M→128k,
+  200k→64k), in both directions, including every alias and `DefaultModel`;
+  it is what caught the Sonnet 4.5 context error above.
+  `TestLiveModelTablesMatchProvider` and `TestLiveMaxTokensTooLargeWording`
+  (both `KLAUDIA_LIVE_MODELS=1`) check the tables against `GET /v1/models` and
+  re-measure the over-cap 400's wording, the latter because the retry parses
+  that message and a reword would silently switch the recovery off. The live
+  test reports what to add, not just that something is wrong.
+- **chromedp v0.16.0 → v0.21.0** (and cdproto to v0.158.3), which is an API
+  rewrite, not a bump: actions are generic (`Action[T]`), `Run` takes one
+  action and returns its value, `Location`/`Title` return strings instead of
+  filling pointers, and the remote allocator moved to `chromedp/remote`. Taken
+  deliberately — the intermediate releases do not build either, so the break
+  predates the fix and there was no cheaper step. Upstream now handles the four
+  DOM events that used to be logged as errors on every ad-carrying page; the
+  local filter in `internal/browser/log.go` stays, because the hand-written
+  event switch it works around is still hand-written and cdproto is still
+  generated. Headed Chrome now launches with `VisibleWindow` rather than
+  `Flag("headless", false)`, which also drops `hide-scrollbars`, `mute-audio`
+  and the automation infobar — the only reason Klaudia ever runs headed is a
+  search challenge a human has to solve, and that is a window they have to be
+  able to use. The browser package now has live Chrome tests
+  (`internal/browser/live_test.go`, skipped with `-short` or without Chrome),
+  because the whole port compiled on the first attempt and compiling says
+  nothing about whether a navigation still ends with the page in hand.
+- **CI actions moved to their current majors**: `actions/checkout` v4 → v7,
+  `actions/setup-go` v5 → v7, `goreleaser/goreleaser-action` v6 → v7. All
+  three are node24/ESM migrations with no input changes — v7 of
+  goreleaser-action still takes the same `version` and `args`. The one
+  behavioural change that matters here is in checkout v6, which moved
+  persisted credentials out of `.git/config` into `$RUNNER_TEMP`; the release
+  job pushes with those credentials, and the coupling is now commented at the
+  checkout step so a future `persist-credentials: false` is not mistaken for
+  hardening.
 
 ### Fixed
 - **Security updates.** Built with Go 1.26.10 and `golang.org/x/net` v0.60.0:
@@ -251,242 +540,6 @@ port mirrors (see `internal/version`).
 - **Long lines wrap between words**, with continuation rows keeping the
   line's indent, instead of splitting words at the last column. The startup
   hint fits in 80 columns.
-
-### Changed
-- **Starting a background job is one line** (`✓ Bash ./provision.sh ·
-  started as provision.sh`); the how-to text stays with the model. The done
-  line's tok/s now excludes the time tools were running, so a turn that
-  waited 39s on a job no longer reads "7 tok/s", and it is left out when the
-  model itself ran for under a second.
-- **`/diff` pages and colours.** It printed the whole diff, uncoloured, into
-  scrollback. It now uses git's colours (none under `NO_COLOR`), opens a long
-  diff in `$PAGER` as `/last` does, and names untracked files, which `git
-  diff` leaves out and which are often what Klaudia just created.
-- **An approval shows the change once, and a Write shows what it changes.**
-  An Edit awaiting approval printed its numbered hunk above the card and then
-  again inside it as `replace "old" → "new"`; the card now adds only what the
-  line above does not say. A Write over an existing file (`~/.zshrc`, say)
-  previews the lines it changes, numbered with context and `+N -M`, instead
-  of the new file's first three lines.
-- **Context in the status bar only when it matters.** It is measured against
-  the auto-compact point rather than the raw window: hidden under 50%, a
-  quiet `ctx 62%` up to 80%, then amber `12% to auto-compact`, moved up the
-  line so a narrow terminal keeps it.
-- **A batch of reads is one line**: `✓ Read 3 files · main.go, main_test.go,
-  go.mod`. Consecutive successful Reads are held until the next thing is
-  written (shown in the live region meanwhile); a lone Read keeps its line
-  count.
-- **Edits show a real hunk.** An Edit printed all of `old_string` as `-`
-  lines and all of `new_string` as `+` lines, with no position and the
-  indentation collapsed. A one-word change inside ten lines read as twenty
-  changed lines. Now only the lines that differ are marked, numbered where
-  they sit in the file, with a line of context either side, indentation
-  kept and tabs at four columns. The Edit tool reports the line its change
-  starts on (`tool_result` events gain an optional `data` field carrying
-  `tool.Result.Data`), so the numbers survive the next call rewriting the
-  same file while this one renders.
-- **`/help` is 21 lines instead of 60.** Commands are listed by group
-  (Session, Work, Context, Shell, Find, Setup, and Skills when any are
-  loaded), names only, followed by the keys. `/help <command>` (or a skill
-  name) prints its usage and description. Typing `/` still filters every
-  command with its description.
-- **Resuming says so, in one line.** A resumed session with a clean working
-  tree showed nothing, so the model carried on from history the user could
-  not see. With anything to reconcile, the card was ten lines restating the
-  mode. Every resume now opens with `↻ continuing the last session here · N
-  messages · approvals start fresh · /clear to start over`, plus one line
-  each for a goal, uncommitted work and stopped jobs when there are any.
-- **One line per tool call.** A call's line used to be written when it started
-  (`⚙ Read main.go`) and its result under it (`✓ Read · 0ms:` and eight
-  lines of the file). It is now written once, when the result is in:
-  `✓ Read main.go · 35 lines`, `✓ Glob **/* · 3 files`, `✓ Write main.go ·
-  103 lines`, `✓ Edit main.go` over its hunk, `✓ Bash go test ./... · 7.2s`
-  over its output. Durations appear from one second up, timed per call
-  rather than matched by tool name. The live status line names the running
-  call. The Agent tool still writes its line first, so its steps have
-  something to sit under, and a call that stops for approval writes its
-  line and diff before the card. Calls still running when a turn stops
-  are listed as stopped.
-- **Project MCP servers ask before they start.** A server in a project's
-  `.mcp.json` or `.klaudia/.mcp.json` launched as soon as Klaudia started in
-  the clone. It now waits for the same remembered approval project hooks get:
-  the first message shows each server's command or URL (and env names), the
-  answer is kept in `~/.klaudia/mcp-approvals.json` until the set changes, and
-  a no lasts the session. Servers in `~/.klaudia/.mcp.json` start as before.
-  `/mcp` lists held servers with their commands and can approve them before
-  the first message (or after a no). Headless runs start project servers
-  only with `--allow-host-changes`. The
-  approval card's `hooks` flag became `repo_config` (`"hooks"` or `"MCP
-  servers"`) on stream-json and ACP; `hooks: true` is still sent for hooks.
-- **Newline is Option+Return (Alt+Enter off the Mac), or end the line with
-  `\`.** The help and intro named Ctrl+J, which nobody remembers; it still
-  works but is no longer advertised. A trailing backslash then Return now
-  inserts a newline in any terminal with no setup, as in Claude Code — the
-  one chord Apple Terminal (Option+Return needs *Use Option as Meta*, which
-  costs `#` on a UK keyboard) and Windows Terminal (Alt+Enter is fullscreen)
-  cannot swallow. Only at the very end of the input, and only on plain
-  Return.
-
-### Changed (breaking)
-- **The core's advice is neutral unless the host words it.** `api.Hints`
-  carries a host's names for its settings, its compact command and the
-  sign-in whose token is often shared; `api.FriendlyError` uses neutral
-  wording and `Hints.FriendlyError` the host's. The loop takes the same value
-  as `agent.Options.Hints` (and `Spawner.WithHints`) for its two notes about
-  the output-token setting. Klaudia passes `config.Hints`, so its messages
-  are unchanged word for word.
-- **The provider layer is `pkg/api`, and the core's leaf packages are in
-  `pkg/`** (`permission`, `plan`, `schema`, and `tool` — the tool contract,
-  aliased from `internal/tools`). The Anthropic client there is neutral: no
-  Claude Code beta, `x-app` header, OAuth beta or billing block. Klaudia
-  adds exactly what it sent before through the client's new `WithPrepare` /
-  `WithRequestOptions` / `WithListOptions` hooks, in
-  `internal/anthropicauth`, which also owns credential discovery
-  (`ResolveCredential`). Live API tests (`KLAUDIA_LIVE_MODELS=1`) now take
-  `ANTHROPIC_API_KEY` from the environment and no longer run by default —
-  two of them used to call the real API with the Keychain login whenever
-  one was found.
-- **The agent loop no longer knows about Klaudia's product packages.**
-  `internal/agent` now imports only `api`, `compaction`, `permission`,
-  `plan`, `schema` and `tools` (it also imported `trust`, `hooks`,
-  `subagent`, `worktree` and `session`). The seams are interfaces with
-  Klaudia's implementations in the wiring: `agent.Gate` (the host gate moved
-  wholesale to `internal/hostgate`, and `ApprovalRequest.HostChange` became
-  `Detail`, read with `hostgate.CardOf`), `agent.Hooks`, `Spawner.WithTypes`,
-  `Spawner.WithIsolator`, and `session.Messages` in place of
-  `agent.MessagesFromEntries`. Behaviour is unchanged, except that `/trust`
-  no longer counts a parallel-batched read-only call (a credential read, say)
-  twice.
-- **`--dangerously-skip-permissions` is removed.** It was a shorthand for
-  `--permission-mode bypassPermissions`, and the docs and the `--loop` error
-  still pointed unattended runs at it long after autonomous mode (the
-  default) plus `--allow-host-changes` covered them. `bypassPermissions`
-  remains — via `--permission-mode` or `/mode` — as the one, explicit way
-  past the gate; it just no longer has a flag that reads like the normal
-  route. `scripts/smoke.sh` uses the explicit form.
-- **Environment settings the core read at runtime are gone.** They were
-  process-wide, which an embedded loop cannot live with.
-  `KLAUDIA_MAX_RETRIES` and `KLAUDIA_STREAM_IDLE_TIMEOUT` are now the config
-  keys `maxRetries` and `streamIdleTimeout` (seconds); the error messages that
-  suggested the variables now name the keys. `KLAUDIA_DISABLE_PROMPT_CACHE`
-  and `DISABLE_COMPACT` / `DISABLE_MICROCOMPACT` / `DISABLE_AUTO_COMPACT` were
-  debugging switches and have no CLI replacement; embedders get
-  `api.Tuning.NoPromptCache` and `agent.Options.NoMicrocompact` /
-  `NoAutocompact`. `api.New` and `api.NewOpenAIProvider` take an `api.Tuning`.
-- **The host chooses where the core writes spills and job logs.** The agent
-  loop, the tools and compaction no longer resolve `~/.klaudia` (or
-  `KLAUDIA_CONFIG_DIR`) themselves. `tools.Spill`, `tools.Cap` and
-  `tools.CapTo` are now methods on `tools.SpillStore{Dir}`, which reaches the
-  loop as `agent.Options.Spill`, Bash as `tools.Context.Spill` and sub-agents
-  through `Spawner.WithSpill`. `tools.NewJobStore(ctx, root, session)` takes
-  the job-log root. The CLI passes the same `outputs/` and `jobs/` directories
-  as before, so nothing moves for users; an embedder that passes none gets
-  clamped output with no spill file and in-memory job logs.
-
-### Added
-- **Clickable links.** URLs and paths to existing files in the transcript are
-  OSC 8 hyperlinks, so Cmd/Ctrl+click opens them. A URL glamour wrapped across
-  rows is one link carrying the whole URL (terminal detection opened the first
-  fragment), and a relative `path:line` resolves against the working directory.
-  On in terminals known to support OSC 8; `KLAUDIA_HYPERLINKS=0/1` or
-  `[links] enabled` overrides. `[links] file` sends file clicks to an editor at
-  the line (`vscode://file/{path}:{line}:{col}`). Screen only: the transcript
-  that `/copy`, `/export` and `$PAGER` read is unchanged.
-- **The plan is visible in every frontend.** The loop emits a `plan` event
-  whenever the step list changes. The TUI, which showed nothing, now draws a
-  live panel above the prompt (`Ctrl+T` collapses it; it hides once every step
-  is done) and folds each `TodoWrite` result to `plan updated · n/m done`.
-  stream-json clients get the event with a snake_case payload (`items`,
-  `content`, `status`, `active_form`, `approved`, `path`, `rev`; a cleared plan
-  is `"items":[]`). ACP's native plan is now built from the stored list rather
-  than from `TodoWrite`'s input.
-- **The session transcript now records the sizing each turn actually ran
-  with**: the resolved model id, `maxTokens`, `contextWindow` and the source
-  label behind each figure, on every assistant line. This is the gap the
-  Opus 5.5 output-cap bug exposed from the other side — the saved transcript
-  named the permission mode, the version, the git branch and the request id,
-  and not one of the three numbers that decided what the turn could do, so the
-  diagnosis rested on the user remembering which model they had picked. Written
-  per entry rather than as a session header because `/model` changes the answer
-  mid-session. Five `omitempty` fields, so a transcript whose sizing was never
-  set is byte-identical to one written before they existed and `--resume` is
-  unaffected.
-- **A `klaudia` theme, and it is the default.** Sky blue and bronze on
-  near-black. The startup colours were previously a palette no theme owned:
-  `currentThemeID()` returned `"dark"`, which is not in `renderThemes`, so the
-  theme picker marked nothing current and switching away from the default was
-  a one-way door — there was no name to switch back to. The default is now a
-  real entry, `defaultChromePalette` is derived from it rather than written
-  out twice, and a test fails if the two ever disagree.
-
-- **An approved plan is now a durable artefact.** `ExitPlanMode` used to return
-  the sentence "Plan approved. Plan mode is now off — proceed with the
-  implementation" and throw the plan away: it survived only as prose in the
-  message history, where compaction could summarise it away and `--resume`
-  never saw it. Approval now writes `~/.klaudia/plans/<session-id>.md` — Claude
-  Code's shape: one file per session, outside the project, so two sessions in
-  one repo cannot overwrite each other's plan and `--resume` keeps writing the
-  same file. The user can edit it when the plan is wrong. The body uses goal
-  mode's checkbox format, so `goal.CountUnchecked` *could* read it, but
-  nothing calls it on a plan yet. The approval result also tells
-  the model to record the steps with `TodoWrite` before starting the first one
-  and to revise them as it goes, because approving a plan should begin working
-  through a visible list rather than merely unlock the tools. A failed write is
-  reported to the model but never costs it the plan: the list stays in memory
-  and a read-only `.klaudia` degrades to a session with no artefact. Headless
-  `-p` runs still have no approver, so a plan there is recorded but not
-  approved and so not persisted.
-
-### Changed
-- **`/doctor` says how old the cached model list is.** The provider's
-  figures beat the built-in tables through a once-a-day cache
-  (`~/.klaudia/cache/`), so its age says how current the sizing is: a
-  `model list` row reads e.g. "14 models, checked 31m ago", and past a day
-  adds "stale, refreshes on the next start". No cache, no row.
-- **The provider's model figures now beat the built-in tables, and `/model`
-  sizes models the same way startup does.** The tables were only overruled for
-  models they did not list, so a wrong entry was never contradicted at runtime
-  (claude-sonnet-4-5 claimed a 1M window for months against the API's 200k).
-  The provider's list is now cached for a day under `~/.klaudia/cache/`
-  (fetching it costs about 300ms, measured) and a fresh answer wins for every
-  model it lists; a stale cache refreshes in the background, so startup stays
-  offline. `/model` used to size a model on its own, with the opposite
-  precedence and without the config file — so a configured `maxTokens`
-  silently stopped applying after any switch (reproduced: 64000 from the
-  provider instead of the configured 4096). Both now go through `api.Resolve`.
-  `/doctor` warns when the provider contradicts the table, so the stale entry
-  gets fixed.
-- **A dropped web search or fetch is a note to the model, not a notice to you.**
-  The on-screen "an earlier web fetch was interrupted… re-run it if the answer
-  depends on it" line is gone. It fired in sessions where nothing had been
-  interrupted (see Fixed), and the model is the one that has to act on a lost
-  result. It is still told: the dropped exchange is replaced with a note in
-  the conversation, once, and that note is never re-added on later turns.
-- **A tool call cut off at the output limit now says where that limit came
-  from.** The refusal used to read `max_tokens=8192` and nothing else; under
-  the Opus 5.5 stale-table bug that number was the unknown-model floor, and the
-  note gave no way to tell it from the model's real cap. It now names the
-  source (`config override`, `provider`, `model default`, the floor, or the
-  new `provider rejected the requested cap` once the loop has adopted a figure
-  from a 400). Only the two caps that are ours rather than the model's (a
-  config override and the floor) add a hint that `maxTokens` in
-  `.klaudia/config.toml` can raise it. `agent.Options` gained `MaxTokensSource`,
-  filled from the resolved limits by the CLI and by sub-agent spawning. The
-  loop's own default path now goes through `api.ResolveLimits` so the number
-  and its label come from one lookup.
-- **The four `Task*` tools are retired, and `TodoWrite` is backed by the new
-  `internal/plan` store.** Klaudia had two parallel task systems, both
-  registered and neither authoritative: `TodoWrite`'s whole-list store, and
-  `TaskCreate`/`TaskGet`/`TaskList`/`TaskUpdate` over `internal/tasks`. Nothing
-  read the second one — not the TUI, not stream-json, not ACP; it was
-  registered and given label-table entries, and that was the whole of its
-  existence. The first was barely better off: it was constructed *inside*
-  `DefaultRegistry` and handed to nobody, so the only frontend that rendered it
-  was ACP, and it did so from the tool input rather than from the store. The
-  store now belongs to the caller (`tools.WithPlanStore`), which is what lets a
-  frontend show the plan at all.
-
-### Fixed
 - **Microcompact no longer re-elides its own placeholders every turn.** It
   never skipped results it had already elided. While the placeholder was one
   fixed string that was harmless; since placeholders carry a preview and a
@@ -731,49 +784,6 @@ port mirrors (see `internal/version`).
   the user which number was wrong. It is checked ahead of the context-overflow
   branch: compacting cannot help a request refused for its `max_tokens`, and
   the measured wording is one reword away from containing "maximum context".
-
-### Changed
-- **The default model is now `claude-opus-5-5`** (was `claude-opus-5`), and the
-  short aliases follow: `opus` → `claude-opus-5-5`, `sonnet` →
-  `claude-sonnet-5-5`, `haiku` → `claude-haiku-5-5`, `fable` →
-  `claude-fable-5-1`. Full ids still pass through unchanged, so
-  `--model claude-opus-5` continues to pin the older generation.
-- **Stale model tables are now a test failure rather than a silent downgrade.**
-  `TestModelTablesAgreeWithEachOther` runs offline and requires every sizing
-  entry to exist in all three tables with the paired values (1M→128k,
-  200k→64k), in both directions, including every alias and `DefaultModel`;
-  it is what caught the Sonnet 4.5 context error above.
-  `TestLiveModelTablesMatchProvider` and `TestLiveMaxTokensTooLargeWording`
-  (both `KLAUDIA_LIVE_MODELS=1`) check the tables against `GET /v1/models` and
-  re-measure the over-cap 400's wording, the latter because the retry parses
-  that message and a reword would silently switch the recovery off. The live
-  test reports what to add, not just that something is wrong.
-- **chromedp v0.16.0 → v0.21.0** (and cdproto to v0.158.3), which is an API
-  rewrite, not a bump: actions are generic (`Action[T]`), `Run` takes one
-  action and returns its value, `Location`/`Title` return strings instead of
-  filling pointers, and the remote allocator moved to `chromedp/remote`. Taken
-  deliberately — the intermediate releases do not build either, so the break
-  predates the fix and there was no cheaper step. Upstream now handles the four
-  DOM events that used to be logged as errors on every ad-carrying page; the
-  local filter in `internal/browser/log.go` stays, because the hand-written
-  event switch it works around is still hand-written and cdproto is still
-  generated. Headed Chrome now launches with `VisibleWindow` rather than
-  `Flag("headless", false)`, which also drops `hide-scrollbars`, `mute-audio`
-  and the automation infobar — the only reason Klaudia ever runs headed is a
-  search challenge a human has to solve, and that is a window they have to be
-  able to use. The browser package now has live Chrome tests
-  (`internal/browser/live_test.go`, skipped with `-short` or without Chrome),
-  because the whole port compiled on the first attempt and compiling says
-  nothing about whether a navigation still ends with the page in hand.
-- **CI actions moved to their current majors**: `actions/checkout` v4 → v7,
-  `actions/setup-go` v5 → v7, `goreleaser/goreleaser-action` v6 → v7. All
-  three are node24/ESM migrations with no input changes — v7 of
-  goreleaser-action still takes the same `version` and `args`. The one
-  behavioural change that matters here is in checkout v6, which moved
-  persisted credentials out of `.git/config` into `$RUNNER_TEMP`; the release
-  job pushes with those credentials, and the coupling is now commented at the
-  checkout step so a future `persist-credentials: false` is not mistaken for
-  hardening.
 
 ## v0.1.0 — 2026-10-19
 
