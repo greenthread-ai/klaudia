@@ -595,6 +595,12 @@ is selected.
   Set to `0` to disable the watchdog.
 - `maxRetries` (config) — retries for connection errors, 429s and 5xx, with
   backoff that honours `Retry-After` (default `5`; `0` disables).
+- `fallbackModels` (config) / `--fallback-model` — models to continue on when
+  the model is overloaded (529) or the provider keeps failing with a 5xx after
+  those retries, e.g. `fallbackModels = ["sonnet", "haiku"]`. The run carries
+  on with the next one, effort and output cap refitted to it, and a notice
+  names the switch. A 4xx or a 429 quota never falls back: another model would
+  fail the same way.
 - **Long-context credits (429)** — if the API returns *"Usage credits are
   required for long context requests"*, that's a billing/entitlement gate, not a
   transient throttle: retries won't help. Add usage credits, or reduce context

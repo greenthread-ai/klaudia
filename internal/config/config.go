@@ -60,6 +60,11 @@ type Config struct {
 	// MaxRetries is how many times a transient failure (connection error,
 	// 429, 5xx) is retried with backoff. Unset uses 5; 0 disables retrying.
 	MaxRetries *int `toml:"maxRetries,omitempty"`
+	// FallbackModels are tried in order when the model is overloaded or the
+	// provider fails with a server error after retries — aliases (sonnet,
+	// haiku) or full ids. The answer then comes from the fallback for the rest
+	// of that run, and a notice says so.
+	FallbackModels []string `toml:"fallbackModels,omitempty"`
 	// StreamIdleTimeout is the seconds a streamed reply may go without data
 	// before it is treated as stalled. Unset uses 120; 0 disables the
 	// watchdog. Raise it behind a proxy that buffers the stream.
@@ -357,6 +362,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.MaxRetries != nil {
 		dst.MaxRetries = src.MaxRetries
+	}
+	if len(src.FallbackModels) > 0 {
+		dst.FallbackModels = src.FallbackModels
 	}
 	if src.StreamIdleTimeout != nil {
 		dst.StreamIdleTimeout = src.StreamIdleTimeout

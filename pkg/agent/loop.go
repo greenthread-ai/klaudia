@@ -225,6 +225,10 @@ type Options struct {
 	// root>/outputs — because an embedded core must not choose where it
 	// writes. The zero value clamps and elides without writing anything.
 	Spill tools.SpillStore
+	// FallbackModels are tried in order, for the rest of the Run, when the
+	// model is unavailable (overloaded or a server error that survived the
+	// client's retries). Empty means the error is reported, as before.
+	FallbackModels []anthropic.Model
 }
 
 // Result is the outcome of a Run.
@@ -258,6 +262,7 @@ func New(provider api.Provider, registry *tools.Registry) *Loop {
 // Run executes the loop until the model stops calling tools or MaxTurns is hit.
 func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, error) {
 	maxTokens, maxTokensSource := opts.MaxTokens, opts.MaxTokensSource
+	fallbackNext := 0 // next index into opts.FallbackModels
 	if maxTokens <= 0 {
 		// Model-aware default: the flat 8192 was low enough that an ordinary
 		// large write hit the output limit mid-tool-call and was dispatched with
@@ -461,6 +466,27 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			messages = l.compact(ctx, messages, opts, maxTokens, emit, &calib, true)
 			if emit != nil {
 				emit(Event{Type: EventCompaction, Content: "context overflowed the model's window — summarised and retried"})
+			}
+			continue
+		}
+		if err != nil && api.IsUnavailable(err) && fallbackNext < len(opts.FallbackModels) {
+			// The provider, not the request: overloaded, or a 5xx the client
+			// already retried. Carry on with the next model in the chain for
+			// the rest of the Run, refitted to it — an effort it does not take
+			// is dropped, and a cap above its own is lowered — and say so,
+			// because the answer now comes from a different model.
+			from := opts.Model
+			opts.Model = opts.FallbackModels[fallbackNext]
+			fallbackNext++
+			if api.EffortError(string(opts.Model), opts.Effort) != "" {
+				opts.Effort = api.EffortUnset
+			}
+			if lim := api.ResolveLimits(ctx, nil, string(opts.Model), 0, 0); int64(lim.MaxOutputTokens) < maxTokens {
+				maxTokens, maxTokensSource = int64(lim.MaxOutputTokens), lim.MaxOutputSource
+			}
+			if emit != nil {
+				emit(Event{Type: EventNotice, Content: fmt.Sprintf("%s is unavailable (%s) — continuing on %s",
+					from, api.Hints{}.FriendlyError(err), opts.Model)})
 			}
 			continue
 		}

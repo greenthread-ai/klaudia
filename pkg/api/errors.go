@@ -365,6 +365,15 @@ func apiStatus(err error) (int, bool) {
 	return 0, false
 }
 
+// IsUnavailable reports whether err is the provider failing rather than the
+// request: overloaded (529) or a server error (5xx), already retried by the
+// client. That is when trying another model can help — a 4xx would fail the
+// same way on any model, and a 429 is a quota, not a model's capacity.
+func IsUnavailable(err error) bool {
+	status, ok := apiStatus(err)
+	return ok && (status == 529 || status >= 500)
+}
+
 // IsContextOverflow reports whether err is the provider refusing a request for
 // being larger than the model's context window. The agent loop uses this to
 // compact and retry rather than surfacing a dead end: once a session is over

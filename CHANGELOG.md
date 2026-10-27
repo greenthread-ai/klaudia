@@ -6,6 +6,12 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Fallback models.** `fallbackModels = ["sonnet", "haiku"]` in config, or
+  `--fallback-model`: when the model is overloaded (529) or the provider keeps
+  failing with a 5xx after retries, the run continues on the next model, with
+  effort and the output cap refitted to it, and a notice names the switch.
+  4xx errors and 429 quotas never fall back. (`api.IsUnavailable`,
+  `agent.Options.FallbackModels`.)
 - **Watched jobs.** `Bash` with `run_in_background` takes `watch`, a regex;
   output lines that match reach the model as they appear, so "start the
   server and tell me if it errors" works without polling. Reports are batched

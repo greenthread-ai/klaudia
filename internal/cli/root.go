@@ -831,6 +831,7 @@ type options struct {
 	print            bool
 	prompt           string
 	model            string
+	fallbackModels   []string
 	effort           string
 	outputFormat     string
 	inputFormat      string
@@ -909,6 +910,7 @@ func NewRootCommand() *cobra.Command {
 	f := cmd.Flags()
 	f.BoolVarP(&opts.print, "print", "p", false, "Non-interactive mode: print result to stdout and exit")
 	f.StringVar(&opts.model, "model", "", "Model alias (haiku|sonnet|opus) or full model ID")
+	f.StringSliceVar(&opts.fallbackModels, "fallback-model", nil, "Model to continue on when the model is overloaded or the provider fails (repeat or comma-separate for a chain; default: config fallbackModels)")
 	f.StringVar(&opts.effort, "effort", "", "How hard the model works per response: "+api.EffortNames()+" (default: the provider's own, usually high)")
 	f.StringVar(&opts.outputFormat, "output-format", "text", "Output format: text|json|stream-json")
 	f.StringVar(&opts.inputFormat, "input-format", "text", "Input format: text|stream-json|acp (stream-json and acp both drive a persistent agent over stdin; acp speaks the Agent Client Protocol for editors such as Zed)")
@@ -1479,6 +1481,21 @@ func run(cmd *cobra.Command, opts *options) error {
 	// now comes from agent.Turn.Apply and the per-mode half from turnSettings,
 	// which is small enough to read at a glance and lists only what genuinely
 	// differs between modes.
+	// The fallback chain: the flag, else config. Resolved once; a model that
+	// is also the primary is skipped, since falling back to it changes nothing.
+	fallbackNames := opts.fallbackModels
+	if len(fallbackNames) == 0 {
+		fallbackNames = cfg.FallbackModels
+	}
+	fallbacks := func(primary anthropic.Model) []anthropic.Model {
+		var out []anthropic.Model
+		for _, n := range fallbackNames {
+			if m := api.ResolveModel(n); m != primary && m != "" {
+				out = append(out, m)
+			}
+		}
+		return out
+	}
 	baseOptions := func(turn agent.Turn, s turnSettings) agent.Options {
 		// Stamp the resolved sizing on the transcript before the turn runs.
 		// Here rather than at transcript construction because this is the one
@@ -1507,6 +1524,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Hooks:           hooksFor(hookRunner),
 			Plan:            planStore,
 			Spill:           spill,
+			FallbackModels:  fallbacks(s.Model),
 		}
 		turn.Apply(&opts)
 		return opts
