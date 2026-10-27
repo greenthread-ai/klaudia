@@ -120,6 +120,10 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **Security updates.** Built with Go 1.26.10 and `golang.org/x/net` v0.60.0:
+  govulncheck found 12 reachable standard-library and x/net advisories under
+  Go 1.26.6 (net/http, crypto/tls, crypto/x509, mime/multipart,
+  html/template); none remain.
 - **Job logs are bounded.** A log grew without limit until the weekly prune,
   and `BashOutput` read everything since its last call into memory. Logs now
   rotate at 64 MiB (one previous file kept) and a read returns at most the
