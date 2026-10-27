@@ -23,6 +23,27 @@ vendor or the spec.
 4. **Traces.** OTel GenAI spans are what an embedder will plug in first, and
    Klaudia emits none.
 
+## Status and order (updated 2026-10-27)
+
+The four points above have landed: the core is in `pkg/` (stages 1–2),
+egress control exists (enforced under the macOS OS sandbox), sub-agents run in
+the background and fork, and the loop emits OTel GenAI spans. The ranked table
+below keeps each item's original reasoning with its status noted inline.
+
+What is left, in the order it will be taken:
+
+1. **Release.** Ship what has landed: vulnerability scan of the new
+   dependencies, the build matrix, a GoReleaser snapshot, the live model
+   checks, and the changelog read as release notes.
+2. **Small gaps worth closing first**: `/rewind`'s "summarise up to here",
+   an effort cap in config.
+3. **Session replay as regression tests** (eval mode's second half) — needs a
+   decision on running recorded tool calls safely.
+
+Deprioritised by decision (2026-10-27), not scheduled: egress beyond the macOS
+sandbox (DNS, Linux enforcement, a socket bridge for containers), and ACP
+parity (background agents, `session/fork`). Nested sub-agents are declined.
+
 ## What the field shipped this year
 
 **Claude Code** (code.claude.com/docs/en/whats-new, changelog, fetched
