@@ -601,16 +601,12 @@ type mcpController struct {
 }
 
 func (c mcpController) Servers() []tui.MCPServerInfo {
-	// Count live tools per server (mcp__<server>__<tool>).
+	// Count live tools per server, by the server each tool reports — its name
+	// may have been rewritten to fit the API, so it is not parsed.
 	counts := map[string]int{}
 	for _, t := range c.mgr.Tools(c.ctx) {
-		n := t.Name()
-		const pfx = "mcp__"
-		if !strings.HasPrefix(n, pfx) {
-			continue
-		}
-		if i := strings.Index(n[len(pfx):], "__"); i >= 0 {
-			counts[n[len(pfx):len(pfx)+i]]++
+		if st, ok := t.(interface{ ServerName() string }); ok {
+			counts[st.ServerName()]++
 		}
 	}
 	out := make([]tui.MCPServerInfo, 0)

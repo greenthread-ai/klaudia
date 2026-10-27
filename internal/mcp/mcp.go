@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -133,6 +134,10 @@ type Server struct {
 	// would otherwise each spawn a child process and close one of them.
 	reviveMu   sync.Mutex
 	lastRevive time.Time
+
+	// disabled is set by /mcp Disconnect and cleared by Reconnect. Without it
+	// the model's next call revived the server the user had just turned off.
+	disabled atomic.Bool
 }
 
 // sess returns the live session, or nil when the server is disconnected.
@@ -270,6 +275,53 @@ func (m *Manager) dial(ctx context.Context, name string, cfg ServerConfig) (*Ser
 	return fn(ctx, name, cfg, el)
 }
 
+// connectTimeout bounds launching one server at startup or on a config
+// reload. Generous, because a first `npx` run downloads the server; what it
+// stops is a server that never answers initialize hanging startup for good.
+const connectTimeout = 60 * time.Second
+
+// dialWithin launches a server, giving up after timeout.
+//
+// The dial itself runs on the manager's own context, not on one that ends at
+// the deadline: a legacy SSE transport ties its long-lived stream to the
+// context it was connected with, so a session dialled under a timeout context
+// died as soon as that context was cancelled — every /mcp reconnect or
+// auto-revive of an SSE server came back connected and then failed its first
+// call. The deadline is enforced from outside instead, and a session that
+// arrives after it is closed rather than leaked.
+func (m *Manager) dialWithin(timeout time.Duration, verb, name string, cfg ServerConfig) (*Server, error) {
+	type dialed struct {
+		s   *Server
+		err error
+	}
+	ch := make(chan dialed, 1)
+	go func() {
+		s, err := m.dial(m.ctx, name, cfg)
+		ch <- dialed{s, err}
+	}()
+	discard := func() {
+		go func() {
+			if d := <-ch; d.s != nil {
+				if sess := d.s.swapSession(nil); sess != nil {
+					_ = sess.Close()
+				}
+			}
+		}()
+	}
+	t := time.NewTimer(timeout)
+	defer t.Stop()
+	select {
+	case d := <-ch:
+		return d.s, d.err
+	case <-t.C:
+		discard()
+		return nil, fmt.Errorf("mcp %q: %s timed out after %s", name, verb, timeout)
+	case <-m.ctx.Done():
+		discard()
+		return nil, m.ctx.Err()
+	}
+}
+
 // Connect launches and connects every server in cfg. Servers that fail to
 // connect are skipped (with their error collected), so one bad server does not
 // abort startup. A nil Elicitor means servers cannot ask the user anything,
@@ -284,7 +336,7 @@ func Connect(ctx context.Context, cfg Config, el *Elicitor) (*Manager, []error) 
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		srv, err := m.dial(ctx, name, cfg.MCPServers[name])
+		srv, err := m.dialWithin(connectTimeout, "connect", name, cfg.MCPServers[name])
 		if err != nil {
 			errs = append(errs, err)
 			// Keep a disconnected placeholder so it can be reconnected later.
@@ -337,6 +389,7 @@ func (m *Manager) Disconnect(name string) error {
 	if s == nil {
 		return fmt.Errorf("no such MCP server %q", name)
 	}
+	s.disabled.Store(true)
 	if prev := s.swapSession(nil); prev != nil {
 		return prev.Close()
 	}
@@ -354,18 +407,14 @@ func (m *Manager) Reconnect(name string) error {
 	if !ok {
 		return fmt.Errorf("no launch config for MCP server %q", name)
 	}
+	s.disabled.Store(false)
 	if prev := s.swapSession(nil); prev != nil {
 		_ = prev.Close()
 	}
 	// Bound the launch+handshake so a hung server can't block the caller (the
 	// TUI runs this synchronously). On timeout the server stays disconnected.
-	ctx, cancel := context.WithTimeout(m.ctx, reconnectTimeout)
-	defer cancel()
-	fresh, err := m.dial(ctx, name, cfg)
+	fresh, err := m.dialWithin(reconnectTimeout, "reconnect", name, cfg)
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("mcp %q: reconnect timed out after %s", name, reconnectTimeout)
-		}
 		return err
 	}
 	if prev := s.swapSession(fresh.sess()); prev != nil {
@@ -410,7 +459,9 @@ func (m *Manager) Reload(ctx context.Context, cfg Config) []error {
 		// Unchanged and still answering: leave it completely alone. The config
 		// comparison comes first so the ping only costs anything for a server
 		// we would otherwise have kept.
-		if had && reflect.DeepEqual(prevCfg.MCPServers[name], sc) && old.alive(ctx) {
+		if had && reflect.DeepEqual(prevCfg.MCPServers[name], sc) && (old.alive(ctx) || old.disabled.Load()) {
+			// Alive, or turned off with /mcp: either way an unrelated edit to
+			// .mcp.json is no reason to touch it.
 			next = append(next, old)
 			continue
 		}
@@ -420,7 +471,7 @@ func (m *Manager) Reload(ctx context.Context, cfg Config) []error {
 				_ = s.Close()
 			}
 		}
-		fresh, err := m.dial(ctx, name, sc)
+		fresh, err := m.dialWithin(connectTimeout, "connect", name, sc)
 		if err != nil {
 			errs = append(errs, err)
 			// Keep a disconnected placeholder, so /mcp can retry it by hand.
@@ -434,7 +485,12 @@ func (m *Manager) Reload(ctx context.Context, cfg Config) []error {
 		if had {
 			// Reuse the pointer: tool wrappers built before this reload hold
 			// it, and swapping the session keeps them working.
-			old.swapSession(fresh.sess())
+			// Close whatever this displaces: a revive or /mcp reconnect can
+			// have installed a session since the swap to nil above, and
+			// dropping it orphaned that server's process.
+			if displaced := old.swapSession(fresh.sess()); displaced != nil {
+				_ = displaced.Close()
+			}
 			next = append(next, old)
 			continue
 		}
@@ -479,6 +535,9 @@ const reviveCooldown = 15 * time.Second
 func (m *Manager) revive(ctx context.Context, s *Server) bool {
 	if s == nil {
 		return false
+	}
+	if s.disabled.Load() {
+		return false // the user turned it off; only /mcp brings it back
 	}
 	s.reviveMu.Lock()
 	defer s.reviveMu.Unlock()

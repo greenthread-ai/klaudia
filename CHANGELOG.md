@@ -42,6 +42,14 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **MCP fixes** (from an audit; no behaviour changes beyond the bugs):
+  tool names that break the API's `[A-Za-z0-9_-]{1,64}` (dots, long names)
+  are rewritten to fit instead of failing every request once revealed;
+  `/mcp` Disconnect is no longer undone by the model's next call; legacy-SSE
+  servers survive `/mcp` reconnect and auto-revive (the handshake timeout
+  context was killing their stream); tool and resource lists read every page;
+  startup and config-reload connects time out (60s) instead of hanging; and a
+  reload no longer orphans a session a revive installed meanwhile.
 - **Read-only MCP tools work in plan mode, and so in Explore and Plan.** Those
   sub-agents run in plan mode and are handed MCP tools marked read-only, but
   plan mode refused every MCP call, so they could never use them. Plan mode

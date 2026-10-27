@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -161,15 +163,26 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 		if sess == nil {
 			continue
 		}
-		res, err := sess.ListTools(ctx, &mcpsdk.ListToolsParams{})
-		if err != nil {
+		// Every page: a server that paginates its list used to lose everything
+		// after the first one. A listing that fails part-way contributes
+		// nothing, as a failed listing always has.
+		var listed []*mcpsdk.Tool
+		failed := false
+		for rt, err := range sess.Tools(ctx, nil) {
+			if err != nil {
+				failed = true
+				break
+			}
+			listed = append(listed, rt)
+		}
+		if failed {
 			continue
 		}
 		// An override, when present, decides for every tool on the server and
 		// the annotations are not consulted at all — in either direction.
 		cfg, _ := m.serverConfig(srv.Name)
 		override := cfg.ReadOnly
-		for _, rt := range res.Tools {
+		for _, rt := range listed {
 			schema, _ := json.Marshal(rt.InputSchema)
 			if len(schema) == 0 || string(schema) == "null" {
 				schema = json.RawMessage(`{"type":"object"}`)
@@ -179,7 +192,7 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 				readOnly = *override
 			}
 			out = append(out, &mcpTool{
-				qualifiedName: fmt.Sprintf("mcp__%s__%s", srv.Name, rt.Name),
+				qualifiedName: qualifiedName(srv.Name, rt.Name),
 				remoteName:    rt.Name,
 				description:   rt.Description,
 				inputSchema:   schema,
@@ -217,11 +230,10 @@ func (m *Manager) formatResourceList(ctx context.Context) string {
 		if sess == nil {
 			continue
 		}
-		res, err := sess.ListResources(ctx, &mcpsdk.ListResourcesParams{})
-		if err != nil {
-			continue
-		}
-		for _, r := range res.Resources {
+		for r, err := range sess.Resources(ctx, nil) { // every page
+			if err != nil {
+				break
+			}
 			fmt.Fprintf(&b, "%s\t%s\t%s\n", srv.Name, r.URI, r.Name)
 		}
 	}
@@ -230,3 +242,36 @@ func (m *Manager) formatResourceList(ctx context.Context) string {
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
+
+// maxToolName is the longest tool name the Anthropic API accepts.
+const maxToolName = 64
+
+// qualifiedName namespaces a server's tool as mcp__<server>__<tool>, in the
+// form the Anthropic API accepts: ^[a-zA-Z0-9_-]{1,64}$. MCP allows tool names
+// with dots and up to 128 characters, and server names are free text from
+// .mcp.json — "my.server" serving "shot.png" became mcp__my.server__shot.png,
+// and every request after ToolSearch revealed it was refused. Anything outside
+// the set becomes "_"; a name still too long keeps its start and gains a hash
+// of the whole, so two long names cannot collide. Valid names are unchanged.
+// The call itself uses the tool's real name (remoteName).
+func qualifiedName(server, tool string) string {
+	clean := func(s string) string {
+		return strings.Map(func(r rune) rune {
+			if r == '_' || r == '-' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+				return r
+			}
+			return '_'
+		}, s)
+	}
+	name := "mcp__" + clean(server) + "__" + clean(tool)
+	if len(name) <= maxToolName {
+		return name
+	}
+	sum := sha256.Sum256([]byte(server + "\x00" + tool))
+	suffix := "_" + hex.EncodeToString(sum[:4])
+	return name[:maxToolName-len(suffix)] + suffix
+}
+
+// ServerName is the server this tool belongs to — what /mcp counts by, rather
+// than parsing a name that may have been rewritten to fit the API.
+func (t *mcpTool) ServerName() string { return t.server.Name }
