@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+
 	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
@@ -49,5 +52,21 @@ func TestSplitTablesLeavesCodeAlone(t *testing.T) {
 	}
 	if tables != 1 {
 		t.Errorf("found %d tables, want 1: %+v", tables, segs)
+	}
+}
+
+// Inline code copies as itself: no padding spaces in colour, and backticks
+// rather than bare words without it.
+func TestInlineCodeIsCopySafe(t *testing.T) {
+	m := newTestModel() // no colour in tests
+	m.resize(100, 30)
+	if got := strings.TrimSpace(stripANSI(m.markdown("Run `go test` now."))); got != "Run `go test` now." {
+		t.Errorf("no colour: %q", got)
+	}
+	defer lipgloss.SetColorProfile(lipgloss.ColorProfile())
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	m.buildGlamour(100)
+	if got := strings.TrimSpace(stripANSI(m.markdown("Run `go test` now."))); got != "Run go test now." {
+		t.Errorf("colour: %q", got)
 	}
 }

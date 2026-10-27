@@ -222,6 +222,15 @@ func (m *Model) glamourThemeOption() glamour.TermRendererOption {
 		style = themeStyle(palette)
 	}
 	stripCopyHostileStyling(&style)
+	// Inline code: the colour styles pad it with a space either side to make
+	// a tinted chip, and those spaces are copied — " go test " in place of
+	// `go test`. The tint stays; the padding goes. With no colour there is no
+	// tint either, and glamour's plain style printed code as bare words, so
+	// it gets its backticks back, which also paste as Markdown.
+	style.Code.Prefix, style.Code.Suffix = "", ""
+	if lipgloss.ColorProfile() == termenv.Ascii {
+		style.Code.Prefix, style.Code.Suffix = "`", "`"
+	}
 	return glamour.WithStyles(style)
 }
 

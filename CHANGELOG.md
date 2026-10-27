@@ -55,6 +55,10 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **Inline code copies as itself.** The colour themes padded it with a space
+  either side, which pasted as " go test "; without colour it rendered as
+  bare words. The padding is gone (the tint stays), and without colour it
+  keeps its backticks.
 - **A resumed session tells the model which jobs stopped.** The resume card
   said so to the user, but the model's history still read "Started job
   provision (bash_1)", so its first move was to read an id that no longer
