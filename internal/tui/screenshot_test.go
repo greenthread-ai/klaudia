@@ -66,6 +66,11 @@ func TestScreenshotIsCurrent(t *testing.T) {
 // produced by the functions the program itself calls. Nothing here is a copy of
 // the UI's text, which is the entire point.
 func screenshotFrame() string {
+	// The help names chords per platform (Option+Return on a Mac, Alt+Enter
+	// elsewhere), so the image pins one; generated on Linux it differed, and
+	// CI failed the check on every push.
+	defer func(g string, d bool) { goos, keysDisambiguated = g, d }(goos, keysDisambiguated)
+	goos, keysDisambiguated = "darwin", false
 	termProfile = colorprofile.TrueColor
 	applyChromeTheme(defaultChromePalette)
 	defer applyChromeTheme(defaultChromePalette)

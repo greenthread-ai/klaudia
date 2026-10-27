@@ -107,6 +107,10 @@ func TestRelToRepo(t *testing.T) {
 // A bare /commit drafts the message from the diff and still asks y/n; the
 // draft names what it was given and what models wrap it in is stripped.
 func TestCommitDraftsAMessage(t *testing.T) {
+	// The commit itself needs an identity, which a CI runner does not have.
+	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "e", "GIT_AUTHOR_EMAIL": "e@x", "GIT_COMMITTER_NAME": "e", "GIT_COMMITTER_EMAIL": "e@x"} {
+		t.Setenv(k, v)
+	}
 	dir := t.TempDir()
 	git := func(args ...string) {
 		t.Helper()
