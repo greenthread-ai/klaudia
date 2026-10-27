@@ -131,7 +131,7 @@ closed. `docs/trust.md` is the design record.
 | Elapsed-time indicator | 06-app-ui | `tui` + bubbles/stopwatch | 🔀 divergent | Live stopwatch while running + "done in"/"interrupted after" duration (replaces the removed /cost). |
 | Welcome intro | 06-app-ui | `tui.intro` | 🔀 divergent | Coloured logo + model/branch + key hints at startup. |
 | Markdown rendering | 06-app-ui | `tui` + glamour | ✅ done | Assistant answers stream raw, then render through glamour (headings, bold, syntax-highlighted code) on completion. |
-| Throughput readout | 06-app-ui | `tui` | 🔀 divergent | "✓ done in 12.3s · 1.2k tokens · 98 tok/s" from real Usage data. |
+| Throughput readout | 06-app-ui | `tui` | 🔀 divergent | "✓ done in 12.3s · 1.2k written · 98 tok/s" from real Usage data (output tokens; the status bar counts input, cache included, too). |
 
 ## Slash commands (TUI)
 
@@ -147,7 +147,7 @@ closed. `docs/trust.md` is the design record.
 | /config, /agents, /context | `tui/commands.go` | ✅ done | Group A (render-only); friendly permission labels. |
 | /mode | `tui/commands.go` + `permission.Mode.Label` | ✅ done | Interactive picker (or direct set) to change permission mode mid-session. The picker (`choice.go`) is a live filterable dropdown shared by `/model`, `/theme`, `/mode` and `/mcp`. |
 | /compact, /add-dir | `tui/commands.go` + `agent.Loop.Compact` | ✅ done | Group B. |
-| /cost, /permissions | — | 🔀 divergent | Not present: /cost was replaced by the per-turn "done in · tokens · tok/s" line and `/stats`; /permissions by `/mode` and `/trust`. |
+| /cost, /permissions | — | 🔀 divergent | Not present: /cost was replaced by the per-turn "done in · written · tok/s" line and `/stats`; /permissions by `/mode` and `/trust`. |
 | /plan, /doctor, /diff, /commit, /export | `tui/commands.go` + `doctor/` | ✅ done | Group C; /commit gated by a y/n confirm. /plan also takes `run [N]` and `stop` (plan runs, docs/plan-mode.md D5). |
 
 ## Auth & infra

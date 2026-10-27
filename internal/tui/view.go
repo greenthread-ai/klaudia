@@ -89,7 +89,7 @@ func throughput(outTokens int64, d time.Duration) string {
 	if outTokens <= 0 {
 		return ""
 	}
-	s := " · " + humanTokens(outTokens) + " tokens"
+	s := " · " + humanTokens(outTokens) + " written" // output only; the status bar counts input too
 	if d > 0 {
 		s += fmt.Sprintf(" · %.0f tok/s", float64(outTokens)/d.Seconds())
 	}

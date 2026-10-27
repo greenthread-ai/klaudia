@@ -195,7 +195,7 @@ func TestRenderAgents(t *testing.T) {
 }
 
 func TestThroughput(t *testing.T) {
-	if got := throughput(1240, 10*time.Second); !strings.Contains(got, "1.2k tokens") || !strings.Contains(got, "124 tok/s") {
+	if got := throughput(1240, 10*time.Second); !strings.Contains(got, "1.2k written") || !strings.Contains(got, "124 tok/s") {
 		t.Errorf("throughput = %q", got)
 	}
 	if got := throughput(0, 10*time.Second); got != "" {

@@ -49,7 +49,9 @@ port mirrors (see `internal/version`).
   carry `context_tokens`, the prompt each call actually sent: the context
   share comes from it (and a share under 1% reads "<1%"), and the token
   count includes cache reads and writes, as `/stats` now says. `/context`
-  calls the top level "(project root)" rather than `*`.
+  calls the top level "(project root)" rather than `*`. The turn's done line says
+  "1.2k written" for its output tokens, so it no longer reads as a second,
+  smaller total beside the status bar's.
 - **Markdown spacing.** A code block or list at a streaming chunk boundary
   sat between two blank lines: glamour pads blank lines with spaces, so
   trimming newlines kept them. Rendered blocks now lose their visually blank
