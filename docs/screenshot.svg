@@ -32,7 +32,7 @@
 <text x="22" y="637" textLength="495.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /forget &lt;path&gt;   Drop a file from the tracked context</tspan></text>
 <text x="22" y="657" textLength="621.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /compact         Summarize and compact the conversation history now</tspan></text>
 <text x="22" y="677" textLength="504.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /add-dir &lt;path&gt;  Add a directory to the prompt context</tspan></text>
-<text x="22" y="697" textLength="495.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /plan [off]      Enter (or leave) read-only plan mode</tspan></text>
+<text x="22" y="697" textLength="837.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /plan [run|off]  Read-only plan mode · run [N]: work the approved plan to done · stop: halt</tspan></text>
 <text x="22" y="717" textLength="414.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /doctor          Run environment diagnostics</tspan></text>
 <text x="22" y="737" textLength="468.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /diff [args]     Show git diff of the working tree</tspan></text>
 <text x="22" y="757" textLength="540.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /commit &lt;msg&gt;    Stage all changes and commit (asks first)</tspan></text>

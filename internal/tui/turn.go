@@ -244,6 +244,9 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.noteNav(kind, ev.ToolName+toolSummaryWith(ev.ToolName, ev.Input, m.displayPaths)+" → "+oneline(s, 60), "", seq)
 		m.activeToolName = ""
 		m.phase = "thinking"
+		if m.loopRemaining > 0 && !m.loopPlan {
+			m.refreshGoalList() // the model may just have ticked a box
+		}
 	case "compaction":
 		m.flushAssistant()
 		if ev.Content == "" {

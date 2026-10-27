@@ -203,37 +203,87 @@ func (m *Model) choiceView() string {
 	return b.String()
 }
 
-// askView renders a pending AskUserQuestion's options as a picker: the
-// model's options, then the escape hatch (see otherAnswerLabel), the
-// highlighted one marked, and a hint that names every key that works.
-func (m *Model) askView() string {
+// The answer pickers — AskUserQuestion's options and plan approval — share one
+// keyboard and one look with each other and with the settings picker above:
+// ↑↓ (or Ctrl+P/N) move, Enter takes the highlighted row, digits pick
+// directly. Unlike the settings picker they do not filter: their rows are
+// sentences, few, and typed text is ignored and explained instead (see
+// pickerKey on why that matters).
+
+// pickerKey applies a picker key to idx/stray and returns the chosen row, or
+// -1 when the key chose nothing.
+//
+// Typing is ignored. It used to start a free-text answer, so a message typed
+// ahead while the model worked became the answer the moment a question
+// appeared — the user answered a question they had not read. And the Enter
+// that follows stray text is swallowed: text then Enter is someone finishing
+// a message, not confirming row one.
+func pickerKey(msg tea.KeyMsg, n int, idx *int, stray *bool) int {
+	switch msg.Type {
+	case tea.KeyUp, tea.KeyCtrlP:
+		*idx, *stray = (*idx-1+n)%n, false
+		return -1
+	case tea.KeyDown, tea.KeyCtrlN:
+		*idx, *stray = (*idx+1)%n, false
+		return -1
+	case tea.KeyEnter:
+		if *stray {
+			*stray = false
+			return -1
+		}
+		return *idx
+	}
+	if s := msg.String(); len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
+		if i := int(s[0] - '1'); i < n {
+			return i
+		}
+		return -1 // a digit past the list: ignore rather than guess
+	}
+	if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+		*stray = true
+	}
+	return -1
+}
+
+// pickerView renders rows with the highlighted one marked, then a hint naming
+// every key that works. writeRow names the row that opens free text, so the
+// "typing doesn't answer" hint can point at it.
+func (m *Model) pickerView(rows []string, idx int, stray bool, writeRow int) string {
 	var b strings.Builder
 	width := max(m.width-8, 20)
-	n := len(m.askOptions) + 1
-	for i := 0; i < n; i++ {
-		label := otherAnswerLabel // always last, always present
-		if i < len(m.askOptions) {
-			label = m.askOptions[i].Label
-			if d := m.askOptions[i].Description; d != "" {
-				label += " — " + d
-			}
-		}
+	for i, label := range rows {
 		num := ""
 		if i < 9 {
 			num = strconv.Itoa(i+1) + ") "
 		}
 		label = ansi.Truncate(label, width, "…")
-		if i == m.askIdx {
+		if i == idx {
 			b.WriteString(caption(suggestStyle.Render("❯ " + num + label)))
 		} else {
 			b.WriteString(caption(toolStyle.Render("  " + num + label)))
 		}
 		b.WriteString("\n")
 	}
-	hint := "↑↓ or 1-" + strconv.Itoa(min(n, 9)) + " to pick · enter to confirm · esc to interrupt"
-	if m.askStray {
-		hint = "typing doesn't answer — pick " + strconv.Itoa(n) + " to write your own · ↑↓ or 1-" + strconv.Itoa(min(n, 9)) + " to pick"
+	keys := "↑↓ or 1-" + strconv.Itoa(min(len(rows), 9)) + " to pick"
+	hint := keys + " · enter to confirm · esc to interrupt"
+	if stray {
+		hint = "typing doesn't answer — pick " + strconv.Itoa(writeRow+1) + " to write your own · " + keys
 	}
 	b.WriteString(caption(hintStyle.Render("  " + hint)))
 	return b.String()
+}
+
+// askView renders a pending AskUserQuestion: the model's options, then the
+// escape hatch (see otherAnswerLabel), always last and always present.
+func (m *Model) askView() string {
+	rows := make([]string, 0, len(m.askOptions)+1)
+	for _, o := range m.askOptions {
+		label := o.Label
+		if o.Description != "" {
+			label += " — " + o.Description
+		}
+		rows = append(rows, label)
+	}
+	rows = append(rows, otherAnswerLabel)
+	return m.pickerView(rows, m.askIdx, m.askStray, len(rows)-1)
 }

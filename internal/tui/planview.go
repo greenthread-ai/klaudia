@@ -34,6 +34,14 @@ func planVisible(snap plan.Snapshot) bool {
 // one whose height depends on the prose, and the row budget above is the
 // whole reason the panel cannot crowd out the input.
 func renderPlan(snap plan.Snapshot, collapsed bool, width int) string {
+	return renderWorkList(snap, "Plan", "", collapsed, width)
+}
+
+// renderWorkList is renderPlan for any step list: title names whose list it is
+// ("Plan", "Goal") and suffix follows the count (" · iteration 2/6"). One panel
+// draws both, so a /goal run shows its checklist where a plan shows its steps
+// instead of leaving a stale plan up while it works.
+func renderWorkList(snap plan.Snapshot, title, suffix string, collapsed bool, width int) string {
 	if !planVisible(snap) {
 		return ""
 	}
@@ -42,7 +50,7 @@ func renderPlan(snap plan.Snapshot, collapsed bool, width int) string {
 		limit = 20
 	}
 	fit := func(s string) string { return ansi.Truncate(s, limit, "…") }
-	count := fmt.Sprintf("Plan %d/%d", snap.Completed(), len(snap.Items))
+	count := fmt.Sprintf("%s %d/%d%s", title, snap.Completed(), len(snap.Items), suffix)
 
 	if collapsed {
 		line := "▸ " + count

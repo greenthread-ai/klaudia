@@ -338,6 +338,28 @@ for, which is not what this is.
   (`~/.klaudia/plans/<acp-session-id>.md`), and each sub-agent gets an
   in-memory one whose events reach nobody.
 
+### D5 — Plan runs: the goal loop over the approved plan (opt-in) ✅ landed
+
+Approval is a picker (the same one AskUserQuestion uses): *Yes — run it*
+(`y`, the old behaviour: one turn), *Yes — and keep going until every step is
+done*, and *No — keep planning* (`n`), which opens a box whose text reaches the
+model as a steering message — so `tools.Planner` keeps its plain
+approved/refused contract across all three frontends.
+
+The second choice, and `/plan run [N]` later, run the goal loop with the
+approved plan as its spec. What is shared is the driver's control flow: the
+turn budget, the completion gate, the verification turn, the wrap-up turn, one
+completion block per run. What is not: the prompts
+(`goal.PlanIterationPrompt` and siblings tell the model to record progress with
+`TodoWrite`, because the store owns the file and rewrites it), the branch
+switch (a plan is approved on the user's branch), and the gate's source (the
+store's snapshot, not a file parse). A plan run is also complete when every
+step is, token or not — the steps are what the user approved.
+
+The live panel draws whichever list is active (`workList`): the plan, or during
+`/goal run` the spec's checklist via `goal.Checklist` — the parser
+`CountUnchecked` now shares, so the panel and the gate cannot disagree.
+
 ## Order
 
 1. **D1** — permission denials stop feeding the loop breakers. Independent;
@@ -353,10 +375,12 @@ being two features that solve the same problem differently.
 
 ## What this does not do
 
-- It does not merge the `/goal` *loop* into plan mode. Goal mode runs unattended
-  with no history per iteration; plan mode runs interactively with a
-  conversation. They should share the artefact and the verification, not the
-  driver.
+- ~~It does not merge the `/goal` *loop* into plan mode.~~ Revised 2026-10-27,
+  see D5. The premise — "goal mode runs unattended with no history per
+  iteration" — describes the goal loop's prompt, not its driver: the TUI passes
+  the full conversation to every iteration. Battletesting showed the cost of
+  the split: a plan the model abandoned at 1/3 simply stopped, with nothing to
+  send it back.
 - It does not make the plan file a committed artefact. `.klaudia/` is
   gitignored; `PRD.md` stays the opt-in committed form, as it is for goal mode.
 - It does not change what `ExitPlanMode` shows the user. The approval prompt

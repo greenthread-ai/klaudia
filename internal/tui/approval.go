@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/goal"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
@@ -30,6 +31,7 @@ func (m *Model) answerAsk(answer string) {
 // the box with whatever the user already typed so the first keystroke isn't
 // swallowed.
 func (m *Model) beginOtherAnswer(seed string) tea.Cmd {
+	m.otherFor = otherAsk
 	m.setState(stateAnsweringOther)
 	m.input.Reset()
 	if seed != "" {
@@ -217,4 +219,65 @@ func (p *uiPlanner) ExitPlan(ctx context.Context, plan string) (bool, error) {
 	case ok := <-reply:
 		return ok, nil
 	}
+}
+
+// otherTarget is what a stateAnsweringOther box answers.
+type otherTarget int
+
+const (
+	otherAsk  otherTarget = iota // an AskUserQuestion's "something else"
+	otherPlan                    // plan approval's "keep planning"
+)
+
+// planChoices are plan approval's rows. The second is what makes a plan more
+// than one turn: a model that stops with steps left is sent back to them (a
+// plan run — the goal loop over the approved plan) instead of the plan simply
+// ending wherever the model did. The third is the only way to say why a plan
+// is wrong; the old "n" could only refuse.
+var planChoices = []string{
+	"Yes — run it",
+	"Yes — and keep going until every step is done",
+	"No — keep planning; tell Klaudia what to change",
+}
+
+// approvePlan accepts the plan; keepGoing also starts a plan run whose first
+// turn is the one already running.
+func (m *Model) approvePlan(keepGoing bool) {
+	m.planReply <- true
+	m.planReply = nil
+	// Autonomous, not a halfway mode. acceptEdits used to be the landing spot,
+	// which left the session allowing edits but asking before every command —
+	// and, because the host gate was untouched and already enforcing, /trust
+	// upgrade reported "already enforcing" and would not move it. Approving a
+	// plan means "go and do this".
+	m.sess.PermissionMode = string(permission.ModeAutonomous)
+	if keepGoing {
+		m.startPlanRun(goal.DefaultIterations, true)
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  → approved; plan mode off — running until every step is done (up to %d turns; Esc or /plan stop halts)", goal.DefaultIterations)))
+	} else {
+		m.appendLine(toolStyle.Render("  → approved; plan mode off (autonomous)"))
+	}
+	m.setState(stateRunning)
+}
+
+// beginPlanFeedback opens the box for "keep planning".
+func (m *Model) beginPlanFeedback() tea.Cmd {
+	m.otherFor = otherPlan
+	m.setState(stateAnsweringOther)
+	m.input.Reset()
+	m.input.Focus()
+	m.syncInputHeight()
+	return textarea.Blink
+}
+
+// rejectPlan refuses the plan and sends the user's reasons. They travel as a
+// steering message — delivered right after ExitPlanMode's result, the next
+// thing the model reads — so tools.Planner keeps its plain approved/refused
+// contract, which ACP and stream-json implement too.
+func (m *Model) rejectPlan(feedback string) {
+	m.planReply <- false
+	m.planReply = nil
+	m.steer.add(feedback, feedback)
+	m.appendLine(toolStyle.Render("  → keep planning: " + oneline(feedback, 200)))
+	m.setState(stateRunning)
 }

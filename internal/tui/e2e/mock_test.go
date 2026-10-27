@@ -235,7 +235,7 @@ func (m *Mock) complete(w http.ResponseWriter, r *http.Request) {
 const slowSentence = "This reply streams slowly so that it can be interrupted."
 
 // scriptKeywords are the words defaultScript answers to.
-var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "question", "wrapme", "planit", "longpara"}
+var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "question", "wrapme", "planit", "longpara", "halfplan"}
 
 // keyword returns the scripted keyword that appears last in the prompt, or "".
 //
@@ -263,6 +263,16 @@ func defaultScript(prompt string, step int) Reply {
 	if strings.Contains(prompt, "autonomously iterating") || strings.Contains(prompt, "final independent review") {
 		return goalStep(prompt, step)
 	}
+	// A plan run's prompts: finish the open step, then confirm on review.
+	if strings.Contains(prompt, "Continue the plan the user approved") {
+		if step == 0 {
+			return Reply{Calls: []ToolCall{{"TodoWrite", halfPlanTodos("completed", "completed")}}}
+		}
+		return Reply{Text: "Finished the second step."}
+	}
+	if strings.Contains(prompt, "Every step of the approved plan") {
+		return Reply{Text: "Both steps verified.\n<goal-complete/>"}
+	}
 	switch keyword(prompt) {
 	case "question":
 		if step == 0 {
@@ -280,6 +290,18 @@ func defaultScript(prompt string, step int) Reply {
 			words = append(words, fmt.Sprintf("w%03d", i))
 		}
 		return Reply{Text: strings.Join(words, " "), ChunkDelay: 15 * time.Millisecond}
+	case "halfplan":
+		// Approved, does one of two steps, then stops: the case a plan run
+		// exists for.
+		steps := []Reply{
+			{Calls: []ToolCall{{"ExitPlanMode", map[string]any{"plan": "## Plan\n\n1. Change the greeting\n2. Add a test\n"}}}},
+			{Calls: []ToolCall{{"TodoWrite", halfPlanTodos("in_progress", "pending")}}},
+			{Calls: []ToolCall{{"TodoWrite", halfPlanTodos("completed", "pending")}}},
+		}
+		if step < len(steps) {
+			return steps[step]
+		}
+		return Reply{Text: "Pausing after the first step."}
 	case "wrapme":
 		if step == 0 {
 			return Reply{Calls: []ToolCall{{"Bash", map[string]any{"command": "echo " + wrapSentence + "; exit 3", "description": "A long failure"}}}}
@@ -373,4 +395,12 @@ func goalStep(prompt string, step int) Reply {
 		return Reply{Text: "All ticked.\n<goal-complete/>"}
 	}
 	return Reply{Text: "Ticked one."}
+}
+
+// halfPlanTodos is the halfplan scenario's two-step list at the given statuses.
+func halfPlanTodos(first, second string) map[string]any {
+	return map[string]any{"todos": []any{
+		map[string]any{"content": "Change the greeting", "status": first},
+		map[string]any{"content": "Add a test", "status": second},
+	}}
 }

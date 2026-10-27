@@ -126,6 +126,42 @@ func WrapUpPrompt(specPath string) string {
 		"blockers, and the single best next step to resume. Commit only that spec update."
 }
 
+// A plan run is the same loop with the session's approved plan as the spec.
+// Its prompts differ in one way that matters: the plan file belongs to the
+// plan store, which rewrites it from TodoWrite, so progress is recorded with
+// TodoWrite rather than by editing the file — an edit would be overwritten by
+// the next TodoWrite, and the file lives outside the project anyway.
+
+// PlanIterationPrompt continues an approved plan that stopped with steps left.
+func PlanIterationPrompt(planPath string) string {
+	return "Continue the plan the user approved, saved at " + planPath + ".\n" +
+		"Read it to recall the steps and which are done, then inspect the repository (git status, " +
+		"and the build and tests) to confirm where things stand. Do the next step that is not done, " +
+		"verify it, and mark it completed with TodoWrite — keep TodoWrite in step with the plan; do " +
+		"not edit the plan file itself.\n\n" +
+		"If and only if EVERY step is done and verified, reply with exactly " + CompleteToken +
+		" on its own line. Otherwise, end your turn after this step."
+}
+
+// PlanVerificationPrompt is the final review before a plan run is accepted as
+// done: every step must be demonstrably done, not merely ticked.
+func PlanVerificationPrompt(planPath string) string {
+	return "Every step of the approved plan (" + planPath + ") is marked done. Before that is " +
+		"accepted, review it independently: re-read the plan, and for each step state whether it is " +
+		"demonstrably done (cite a file, a commit or a passing test). Run the build and tests.\n\n" +
+		"If a step is not really done, mark it in_progress with TodoWrite and say what remains — do " +
+		"not claim completion. If every step is done and verification passes, reply with exactly " +
+		CompleteToken + " on its own line."
+}
+
+// PlanWrapUpPrompt records where a plan run stopped when it hits its turn cap.
+func PlanWrapUpPrompt(planPath string) string {
+	return "The plan run is stopping before every step is done. Do NOT start new work. Update the " +
+		"step list with TodoWrite so it reflects reality — completed only for steps that are " +
+		"genuinely done — and summarise in a few lines what was accomplished, what remains, and the " +
+		"next step, so /plan run can resume from " + planPath + "."
+}
+
 // IsComplete reports whether an iteration's final text signals completion.
 func IsComplete(text string) bool {
 	return strings.Contains(text, CompleteToken)
@@ -138,18 +174,44 @@ func IsComplete(text string) bool {
 // could see" but NOT "Progress tracker is missing rows for phases described
 // in the body" — RequiresStubFix handles that.
 func CountUnchecked(specPath string) (int, error) {
-	data, err := os.ReadFile(specPath)
-	if err != nil {
-		return 0, err
-	}
+	items, err := Checklist(specPath)
 	n := 0
-	for _, line := range strings.Split(string(data), "\n") {
-		t := strings.TrimSpace(line)
-		if strings.HasPrefix(t, "- [ ]") || strings.HasPrefix(t, "* [ ]") {
+	for _, it := range items {
+		if !it.Done {
 			n++
 		}
 	}
-	return n, nil
+	return n, err
+}
+
+// Item is one checkbox line of a spec.
+type Item struct {
+	Text string
+	Done bool
+}
+
+// Checklist returns every "- [ ]" / "- [x]" line of the spec in order — the
+// same lines CountUnchecked counts, so the live panel a run shows and the gate
+// that ends it cannot disagree.
+func Checklist(specPath string) ([]Item, error) {
+	data, err := os.ReadFile(specPath)
+	if err != nil {
+		return nil, err
+	}
+	var items []Item
+	for _, line := range strings.Split(string(data), "\n") {
+		t := strings.TrimSpace(line)
+		if len(t) < 5 || (t[0] != '-' && t[0] != '*') || t[1] != ' ' || t[2] != '[' || t[4] != ']' {
+			continue
+		}
+		switch t[3] {
+		case ' ':
+			items = append(items, Item{Text: strings.TrimSpace(t[5:])})
+		case 'x', 'X':
+			items = append(items, Item{Text: strings.TrimSpace(t[5:]), Done: true})
+		}
+	}
+	return items, nil
 }
 
 // phaseInHeadingPattern matches a markdown heading line whose title starts

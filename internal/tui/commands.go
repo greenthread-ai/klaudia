@@ -49,7 +49,7 @@ var commandList = []cmdInfo{
 	{"/forget", "<path>", "Drop a file from the tracked context"},
 	{"/compact", "", "Summarize and compact the conversation history now"},
 	{"/add-dir", "<path>", "Add a directory to the prompt context"},
-	{"/plan", "[off]", "Enter (or leave) read-only plan mode"},
+	{"/plan", "[run|off]", "Read-only plan mode · run [N]: work the approved plan to done · stop: halt"},
 	{"/doctor", "", "Run environment diagnostics"},
 	{"/diff", "[args]", "Show git diff of the working tree"},
 	{"/commit", "<msg>", "Stage all changes and commit (asks first)"},
@@ -319,16 +319,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			}
 			return m.startGoalLoop(args[1:])
 		case strings.EqualFold(args[0], "stop"):
-			if m.loopRemaining > 0 || m.loopWrapUp || m.turnCancel != nil {
-				m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false
-				if m.turnCancel != nil {
-					m.turnCancel()
-					m.turnCancel = nil
-				}
-				m.appendLine(toolStyle.Render("  ⊘ goal loop stopped."))
-			} else {
-				m.appendLine(bannerStyle.Render("No goal loop running."))
-			}
+			m.stopLoop()
 		case strings.EqualFold(args[0], "clear"):
 			m.sess.Goal = ""
 			m.appendLine(bannerStyle.Render("Standing goal cleared."))
@@ -477,6 +468,16 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}(m.history)
 		return m, m.spin.Tick
 	case "/plan":
+		if len(args) > 0 && strings.EqualFold(args[0], "run") {
+			if m.busyGuard("/plan run") {
+				break
+			}
+			return m.runPlan(args[1:])
+		}
+		if len(args) > 0 && strings.EqualFold(args[0], "stop") {
+			m.stopLoop()
+			break
+		}
 		if len(args) > 0 && strings.ToLower(args[0]) == "off" {
 			// Autonomous, not a mode that asks per action: leaving plan means
 			// getting on with it, and the host gate is what stops a change to

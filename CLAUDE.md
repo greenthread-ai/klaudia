@@ -74,8 +74,10 @@ is retired. Read that doc before adding another. The store is owned by the
 caller and passed in with `tools.WithPlanStore`; an **approved** plan is
 written to `~/.klaudia/plans/<session-id>.md` (session-keyed: a per-project
 file let concurrent sessions clobber each other). It uses goal mode's checkbox
-format so `goal.CountUnchecked` *can* read it — nothing calls it on a plan
-yet, so treat that as latent, not wiring, but don't drift the format. D4 landed: the loop emits a `plan`
+format so `goal.CountUnchecked` *can* read it. Nothing calls it on a plan: a
+plan run (D5 — the goal loop over the approved plan) gates on the store's
+snapshot, not the file. Treat the format as latent, not wiring, but don't drift
+it. D4 landed: the loop emits a `plan`
 event when the store's revision moves, and the TUI, stream-json and ACP all render from it. The store is
 **per conversation** — `agent.Turn.Plan` → `Options.Plan` → `tools.Context.Plans` — because a
 process-wide one let ACP threads share a list and let a sub-agent's `TodoWrite` replace the user's plan.

@@ -447,6 +447,17 @@ type Model struct {
 	askQuestion string
 	askIdx      int  // highlighted row; len(askOptions) is the escape hatch
 	askStray    bool // text was typed at the picker since the last move (see onKey)
+	// otherFor says whose free-text box stateAnsweringOther is: a question's
+	// "something else", or plan approval's "keep planning".
+	otherFor otherTarget
+	// Pending plan approval: the picker's highlighted row and stray-typing flag.
+	planIdx   int
+	planStray bool
+	// loopPlan marks a run over the approved plan (/plan run, or approval's
+	// "keep going") rather than over a goal spec; goalList is a goal run's
+	// checklist, for the panel.
+	loopPlan bool
+	goalList plan.Snapshot
 	// Pending ExitPlanMode approval.
 	planReply chan bool
 	// Pending /commit-style confirmation: run on "y", returns a result line.
@@ -719,9 +730,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case planMsg:
 		m.setState(stateAwaitingPlan)
 		m.planReply = msg.reply
+		m.planIdx, m.planStray = 0, false
 		m.appendLine(askStyle.Render("Proposed plan:"))
 		m.appendMarkdown(msg.plan)
-		// The y/n prompt lives only in the persistent bottom view (see
+		// The approval picker lives only in the persistent bottom view (see
 		// bottomView/stateAwaitingPlan); don't also write it to scrollback or
 		// the user sees the same prompt twice.
 		return m, m.waitForEvent()
@@ -796,6 +808,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pending, m.askReply, m.planReply = nil, nil, nil
 		// Goal loop: run the next iteration (or the wrap-up turn) unless the goal
 		// is complete, the turn errored/was interrupted, or we've fully stopped.
+		if loopPrompt == "" && !m.loopWrapUp {
+			m.loopPlan = false // whatever kind of run it was, it is over
+		}
 		if loopPrompt != "" {
 			m.setState(stateRunning)
 			return m, tea.Batch(m.waitForEvent(), m.startTurn(loopPrompt), stopSW)

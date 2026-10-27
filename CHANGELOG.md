@@ -5,6 +5,17 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+- **Plan runs.** Plan approval is now a picker: *Yes — run it* (`y`, as
+  before), *Yes — and keep going until every step is done*, and *No — keep
+  planning* (`n`), which asks what should change and sends it to the model —
+  previously "n" could only refuse. "Keep going", and `/plan run [N]` later,
+  run the goal loop over the approved plan: a model that stops with steps left
+  is sent back to them, every step done triggers a verification turn, and the
+  run ends with one completion block. `/plan stop` (or `/goal stop`, or Esc)
+  halts it. During `/goal run` the live panel shows the spec's checklist and
+  the iteration, instead of whatever plan was last on screen.
+
 ### Fixed
 - **OpenAI-compatible providers: steering and interrupted prompts.** A user
   message's text blocks were concatenated with no separator ("go slow" +

@@ -86,7 +86,7 @@ func TestPlanApprovalRuns(t *testing.T) {
 	tm.Press(keyEnter)
 	tm.WaitText(t, "Entered plan mode", 5*time.Second)
 	env.Prompt(t, tm, "planit")
-	tm.WaitText(t, "Approve plan?", 15*time.Second)
+	tm.WaitText(t, "Approve this plan?", 15*time.Second)
 	tm.Press("y")
 	snap := tm.WaitFor(t, "the plan to finish", 20*time.Second, func(s Snapshot) bool {
 		return strings.Contains(s.All(), "Plan done.") && s.HasLine(doneLine)
@@ -145,5 +145,55 @@ func TestStreamingPreviewFollowsALongParagraph(t *testing.T) {
 	})
 	if snap.HasLine(doneLine) {
 		t.Fatalf("the turn had already finished; the preview was not observed mid-stream\n%s", snap)
+	}
+}
+
+// A plan approved with "keep going" outlives the model stopping halfway: the
+// run sends it back to the open step, then verifies, then ends.
+func TestPlanKeepGoingFinishesAnAbandonedPlan(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	tm.Type("/plan")
+	tm.Press(keyEnter)
+	tm.WaitText(t, "Entered plan mode", 5*time.Second)
+	env.Prompt(t, tm, "halfplan")
+	tm.WaitText(t, "Approve this plan?", 15*time.Second)
+	tm.Press("2")
+	snap := tm.WaitText(t, "plan complete (verified)", 30*time.Second)
+	all := snap.All()
+	for _, want := range []string{"Pausing after the first step.", "↻ turn 2/", "Finished the second step."} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing %q\n%s", want, all)
+		}
+	}
+	plans, _ := filepath.Glob(filepath.Join(env.Config, "plans", "*.md"))
+	if len(plans) != 1 {
+		t.Fatalf("want one saved plan, got %v", plans)
+	}
+	if body, _ := os.ReadFile(plans[0]); strings.Contains(string(body), "- [ ]") {
+		t.Errorf("plan still has open steps:\n%s", body)
+	}
+}
+
+// "Keep planning" gets the user's reasons to the model.
+func TestPlanKeepPlanningReachesTheModel(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	tm.Type("/plan")
+	tm.Press(keyEnter)
+	tm.WaitText(t, "Entered plan mode", 5*time.Second)
+	env.Prompt(t, tm, "halfplan")
+	tm.WaitText(t, "Approve this plan?", 15*time.Second)
+	tm.Press("n")
+	tm.WaitText(t, "What should change?", 5*time.Second)
+	tm.Type("split the test step in two")
+	tm.Press(keyEnter)
+	tm.WaitFor(t, "the turn to end", 20*time.Second, func(s Snapshot) bool { return s.HasLine(doneLine) })
+	found := false
+	for _, p := range env.Mock.Prompts() {
+		found = found || strings.Contains(p, "split the test step in two")
+	}
+	if !found {
+		t.Errorf("the feedback never reached the model; prompts: %q", env.Mock.Prompts())
 	}
 }

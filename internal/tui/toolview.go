@@ -258,9 +258,9 @@ func (m *Model) statusLine() string {
 	// unattended, which is the thing you would most want to notice.
 	switch {
 	case m.loopRemaining > 0:
-		segments = append(segments, hintStyle.Render(fmt.Sprintf("goal %d/%d", m.loopTotal-m.loopRemaining+1, m.loopTotal)))
+		segments = append(segments, hintStyle.Render(fmt.Sprintf("%s %d/%d", m.loopKind(), m.loopTotal-m.loopRemaining+1, m.loopTotal)))
 	case m.loopWrapUp:
-		segments = append(segments, hintStyle.Render("goal summary"))
+		segments = append(segments, hintStyle.Render(m.loopKind()+" summary"))
 	case m.goalSetting:
 		segments = append(segments, hintStyle.Render("goal-setting"))
 	}

@@ -185,7 +185,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// The text box's own keys, before any state dispatch. Esc reaching the menu
 	// ahead of the interrupt is deliberate: closing a dropdown that is on screen
 	// must not also kill the turn behind it. A second Esc does that.
-	if msg.Type == tea.KeyCtrlT && planVisible(m.plan) {
+	if snap, _, _ := m.workList(); msg.Type == tea.KeyCtrlT && planVisible(snap) {
 		m.planCollapsed = !m.planCollapsed
 		return m, nil
 	}
@@ -295,24 +295,23 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingPlan {
+		// y and n keep their old meanings: approve and run, keep planning.
+		choice := -1
 		switch strings.ToLower(msg.String()) {
 		case "y":
-			m.planReply <- true
-			m.planReply = nil
-			// Autonomous, not a halfway mode. acceptEdits used to be the
-			// landing spot, which left the session allowing edits but asking
-			// before every command — and, because the host gate was untouched
-			// and already enforcing, /trust upgrade reported "already
-			// enforcing" and would not move it. Approving a plan means "go
-			// and do this".
-			m.sess.PermissionMode = string(permission.ModeAutonomous)
-			m.appendLine(toolStyle.Render("  → approved; plan mode off (autonomous)"))
-			m.setState(stateRunning)
+			choice = 0
 		case "n":
-			m.planReply <- false
-			m.planReply = nil
-			m.appendLine(toolStyle.Render("  → not approved; staying in plan mode"))
-			m.setState(stateRunning)
+			choice = 2
+		default:
+			choice = pickerKey(msg, len(planChoices), &m.planIdx, &m.planStray)
+		}
+		switch choice {
+		case 0:
+			m.approvePlan(false)
+		case 1:
+			m.approvePlan(true)
+		case 2:
+			return m, m.beginPlanFeedback()
 		}
 		return m, nil
 	}
@@ -339,54 +338,29 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingAnswer {
-		// The same keys as the settings picker: ↑↓ (or Ctrl+P/N) move, Enter
-		// takes the highlighted row, 1..N+1 pick directly, and N+1 is the
-		// "something else" escape hatch.
-		//
-		// Other typing is ignored. It used to open free text seeded with the
-		// keystroke, so a message typed ahead while the model worked became the
-		// answer the moment a question appeared — the user answered a question
-		// they had not read. Free text is one deliberate step away instead, as
-		// in Claude Code. And Enter after stray text does nothing: text then
-		// Enter is someone finishing a message, not confirming row one.
+		// 1..N are the model's options; N+1 is the "something else" escape
+		// hatch, which opens free text rather than answering. As in Claude
+		// Code, free text is one deliberate step away (see pickerKey).
 		n := len(m.askOptions) + 1
-		pick := func(i int) tea.Cmd {
-			if i == n-1 {
-				return m.beginOtherAnswer("")
-			}
+		switch i := pickerKey(msg, n, &m.askIdx, &m.askStray); {
+		case i < 0:
+		case i == n-1:
+			return m, m.beginOtherAnswer("")
+		default:
 			m.answerAsk(m.askOptions[i].Label)
-			return nil
 		}
-		switch msg.Type {
-		case tea.KeyUp, tea.KeyCtrlP:
-			m.askIdx, m.askStray = (m.askIdx-1+n)%n, false
-			return m, nil
-		case tea.KeyDown, tea.KeyCtrlN:
-			m.askIdx, m.askStray = (m.askIdx+1)%n, false
-			return m, nil
-		case tea.KeyEnter:
-			if m.askStray {
-				m.askStray = false
-				return m, nil
-			}
-			return m, pick(m.askIdx)
-		}
-		if s := msg.String(); len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
-			if i := int(s[0] - '1'); i < n {
-				return m, pick(i)
-			}
-		}
-		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
-			m.askStray = true
-		}
-		return m, nil // a digit past the list, or text: ignore rather than guess
+		return m, nil
 	}
 
 	if m.state == stateAnsweringOther {
 		if msg.Type == tea.KeyEsc { // back to the list, draft discarded
 			m.input.Reset()
 			m.syncInputHeight()
-			m.setState(stateAwaitingAnswer)
+			if m.otherFor == otherPlan {
+				m.setState(stateAwaitingPlan)
+			} else {
+				m.setState(stateAwaitingAnswer)
+			}
 			return m, nil
 		}
 		switch action {
@@ -403,7 +377,11 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Reset()
 			m.syncInputHeight()
 			m.pushHistory(answer)
-			m.answerAsk(answer)
+			if m.otherFor == otherPlan {
+				m.rejectPlan(answer)
+			} else {
+				m.answerAsk(answer)
+			}
 			return m, nil
 		}
 		return m, m.updateInput(msg)

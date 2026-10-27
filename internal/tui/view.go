@@ -284,7 +284,8 @@ func (m *Model) bottomView() string {
 	// running — nowhere else. Every other state is a question whose options
 	// were just printed in scrollback directly above its prompt, and a
 	// checklist wedged between the two reads as part of the question.
-	panel := renderPlan(m.plan, m.planCollapsed, m.width)
+	snap, title, suffix := m.workList()
+	panel := renderWorkList(snap, title, suffix, m.planCollapsed, m.width)
 	withPanel := func(s string) string {
 		if panel == "" {
 			return s
@@ -329,10 +330,14 @@ func (m *Model) bottomView() string {
 		bottom = m.askView()
 	case stateAnsweringOther:
 		m.input.SetHeight(m.inputHeight())
-		bottom = m.promptBox() + m.inputAffordanceView() + "\n" + caption(askStyle.Render("Your answer")+
+		title := "Your answer"
+		if m.otherFor == otherPlan {
+			title = "What should change?"
+		}
+		bottom = m.promptBox() + m.inputAffordanceView() + "\n" + caption(askStyle.Render(title)+
 			hintStyle.Render("  (enter sends · esc goes back to the options)"))
 	case stateAwaitingPlan:
-		bottom = caption(askStyle.Render("Approve plan? (y)es / (n)o"))
+		bottom = caption(askStyle.Render("Approve this plan?")) + "\n" + m.pickerView(planChoices, m.planIdx, m.planStray, 2)
 	case stateAwaitingConfirm:
 		bottom = caption(askStyle.Render("Confirm? (y)es / (n)o"))
 	case stateAwaitingChoice:

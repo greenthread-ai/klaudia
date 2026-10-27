@@ -270,3 +270,29 @@ func indexOf(s, sub string) int {
 	}
 	return -1
 }
+
+// Checklist and CountUnchecked read the same lines, so the panel a run shows
+// and the gate that ends it agree.
+func TestChecklistMatchesCountUnchecked(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "spec.md")
+	body := "# Spec\n- [x] done one\n- [ ] open one\n* [X] done two\n- [ ] open two _(in progress)_\n-[ ] not a box\nprose with - [ ] inside\n"
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	items, err := Checklist(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Item{{"done one", true}, {"open one", false}, {"done two", true}, {"open two _(in progress)_", false}}
+	if len(items) != len(want) {
+		t.Fatalf("items = %+v, want %+v", items, want)
+	}
+	for i := range want {
+		if items[i] != want[i] {
+			t.Errorf("item %d = %+v, want %+v", i, items[i], want[i])
+		}
+	}
+	if n, _ := CountUnchecked(p); n != 2 {
+		t.Errorf("CountUnchecked = %d, want 2", n)
+	}
+}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/goal"
+	"github.com/greenthread-ai/klaudia/internal/plan"
 )
 
 // toggleGoalSetting flips goal-setting mode. Turning it on loads any existing
@@ -96,7 +97,9 @@ func (m *Model) startGoalLoop(args []string) (tea.Model, tea.Cmd) {
 	}
 
 	m.goalSetting = false
+	m.loopPlan = false
 	m.loopTotal, m.loopRemaining, m.loopSpecPath = n, n, specPath
+	m.refreshGoalList()
 	m.loopStubFixing, m.loopVerifying = false, false
 	m.appendLine(bannerStyle.Render(fmt.Sprintf("Goal loop: up to %d iterations against %s. Esc or /goal stop to halt.", n, specPath)))
 
@@ -154,14 +157,18 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 	if m.loopWrapUp { // the wrap-up turn just finished
 		m.loopWrapUp = false
 		if err == nil {
-			m.appendLine(toolStyle.Render(fmt.Sprintf("  summary written to %s — /goal run to resume.", filepath.Base(m.loopSpecPath))))
+			if m.loopPlan {
+				m.appendLine(toolStyle.Render("  progress recorded in the plan — /plan run to resume."))
+			} else {
+				m.appendLine(toolStyle.Render(fmt.Sprintf("  summary written to %s — /goal run to resume.", filepath.Base(m.loopSpecPath))))
+			}
 		}
 		m.appendMergeHint()
 		return ""
 	}
 	if err != nil {
 		m.loopRemaining = 0
-		m.appendLine(toolStyle.Render("  ⊘ goal loop halted."))
+		m.appendLine(toolStyle.Render("  ⊘ " + m.loopNoun() + " halted."))
 		m.appendMergeHint()
 		return ""
 	}
@@ -183,10 +190,13 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 		m.loopStubFixing = false
 	}
 
-	if goal.IsComplete(res.Text) {
+	// A plan run is also done when every step is: the steps are what the user
+	// approved, and the model may finish them without saying the token.
+	claimed := goal.IsComplete(res.Text) || (m.loopPlan && len(m.plan.Items) > 0 && m.plan.Remaining() == 0)
+	if claimed {
 		// Mechanical gate first.
-		if n, cerr := goal.CountUnchecked(m.loopSpecPath); cerr == nil && n > 0 {
-			m.appendLine(toolStyle.Render(fmt.Sprintf("  ✗ completion claim rejected: %d unchecked item(s) remain in %s", n, filepath.Base(m.loopSpecPath))))
+		if n, cerr := m.loopUnchecked(); cerr == nil && n > 0 {
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  ✗ completion claim rejected: %d unchecked item(s) remain in %s", n, m.loopSourceName())))
 			m.loopVerifying = false
 			return m.continueIteration()
 		}
@@ -195,7 +205,7 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 			m.loopVerifying = false
 			done := m.loopTotal - m.loopRemaining + 1
 			m.loopRemaining = 0
-			m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ goal complete (verified) in %d iteration(s).", done)))
+			m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ %s complete (verified) in %d %s(s).", m.loopKind(), done, m.loopUnit())))
 			m.appendMergeHint()
 			return ""
 		}
@@ -203,6 +213,9 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 		// Doesn't decrement the budget; it's an insurance check, not new work.
 		m.loopVerifying = true
 		m.appendLine(toolStyle.Render("  completion claimed; running final verification…"))
+		if m.loopPlan {
+			return goal.PlanVerificationPrompt(m.plan.Path)
+		}
 		return goal.VerificationPrompt(m.loopSpecPath)
 	}
 
@@ -220,12 +233,27 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 // Centralised so the rejection path and the ordinary path can't drift apart.
 func (m *Model) continueIteration() string {
 	m.loopRemaining--
+	if m.loopPlan && m.plan.Path == "" {
+		// The store had nowhere to write the plan, so there is no file for the
+		// next turn to read; carrying on would ask the model to continue a plan
+		// it can only remember.
+		m.loopRemaining = 0
+		m.appendLine(errStyle.Render("  ⊘ plan run halted: the plan was not saved, so there is nothing to resume from."))
+		return ""
+	}
 	if m.loopRemaining > 0 {
 		next := m.loopTotal - m.loopRemaining + 1
-		m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ iteration %d/%d", next, m.loopTotal)))
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ %s %d/%d", m.loopUnit(), next, m.loopTotal)))
+		if m.loopPlan {
+			return goal.PlanIterationPrompt(m.plan.Path)
+		}
 		return goal.IterationPrompt(m.loopSpecPath)
 	}
 	m.loopWrapUp = true
+	if m.loopPlan {
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d turn(s); recording progress in the plan…", m.loopTotal)))
+		return goal.PlanWrapUpPrompt(m.plan.Path)
+	}
 	m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); summarising progress to the spec…", m.loopTotal)))
 	return goal.WrapUpPrompt(m.loopSpecPath)
 }
@@ -236,4 +264,142 @@ func (m *Model) appendMergeHint() {
 	if m.loopBranch != "" {
 		m.appendLine(toolStyle.Render("  " + goal.MergeHint(m.loopBranch, m.loopBaseBranch)))
 	}
+}
+
+// startPlanRun turns the session's approved plan into a run: the goal loop with
+// the plan as its spec (see goal.PlanIterationPrompt). fromApproval means the
+// turn already running — the one the plan was approved in — is the run's
+// first turn, so its changes belong in the run's completion block.
+func (m *Model) startPlanRun(n int, fromApproval bool) {
+	m.loopPlan = true
+	m.goalSetting = false
+	m.loopBranch, m.loopBaseBranch = "", "" // a plan is approved on the user's branch
+	m.loopTotal, m.loopRemaining, m.loopSpecPath = n, n, ""
+	m.loopStubFixing, m.loopVerifying, m.loopWrapUp = false, false, false
+	m.loopSpanOpen = fromApproval
+}
+
+// runPlan is /plan run [N]: resume the approved plan when it has steps left.
+func (m *Model) runPlan(args []string) (tea.Model, tea.Cmd) {
+	switch {
+	case !m.plan.Approved:
+		m.appendLine(errStyle.Render("No approved plan this session. /plan to start one."))
+		return m, nil
+	case m.plan.Path == "":
+		m.appendLine(errStyle.Render("The approved plan was not saved, so there is nothing to resume from."))
+		return m, nil
+	case len(m.plan.Items) == 0 || m.plan.Remaining() == 0:
+		m.appendLine(bannerStyle.Render("Every step of the approved plan is done."))
+		return m, nil
+	}
+	n := goal.DefaultIterations
+	if len(args) > 0 {
+		v, err := strconv.Atoi(args[0])
+		if err != nil || v <= 0 {
+			m.appendLine(errStyle.Render("usage: /plan run [N]  (N = max turns, a positive integer)"))
+			return m, nil
+		}
+		n = min(v, goal.MaxIterations)
+	}
+	m.startPlanRun(n, false)
+	m.appendLine(bannerStyle.Render(fmt.Sprintf("Plan run: %d step(s) left, up to %d turns. Esc or /plan stop to halt.", m.plan.Remaining(), n)))
+	m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ turn 1/%d", n)))
+	m.setState(stateRunning)
+	return m, m.startTurn(goal.PlanIterationPrompt(m.plan.Path))
+}
+
+// stopLoop is /goal stop and /plan stop: either kind of run.
+func (m *Model) stopLoop() {
+	if m.loopRemaining > 0 || m.loopWrapUp || m.turnCancel != nil {
+		noun := m.loopNoun()
+		m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false
+		m.loopPlan = false
+		if m.turnCancel != nil {
+			m.turnCancel()
+			m.turnCancel = nil
+		}
+		m.appendLine(toolStyle.Render("  ⊘ " + noun + " stopped."))
+		return
+	}
+	m.appendLine(bannerStyle.Render("Nothing is running."))
+}
+
+// loopKind, loopNoun and loopUnit name the run for messages: a goal loop
+// counts iterations, a plan run counts turns.
+func (m *Model) loopKind() string {
+	if m.loopPlan {
+		return "plan"
+	}
+	return "goal"
+}
+
+func (m *Model) loopNoun() string {
+	if m.loopPlan {
+		return "plan run"
+	}
+	return "goal loop"
+}
+
+func (m *Model) loopUnit() string {
+	if m.loopPlan {
+		return "turn"
+	}
+	return "iteration"
+}
+
+// loopUnchecked is the mechanical gate's count: open steps of the plan, or
+// unchecked boxes in the goal spec.
+func (m *Model) loopUnchecked() (int, error) {
+	if m.loopPlan {
+		return m.plan.Remaining(), nil
+	}
+	return goal.CountUnchecked(m.loopSpecPath)
+}
+
+func (m *Model) loopSourceName() string {
+	if m.loopPlan {
+		return "the plan"
+	}
+	return filepath.Base(m.loopSpecPath)
+}
+
+// refreshGoalList rereads a goal run's checklist for the panel. Called when
+// the run starts and after each tool result, since that is when the model
+// can have ticked a box.
+func (m *Model) refreshGoalList() {
+	if m.loopSpecPath == "" {
+		m.goalList = plan.Snapshot{}
+		return
+	}
+	items, err := goal.Checklist(m.loopSpecPath)
+	if err != nil {
+		return // keep the last good list rather than blanking the panel
+	}
+	snap := plan.Snapshot{Items: make([]plan.Item, 0, len(items))}
+	for _, it := range items {
+		st := plan.StatusPending
+		if it.Done {
+			st = plan.StatusCompleted
+		}
+		snap.Items = append(snap.Items, plan.Item{Content: it.Text, Status: st})
+	}
+	m.goalList = snap
+}
+
+// workList is what the live panel shows: during a goal run the spec's
+// checklist, otherwise the plan — each titled, and a run's count of turns or
+// iterations alongside. One panel for both, so a goal run never sits under a
+// stale plan.
+func (m *Model) workList() (snap plan.Snapshot, title, suffix string) {
+	running := m.loopRemaining > 0 || m.loopWrapUp
+	if running {
+		suffix = fmt.Sprintf(" · %s %d/%d", m.loopUnit(), m.loopTotal-m.loopRemaining+1, m.loopTotal)
+		if m.loopWrapUp {
+			suffix = " · wrapping up"
+		}
+	}
+	if running && !m.loopPlan {
+		return m.goalList, "Goal", suffix
+	}
+	return m.plan, "Plan", suffix
 }
