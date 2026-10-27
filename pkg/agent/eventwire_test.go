@@ -15,7 +15,7 @@ import (
 func TestEventWireShape(t *testing.T) {
 	ev := Event{
 		Type: EventToolResult, Text: "t", ToolName: "n", ToolUseID: "id", Input: map[string]any{"k": 1},
-		Content: "c", IsError: true, HostBlocked: true, FullContent: "f",
+		Content: "c", IsError: true, HostBlocked: true, FullContent: "f", Data: map[string]any{"line": 1},
 		InputDelta: 1, OutputDelta: 1, TurnDelta: 1,
 		Plan: &plan.Snapshot{Items: []plan.Item{{Content: "x", Status: plan.StatusPending, ActiveForm: "y"}}, Approved: true, Path: "p", Rev: 1},
 	}
@@ -25,7 +25,7 @@ func TestEventWireShape(t *testing.T) {
 	}
 	var m map[string]any
 	_ = json.Unmarshal(b, &m)
-	want := []string{"content", "full_content", "host_blocked", "input", "input_delta", "is_error",
+	want := []string{"content", "data", "full_content", "host_blocked", "input", "input_delta", "is_error",
 		"output_delta", "plan", "text", "tool_name", "tool_use_id", "turn_delta", "type"}
 	if got := keys(m); !reflect.DeepEqual(got, want) {
 		t.Errorf("Event JSON fields = %v, want %v — renaming or removing one breaks peers; bump EventSchemaVersion", got, want)

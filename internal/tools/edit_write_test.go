@@ -226,3 +226,18 @@ func TestFlexibleMatch(t *testing.T) {
 		}
 	})
 }
+
+// Edit reports where its change starts, for the frontend's numbered hunk.
+func TestEditReportsTheLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "f.go")
+	os.WriteFile(path, []byte("a\nb\nc\nd\n"), 0o644)
+	e, _ := NewEdit()
+	raw, _ := json.Marshal(EditInput{FilePath: path, OldString: "c", NewString: "C"})
+	res, err := e.Execute(context.Background(), Context{}, raw)
+	if err != nil || res[0].IsError {
+		t.Fatalf("edit failed: %v %+v", err, res)
+	}
+	if res[0].Data["line"] != 3 {
+		t.Errorf("Data = %v, want line 3", res[0].Data)
+	}
+}

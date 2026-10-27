@@ -70,7 +70,7 @@ func (m *Model) showTool(p *pendingTool) {
 	m.appendLine(toolStyle.Render("⚙ " + p.header()))
 	diff := toolDiff(p.name, p.input)
 	if p.name == "Edit" {
-		diff = m.editPreview(p.input)
+		diff = m.editPreview(p.input, 0)
 	}
 	if diff != "" {
 		m.appendLine(diff)
@@ -160,7 +160,7 @@ func (m *Model) renderToolResult(ev agent.Event, p *pendingTool, seq int) {
 		}
 		m.appendLine(toolStyle.Render(indent + "✓ " + head))
 		if !p.shown {
-			if diff := m.editDiff(ev.ToolName, p.input); diff != "" {
+			if diff := m.editDiff(ev.ToolName, p.input, dataInt(ev.Data, "line")); diff != "" {
 				m.appendLine(diff)
 			}
 		}
@@ -195,20 +195,33 @@ func (m *Model) appendPreview(s, indent string, style interface{ Render(...strin
 // editDiff is the change preview written under a finished edit. Write's is
 // left out: the line already says how many lines it wrote, and its first three
 // lines told nobody anything.
-func (m *Model) editDiff(name string, input any) string {
+func (m *Model) editDiff(name string, input any, line int) string {
 	switch name {
 	case "Write":
 		return ""
 	case "Edit":
-		return m.editPreview(input)
+		return m.editPreview(input, line)
 	}
 	return toolDiff(name, input)
 }
 
-// editPreview is an Edit's numbered hunk.
-func (m *Model) editPreview(input any) string {
+// editPreview is an Edit's numbered hunk; line is where the tool reported the
+// change starts, or 0.
+func (m *Model) editPreview(input any, line int) string {
 	f := toolFields(input)
-	return m.editHunk(f["file_path"], f["old_string"], f["new_string"])
+	return m.editHunk(f["file_path"], f["old_string"], f["new_string"], line)
+}
+
+// dataInt reads an integer a tool reported in Result.Data: an int in
+// process, a float64 once it has been through JSON.
+func dataInt(data map[string]any, key string) int {
+	switch v := data[key].(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	}
+	return 0
 }
 
 // readLineRe matches a line of Read's numbered output.

@@ -72,6 +72,11 @@ type Event struct {
 	// to protect the context window. Local frontends show this; it never goes
 	// back to the model. Empty means Content is already complete.
 	FullContent string `json:"full_content,omitempty"`
+	// Data is the structured detail tools attached to their result
+	// (tool.Result.Data), for frontends; it never goes to the model. Edit
+	// reports "line", where its change starts, so a frontend can number the
+	// hunk without re-reading a file the next call may be rewriting.
+	Data map[string]any `json:"data,omitempty"`
 	// Usage deltas for one inner-loop LLM call, emitted after each streamTurn so
 	// the TUI/stream-json frontend can update token counters live during long
 	// goal iterations rather than waiting for the whole Run to return. The
@@ -1238,6 +1243,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	// output sets Result.Full, and the UI gets that while the model gets the
 	// clamped Content. clamped stays false when no tool did, so the event
 	// carries no redundant copy of the same string.
+	var data map[string]any
 	var content, full string
 	isErr := false
 	clamped := false
@@ -1254,6 +1260,12 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		}
 		isErr = isErr || r.IsError
 		images = append(images, r.Images...)
+		for k, v := range r.Data {
+			if data == nil {
+				data = map[string]any{}
+			}
+			data[k] = v
+		}
 	}
 
 	// The backstop. Tools that understand their own output clamp it better
@@ -1301,7 +1313,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		fs.clear(key, tu.Name)
 	}
 	if emit != nil {
-		ev := Event{Type: EventToolResult, ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr}
+		ev := Event{Type: EventToolResult, ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr, Data: data}
 		if clamped {
 			ev.FullContent = full
 		}

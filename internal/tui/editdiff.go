@@ -23,7 +23,13 @@ import (
 // now, and the numbers come from finding the change in the file — new_string
 // after the edit, old_string before it (an approval card shows the hunk before
 // the edit runs). When neither is found, the hunk is drawn without numbers.
-func (m *Model) editHunk(path, oldS, newS string) string {
+//
+// line is where the Edit tool reported the change starts, or 0. It wins over
+// the file: the TUI reads the file when it renders, and by then the next call
+// may be rewriting it (os.WriteFile truncates first), which left a hunk in a
+// live run unnumbered. The file is then used only for context, and only if it
+// agrees.
+func (m *Model) editHunk(path, oldS, newS string, line int) string {
 	oldL, newL := strings.Split(oldS, "\n"), strings.Split(newS, "\n")
 
 	// Lines the two strings share at either end are not part of the change.
@@ -39,6 +45,12 @@ func (m *Model) editHunk(path, oldS, newS string) string {
 	// start: the 1-based line the strings begin on, or 0; span: how many
 	// lines of the file they cover as found (old before the edit, new after).
 	file, start, span := m.locateEdit(path, oldS, newS)
+	if line > 0 {
+		if start != line {
+			file = "" // the file has moved on, or was caught mid-write
+		}
+		start, span = line, len(newL)
+	}
 	var fileLines []string
 	if file != "" {
 		fileLines = strings.Split(file, "\n")

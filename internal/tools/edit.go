@@ -167,6 +167,12 @@ func (e *Edit) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 		return []Result{{Content: fmt.Sprintf("old_string is not unique (%d matches). Provide more context or set replace_all=true.", count), IsError: true}}, nil
 	}
 
+	// Where the change starts, for the frontend's hunk (Result.Data). The
+	// first occurrence, which is the only one without replace_all.
+	line := 0
+	if i := strings.Index(content, oldString); i >= 0 {
+		line = strings.Count(content[:i], "\n") + 1
+	}
 	var updated string
 	if in.ReplaceAll {
 		updated = strings.ReplaceAll(content, oldString, newString)
@@ -196,7 +202,11 @@ func (e *Edit) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	if flexible {
 		msg += " — old_string was matched ignoring surrounding whitespace; verify the result with Read if it matters."
 	}
-	return []Result{{Content: msg}}, nil
+	r := Result{Content: msg}
+	if line > 0 {
+		r.Data = map[string]any{"line": line}
+	}
+	return []Result{r}, nil
 }
 
 // flexibleMatch locates oldString in content allowing per-line differences in
