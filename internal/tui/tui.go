@@ -53,6 +53,7 @@ type Session struct {
 	Theme          string         // markdown render theme ("" = dark)
 	EnterInserts   bool           // Return inserts a newline; alt+Return/ctrl+j submit
 	Hyperlinks     bool           // OSC 8 links on URLs and file paths (see HyperlinksEnabled)
+	IdleCompact    bool           // compact near the threshold while idle (idlecompact.go)
 	FileLinks      string         // file-link URL format; "" = file:// (see fileLinkURL)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
 
@@ -455,6 +456,9 @@ type Model struct {
 	// contextMeasured is set when this turn's usage reported the real prompt
 	// size, which then stands in for the estimate at doneMsg.
 	contextMeasured bool
+	// idleSeq numbers idle spells, so an idle-compaction timer from one that
+	// a turn has since ended does nothing (idlecompact.go).
+	idleSeq int
 	// results holds the full, untruncated content of recent tool results so
 	// /last can reach past the newest one. The event stream is not truncated
 	// upstream, so what's stored is exactly what the model saw.
@@ -929,7 +933,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.setState(stateIdle)
 		m.input.Focus()
-		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW)
+		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW, m.scheduleIdleCompact())
+
+	case idleCompactMsg:
+		return m, m.onIdleCompact(msg)
 
 	case modelsMsg:
 		if msg.err != nil {
@@ -970,6 +977,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendLine(errStyle.Render("compact: " + config.Hints.FriendlyError(msg.err)))
 		} else {
 			m.history = msg.history
+			// The measured size was the pre-compaction prompt; until the next
+			// call reports a new one, the estimate of what is left stands.
+			m.residentTokens, m.contextMeasured = compaction.EstimateTokens(m.history), false
 			m.appendLine(bannerStyle.Render("Compacted conversation. Summary:\n" + strings.TrimSpace(msg.summary)))
 		}
 		m.setState(stateIdle)

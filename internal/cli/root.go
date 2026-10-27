@@ -1545,6 +1545,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			PermissionMode: string(mode),
 			EnterInserts:   tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 			Hyperlinks:     tui.HyperlinksEnabled(cfg.Links.Enabled, os.Getenv),
+			IdleCompact:    cfg.IdleCompact == nil || *cfg.IdleCompact,
 			FileLinks:      cfg.Links.File,
 			Memory:         memStore,
 			MCP: mcpController{mgr: mcpMgr, ctx: ctx, rebuild: rebuildMCP,

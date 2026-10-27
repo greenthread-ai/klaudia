@@ -43,6 +43,7 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	// these on doneMsg, so this is just a guard.
 	m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
 	m.contextMeasured = false
+	m.idleSeq++ // a turn cancels a pending idle compaction
 	// Phase tracking: start every turn in "thinking" and mark the clock now
 	// so the quiet-detector doesn't fire on a fresh turn that legitimately
 	// takes 30s+ to receive its first event (some providers stream slowly).

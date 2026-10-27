@@ -91,7 +91,7 @@ Size is a guess: S ≈ a day, M ≈ a week, L ≈ several.
 | 7 | **MCP serve mode**: `klaudia mcp serve` exposing "run an agent task" as a tool, long runs as Tasks | Makes Klaudia callable by every MCP host, which is most of them | M |
 | 8 | **Job events into the conversation** (Monitor-style) — *landed 2026-10-27: exits and `watch` matches reach the model in every frontend but ACP*: a background job's output lines matching a pattern wake the loop | Klaudia's jobs are richer than most; this is the missing half that makes "start the server, watch for errors" work | S–M |
 | 9 | **Fallback model chain** and an effort cap in config — *chain landed 2026-10-27 (`fallbackModels`, `--fallback-model`; main loop only, not sub-agents); effort cap not done* | Small, and the 5.5-sizing incident showed provider-side surprises are real | S |
-| 10 | **Idle compaction** above a threshold, before the cache expires | Cheaper than compacting under pressure mid-turn | S |
+| 10 | **Idle compaction** above a threshold, before the cache expires — *landed 2026-10-27 (TUI; `idleCompact`)* | Cheaper than compacting under pressure mid-turn | S |
 | 11 | **Eval mode**: `--restricted` (no user config, no memory, no hooks) plus replaying saved sessions as regression tests | The transcript already records sizing per line; turning sessions into tests catches loop regressions before users do | M |
 | 12 | **TUI**: links on the live region and in `/doctor`'s output, a hyperlink row in `/doctor` | Small follow-ups to the OSC 8 work | S |
 

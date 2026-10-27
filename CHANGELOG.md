@@ -6,6 +6,12 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Idle compaction.** When the conversation is at 85% or more of the
+  compaction point, the TUI compacts it after four idle minutes — before the
+  prompt cache expires, so the summary is cheap — instead of making the next
+  turn stop for it. Skipped while you are typing; `idleCompact = false` turns
+  it off. `/compact` and idle compaction now also refresh the status bar's
+  context reading.
 - **Fallback models.** `fallbackModels = ["sonnet", "haiku"]` in config, or
   `--fallback-model`: when the model is overloaded (529) or the provider keeps
   failing with a 5xx after retries, the run continues on the next model, with

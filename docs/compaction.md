@@ -96,6 +96,16 @@ cut — the model then re-asked questions the user had already answered. An
 unsummarised history can still be compacted later; a truncated one cannot be
 recovered.
 
+### Idle compaction (TUI)
+
+A conversation at 85% or more of the compact threshold will be compacted on
+its next turn anyway, mid-turn, with the user waiting. So after four idle
+minutes — under the provider's five-minute prompt cache, so the summary
+request reads the conversation from cache — the TUI compacts it then, with a
+line saying so. Never with a draft in the input box, never once another turn
+has started, and not at all with `idleCompact = false` in config. Headless
+and stream-json runs have no idle time to use and keep compacting in-turn.
+
 ## Before either stage: the per-result cap
 
 Compaction deals with history that has already accumulated. The cheaper defence

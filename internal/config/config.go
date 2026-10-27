@@ -65,6 +65,10 @@ type Config struct {
 	// haiku) or full ids. The answer then comes from the fallback for the rest
 	// of that run, and a notice says so.
 	FallbackModels []string `toml:"fallbackModels,omitempty"`
+	// IdleCompact, unset or true, lets the TUI compact a conversation that is
+	// close to the compaction point while it sits idle, before the prompt
+	// cache expires. false turns it off.
+	IdleCompact *bool `toml:"idleCompact,omitempty"`
 	// StreamIdleTimeout is the seconds a streamed reply may go without data
 	// before it is treated as stalled. Unset uses 120; 0 disables the
 	// watchdog. Raise it behind a proxy that buffers the stream.
@@ -365,6 +369,9 @@ func merge(dst *Config, src Config) {
 	}
 	if len(src.FallbackModels) > 0 {
 		dst.FallbackModels = src.FallbackModels
+	}
+	if src.IdleCompact != nil {
+		dst.IdleCompact = src.IdleCompact
 	}
 	if src.StreamIdleTimeout != nil {
 		dst.StreamIdleTimeout = src.StreamIdleTimeout
