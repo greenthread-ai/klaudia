@@ -7,9 +7,9 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // toolTurn builds an assistant message calling one tool. Via JSON so the SDK

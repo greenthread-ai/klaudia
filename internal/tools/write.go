@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/schema"
 )
 
 // WriteInput is the Write tool's input.

@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/greenthread-ai/klaudia/internal/plan"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // planMaxRows caps the expanded panel. The panel lives in the live region,

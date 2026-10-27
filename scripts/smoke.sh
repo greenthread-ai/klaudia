@@ -25,7 +25,7 @@ CGO_ENABLED=0 go build -o "$BIN" "$ROOT/cmd/klaudia"
 "$BIN" --version | grep -q klaudia && pass "binary builds and reports version" || fail "version"
 
 echo "== unit tests =="
-(cd "$ROOT" && go test ./internal/... -count=1 >/dev/null) && pass "go test ./internal/..." || fail "unit tests"
+(cd "$ROOT" && go test ./... -count=1 >/dev/null) && pass "go test ./..." || fail "unit tests"
 
 echo "== headless: client-side tools (Write/Read/Glob/Grep) =="
 cd "$WORK"

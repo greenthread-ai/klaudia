@@ -10,7 +10,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/goal"
-	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // loopStallLimit stops the loop after this many consecutive iterations make no

@@ -12,8 +12,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/plan"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // Result is a single tool_result content block produced by a tool execution.

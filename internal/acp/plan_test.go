@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/plan"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 func TestTodoWriteBecomesAPlanNotAToolCall(t *testing.T) {

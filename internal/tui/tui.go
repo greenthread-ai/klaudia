@@ -27,10 +27,10 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/mcp"
 	"github.com/greenthread-ai/klaudia/internal/memory"
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // RunFunc drives one user turn against the agent core. It is the shared

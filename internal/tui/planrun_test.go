@@ -10,7 +10,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/goal"
-	"github.com/greenthread-ai/klaudia/internal/plan"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // awaitPlan puts a plan up for approval and returns the reply channel the

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // lineSink captures emitted JSON lines, safe for concurrent writes/reads.

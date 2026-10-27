@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/lsp"
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/schema"
 )
 
 // resolvePath makes a tool-supplied path absolute relative to the working dir.

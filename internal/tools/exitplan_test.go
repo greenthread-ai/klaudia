@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/plan"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 type fakePlanner struct {

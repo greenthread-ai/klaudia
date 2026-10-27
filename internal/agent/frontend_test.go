@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 func TestDenyAllDenies(t *testing.T) {

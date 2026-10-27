@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/plan"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // Translating Klaudia's event stream into ACP session/update notifications.

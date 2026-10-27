@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/greenthread-ai/klaudia/internal/memory"
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/schema"
 )
 
 // MemoryInput is the Memory tool's input.

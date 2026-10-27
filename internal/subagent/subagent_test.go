@@ -6,8 +6,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 func TestBuiltinLookup(t *testing.T) {

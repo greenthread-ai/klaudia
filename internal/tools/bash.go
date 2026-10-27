@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/greenthread-ai/klaudia/internal/native/bashparser"
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
-	"github.com/greenthread-ai/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/schema"
 )
 
 // bashDefaultTimeout is applied when the model doesn't specify one.

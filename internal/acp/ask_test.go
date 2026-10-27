@@ -9,9 +9,9 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/trust"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // stubRequester answers permission requests with a canned outcome and records

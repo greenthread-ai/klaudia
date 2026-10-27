@@ -6,10 +6,10 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread-ai/klaudia/internal/api"
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/subagent"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/worktree"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // builtinTypes resolves sub-agent types the way the CLI does, so spawner tests

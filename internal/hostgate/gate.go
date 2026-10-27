@@ -16,9 +16,9 @@ import (
 	"sync"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/trust"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // The host gate sits in front of every tool call, before the permission check.

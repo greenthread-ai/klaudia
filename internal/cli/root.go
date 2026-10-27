@@ -29,8 +29,6 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/lsp"
 	"github.com/greenthread-ai/klaudia/internal/mcp"
 	"github.com/greenthread-ai/klaudia/internal/memory"
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/prompt"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/internal/session"
@@ -41,6 +39,8 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/trust"
 	"github.com/greenthread-ai/klaudia/internal/tui"
 	"github.com/greenthread-ai/klaudia/internal/version"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // resumeFromSummary rebuilds a compacted session as it stood live: the last

@@ -251,7 +251,7 @@ not the consolidation an earlier draft of this doc claimed it was.
 
 What the implementation settled:
 
-- **`internal/plan`** is the store, a leaf package depending on nothing in the
+- **`pkg/plan`** (was `internal/plan`) is the store, a leaf package depending on nothing in the
   tree. It is owned by the *caller* and passed in with
   `tools.WithPlanStore`, because the old store was constructed inside
   `DefaultRegistry` and handed to nobody — which is the whole reason the todo

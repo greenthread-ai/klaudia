@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // Web/network tools must never be auto-allowed: they reach the network and can

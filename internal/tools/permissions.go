@@ -1,8 +1,8 @@
 package tools
 
 import (
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/trust"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // The intrinsic decisions below are what is left of per-tool permission once

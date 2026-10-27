@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // HeadlessApprover is the Approver for runs with no human present.

@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/trust"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // hostChangeApprover connects the RequestHostChange tool to the frontend and to

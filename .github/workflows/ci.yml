@@ -35,8 +35,16 @@ jobs:
           out=$(go run golang.org/x/tools/cmd/deadcode@v0.49.0 -test ./...)
           if [ -n "$out" ]; then echo "$out"; exit 1; fi
 
+      # pkg/ is the embeddable core. A package outside this module cannot
+      # import internal/, so anything in pkg/ that does is unusable to the
+      # products it exists for — fail here rather than at their build.
+      - name: pkg/ stays importable
+        run: |
+          bad=$(go list -deps ./pkg/... | grep 'greenthread-ai/klaudia/internal/' || true)
+          if [ -n "$bad" ]; then echo "pkg/ depends on internal packages:"; echo "$bad"; exit 1; fi
+
       - name: Test
-        run: go test ./internal/... -count=1
+        run: go test ./... -count=1
 
       # The real binary in a pty against a scripted mock provider on
       # 127.0.0.1: no API key, no network. Skipped by the step above, which

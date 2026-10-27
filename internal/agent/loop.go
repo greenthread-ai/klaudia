@@ -20,10 +20,10 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/api"
 	"github.com/greenthread-ai/klaudia/internal/compaction"
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/plan"
-	"github.com/greenthread-ai/klaudia/internal/schema"
 	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
+	"github.com/greenthread-ai/klaudia/pkg/schema"
 )
 
 // Emitter receives streaming events for stream-json output. It is called for

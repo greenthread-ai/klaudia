@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/trust"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 type fakeTrust struct {

@@ -112,7 +112,7 @@ Pure Go, no CGO, no system libraries:
 
 ```bash
 CGO_ENABLED=0 go install ./cmd/klaudia   # puts the build on your PATH
-go test ./internal/...
+go test ./...
 KLAUDIA_E2E=1 go test ./internal/tui/e2e/...   # the real binary in a pty, against a mock model
 ```
 
@@ -995,7 +995,7 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 - **Project knowledge** — `.klaudia/KNOWLEDGE.md` (curated, durable lessons) is
   injected into the system prompt when present.
 
-## Internal package layout
+## Package layout
 
 | Package | Responsibility |
 |---------|----------------|
@@ -1004,7 +1004,7 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 | `tools` | local tool implementations |
 | `browser` | lazy headless-Chrome engine + web search |
 | `lsp` | language-server client for code intelligence (Diagnostics/Definition/References) |
-| `permission` | the three permission modes (a leaf package) |
+| `pkg/permission` | the three permission modes (a leaf package) |
 | `trust` | zones, command/tool classification, session-scoped grants |
 | `session` | JSONL transcripts, resume, persisted summaries |
 | `compaction` | micro + auto context compaction |
@@ -1022,8 +1022,9 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 | `tui` | Bubble Tea terminal UI |
 | `cli` | command entry, flags, wiring |
 | `native` | pure-Go search / bash-parsing / PDF |
-| `plan`, `goal` | the session plan and its artefact; goal specs and the loop that also drives plan runs |
-| `prompt`, `schema`, `config`, `fuzzy`, `lsp`, `version` | supporting packages |
+| `pkg/plan`, `goal` | the session plan and its artefact; goal specs and the loop that also drives plan runs |
+| `pkg/schema` | JSON Schema for tool inputs |
+| `prompt`, `config`, `fuzzy`, `lsp`, `version` | supporting packages |
 
 ## Documentation
 

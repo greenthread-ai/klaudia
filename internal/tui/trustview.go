@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/trust"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // /trust answers three questions, and it exists because none of them had an

@@ -6,8 +6,8 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/browser"
 	"github.com/greenthread-ai/klaudia/internal/lsp"
-	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // regOptions holds the caller-owned, session-scoped resources the registry's

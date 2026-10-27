@@ -7,7 +7,7 @@ CLI agent that helps users with software engineering tasks.
 ```bash
 CGO_ENABLED=0 go install ./cmd/klaudia   # updates the `klaudia` on your PATH
 CGO_ENABLED=0 go build ./...             # compile check only — writes no binary
-go test ./internal/...
+go test ./...
 ```
 
 `go build ./...` with multiple packages compiles and *discards* the results: it
@@ -21,13 +21,20 @@ built from, so you can check which one you are running rather than inferring it
 from mtimes. Releases are a tag push; `docs/releasing.md` has the steps and the
 reason `-buildvcs=false` must never appear in the build flags.
 
-## Internal Package Layout
+## Package Layout
+
+`pkg/` is the embeddable core — the agent loop and what it needs, importable by
+other products (see docs/roadmap.md, "The extraction"); it must not import
+`internal/`. `internal/` is Klaudia the product.
+
+- **pkg/permission** - The three permission modes (a leaf package)
+- **pkg/plan** - The session plan: step list + the approved-plan artefact
+- **pkg/schema** - Type/schema definitions
 
 - **agent** - Main event loop, orchestration, and sub-agent spawning
 - **api** - Provider abstraction: Anthropic client + OpenAI-compatible shim
 - **tools** - Local tool implementations
 - **browser** - Lazy headless-Chrome engine + web search
-- **permission** - The three permission modes (a leaf package)
 - **trust** - Zones, command/tool classification, session-scoped grants
 - **hostgate** - Klaudia's `agent.Gate`: the host gate, its approval card (`CardOf`), headless approver
 - **session** - Transcripts, resume, persisted compaction summaries
@@ -38,7 +45,6 @@ reason `-buildvcs=false` must never appear in the build flags.
 - **skill** - User-defined skills (`.klaudia/skills`)
 - **hooks** - Lifecycle hooks: the four events, project-hook trust, execution
 - **memory** - Auto-memory store
-- **plan** - The session plan: step list + the approved-plan artefact
 - **doctor** - `/doctor` environment diagnostics
 - **streamjson** - Bidirectional stream-json frontend
 - **acp** - Agent Client Protocol v1 agent (editor-driven sessions)
@@ -48,7 +54,6 @@ reason `-buildvcs=false` must never appear in the build flags.
 - **cli** - CLI entry point and wiring
 - **native** - Pure-Go search / bash-parsing / PDF
 - **sandbox** - Local / OS-confined / container Bash execution
-- **schema** - Type/schema definitions
 - **config** - `config.toml` schema and loading (user file under the config root, project overlay)
 - **goal** - Goal specs and the loop's prompts and gates (also drives plan runs)
 - **lsp** - Language-server pool behind the code-intelligence tools
@@ -73,7 +78,7 @@ sees), and plan mode gates **mutation** rather than execution via
 `trust.InspectCommand`. That classifier has three verdicts and the third is the
 point: a command it cannot read *asks* rather than being refused, because an
 allowlist that denies what it has not got round to classifying is the bug plan
-mode opened with. D3 landed too: `internal/plan` is now the one answer to
+mode opened with. D3 landed too: `pkg/plan` is now the one answer to
 "where does the plan live", replacing three unconnected ones (plan-mode prose,
 goal mode's checkbox file, and an in-memory todo list built inside the registry
 that only ACP rendered — from the tool *input*, not from any store). A fourth,

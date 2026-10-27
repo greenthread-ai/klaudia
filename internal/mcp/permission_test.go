@@ -3,7 +3,7 @@ package mcp
 import (
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // MCP calls used to prompt every time, in every mode, no matter what else the

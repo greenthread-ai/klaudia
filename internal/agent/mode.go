@@ -3,7 +3,7 @@ package agent
 import (
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // The permission mode was invisible to the model, and the model is the one

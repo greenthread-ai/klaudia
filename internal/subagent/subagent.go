@@ -4,8 +4,8 @@
 package subagent
 
 import (
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // Type describes a sub-agent kind selectable via the Agent tool's

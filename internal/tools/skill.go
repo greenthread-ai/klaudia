@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/schema"
 )
 
 // SkillInfo is one skill the model can invoke through the Skill tool. It mirrors

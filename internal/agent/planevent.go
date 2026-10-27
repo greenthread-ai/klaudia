@@ -1,6 +1,6 @@
 package agent
 
-import "github.com/greenthread-ai/klaudia/internal/plan"
+import "github.com/greenthread-ai/klaudia/pkg/plan"
 
 // planTracker remembers which plan revision the frontend was last sent, so a
 // plan event goes out when the plan changed and at no other time.

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // TestBashPlanModeGatesMutationNotExecution is the fix for the defect

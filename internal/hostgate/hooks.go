@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/trust"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 // ConfirmHooks asks the user, through approver, whether the hooks declared in

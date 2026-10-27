@@ -12,8 +12,8 @@ import (
 	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/native/pdf"
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/schema"
+	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/schema"
 )
 
 // readPDF extracts text from a PDF and returns it with a page-count header.

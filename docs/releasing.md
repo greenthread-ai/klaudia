@@ -158,6 +158,6 @@ goreleaser release --release-notes=/path/to/notes.md
 
 `ci.yml` triggers on `push: branches: [main]` and on pull requests. Neither a
 tag push nor a dispatch matches, so `release.yml` runs `go vet` and
-`go test ./internal/...` itself. Without that, the release build would be the
+`go test ./...` itself. Without that, the release build would be the
 only build in the project that nothing gates. They run *before* the tag is
 cut, so a failing test leaves no tag behind to clean up.
