@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"runtime"
 	"strings"
 	"unicode"
 
@@ -35,10 +36,12 @@ type keymap struct {
 // chords are what they are — in particular why alt+Return rather than
 // Ctrl+Return is the internal contract.
 func newKeymap(enterInserts bool) keymap {
+	alt := altReturnLabel()
 	submit := key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "Send the prompt"))
-	newline := key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"), key.WithHelp("Ctrl+J", "Newline without sending"))
+	newline := key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"),
+		key.WithHelp(alt, "Newline without sending (or end the line with \\)"))
 	if enterInserts {
-		submit = key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"), key.WithHelp("Ctrl+J", "Send the prompt"))
+		submit = key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"), key.WithHelp(alt, "Send the prompt"))
 		newline = key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "Newline without sending"))
 	}
 	// Prev and Next share a description on purpose: keyHelp merges bindings
@@ -153,4 +156,16 @@ func (m *Model) keymap() keymap {
 // keyHints renders the key reference for /help from the live bindings.
 func (m *Model) keyHints() string {
 	return keyHelp(m.keymap(), m.input.KeyMap)
+}
+
+// goos is runtime.GOOS, indirected so tests can render either platform's help.
+var goos = runtime.GOOS
+
+// altReturnLabel names the Alt+Return chord the way the keyboard in front of
+// the user labels it: Option+Return on a Mac, Alt+Enter elsewhere.
+func altReturnLabel() string {
+	if goos == "darwin" {
+		return "Option+Return"
+	}
+	return "Alt+Enter"
 }

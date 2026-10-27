@@ -227,6 +227,16 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// the idle prompt and the queue-while-running path cannot disagree about
 	// which chord sends — they did, in the first cut of this change.
 	action := m.keymap().action(msg)
+	// A trailing backslash turns the send into a newline, as in Claude Code.
+	// It is the one newline chord no terminal can swallow: Option+Return
+	// arrives as plain Return in Apple Terminal unless Option is set to act as
+	// Meta — which on a UK keyboard costs Option+3, the # key — and Windows
+	// Terminal keeps Alt+Enter for fullscreen.
+	// Only where Return sends: with input.enter = "newline", Return already
+	// inserts one and the send chord should send.
+	if action == actionSubmit && msg.Type == tea.KeyEnter && !msg.Alt && m.backslashContinues() {
+		action = actionNewline
+	}
 
 	// No scrollback keys are bound. Klaudia renders inline, so PgUp/PgDn, the
 	// wheel, Home/End, tmux copy mode and the terminal's own search all operate
@@ -459,4 +469,24 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, m.updateInput(msg)
+}
+
+// backslashContinues reports whether the input ends in a backslash, and if
+// so removes it, so the Return that follows inserts a newline instead of
+// sending. Only at the end of the input: a backslash typed mid-line is part of
+// what the user is writing (a path, a regex), not a request for a new line.
+func (m *Model) backslashContinues() bool {
+	v := m.input.Value()
+	if !strings.HasSuffix(v, "\\") || !m.cursorAtEnd() {
+		return false
+	}
+	m.input.SetValue(strings.TrimSuffix(v, "\\"))
+	return true
+}
+
+// cursorAtEnd reports whether the cursor is after the last character.
+func (m *Model) cursorAtEnd() bool {
+	lines := strings.Split(m.input.Value(), "\n")
+	last := lines[len(lines)-1]
+	return m.input.Line() == len(lines)-1 && m.input.LineInfo().StartColumn+m.input.LineInfo().CharOffset == len([]rune(last))
 }

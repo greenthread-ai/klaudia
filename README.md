@@ -174,11 +174,14 @@ file = "vscode://file/{path}:{line}:{col}"   # or cursor://file/{path}:{line}
 
 ### Return, and multi-line input
 
-`Return` sends; `Ctrl+J` and `Alt+Return` insert a newline. To swap them:
+`Return` sends. For a new line, press `Option+Return` on macOS (`Alt+Enter`
+on Linux) — or end the line with `\` and press `Return`, which works in every
+terminal with no setup at all, as in Claude Code. (`Ctrl+J` also still works,
+but nobody remembers it.) To swap Return's meaning:
 
 ```toml
 [input]
-enter = "newline"   # Return inserts a newline; Alt+Return or Ctrl+J sends
+enter = "newline"   # Return inserts a newline; Option+Return / Alt+Enter sends
 ```
 
 **Ctrl+Return is not something Klaudia can offer on its own.** A terminal sends
@@ -197,13 +200,15 @@ arrives as `Alt+Return`:
 | kitty | `map ctrl+enter send_text all \x1b\r` | — |
 | WezTerm | `{ key="Enter", mods="CTRL", action=wezterm.action.SendString("\x1b\r") }` | — |
 | iTerm2 | Settings → Keys → Key Bindings → `⌃↩` → *Send Escape Sequence* → `\r` | — |
-| Apple Terminal | Cannot remap `Return` at all | Use `Option+Return`, with Settings → Profiles → Keyboard → *Use Option as Meta key*. That option also stops `Option` from typing `é`, `©` and friends |
+| Apple Terminal | Cannot remap `Return` at all | `Option+Return` needs Settings → Profiles → Keyboard → *Use Option as Meta key*, which also stops `Option` typing `é`, `©` — and on a UK keyboard, `#` (`Option+3`). If that is a dealbreaker, end the line with `\` instead |
 | Windows Terminal | `{ "keys": "ctrl+enter", "command": { "action": "sendInput", "input": "\u001b\r" } }` | `Alt+Return` is the fullscreen toggle by default and never reaches the app, so remap it or use `Ctrl+J` |
 | tmux / screen | nothing to do — `ESC` `CR` passes through | — |
 
-`Ctrl+J` works in every terminal, in both modes, needing no configuration at
-all: it is the LF byte. That is the escape hatch, and it is why
-`enter = "newline"` cannot leave you unable to send.
+A trailing `\` then `Return` works in every terminal, needing no configuration
+at all — Klaudia turns it into a newline instead of sending (only at the end of
+the input, so a `\` in a path or regex is left alone). `Ctrl+J`, the LF byte,
+also works everywhere in both modes; that is why `enter = "newline"` cannot
+leave you unable to send.
 
 **What this changed:** `Alt+Return` used to send, because the Return handler
 ignored the Alt modifier. It now inserts a newline (or sends, in `newline`
@@ -520,7 +525,8 @@ apiKeyEnv = "MY_API_KEY"
 # maxTokens = 32000
 
 # Optional: what the Return key does at the prompt. "send" (default) submits
-# and ctrl+j / alt+Return insert a newline; "newline" swaps them. See
+# and Option+Return / Alt+Enter (or a trailing \) insert a newline; "newline"
+# swaps them. See
 # "Return, and multi-line input" above — ctrl+Return is not a value, because
 # terminals cannot send one.
 # [input]

@@ -63,7 +63,7 @@ func TestHelpFollowsTheConfiguredReturnMode(t *testing.T) {
 		sends        string
 	}{
 		{"enter sends", false, "Enter"},
-		{"enter inserts a newline", true, "Ctrl+J"},
+		{"enter inserts a newline", true, altReturnLabel()},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			m := newTestModel()
@@ -128,4 +128,49 @@ func helpLineFor(t *testing.T, help, desc string) string {
 	}
 	t.Fatalf("no help row describes %q:\n%s", desc, help)
 	return ""
+}
+
+// The newline chord is labelled as the keyboard labels it.
+func TestAltReturnLabelFollowsThePlatform(t *testing.T) {
+	defer func(g string) { goos = g }(goos)
+	goos = "darwin"
+	if got := altReturnLabel(); got != "Option+Return" {
+		t.Errorf("darwin: %q", got)
+	}
+	goos = "linux"
+	if got := altReturnLabel(); got != "Alt+Enter" {
+		t.Errorf("linux: %q", got)
+	}
+	if strings.Contains(stripANSI(newTestModel().keyHints()), "Ctrl+J") {
+		t.Error("help should not advertise Ctrl+J")
+	}
+}
+
+// A trailing backslash makes Return a newline, in any terminal; a backslash
+// anywhere else is just text.
+func TestBackslashReturnInsertsANewline(t *testing.T) {
+	m := newTestModel()
+	m.resize(100, 30)
+	typeRunes(m, `first\`)
+	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := m.input.Value(); got != "first\n" {
+		t.Fatalf("after \\ + Return: %q, want %q", got, "first\n")
+	}
+	if m.state != stateIdle {
+		t.Fatalf("state = %v; the prompt must not have been sent", m.state)
+	}
+	typeRunes(m, "second")
+	if got := m.input.Value(); got != "first\nsecond" {
+		t.Errorf("continued input = %q", got)
+	}
+
+	// Mid-line it is part of what is being written.
+	m2 := newTestModel()
+	m2.resize(100, 30)
+	typeRunes(m2, `a\b`)
+	m2.onKey(tea.KeyMsg{Type: tea.KeyLeft})
+	m2.onKey(tea.KeyMsg{Type: tea.KeyLeft})
+	if m2.backslashContinues() {
+		t.Error("a backslash before the cursor but not at the end must not continue the line")
+	}
 }

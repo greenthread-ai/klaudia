@@ -248,7 +248,7 @@ func TestMarkdownAndFlush(t *testing.T) {
 
 func TestIntro(t *testing.T) {
 	got := intro("openai/gpt-5.5", "go-port", "your preferred coding agent", nil, newKeymap(false).Submit)
-	for _, want := range []string{"Klaudia", "your preferred coding agent", "openai/gpt-5.5", "go-port", "Esc interrupts"} {
+	for _, want := range []string{"Klaudia", "your preferred coding agent", "openai/gpt-5.5", "go-port", "Esc stops"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("intro missing %q", want)
 		}

@@ -65,7 +65,7 @@ func intro(model, branch, tagline string, skills []string, submit key.Binding) s
 	// Kept under 80 columns: at 103 it wrapped on every terminal of ordinary
 	// width, and the whole of /help is one keystroke away.
 	tip := hintStyle.Render("\n  " + chordCase(submit.Help().Key) +
-		" sends · / commands · @ files · Esc interrupts · Ctrl+C twice quits")
+		" sends · / commands · @ files · Esc stops · Ctrl+C twice quits")
 	return logo + tag + meta + tip + "\n"
 }
 

@@ -75,6 +75,16 @@ port mirrors (see `internal/version`).
   line's indent, instead of splitting words at the last column. The startup
   hint fits in 80 columns.
 
+### Changed
+- **Newline is Option+Return (Alt+Enter off the Mac), or end the line with
+  `\`.** The help and intro named Ctrl+J, which nobody remembers; it still
+  works but is no longer advertised. A trailing backslash then Return now
+  inserts a newline in any terminal with no setup, as in Claude Code — the
+  one chord Apple Terminal (Option+Return needs *Use Option as Meta*, which
+  costs `#` on a UK keyboard) and Windows Terminal (Alt+Enter is fullscreen)
+  cannot swallow. Only at the very end of the input, and only on plain
+  Return.
+
 ### Changed (breaking)
 - **The provider layer is `pkg/api`, and the core's leaf packages are in
   `pkg/`** (`permission`, `plan`, `schema`, and `tool` — the tool contract,
