@@ -61,6 +61,11 @@ port mirrors (see `internal/version`).
   from `ReadMcpResource`; embedded text resources are included; a result
   with only `structuredContent` sends its JSON; audio, binary blobs and
   resource links are named in one line rather than vanishing.
+- **`/mcp` Reconnect of a server that failed at startup gives it tools.** It
+  connected, but the registries were built while it had none, so it stayed
+  useless until a restart. Reconnect now rebuilds them, as a config reload
+  does. `ToolSearch` also searches only the tools it can load — it used to
+  offer back the built-ins already in every request.
 - **Read-only MCP tools work in plan mode, and so in Explore and Plan.** Those
   sub-agents run in plan mode and are handed MCP tools marked read-only, but
   plan mode refused every MCP call, so they could never use them. Plan mode

@@ -598,6 +598,10 @@ func buildContainerExecutor(sb config.Sandbox, warn func(string)) sandbox.Execut
 type mcpController struct {
 	mgr *mcp.Manager
 	ctx context.Context
+	// rebuild re-reads the live MCP tools into the registries. A server that
+	// failed at startup contributed no tools, so reconnecting it without a
+	// rebuild left it connected and unusable for the rest of the session.
+	rebuild func()
 }
 
 func (c mcpController) Servers() []tui.MCPServerInfo {
@@ -616,7 +620,16 @@ func (c mcpController) Servers() []tui.MCPServerInfo {
 	return out
 }
 
-func (c mcpController) Reconnect(name string) error  { return c.mgr.Reconnect(name) }
+func (c mcpController) Reconnect(name string) error {
+	if err := c.mgr.Reconnect(name); err != nil {
+		return err
+	}
+	if c.rebuild != nil {
+		c.rebuild()
+	}
+	return nil
+}
+
 func (c mcpController) Disconnect(name string) error { return c.mgr.Disconnect(name) }
 
 // turnSettings is the part of a run that one frontend changes between turns and
@@ -1201,8 +1214,13 @@ func run(cmd *cobra.Command, opts *options) error {
 			}
 		}
 		if len(deferred) > 0 {
-			catalog := make([]tools.ToolInfo, 0, len(all))
+			// Only what is withheld: the rest is already in every request, and
+			// a search that answers with Read or Bash wastes the model's turn.
+			catalog := make([]tools.ToolInfo, 0, len(deferred))
 			for _, t := range all {
+				if !deferred[t.Name()] {
+					continue
+				}
 				desc, _ := t.Description(ctx)
 				catalog = append(catalog, tools.ToolInfo{Name: t.Name(), Description: desc})
 			}
@@ -1276,6 +1294,18 @@ func run(cmd *cobra.Command, opts *options) error {
 	// that, along with any server that failed to launch, is reported through
 	// mcpReloads so a broken edit is not silently indistinguishable from a
 	// working one.
+	//
+	// rebuildMCP is the part a /mcp reconnect needs too: the server may have
+	// had no tools to contribute when the registries were last built.
+	rebuildMCP := func() {
+		next, deferred := buildTools()
+		base.Replace(next...)
+		registry.Replace(append(append([]tools.Tool(nil), next...), wiring.agentTool)...)
+		wiring.spawner.SetDeferred(deferred)
+		deferredMu.Lock()
+		deferredTools = deferred
+		deferredMu.Unlock()
+	}
 	mcpReloads := &mcpReloadNotifier{}
 	stopWatch, werr := mcp.Watch(cwd, func() {
 		cfg, lerr := mcp.LoadConfig(cwd)
@@ -1284,13 +1314,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			return
 		}
 		errs := mcpMgr.Reload(ctx, cfg)
-		next, deferred := buildTools()
-		base.Replace(next...)
-		registry.Replace(append(append([]tools.Tool(nil), next...), wiring.agentTool)...)
-		wiring.spawner.SetDeferred(deferred)
-		deferredMu.Lock()
-		deferredTools = deferred
-		deferredMu.Unlock()
+		rebuildMCP()
 		if len(errs) > 0 {
 			msgs := make([]string, 0, len(errs))
 			for _, e := range errs {
@@ -1397,7 +1421,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Hyperlinks:          tui.HyperlinksEnabled(cfg.Links.Enabled, os.Getenv),
 			FileLinks:           cfg.Links.File,
 			Memory:              memStore,
-			MCP:                 mcpController{mgr: mcpMgr, ctx: ctx},
+			MCP:                 mcpController{mgr: mcpMgr, ctx: ctx, rebuild: rebuildMCP},
 			OnMCPReload:         mcpReloads.register,
 			Skills:              tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 			Provider:            providerName(cfg),
