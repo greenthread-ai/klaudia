@@ -18,6 +18,7 @@ const (
 	keyEnter = "\r"
 	keyEsc   = "\x1b"
 	keyCtrlC = "\x03"
+	keyDown  = "\x1b[B"
 )
 
 // Term is the klaudia binary running in a pseudo-terminal, with its output

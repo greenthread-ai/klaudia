@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -234,7 +235,7 @@ func (m *Mock) complete(w http.ResponseWriter, r *http.Request) {
 const slowSentence = "This reply streams slowly so that it can be interrupted."
 
 // scriptKeywords are the words defaultScript answers to.
-var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links"}
+var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "question", "wrapme", "planit"}
 
 // keyword returns the scripted keyword that appears last in the prompt, or "".
 //
@@ -257,7 +258,46 @@ func keyword(prompt string) string {
 // scriptKeywords and a case here for a new scenario; a prompt with none of
 // them, or "hello", gets a plain greeting.
 func defaultScript(prompt string, step int) Reply {
+	// /goal run's prompts are fixed text naming the spec file; answer them by
+	// working through its checkboxes (goalStep) rather than by keyword.
+	if strings.Contains(prompt, "autonomously iterating") || strings.Contains(prompt, "final independent review") {
+		return goalStep(prompt, step)
+	}
 	switch keyword(prompt) {
+	case "question":
+		if step == 0 {
+			return Reply{Calls: []ToolCall{{"AskUserQuestion", map[string]any{
+				"question": "Which greeting should main.go print?",
+				"options": []any{
+					map[string]any{"label": "hello, world", "description": "The classic"},
+					map[string]any{"label": "hi", "description": "Short"},
+				}}}}}
+		}
+		return Reply{Text: "Noted your choice."}
+	case "wrapme":
+		if step == 0 {
+			return Reply{Calls: []ToolCall{{"Bash", map[string]any{"command": "echo " + wrapSentence + "; exit 3", "description": "A long failure"}}}}
+		}
+		return Reply{Text: "Done wrapping."}
+	case "planit":
+		todos := func(statuses ...string) map[string]any {
+			names := []string{"Change the greeting", "Add a test"}
+			var list []any
+			for i, s := range statuses {
+				list = append(list, map[string]any{"content": names[i], "status": s})
+			}
+			return map[string]any{"todos": list}
+		}
+		steps := []Reply{
+			{Text: "Here is my plan.\n", Calls: []ToolCall{{"ExitPlanMode", map[string]any{"plan": "## Plan\n\n1. Change the greeting\n2. Add a test\n"}}}},
+			{Calls: []ToolCall{{"TodoWrite", todos("in_progress", "pending")}}},
+			{Calls: []ToolCall{{"Edit", map[string]any{"file_path": "main.go", "old_string": `"hello"`, "new_string": `"hello, plan"`}}}},
+			{Calls: []ToolCall{{"TodoWrite", todos("completed", "completed")}}},
+		}
+		if step < len(steps) {
+			return steps[step]
+		}
+		return Reply{Text: "Plan done."}
 	case "tools":
 		steps := []Reply{
 			{Text: "Let me look.\n", Calls: []ToolCall{{"TodoWrite", map[string]any{"todos": []any{
@@ -291,4 +331,40 @@ func defaultScript(prompt string, step int) Reply {
 			"There is no nowhere/missing.go.\n"}
 	}
 	return Reply{Text: "Hello from the mock model."}
+}
+
+// wrapSentence is distinctive words, long enough to wrap at 100 columns, so a
+// scenario can check none of them was split across rows.
+const wrapSentence = "alphaword bravoword charlieword deltaword echoword foxtrotword golfword " +
+	"hotelword indiaword julietword kiloword limaword mikeword novemberword oscarword papaword"
+
+// goalStep plays a model working a /goal run: each iteration ticks the first
+// unchecked box in the spec with Edit, and claims completion once none are
+// left; the final review confirms it.
+func goalStep(prompt string, step int) Reply {
+	m := regexp.MustCompile(`(?:defined in|Re-read) (\S+?\.md)`).FindStringSubmatch(prompt)
+	if m == nil {
+		return Reply{Text: "no spec path in the prompt"}
+	}
+	data, err := os.ReadFile(m[1])
+	if err != nil {
+		return Reply{Text: "cannot read " + m[1]}
+	}
+	var unchecked []string
+	for _, ln := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(ln), "- [ ]") {
+			unchecked = append(unchecked, ln)
+		}
+	}
+	switch {
+	case strings.Contains(prompt, "final independent review"):
+		return Reply{Text: "Reviewed every item.\n<goal-complete/>"}
+	case step == 0 && len(unchecked) > 0:
+		return Reply{Calls: []ToolCall{{"Edit", map[string]any{
+			"file_path": m[1], "old_string": unchecked[0],
+			"new_string": strings.Replace(unchecked[0], "- [ ]", "- [x]", 1)}}}}
+	case len(unchecked) == 0:
+		return Reply{Text: "All ticked.\n<goal-complete/>"}
+	}
+	return Reply{Text: "Ticked one."}
 }
