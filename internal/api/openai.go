@@ -23,16 +23,18 @@ type OpenAIProvider struct {
 	baseURL     string // e.g. https://api.demo.gthread.dev/v1
 	apiKey      string
 	temperature *float64
+	tuning      Tuning
 	http        *http.Client
 }
 
 // NewOpenAIProvider builds the provider. baseURL should include the /v1 suffix.
 // temperature may be nil (omit from request) or a pointer to a value.
-func NewOpenAIProvider(baseURL, apiKey string, temperature *float64) *OpenAIProvider {
+func NewOpenAIProvider(baseURL, apiKey string, temperature *float64, tuning Tuning) *OpenAIProvider {
 	return &OpenAIProvider{
 		baseURL:     strings.TrimRight(baseURL, "/"),
 		apiKey:      apiKey,
 		temperature: temperature,
+		tuning:      tuning,
 		http:        &http.Client{},
 	}
 }
@@ -128,7 +130,7 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 	// Same idle-watchdog + stall-retry policy as the Anthropic provider: a
 	// half-open SSE connection would otherwise park bufio.Scanner.Scan() forever
 	// with the TUI stuck on "thinking…". See provider.go for the rationale.
-	idle := streamIdleTimeout()
+	idle := p.tuning.streamIdleTimeout()
 	for attempt := 0; ; attempt++ {
 		acc, delivered, stalled, serr := p.streamAttempt(ctx, body, string(params.Model), sink, idle)
 		if !stalled {
@@ -415,7 +417,7 @@ func (e *OpenAIError) Payload() *OpenAIErrorPayload {
 // request body is re-created from bodyBytes for each attempt. It mirrors the
 // Anthropic SDK's retry behavior for parity across providers.
 func (p *OpenAIProvider) doWithRetry(req *http.Request, bodyBytes []byte) (*http.Response, error) {
-	max := maxRetries()
+	max := p.tuning.maxRetries()
 	var lastErr error
 	for attempt := 0; attempt <= max; attempt++ {
 		if attempt > 0 {

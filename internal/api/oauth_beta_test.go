@@ -115,7 +115,6 @@ func containsBeta(list []anthropic.AnthropicBeta, want anthropic.AnthropicBeta) 
 // we ship, we assert the body shape that actually flips the bucket — and that
 // API-key callers don't get the prefix shoved into their tenant by accident.
 func TestOAuthRequestCarriesBillingHeaderInBody(t *testing.T) {
-	t.Setenv("KLAUDIA_MAX_RETRIES", "0")
 
 	var (
 		mu   sync.Mutex
@@ -171,7 +170,7 @@ func TestOAuthRequestCarriesBillingHeaderInBody(t *testing.T) {
 				sys = []anthropic.BetaTextBlockParam{{Text: tc.userSystem}}
 			}
 
-			c := New(tc.cred, server.URL)
+			c := New(tc.cred, server.URL, noRetries)
 			_, _ = c.StreamTurn(context.Background(), anthropic.BetaMessageNewParams{
 				Model:     anthropic.Model(DefaultModel),
 				MaxTokens: 16,

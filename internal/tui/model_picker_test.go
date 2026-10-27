@@ -265,7 +265,7 @@ func TestModelPickerAgainstLiveProvider(t *testing.T) {
 	if err != nil {
 		t.Skip("no credentials")
 	}
-	client := api.New(cred, "")
+	client := api.New(cred, "", api.Tuning{})
 
 	m := newTestModel()
 	m.resize(100, 40)

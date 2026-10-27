@@ -21,7 +21,6 @@ import (
 // confirming we haven't accidentally regressed back to a heavy header set, or
 // for debugging future provider quirks.
 func TestDumpOutgoingHeaders(t *testing.T) {
-	t.Setenv("KLAUDIA_MAX_RETRIES", "0")
 
 	var captured http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +37,7 @@ func TestDumpOutgoingHeaders(t *testing.T) {
 		{"API-KEY", Credential{APIKey: "sk-fake"}},
 	} {
 		captured = nil
-		c := New(tc.cred, server.URL)
+		c := New(tc.cred, server.URL, noRetries)
 		params := anthropic.BetaMessageNewParams{
 			Model:     anthropic.Model(DefaultModel),
 			MaxTokens: 16,

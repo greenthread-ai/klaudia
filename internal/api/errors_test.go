@@ -70,8 +70,8 @@ func TestFriendlyError429AnthropicSurfacesUpstreamMessage(t *testing.T) {
 		"Rate limited (429)",
 		"[rate_limit_error]",
 		"input-tokens-per-minute rate limit",
-		"Claude Code OAuth",   // OAuth-sharing remains as a possible cause
-		"KLAUDIA_MAX_RETRIES", // the retry knob is still relevant
+		"Claude Code OAuth", // OAuth-sharing remains as a possible cause
+		"maxRetries",        // the retry knob is still relevant
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in: %q", want, got)
@@ -122,7 +122,7 @@ func TestFriendlyError429HintIsProviderSpecific(t *testing.T) {
 	if strings.Contains(openAI, "OAuth") || strings.Contains(openAI, "Claude Code") {
 		t.Errorf("OpenAI 429 leaked the Claude-Code OAuth hint: %q", openAI)
 	}
-	if !strings.Contains(openAI, "KLAUDIA_MAX_RETRIES") {
+	if !strings.Contains(openAI, "maxRetries") {
 		t.Errorf("OpenAI 429 should still mention the retries env: %q", openAI)
 	}
 	anth := FriendlyError(&anthropic.Error{StatusCode: 429})
@@ -134,7 +134,7 @@ func TestFriendlyError429HintIsProviderSpecific(t *testing.T) {
 func TestFriendlyErrorInsufficientQuotaDoesNotRecommendRetry(t *testing.T) {
 	// Real OpenAI body for an exhausted-quota 429: the provider already gives a
 	// useful message, and retries won't help — so we surface their wording and
-	// drop the misleading "retries / KLAUDIA_MAX_RETRIES" advice.
+	// drop the misleading "retries / maxRetries" advice.
 	body := `{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","param":null,"code":"insufficient_quota"}}`
 	msg := FriendlyError(&OpenAIError{StatusCode: 429, Body: body})
 
@@ -143,7 +143,7 @@ func TestFriendlyErrorInsufficientQuotaDoesNotRecommendRetry(t *testing.T) {
 			t.Errorf("missing %q in: %q", want, msg)
 		}
 	}
-	for _, banned := range []string{"KLAUDIA_MAX_RETRIES", "retries were exhausted", "Wait a moment"} {
+	for _, banned := range []string{"maxRetries", "retries were exhausted", "Wait a moment"} {
 		if strings.Contains(msg, banned) {
 			t.Errorf("should not recommend retrying for insufficient_quota: %q (contains %q)", msg, banned)
 		}
@@ -158,7 +158,7 @@ func TestFriendlyError429PassesThroughOpenAIMessage(t *testing.T) {
 	if !strings.Contains(msg, "You are sending requests too quickly") {
 		t.Errorf("expected the upstream message to pass through: %q", msg)
 	}
-	if !strings.Contains(msg, "KLAUDIA_MAX_RETRIES") {
+	if !strings.Contains(msg, "maxRetries") {
 		t.Errorf("transient 429 should still mention the retry knob: %q", msg)
 	}
 }
@@ -280,17 +280,6 @@ func TestFriendlyErrorNetwork(t *testing.T) {
 	}
 }
 
-func TestMaxRetriesEnvOverride(t *testing.T) {
-	t.Setenv("KLAUDIA_MAX_RETRIES", "9")
-	if maxRetries() != 9 {
-		t.Errorf("maxRetries = %d, want 9", maxRetries())
-	}
-	t.Setenv("KLAUDIA_MAX_RETRIES", "")
-	if maxRetries() != defaultMaxRetries {
-		t.Errorf("maxRetries = %d, want default %d", maxRetries(), defaultMaxRetries)
-	}
-}
-
 func TestFriendlyError400ContextOverflowSuggestsContextWindow(t *testing.T) {
 	// Real shape from a hosted gpt-oss-120b endpoint: after enough turns the
 	// provider's internal max_tokens = ctx - input goes negative, and we get
@@ -328,7 +317,7 @@ func TestFriendlyError400OtherStillSurfacesUpstream(t *testing.T) {
 func TestFriendlyError429SessionLimitAdvisesNotToRetry(t *testing.T) {
 	// Claude Max / Claude Code "session limit" 429: the OAuth-sharing hint
 	// would be misleading (it's a daily/period quota wait, not concurrent use)
-	// and the "set KLAUDIA_MAX_RETRIES" suggestion is actively wrong since
+	// and the "set maxRetries" suggestion is actively wrong since
 	// no retry will help until the reset time the message names. Detect the
 	// shape and swap the advice.
 	body := []byte(`{"error":{"type":"rate_limit_error","message":"You've hit your session limit · resets 12:40am (Australia/Sydney)"}}`)
@@ -345,7 +334,7 @@ func TestFriendlyError429SessionLimitAdvisesNotToRetry(t *testing.T) {
 	if !strings.Contains(got, "Retries won't help") {
 		t.Errorf("must advise against retrying; got %q", got)
 	}
-	for _, forbidden := range []string{"token is in use by another session", "KLAUDIA_MAX_RETRIES"} {
+	for _, forbidden := range []string{"token is in use by another session", "maxRetries"} {
 		if strings.Contains(got, forbidden) {
 			t.Errorf("should not suggest %q for a session-limit 429; got %q", forbidden, got)
 		}
@@ -354,7 +343,7 @@ func TestFriendlyError429SessionLimitAdvisesNotToRetry(t *testing.T) {
 
 func TestFriendlyError429LongContextCreditsAdvisesNotToRetry(t *testing.T) {
 	// The long-context-tier credits 429: an entitlement/billing gate, so the
-	// "set KLAUDIA_MAX_RETRIES" and OAuth-sharing hints are both wrong. Detect
+	// "set maxRetries" and OAuth-sharing hints are both wrong. Detect
 	// the shape and swap in the add-credits / shrink-context advice instead.
 	body := []byte(`{"error":{"type":"rate_limit_error","message":"Usage credits are required for long context requests."}}`)
 	var anthErr anthropic.Error
@@ -373,7 +362,7 @@ func TestFriendlyError429LongContextCreditsAdvisesNotToRetry(t *testing.T) {
 	if !strings.Contains(got, "contextWindow") || !strings.Contains(got, "/compact") {
 		t.Errorf("must point at the shrink-context fix; got %q", got)
 	}
-	for _, forbidden := range []string{"token is in use by another session", "KLAUDIA_MAX_RETRIES"} {
+	for _, forbidden := range []string{"token is in use by another session", "maxRetries"} {
 		if strings.Contains(got, forbidden) {
 			t.Errorf("should not suggest %q for a long-context-credits 429; got %q", forbidden, got)
 		}
@@ -541,7 +530,6 @@ func TestOverCapMaxTokensIsNotContextOverflow(t *testing.T) {
 // so drive a real request at a 400-returning server rather than hand-rolling an
 // *anthropic.Error, whose RawJSON cannot be set from outside the SDK.
 func TestMaxTokensTooLargeReadsAnthropicBody(t *testing.T) {
-	t.Setenv("KLAUDIA_MAX_RETRIES", "0")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -550,7 +538,7 @@ func TestMaxTokensTooLargeReadsAnthropicBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := New(Credential{APIKey: "sk-fake"}, srv.URL).StreamTurn(context.Background(), testParams(), StreamSink{})
+	_, err := New(Credential{APIKey: "sk-fake"}, srv.URL, noRetries).StreamTurn(context.Background(), testParams(), StreamSink{})
 	if err == nil {
 		t.Fatal("a 400 should surface as an error")
 	}

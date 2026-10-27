@@ -5,6 +5,17 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Changed (breaking)
+- **Environment settings the core read at runtime are gone.** They were
+  process-wide, which an embedded loop cannot live with.
+  `KLAUDIA_MAX_RETRIES` and `KLAUDIA_STREAM_IDLE_TIMEOUT` are now the config
+  keys `maxRetries` and `streamIdleTimeout` (seconds); the error messages that
+  suggested the variables now name the keys. `KLAUDIA_DISABLE_PROMPT_CACHE`
+  and `DISABLE_COMPACT` / `DISABLE_MICROCOMPACT` / `DISABLE_AUTO_COMPACT` were
+  debugging switches and have no CLI replacement; embedders get
+  `api.Tuning.NoPromptCache` and `agent.Options.NoMicrocompact` /
+  `NoAutocompact`. `api.New` and `api.NewOpenAIProvider` take an `api.Tuning`.
+
 ### Added
 - **Clickable links.** URLs and paths to existing files in the transcript are
   OSC 8 hyperlinks, so Cmd/Ctrl+click opens them. A URL glamour wrapped across

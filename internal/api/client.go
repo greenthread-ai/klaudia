@@ -8,8 +8,6 @@ package api
 
 import (
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -201,8 +199,9 @@ func ResolveModel(m string) anthropic.Model {
 // Client is Klaudia's Anthropic API client: the SDK client plus the resolved
 // credential (so callers know whether they are on the OAuth path).
 type Client struct {
-	sdk  anthropic.Client
-	cred Credential
+	sdk    anthropic.Client
+	cred   Credential
+	tuning Tuning
 	// httpc is the client the SDK was built with, kept so a stalled stream can
 	// drop its idle connections before retrying — see streamRetrying.
 	httpc *http.Client
@@ -264,16 +263,6 @@ func (c *Client) augmentSystem(in []anthropic.BetaTextBlockParam) []anthropic.Be
 // transparently. The SDK uses exponential backoff and honors Retry-After.
 const defaultMaxRetries = 5
 
-// maxRetries resolves the retry count, overridable via KLAUDIA_MAX_RETRIES.
-func maxRetries() int {
-	if v := os.Getenv("KLAUDIA_MAX_RETRIES"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			return n
-		}
-	}
-	return defaultMaxRetries
-}
-
 // New builds a Client from the resolved credential and optional custom base
 // URL (KLAUDIA_CUSTOM_ENDPOINT, or baseURL/baseURLAnthropic in the config).
 // baseURL == "" uses the Anthropic production API.
@@ -283,11 +272,11 @@ func maxRetries() int {
 // augmentSystem. We previously mirrored claude's UA + Stainless fingerprint to
 // fix 429s; turned out none of it was the discriminator. The Go SDK's native
 // identity is fine on both paths.
-func New(cred Credential, baseURL string) *Client {
+func New(cred Credential, baseURL string, tuning Tuning) *Client {
 	httpc := newHTTPClient()
 	opts := []option.RequestOption{
 		option.WithHeader("x-app", "cli"),
-		option.WithMaxRetries(maxRetries()),
+		option.WithMaxRetries(tuning.maxRetries()),
 		option.WithHTTPClient(httpc),
 	}
 	if cred.IsOAuth() {
@@ -298,7 +287,7 @@ func New(cred Credential, baseURL string) *Client {
 	if baseURL != "" {
 		opts = append(opts, option.WithBaseURL(baseURL))
 	}
-	return &Client{sdk: anthropic.NewClient(opts...), cred: cred, httpc: httpc}
+	return &Client{sdk: anthropic.NewClient(opts...), cred: cred, tuning: tuning, httpc: httpc}
 }
 
 // IsOAuth reports whether this client authenticates via OAuth bearer token.

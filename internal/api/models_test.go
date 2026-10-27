@@ -23,7 +23,7 @@ func TestOpenAIListModels(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewOpenAIProvider(srv.URL+"/v1", "test-key", nil)
+	p := NewOpenAIProvider(srv.URL+"/v1", "test-key", nil, Tuning{})
 	got, err := p.ListModels(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestOpenAIListModelsReportsHTTPError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := NewOpenAIProvider(srv.URL+"/v1", "k", nil).ListModels(context.Background()); err == nil {
+	if _, err := NewOpenAIProvider(srv.URL+"/v1", "k", nil, Tuning{}).ListModels(context.Background()); err == nil {
 		t.Fatal("a 401 should surface as an error, not an empty list")
 	}
 }
@@ -78,7 +78,7 @@ func TestListModelsLive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	models, err := New(cred, "").ListModels(ctx)
+	models, err := New(cred, "", Tuning{}).ListModels(ctx)
 	if err != nil {
 		t.Fatalf("live ListModels: %v", err)
 	}

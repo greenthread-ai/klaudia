@@ -46,9 +46,8 @@ func testParams() anthropic.BetaMessageNewParams {
 // maxStreamStallRetries, then surfaces as a DeadlineExceeded error rather than
 // hanging forever.
 func TestStreamRetryingStallRetriesThenFails(t *testing.T) {
-	t.Setenv("KLAUDIA_MAX_RETRIES", "0")
 	srv, attempts := stallingServer(t)
-	c := New(Credential{APIKey: "sk-fake"}, srv.URL)
+	c := New(Credential{APIKey: "sk-fake"}, srv.URL, noRetries)
 
 	done := make(chan error, 1)
 	go func() {
@@ -73,9 +72,8 @@ func TestStreamRetryingStallRetriesThenFails(t *testing.T) {
 // context.Canceled (so the loop treats it as an interrupt, not a stall) and
 // must NOT trigger a stall retry.
 func TestStreamRetryingUserCancelNotRetried(t *testing.T) {
-	t.Setenv("KLAUDIA_MAX_RETRIES", "0")
 	srv, attempts := stallingServer(t)
-	c := New(Credential{APIKey: "sk-fake"}, srv.URL)
+	c := New(Credential{APIKey: "sk-fake"}, srv.URL, noRetries)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -122,7 +120,7 @@ func oaStallingServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 // (not a user cancel) so StreamTurn can apply the same retry policy.
 func TestOpenAIStreamAttemptStallTripsWatchdog(t *testing.T) {
 	srv, attempts := oaStallingServer(t)
-	p := NewOpenAIProvider(srv.URL, "k", nil)
+	p := NewOpenAIProvider(srv.URL, "k", nil, Tuning{})
 
 	done := make(chan struct{}, 1)
 	go func() {
@@ -148,7 +146,7 @@ func TestOpenAIStreamAttemptStallTripsWatchdog(t *testing.T) {
 // A user interrupt (ctx cancel) on the OpenAI path is NOT a stall.
 func TestOpenAIStreamAttemptUserCancelNotStall(t *testing.T) {
 	srv, _ := oaStallingServer(t)
-	p := NewOpenAIProvider(srv.URL, "k", nil)
+	p := NewOpenAIProvider(srv.URL, "k", nil, Tuning{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{}, 1)
@@ -167,21 +165,6 @@ func TestOpenAIStreamAttemptUserCancelNotStall(t *testing.T) {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("streamAttempt did not return after ctx cancel")
-	}
-}
-
-func TestStreamIdleTimeoutOverride(t *testing.T) {
-	t.Setenv("KLAUDIA_STREAM_IDLE_TIMEOUT", "7")
-	if got := streamIdleTimeout(); got != 7*time.Second {
-		t.Fatalf("streamIdleTimeout() = %v, want 7s", got)
-	}
-	t.Setenv("KLAUDIA_STREAM_IDLE_TIMEOUT", "0")
-	if got := streamIdleTimeout(); got != 0 {
-		t.Fatalf("streamIdleTimeout() = %v, want 0 (disabled)", got)
-	}
-	t.Setenv("KLAUDIA_STREAM_IDLE_TIMEOUT", "")
-	if got := streamIdleTimeout(); got != defaultStreamIdleTimeout {
-		t.Fatalf("streamIdleTimeout() = %v, want default %v", got, defaultStreamIdleTimeout)
 	}
 }
 

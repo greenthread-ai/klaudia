@@ -34,7 +34,7 @@ func FriendlyError(err error) string {
 				}
 				if oai.Message != "" {
 					return "Rate limited (429): " + strings.TrimSpace(oai.Message) +
-						" (Set KLAUDIA_MAX_RETRIES to retry more.)"
+						" (Raise maxRetries in .klaudia/config.toml to retry more.)"
 				}
 			}
 			// Anthropic: pass through whatever the API actually said when it's
@@ -64,9 +64,9 @@ func FriendlyError(err error) string {
 					if isLongContextCredits(detail) {
 						return out + ": " + detail + " (Retries won't help — this needs pay-as-you-go usage credits for the long-context tier. Add credits, or reduce context: lower `contextWindow` in .klaudia/config.toml so autocompaction triggers earlier, and run /compact.)"
 					}
-					return out + ": " + detail + " (If you signed in via Claude Code OAuth this often happens when the token is in use by another session. Set KLAUDIA_MAX_RETRIES to retry more.)"
+					return out + ": " + detail + " (If you signed in via Claude Code OAuth this often happens when the token is in use by another session. Raise maxRetries in .klaudia/config.toml to retry more.)"
 				}
-				return out + ": if you signed in via Claude Code OAuth this often happens when the token is in use by another session — try closing other sessions and waiting a moment. (Set KLAUDIA_MAX_RETRIES to retry more.)"
+				return out + ": if you signed in via Claude Code OAuth this often happens when the token is in use by another session — try closing other sessions and waiting a moment. (Raise maxRetries in .klaudia/config.toml to retry more.)"
 			}
 			// Fallback (no parseable provider payload). The OAuth-token-sharing
 			// cause is Anthropic-specific, so still include it when the error
@@ -76,7 +76,7 @@ func FriendlyError(err error) string {
 			if errors.As(err, &anthErr) {
 				out += "If you signed in via Claude Code OAuth, this often happens when the token is in use by another session. "
 			}
-			return out + "Wait a moment and try again. (Set KLAUDIA_MAX_RETRIES to retry more.)"
+			return out + "Wait a moment and try again. (Raise maxRetries in .klaudia/config.toml to retry more.)"
 		case 400:
 			// A 400 is usually the model rejecting an input shape, but two
 			// patterns are really "your conversation outgrew the model's context
@@ -137,12 +137,12 @@ func FriendlyError(err error) string {
 			return "The model connection went quiet mid-reply (no data before the idle timeout), so the " +
 				"partial answer above is all that arrived. It was not retried automatically — that would " +
 				"repeat what you already saw. Send your message again; tune the window with " +
-				"KLAUDIA_STREAM_IDLE_TIMEOUT (seconds, 0 disables)."
+				"streamIdleTimeout in .klaudia/config.toml (seconds, 0 disables)."
 		}
 		return "The model connection stalled (no data received before the idle timeout) and was " +
 			"auto-retried without success — usually a flaky network, proxy, or VPN dropping the " +
-			"streaming connection. Send your message again; tune the window with KLAUDIA_STREAM_IDLE_TIMEOUT " +
-			"(seconds, 0 disables)."
+			"streaming connection. Send your message again; tune the window with streamIdleTimeout " +
+			"in .klaudia/config.toml (seconds, 0 disables)."
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "The request to the model endpoint timed out. Check the endpoint is reachable " +

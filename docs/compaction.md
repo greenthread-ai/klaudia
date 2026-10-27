@@ -12,13 +12,11 @@ At the top of each agent turn:
 2. **Autocompact** — model-based summarization, only when nearing the window
    limit. Replaces the history with a summary.
 
-Both can be disabled by env var (matching the JS reference):
-
-```bash
-DISABLE_COMPACT=1        # disable both stages
-DISABLE_MICROCOMPACT=1   # disable only microcompact
-DISABLE_AUTO_COMPACT=1   # disable only autocompact
-```
+Either can be turned off with `agent.Options.NoMicrocompact` /
+`NoAutocompact`. These were the `DISABLE_*COMPACT` environment variables, read
+on every turn by every loop in the process; they are fields now so an embedder
+can set them per conversation. The CLI does not expose them — they were only
+ever for debugging.
 
 Token counts are estimates (~4 chars/token for text, a flat per-item estimate
 for images/documents) — close enough to drive the thresholds without a real

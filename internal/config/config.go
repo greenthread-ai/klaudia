@@ -55,6 +55,13 @@ type Config struct {
 	// raise or lower the cap explicitly — e.g. an OpenAI-compatible model whose
 	// output limit the table doesn't know.
 	MaxTokens int `toml:"maxTokens,omitempty"`
+	// MaxRetries is how many times a transient failure (connection error,
+	// 429, 5xx) is retried with backoff. Unset uses 5; 0 disables retrying.
+	MaxRetries *int `toml:"maxRetries,omitempty"`
+	// StreamIdleTimeout is the seconds a streamed reply may go without data
+	// before it is treated as stalled. Unset uses 120; 0 disables the
+	// watchdog. Raise it behind a proxy that buffers the stream.
+	StreamIdleTimeout *int `toml:"streamIdleTimeout,omitempty"`
 	// Effort is how hard the model works per response: "low", "medium",
 	// "high", "xhigh" or "max". Unset sends nothing and lets the provider
 	// apply its own default (high on most Claude models). --effort and
@@ -340,6 +347,12 @@ func merge(dst *Config, src Config) {
 	}
 	if src.MaxTokens != 0 {
 		dst.MaxTokens = src.MaxTokens
+	}
+	if src.MaxRetries != nil {
+		dst.MaxRetries = src.MaxRetries
+	}
+	if src.StreamIdleTimeout != nil {
+		dst.StreamIdleTimeout = src.StreamIdleTimeout
 	}
 	if src.Effort != "" {
 		dst.Effort = src.Effort

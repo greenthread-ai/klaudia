@@ -1,8 +1,6 @@
 package api
 
 import (
-	"os"
-
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
@@ -14,18 +12,13 @@ import (
 // turn becomes the cache hit for the next.
 //
 // Breakpoints below the model's minimum cacheable size are a silent no-op, so
-// this is safe to apply unconditionally. Set KLAUDIA_DISABLE_PROMPT_CACHE to
-// turn it off.
+// this is safe to apply unconditionally. Tuning.NoPromptCache turns it off.
 //
 // It clears any pre-existing breakpoints first: message content blocks are the
 // same objects turn after turn (the loop reuses the history slice), so without a
 // reset the per-turn breakpoint would accumulate and eventually exceed the API's
 // limit of 4 cache_control blocks.
 func applyCacheControl(params *anthropic.BetaMessageNewParams) {
-	if os.Getenv("KLAUDIA_DISABLE_PROMPT_CACHE") != "" {
-		return
-	}
-
 	var zero anthropic.BetaCacheControlEphemeralParam
 	for i := range params.Tools {
 		if params.Tools[i].OfTool != nil {

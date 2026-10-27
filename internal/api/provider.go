@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -58,17 +56,6 @@ type Provider interface {
 // (extended-thinking deltas arrive well inside this window).
 const defaultStreamIdleTimeout = 120 * time.Second
 
-// streamIdleTimeout resolves the per-event idle deadline, overridable via
-// KLAUDIA_STREAM_IDLE_TIMEOUT (seconds). A value <= 0 disables the watchdog.
-func streamIdleTimeout() time.Duration {
-	if v := os.Getenv("KLAUDIA_STREAM_IDLE_TIMEOUT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return time.Duration(n) * time.Second
-		}
-	}
-	return defaultStreamIdleTimeout
-}
-
 // maxStreamStallRetries bounds how many times StreamTurn transparently re-issues
 // a request that stalled before delivering any output. Kept small: a stall that
 // recurs immediately points at a real outage, which should surface as an error
@@ -111,9 +98,11 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	params.System = c.augmentSystem(params.System)
 	// Cache the stable prefix (tools + system) plus a rolling conversation
 	// breakpoint so each turn doesn't re-pay full price for the whole history.
-	applyCacheControl(&params)
+	if !c.tuning.NoPromptCache {
+		applyCacheControl(&params)
+	}
 
-	return c.streamRetrying(ctx, params, sink, streamIdleTimeout())
+	return c.streamRetrying(ctx, params, sink, c.tuning.streamIdleTimeout())
 }
 
 // streamRetrying runs streamOnce under the stall-retry policy. Split out from

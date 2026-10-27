@@ -94,15 +94,6 @@ func TestApplyCacheControlMarksLastRegularTool(t *testing.T) {
 	}
 }
 
-func TestApplyCacheControlDisabled(t *testing.T) {
-	t.Setenv("KLAUDIA_DISABLE_PROMPT_CACHE", "1")
-	p := sampleParams()
-	applyCacheControl(p)
-	if got := countCacheControl(t, p); got != 0 {
-		t.Fatalf("disabled: breakpoints = %d, want 0", got)
-	}
-}
-
 func TestApplyCacheControlEmptyIsSafe(t *testing.T) {
 	p := &anthropic.BetaMessageNewParams{}
 	applyCacheControl(p) // must not panic on no tools/system/messages

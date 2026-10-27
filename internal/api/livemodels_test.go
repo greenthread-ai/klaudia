@@ -37,7 +37,7 @@ func TestLiveModelTablesMatchProvider(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	models, err := New(cred, "").ListModels(ctx)
+	models, err := New(cred, "", Tuning{}).ListModels(ctx)
 	if err != nil {
 		t.Fatalf("ListModels: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestLiveMaxTokensTooLargeWording(t *testing.T) {
 		MaxTokens: int64(want * 2),
 		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
 	}
-	_, err = New(cred, "").StreamTurn(ctx, params, StreamSink{})
+	_, err = New(cred, "", Tuning{}).StreamTurn(ctx, params, StreamSink{})
 	if err == nil {
 		t.Fatalf("max_tokens=%d on %s was accepted — the cap moved; re-check modelMaxOutputTokens", want*2, model)
 	}

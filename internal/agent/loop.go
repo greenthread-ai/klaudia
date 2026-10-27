@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -144,6 +143,11 @@ type Options struct {
 	// ContextWindow is the model's context size, used for autocompact
 	// thresholds. 0 uses the package default.
 	ContextWindow int
+	// NoMicrocompact and NoAutocompact turn off the two compaction stages
+	// (docs/compaction.md). Off includes the forced autocompact after the
+	// provider rejects a request for size, which then fails the turn instead.
+	NoMicrocompact bool
+	NoAutocompact  bool
 	// Effort is how hard the model works on each response: thinking depth,
 	// tool calls and text together. api.EffortUnset (the zero value) sends
 	// nothing and lets the provider apply its own default.
@@ -555,14 +559,9 @@ func elisionSpiller(content string) (string, bool) {
 }
 
 // compact applies microcompact then (if near the limit) autocompact to the
-// message list. Honors DISABLE_COMPACT / DISABLE_MICROCOMPACT /
-// DISABLE_AUTO_COMPACT, matching the JS env switches.
+// message list, each unless Options turns it off.
 func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64, emit Emitter, calib *compaction.Calibration, force bool) []anthropic.BetaMessageParam {
-	if os.Getenv("DISABLE_COMPACT") != "" {
-		return messages
-	}
-
-	if os.Getenv("DISABLE_MICROCOMPACT") == "" {
+	if !opts.NoMicrocompact {
 		if out, res := compaction.Microcompact(messages, elisionSpiller); res.Compacted {
 			messages = out
 			if emit != nil {
@@ -576,7 +575,7 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 	// how a session reached "prompt is too long" without ever tripping this.
 	// force is set when the provider has already rejected the request for
 	// size: the threshold is moot, we are over it by definition.
-	if os.Getenv("DISABLE_AUTO_COMPACT") == "" &&
+	if !opts.NoAutocompact &&
 		(force || compaction.ShouldAutocompact(calib.Scale(compaction.EstimateTokens(messages)), opts.ContextWindow)) {
 		// Autocompact is a model call that runs silently (emit=nil), so signal
 		// its start with a contentless "compaction" event — the frontend shows

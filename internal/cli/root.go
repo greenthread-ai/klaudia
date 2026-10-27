@@ -446,6 +446,16 @@ func resolveEndpoint(cfg config.Config) string {
 	return firstNonEmpty(os.Getenv("KLAUDIA_CUSTOM_ENDPOINT"), cfg.ResolveBaseURL())
 }
 
+// apiTuning maps the config's transport settings onto the providers'.
+func apiTuning(cfg config.Config) api.Tuning {
+	t := api.Tuning{MaxRetries: cfg.MaxRetries}
+	if cfg.StreamIdleTimeout != nil {
+		d := time.Duration(*cfg.StreamIdleTimeout) * time.Second
+		t.StreamIdleTimeout = &d
+	}
+	return t
+}
+
 // buildProvider selects and constructs the model provider from config. It
 // returns the provider and the provider's default model. Anthropic is the
 // default; "openai" uses an OpenAI-compatible Chat Completions endpoint.
@@ -460,13 +470,13 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 		if key == "" {
 			return nil, "", fmt.Errorf("provider \"openai\" needs apiKey or apiKeyEnv in ~/.klaudia/config.toml or ./.klaudia/config.toml; if using apiKeyEnv, export that variable before running")
 		}
-		return api.NewOpenAIProvider(endpoint, key, cfg.Temperature), cfg.Model, nil
+		return api.NewOpenAIProvider(endpoint, key, cfg.Temperature, apiTuning(cfg)), cfg.Model, nil
 	default:
 		cred, err := api.ResolveCredential()
 		if err != nil {
 			return nil, "", err
 		}
-		return api.New(cred, endpoint), cfg.Model, nil
+		return api.New(cred, endpoint, apiTuning(cfg)), cfg.Model, nil
 	}
 }
 
