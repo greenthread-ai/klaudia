@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/greenthread-ai/klaudia/internal/session"
 )
 
 // A hook from the project config is a command that arrived with the repository.
@@ -53,11 +55,10 @@ func (s Store) path() (string, error) {
 	if s.Path != "" {
 		return s.Path, nil
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".klaudia", "hooks.json"), nil
+	// The config root, like every other file Klaudia keeps: built from the
+	// home directory, it ignored KLAUDIA_CONFIG_DIR, so a sandboxed run shared
+	// the real user's hook approvals.
+	return filepath.Join(session.ConfigRoot(), "hooks.json"), nil
 }
 
 func (s Store) read() storeFile {

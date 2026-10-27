@@ -27,6 +27,16 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **Read-only MCP tools work in plan mode, and so in Explore and Plan.** Those
+  sub-agents run in plan mode and are handed MCP tools marked read-only, but
+  plan mode refused every MCP call, so they could never use them. Plan mode
+  now allows MCP tools marked read-only (`readOnlyHint` or `.mcp.json`) and
+  refuses the rest, as it does for shell commands.
+- **`KLAUDIA_CONFIG_DIR` moves everything.** `hooks.json`, `skills/` and the
+  global `AGENTS.md` were still read from `$HOME/.klaudia`.
+- **Help text**: `/commit` said it stages all changes (it commits the files
+  Klaudia changed, or what you staged); `--loop` said it needs
+  `--dangerously-skip-permissions` (autonomous, the default, is enough).
 - **Sub-agents know the project.** A sub-agent's system prompt was its
   one-paragraph role and nothing else — no working directory, date or
   platform, no AGENTS.md / CLAUDE.md, no security clause, no host-change

@@ -99,7 +99,7 @@ func testFilePointersOnEmpty(t *testing.T, s Store) {
 
 func testSyncLinksOnEmpty(t *testing.T, s Store) {
 	// Must not error even when nothing exists to link. This is the
-	// startup-eager call from cli/root.go:672.
+	// startup-eager call from cli/root.go, just before the system prompt is built.
 	if err := s.SyncLinks(); err != nil {
 		t.Errorf("SyncLinks err = %v on fresh store, want nil", err)
 	}

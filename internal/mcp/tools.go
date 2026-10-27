@@ -29,13 +29,16 @@ import (
 // means trusting the servers in .mcp.json roughly as much as the shell —
 // which is the same bet as running them at all.
 //
-// A server you want available without that bet can be marked read-only in
-// .mcp.json and reached from a read-only sub-agent; that path is governed by
-// the readOnlyHint annotation rather than by the mode.
-func mcpPermission(pctx permission.Context) permission.Decision {
-	if permission.CurrentMode(pctx) == permission.ModePlan {
-		// Plan mode is read-only for every tool, trusted or not.
-		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; MCP tools are not allowed"}
+// Plan mode allows what only reads, as it does for shell commands, and refuses
+// the rest. readOnly is the readOnlyHint annotation or the .mcp.json override
+// (see ReadOnly). It used to refuse every MCP call, which left the read-only
+// sub-agents — which run in plan mode — holding read-only MCP tools they could
+// never call: the feature the filter in internal/subagent exists for did not
+// work. Trusting the declaration grants nothing new: outside plan mode the
+// same servers' tools run without asking.
+func mcpPermission(pctx permission.Context, readOnly bool) permission.Decision {
+	if permission.CurrentMode(pctx) == permission.ModePlan && !readOnly {
+		return permission.Decision{Behavior: permission.Deny, Message: "plan mode is read-only; this MCP tool is not marked read-only"}
 	}
 	return permission.Decision{Behavior: permission.Allow}
 }
@@ -65,10 +68,10 @@ func (t *mcpTool) InputSchema() json.RawMessage                { return t.inputS
 // annotation is optional in the protocol, and the safe reading of silence is
 // that the author never thought about it.
 //
-// This governs which tools a read-only sub-agent is handed. It is not a claim
-// that calling the tool is safe — nothing here verifies what a server does, and
-// under an enforcing trust posture the main agent calls MCP tools without
-// asking, read-only or not.
+// This governs which tools a read-only sub-agent is handed, and which MCP
+// tools plan mode allows (mcpPermission). It is not a claim that calling the
+// tool is safe — nothing here verifies what a server does, and outside plan
+// mode the main agent calls MCP tools without asking, read-only or not.
 func (t *mcpTool) ReadOnly() bool { return t.readOnly }
 
 // ValidateInput is a no-op beyond JSON well-formedness; the server validates
@@ -85,7 +88,7 @@ func (t *mcpTool) PermissionRequest(json.RawMessage) permission.PermissionReques
 }
 
 func (t *mcpTool) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
-	return mcpPermission(pctx)
+	return mcpPermission(pctx, t.readOnly)
 }
 
 func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMessage) ([]tools.Result, error) {

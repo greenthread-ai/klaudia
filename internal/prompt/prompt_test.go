@@ -43,6 +43,7 @@ func TestSystemLoadsProjectClaudeMd(t *testing.T) {
 
 func TestSystemRecallsMemory(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	dir := t.TempDir()
 	klaudiaDir := filepath.Join(dir, ".klaudia")
 	if err := os.MkdirAll(klaudiaDir, 0o755); err != nil {
@@ -63,6 +64,7 @@ func TestSystemRecallsMemory(t *testing.T) {
 
 func TestSystemRecallsLinkedMemoryFiles(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	dir := t.TempDir()
 	memDir := filepath.Join(dir, ".klaudia", "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
@@ -93,6 +95,7 @@ func TestSystemRecallsLinkedMemoryFiles(t *testing.T) {
 
 func TestSystemRecallsLegacyMemoryPath(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	dir := t.TempDir()
 	memDir := filepath.Join(dir, ".klaudia", "memory")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
@@ -110,6 +113,7 @@ func TestSystemRecallsLegacyMemoryPath(t *testing.T) {
 
 func TestSystemRecallsKnowledge(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".klaudia"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".klaudia", "KNOWLEDGE.md"),
@@ -135,6 +139,7 @@ func TestSystemNoClaudeMd(t *testing.T) {
 // seen them.
 func TestSystemLoadsAgentsMd(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "AGENTS.md"), "# Conventions\nUse tabs, never spaces.")
 
@@ -152,6 +157,7 @@ func TestSystemLoadsAgentsMd(t *testing.T) {
 // ignoring the other silently drops instructions.
 func TestSystemLoadsBothInstructionFiles(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "AGENTS.md"), "generic: run the linter")
 	write(t, filepath.Join(dir, "CLAUDE.md"), "specific: sign your commits")
@@ -177,6 +183,7 @@ func TestSystemLoadsBothInstructionFiles(t *testing.T) {
 // link the entire instruction block is sent twice in every request.
 func TestSymlinkedInstructionFileIsReadOnce(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "AGENTS.md"), "a distinctive instruction line")
 	if err := os.Symlink("AGENTS.md", filepath.Join(dir, "CLAUDE.md")); err != nil {
@@ -193,6 +200,7 @@ func TestSymlinkedInstructionFileIsReadOnce(t *testing.T) {
 // identity is also established by content.
 func TestDuplicatedInstructionContentIsReadOnce(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	dir := t.TempDir()
 	body := "the same instructions in two files"
 	write(t, filepath.Join(dir, "AGENTS.md"), body)
@@ -212,6 +220,7 @@ func TestDuplicatedInstructionContentIsReadOnce(t *testing.T) {
 func TestSystemLoadsGlobalInstructions(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	write(t, filepath.Join(home, ".claude", "CLAUDE.md"), "ecosystem global")
 	write(t, filepath.Join(home, ".klaudia", "AGENTS.md"), "klaudia global")
 

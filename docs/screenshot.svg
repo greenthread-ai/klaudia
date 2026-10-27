@@ -35,7 +35,7 @@
 <text x="22" y="697" textLength="837.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /plan [run|off]  Read-only plan mode · run [N]: work the approved plan to done · stop: halt</tspan></text>
 <text x="22" y="717" textLength="414.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /doctor          Run environment diagnostics</tspan></text>
 <text x="22" y="737" textLength="468.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /diff [args]     Show git diff of the working tree</tspan></text>
-<text x="22" y="757" textLength="540.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /commit &lt;msg&gt;    Stage all changes and commit (asks first)</tspan></text>
+<text x="22" y="757" textLength="882.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /commit &lt;msg&gt;    Commit the files Klaudia changed — or what you staged, if anything (asks first)</tspan></text>
 <text x="22" y="777" textLength="549.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /export          Export the conversation to a Markdown file</tspan></text>
 <text x="22" y="797" textLength="693.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /last [n|list]   Show a tool output in full (no arg = latest; list = index)</tspan></text>
 <text x="22" y="817" textLength="729.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /copy [target]   Copy to the clipboard: answer (default) | code [N] | out | all</tspan></text>

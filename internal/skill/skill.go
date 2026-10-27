@@ -26,6 +26,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/greenthread-ai/klaudia/internal/session"
 )
 
 // Skill types.
@@ -78,11 +80,11 @@ func Load(cwd string, warn func(string)) []Skill {
 	// each level, so a project can override an installed skill by name.
 	dirs := make([]string, 0, 4)
 	if home, err := os.UserHomeDir(); err == nil {
-		dirs = append(dirs,
-			filepath.Join(home, ".claude", "skills"),
-			filepath.Join(home, ".klaudia", "skills"),
-		)
+		dirs = append(dirs, filepath.Join(home, ".claude", "skills"))
 	}
+	// Klaudia's own user directory is the config root, so KLAUDIA_CONFIG_DIR
+	// moves it with everything else.
+	dirs = append(dirs, filepath.Join(session.ConfigRoot(), "skills"))
 	dirs = append(dirs,
 		filepath.Join(cwd, ".claude", "skills"),
 		filepath.Join(cwd, ".klaudia", "skills"),

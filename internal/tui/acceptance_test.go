@@ -11,7 +11,7 @@ import (
 // The five acceptance criteria Klaudia's terminal UX is held to. Each of these
 // reproduced a real failure before the P0/P1 work; they are here so a
 // regression shows up as a named criterion rather than as a subtle behaviour
-// change somewhere in tui.go.
+// change somewhere in the TUI.
 //
 //  1. I can copy anything I can see.
 //  2. I can paste anything a terminal app should accept.

@@ -36,7 +36,7 @@ func modeClause(mode permission.Mode) string {
 		// without having looked at the branch it was planning against.
 		return "\n\n# Permission mode: plan\n" +
 			"You are in plan mode. Nothing you do may change a file: edits, writes and MCP " +
-			"calls are refused, and so is any command that would write — including builds and " +
+			"tools not marked read-only are refused, and so is any command that would write — including builds and " +
 			"test runs, which can leave output behind. Commands that only inspect are " +
 			"available and you are expected to use them: `git log`, `git diff`, `git status`, " +
 			"`ls`, `sed -n`, `go doc`, `go list`. A command nothing can classify will ask the user " +

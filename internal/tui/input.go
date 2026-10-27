@@ -92,7 +92,7 @@ func (m *Model) updateInput(msg tea.Msg) tea.Cmd {
 
 // reconcilePastes drops stored paste payloads that no longer appear anywhere the
 // user can still bring them back — neither the live input nor a recall-able
-// history entry (which stores the chip form, tui.go pushHistory). This is what
+// history entry (which stores the chip form; see pushHistory). This is what
 // gives "delete the chip, delete the attachment", and it lets the chip counter
 // fall back to #1 once nothing is outstanding instead of climbing forever.
 func (m *Model) reconcilePastes() {

@@ -26,6 +26,7 @@ func write(t *testing.T, path, content string) {
 func isolateHome(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 }
 
 func TestParseFrontmatterAndBody(t *testing.T) {
@@ -87,6 +88,7 @@ func TestLoadProjectOverlaysHome(t *testing.T) {
 	cwd := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 
 	write(t, filepath.Join(home, ".klaudia", "skills", "review.md"), "---\nname: review\ndescription: home version\n---\nhome body")
 	write(t, filepath.Join(home, ".klaudia", "skills", "deploy.md"), "---\nname: deploy\ndescription: deploy\n---\ndeploy")

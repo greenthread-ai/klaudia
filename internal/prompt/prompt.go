@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/greenthread-ai/klaudia/internal/session"
 )
 
 // securityClause mirrors the JS constant V44 (05-app-core.js:65659).
@@ -231,11 +233,11 @@ func loadProjectInstructions(cwd string) (string, []string) {
 		// ~/.claude is read for the same reason skill.Load reads it: that is
 		// where the ecosystem's installers put things. Klaudia's own global
 		// comes after, so it wins at that level.
-		paths = append(paths,
-			filepath.Join(home, ".claude", "CLAUDE.md"),
-			filepath.Join(home, ".klaudia", "AGENTS.md"),
-		)
+		paths = append(paths, filepath.Join(home, ".claude", "CLAUDE.md"))
 	}
+	// Klaudia's own global file lives in the config root, which follows
+	// KLAUDIA_CONFIG_DIR like every other user file.
+	paths = append(paths, filepath.Join(session.ConfigRoot(), "AGENTS.md"))
 	if root, err := runGit(cwd, "rev-parse", "--show-toplevel"); err == nil {
 		root = strings.TrimSpace(root)
 		paths = append(paths, filepath.Join(root, "AGENTS.md"), filepath.Join(root, "CLAUDE.md"))

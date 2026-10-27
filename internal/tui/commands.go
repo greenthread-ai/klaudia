@@ -52,7 +52,7 @@ var commandList = []cmdInfo{
 	{"/plan", "[run|off]", "Read-only plan mode · run [N]: work the approved plan to done · stop: halt"},
 	{"/doctor", "", "Run environment diagnostics"},
 	{"/diff", "[args]", "Show git diff of the working tree"},
-	{"/commit", "<msg>", "Stage all changes and commit (asks first)"},
+	{"/commit", "<msg>", "Commit the files Klaudia changed — or what you staged, if anything (asks first)"},
 	{"/export", "", "Export the conversation to a Markdown file"},
 	{"/last", "[n|list]", "Show a tool output in full (no arg = latest; list = index)"},
 	{"/copy", "[target]", "Copy to the clipboard: answer (default) | code [N] | out | all"},

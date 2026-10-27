@@ -7,9 +7,10 @@ import "time"
 // path that used to pass a nil *memory.Store, dropping the nil-guard
 // branches that used to litter every call site.
 //
-// SyncLinks() returns nil rather than ErrDisabled — the eager call at
-// cli/root.go:672 runs at startup for its side effect and treats errors as
-// best-effort; surfacing ErrDisabled there would print a spurious warning.
+// SyncLinks() returns nil rather than ErrDisabled — the eager call in
+// cli/root.go, just before the system prompt is built, runs at startup for its
+// side effect and treats errors as best-effort; surfacing ErrDisabled there
+// would print a spurious warning.
 // The other writes do return ErrDisabled so genuinely missing the headless
 // case surfaces.
 func Disabled() Store {

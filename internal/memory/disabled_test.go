@@ -53,8 +53,8 @@ func TestDisabledWritesReturnErrDisabled(t *testing.T) {
 }
 
 func TestDisabledSyncLinksIsBestEffortNoOp(t *testing.T) {
-	// SyncLinks is called eagerly at startup (cli/root.go:672) and treats
-	// errors as best-effort. Returning ErrDisabled there would print a
+	// SyncLinks is called eagerly at startup (cli/root.go, just before the
+	// system prompt is built) and treats errors as best-effort. Returning ErrDisabled there would print a
 	// spurious warning every headless run — return nil instead.
 	if err := Disabled().SyncLinks(); err != nil {
 		t.Errorf("SyncLinks should be a no-op on Disabled; got %v", err)
