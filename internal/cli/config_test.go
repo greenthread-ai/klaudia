@@ -36,6 +36,7 @@ func TestCreateConfig(t *testing.T) {
 			home := t.TempDir()
 			cwd := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 
 			path, err := createConfig(tt.scope, cwd)
 			if err != nil {
@@ -102,6 +103,7 @@ func TestStarterConfigRoundtripsContextWindow(t *testing.T) {
 	// case where the toml tag drifts from the example line.
 	cwd := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	path, err := createConfig("local", cwd)
 	if err != nil {
 		t.Fatal(err)

@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/greenthread-ai/klaudia/internal/session"
 )
 
 // Provider names.
@@ -245,6 +247,15 @@ func ProjectDir(cwd string) string {
 	return filepath.Join(cwd, ".klaudia")
 }
 
+// UserPath returns the user's config file: config.toml under the config root
+// (~/.klaudia, or KLAUDIA_CONFIG_DIR). It used to be built from the home
+// directory directly, so KLAUDIA_CONFIG_DIR moved sessions, caches and MCP
+// config but not the config itself — a sandboxed run silently picked up the
+// real user's provider and credentials.
+func UserPath() string {
+	return filepath.Join(session.ConfigRoot(), "config.toml")
+}
+
 // ProjectPath returns cwd/.klaudia/config.toml.
 func ProjectPath(cwd string) string {
 	return filepath.Join(ProjectDir(cwd), "config.toml")
@@ -254,9 +265,7 @@ func ProjectPath(cwd string) string {
 // (project settings win). Missing files are ignored.
 func Load(cwd string) Config {
 	var cfg Config
-	if home, err := os.UserHomeDir(); err == nil {
-		merge(&cfg, read(filepath.Join(home, ".klaudia", "config.toml")))
-	}
+	merge(&cfg, read(UserPath()))
 	merge(&cfg, read(ProjectPath(cwd)))
 	return cfg
 }
@@ -284,9 +293,7 @@ type HookSources struct {
 // answer that.
 func LoadHooks(cwd string) HookSources {
 	src := HookSources{ProjectPath: ProjectPath(cwd)}
-	if home, err := os.UserHomeDir(); err == nil {
-		src.User = read(filepath.Join(home, ".klaudia", "config.toml")).Hooks
-	}
+	src.User = read(UserPath()).Hooks
 	src.Project = read(src.ProjectPath).Hooks
 	return src
 }

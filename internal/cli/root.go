@@ -254,10 +254,8 @@ func legacySSEServers(cfg mcp.Config) []string {
 
 // configFileExists reports whether a home or project .klaudia/config.toml exists.
 func configFileExists(cwd string) bool {
-	if home, err := os.UserHomeDir(); err == nil {
-		if _, err := os.Stat(filepath.Join(home, ".klaudia", "config.toml")); err == nil {
-			return true
-		}
+	if _, err := os.Stat(config.UserPath()); err == nil {
+		return true
 	}
 	_, err := os.Stat(config.ProjectPath(cwd))
 	return err == nil
@@ -767,11 +765,7 @@ func createConfig(scope, cwd string) (string, error) {
 	var path string
 	switch scope {
 	case "global":
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("find home directory: %w", err)
-		}
-		path = filepath.Join(home, ".klaudia", "config.toml")
+		path = config.UserPath()
 	case "local":
 		path = config.ProjectPath(cwd)
 	default:

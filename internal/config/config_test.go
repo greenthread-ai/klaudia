@@ -20,6 +20,7 @@ func writeConfig(t *testing.T, dir, body string) {
 func TestLoadProjectOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	writeConfig(t, home, `provider = "anthropic"
 model = "sonnet"
 `)
@@ -45,6 +46,7 @@ baseURL = "https://x/v1"
 func TestLoadThemeProjectOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	writeConfig(t, home, `theme = "nord"`)
 
 	// Global-only: inherited.
@@ -63,6 +65,7 @@ func TestLoadThemeProjectOverridesHome(t *testing.T) {
 func TestLoadPermissionModeOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	writeConfig(t, home, "[permissions]\nmode = \"plan\"\n")
 
 	// Global-only → inherited.
@@ -80,6 +83,7 @@ func TestLoadPermissionModeOverridesHome(t *testing.T) {
 func TestLoadBrowserProjectOverridesHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	writeConfig(t, home, `
 [browser]
 engine = "chrome"
@@ -139,6 +143,7 @@ func TestResolveAPIKey(t *testing.T) {
 }
 func TestLoadMissingIsEmpty(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 	cfg := Load(t.TempDir())
 	if cfg.Provider != "" {
 		t.Errorf("expected empty config, got %+v", cfg)
@@ -177,6 +182,7 @@ func TestSubagentWorktrees(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
 			if tt.home != "" {
 				writeConfig(t, home, tt.home)
 			}
@@ -188,5 +194,24 @@ func TestSubagentWorktrees(t *testing.T) {
 				t.Errorf("SubagentWorktrees = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// KLAUDIA_CONFIG_DIR moves the user's config file along with everything else
+// under the config root. It used to move sessions and caches but not the
+// config, so a run pointed at a scratch root still read the real user's
+// provider and credentials.
+func TestLoadHonoursConfigDir(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("KLAUDIA_CONFIG_DIR", root)
+	t.Setenv("HOME", t.TempDir()) // a config here must not be the one read
+	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("provider = \"openai\"\nmodel = \"from-config-dir\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load(t.TempDir()).Model; got != "from-config-dir" {
+		t.Errorf("Load().Model = %q, want the config under KLAUDIA_CONFIG_DIR", got)
+	}
+	if got := UserPath(); got != filepath.Join(root, "config.toml") {
+		t.Errorf("UserPath() = %q", got)
 	}
 }
