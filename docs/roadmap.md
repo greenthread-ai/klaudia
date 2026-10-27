@@ -153,12 +153,23 @@ Klaudia's implementations in `cli` (`subagentTypes`, `gitIsolator`) so neither
 `subagent` nor `worktree` imports `agent`. Both gates are already nil-safe, so
 the defaults are "none".
 
-**Stage 2 — `pkg/` in this module, v0.** Move the core to `pkg/agent`,
-`pkg/provider`, `pkg/tool`, `pkg/compaction`, `pkg/permission`, `pkg/plan`,
-with Klaudia as its first consumer. Not a separate module until the API stops
-moving — two modules double the release work while every change is still
-breaking. Built-in tools stay internal at first, then an opt-in
-`pkg/tools/builtin`.
+**Stage 2 — `pkg/` in this module, v0. Done.** The core is `pkg/agent`,
+`pkg/api` (the provider layer — kept the name `api` rather than churn every
+reference to `provider`), `pkg/tool`, `pkg/compaction`, `pkg/permission`,
+`pkg/plan` and `pkg/schema`, with Klaudia as its first consumer; CI fails if
+anything in `pkg/` depends on `internal/`. Not a separate module until the API
+stops moving — two modules double the release work while every change is
+still breaking. Built-in tools stay internal at first (`internal/tools`
+aliases the contract), then an opt-in `pkg/tools/builtin`. The Anthropic
+client in `pkg/api` is neutral; Klaudia's request shaping and credential
+discovery are `internal/anthropicauth`.
+
+Left from stage 0: product text in the core. `api.FriendlyError` advises
+`.klaudia/config.toml` keys (`maxRetries`, `streamIdleTimeout`,
+`contextWindow`, `baseURL`) and a Claude-Code-OAuth token-sharing cause, and
+two loop notes name `maxTokens in .klaudia/config.toml`. Only Klaudia's
+frontends call FriendlyError, so the fix is a hints value the host supplies
+(neutral by default) and an `Options` field for the loop's setting name.
 
 **Stage 3 — adapters.** `agent.Event` is already the stream-json wire schema;
 version it and give it typed constructors. Lift ACP into `pkg/acp` — which
