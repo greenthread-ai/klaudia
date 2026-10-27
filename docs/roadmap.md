@@ -73,7 +73,7 @@ isolation per sub-agent, `/goal`, hooks with project-hook trust, AGENTS.md and
 edits.
 
 Missing: OTel; egress control beyond the container's `--network`; background,
-nested or forked sub-agents; conversation rewind; plugins; fallback models;
+nested or forked sub-agents; conversation rewind; fallback models;
 idle compaction; MCP Tasks; any way to *serve* Klaudia over MCP; a public API.
 
 ## Recommendations, ranked
@@ -93,10 +93,12 @@ Size is a guess: S ≈ a day, M ≈ a week, L ≈ several.
 | 9 | **Fallback model chain** and an effort cap in config | Small, and the 5.5-sizing incident showed provider-side surprises are real | S |
 | 10 | **Idle compaction** above a threshold, before the cache expires | Cheaper than compacting under pressure mid-turn | S |
 | 11 | **Eval mode**: `--restricted` (no user config, no memory, no hooks) plus replaying saved sessions as regression tests | The transcript already records sizing per line; turning sessions into tests catches loop regressions before users do | M |
-| 12 | **Plugins**: a directory or zip bundling skills, agents, hooks and MCP servers, trusted the way project hooks are | Ecosystem pull, but only after #1 — a plugin is an extension of the public API | M |
-| 13 | **TUI**: links on the live region and in `/doctor`'s output, a hyperlink row in `/doctor` | Small follow-ups to the OSC 8 work | S |
+| 12 | **TUI**: links on the live region and in `/doctor`'s output, a hyperlink row in `/doctor` | Small follow-ups to the OSC 8 work | S |
 
-Not recommended: a classifier-based auto mode. Klaudia's zones already
+Not recommended: plugin bundles (skills + agents + hooks + MCP in one
+installable package) — not the direction for Klaudia, by decision 2026-10-27;
+skills, hooks and MCP stay separately configured. And a classifier-based auto
+mode. Klaudia's zones already
 remove the approval fatigue it exists to fix, and the field's own experience is
 that it is a convenience, not a boundary.
 
@@ -108,10 +110,14 @@ a frontend, and `Loop`/`Options`/`Event`/`Turn`/`api.Provider`/`tools.Tool`/
 
 **Embed-blockers** — process-wide behaviour an embedder cannot control:
 
-- `agent/loop.go:561,565,579` read `DISABLE_COMPACT`,
-  `DISABLE_MICROCOMPACT`, `DISABLE_AUTO_COMPACT` on every compaction.
-- `api/provider.go:64`, `api/client.go:269`, `api/cache.go:25`, `api/auth.go`
-  read `KLAUDIA_*` and credential variables.
+- ~~`agent/loop.go` read `DISABLE_*COMPACT`; `api` read
+  `KLAUDIA_MAX_RETRIES`, `KLAUDIA_STREAM_IDLE_TIMEOUT`,
+  `KLAUDIA_DISABLE_PROMPT_CACHE`~~ — done: `agent.Options.NoMicrocompact` /
+  `NoAutocompact` and `api.Tuning`. Environment settings were treated as
+  disposable (CI and debugging use, by decision): removed outright, not
+  preserved behind a shim.
+- `api/auth.go` reads credential variables; credential discovery belongs to
+  the host and moves out with the rest of the product code.
 - `tools/output.go:142` spills to `session.ConfigRoot()/outputs` — so the
   loop's microcompact writes into `~/.klaudia` — and `tools/joblog.go:22`
   duplicates `ConfigRoot`.
@@ -120,9 +126,9 @@ a frontend, and `Loop`/`Options`/`Event`/`Turn`/`api.Provider`/`tools.Tool`/
 - `agent` imports `trust`, `hooks`, `subagent`, `worktree` and `session`
   concretely; `hooks` imports `config` (the one upward edge).
 
-**Stage 0 — no API, no behaviour change.** Env reads become `Options` /
-provider-constructor fields that Klaudia's CLI fills from the environment.
-Inject the spill directory (`compaction.Spiller` is already an interface).
+**Stage 0 — internal plumbing.** Env reads become `Options` /
+provider-constructor fields (done for the loop and providers). Inject the
+spill directory (`compaction.Spiller` is already an interface).
 Move `MessagesFromEntries` from `agent` to `session`. Cut `hooks → config`.
 Product strings behind an injectable hint function.
 
@@ -143,13 +149,11 @@ breaking. Built-in tools stay internal at first, then an opt-in
 version it and give it typed constructors. Lift ACP into `pkg/acp` — which
 would be the first Go ACP SDK — and add the MCP-server adapter (#7).
 
-**The decision to make before stage 2:** the public message type. Today it is
-`anthropic.BetaMessageParam` everywhere, which ties the library's API to
-anthropic-sdk-go's release cadence. Recommendation: re-export it under
-Klaudia-owned names in stage 2 (no conversion cost; the OpenAI shim already
-translates from this shape) and only define neutral types if a third provider
-needs something the Anthropic shape cannot carry. Doing it the other way round
-costs a conversion layer on every turn to solve a problem nobody has yet.
+**Message types — decided:** the library consumes anthropic-sdk-go directly
+and the OpenAI-compatible API through the existing shim, with no re-export or
+neutral layer. `anthropic.BetaMessageParam` stays the public message type.
+What matters is provider optionality — the same loop over either backend —
+and that is a property of `api.Provider`, not of owning the message structs.
 
 Sessions as append-only logs with fork (#5) are the prerequisite for durable
 execution (checkpoint, crash, resume elsewhere) — worth designing during stage
