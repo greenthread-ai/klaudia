@@ -571,17 +571,3 @@ func (m *Manager) Close() {
 		}
 	}
 }
-
-// textOf concatenates the text content blocks of an MCP result.
-func textOf(content []mcpsdk.Content) string {
-	var out string
-	for _, c := range content {
-		if tc, ok := c.(*mcpsdk.TextContent); ok {
-			if out != "" {
-				out += "\n"
-			}
-			out += tc.Text
-		}
-	}
-	return out
-}

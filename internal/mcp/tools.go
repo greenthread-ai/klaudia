@@ -111,7 +111,7 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 	}
 	res, err := sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args})
 	if err == nil {
-		return []tools.Result{{Content: textOf(res.Content), IsError: res.IsError}}, nil
+		return []tools.Result{resultOf(res)}, nil
 	}
 
 	// The call failed on the wire. revive probes liveness first, so a bad
@@ -141,7 +141,7 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 	if err != nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP call failed after restarting server %q: %v", t.server.Name, err), IsError: true}}, nil
 	}
-	return []tools.Result{{Content: textOf(res.Content), IsError: res.IsError}}, nil
+	return []tools.Result{resultOf(res)}, nil
 }
 
 // revive relaunches the tool's server if it has died. It is a no-op returning

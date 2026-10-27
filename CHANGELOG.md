@@ -55,6 +55,12 @@ port mirrors (see `internal/version`).
   or zod — whose properties say `"$ref": "#/$defs/X"` — sent refs to nothing.
   `$defs`, `definitions`, `anyOf`, `oneOf` and `allOf` now travel with them;
   built-in tool requests are byte-for-byte unchanged.
+- **MCP tool results keep more than their text.** Every non-text block was
+  dropped, so a screenshot tool answered with an empty string. Images
+  (PNG/JPEG/GIF/WebP) now reach the model as images, from tool calls and
+  from `ReadMcpResource`; embedded text resources are included; a result
+  with only `structuredContent` sends its JSON; audio, binary blobs and
+  resource links are named in one line rather than vanishing.
 - **Read-only MCP tools work in plan mode, and so in Explore and Plan.** Those
   sub-agents run in plan mode and are handed MCP tools marked read-only, but
   plan mode refused every MCP call, so they could never use them. Plan mode

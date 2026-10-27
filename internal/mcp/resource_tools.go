@@ -2,8 +2,10 @@ package mcp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -110,16 +112,17 @@ func (t *readResourceTool) Execute(ctx context.Context, _ tools.Context, raw jso
 	if err != nil {
 		return []tools.Result{{Content: fmt.Sprintf("Read failed: %v", err), IsError: true}}, nil
 	}
-	var out string
+	var r tools.Result
+	var parts []string
 	for _, c := range res.Contents {
-		if c.Text != "" {
-			if out != "" {
-				out += "\n"
-			}
-			out += c.Text
+		if c.Text == "" && visionTypes[c.MIMEType] {
+			r.Images = append(r.Images, tools.ResultImage{MediaType: c.MIMEType, Base64: base64.StdEncoding.EncodeToString(c.Blob)})
+		} else if t := resourceText(c); t != "" {
+			parts = append(parts, t)
 		}
 	}
-	return []tools.Result{{Content: out}}, nil
+	r.Content = strings.Join(parts, "\n")
+	return []tools.Result{r}, nil
 }
 
 // ResourceToolSchemas is tools.BuiltinSchemas for the two resource tools, which
