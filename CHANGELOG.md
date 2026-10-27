@@ -6,6 +6,11 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Background sub-agents outside the TUI.** A headless `-p` run starts them
+  in the background and does not end while one is working: their results go
+  to the model mid-run, or as one more turn once they arrive, and the result
+  line totals every turn. Over stream-json they report to the model with the
+  next turn and to the peer as `system/agent_done`.
 - **`/rewind`.** Pick one of this session's earlier prompts: every file
   Klaudia changed from that turn on goes back to how it was before it, the
   conversation is cut back to before the prompt, and the prompt returns to

@@ -100,9 +100,12 @@ type Driver struct {
 	// Interject, if set, is each turn's source of reports that arrive while
 	// it runs (a background job exiting); see agent.Inbox.
 	Interject func() agent.Interjection
-	out       io.Writer
-	mu        sync.Mutex // serializes writes to out
-	pending   sync.Map   // request_id -> chan *controlResp
+	// Background, if set, runs the Agent tool's run_in_background work past
+	// the turn; see agent.Background.
+	Background tools.BackgroundRunner
+	out        io.Writer
+	mu         sync.Mutex // serializes writes to out
+	pending    sync.Map   // request_id -> chan *controlResp
 }
 
 // NewDriver builds a Driver writing to w.
@@ -156,13 +159,14 @@ func (d *Driver) Run(ctx context.Context, r io.Reader, history []anthropic.BetaM
 				continue
 			}
 			res, err := run(ctx, agent.Turn{
-				Prompt:    prompt,
-				History:   history,
-				Emit:      func(ev agent.Event) { d.write(ev) },
-				Approver:  &controlApprover{driver: d},
-				Asker:     &controlAsker{driver: d},
-				Planner:   &controlPlanner{driver: d},
-				Interject: d.Interject,
+				Prompt:     prompt,
+				History:    history,
+				Emit:       func(ev agent.Event) { d.write(ev) },
+				Approver:   &controlApprover{driver: d},
+				Asker:      &controlAsker{driver: d},
+				Planner:    &controlPlanner{driver: d},
+				Interject:  d.Interject,
+				Background: d.Background,
 			})
 			if res.Messages != nil {
 				history = res.Messages // carry conversation forward

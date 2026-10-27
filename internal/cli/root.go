@@ -1647,6 +1647,19 @@ func run(cmd *cobra.Command, opts *options) error {
 	if opts.inputFormat == "stream-json" {
 		driver := streamjson.NewDriver(cmd.OutOrStdout())
 		driver.Interject = jobInbox.Interject
+		// Background sub-agents: results queue for the model's next turn (or
+		// the running one), and the peer hears about each as it finishes.
+		driver.Background = agent.NewBackground(ctx, func(t agent.BackgroundTask) {
+			jobInbox.Add(t.Notice())
+			status := "completed"
+			if t.Err != nil {
+				status = "failed"
+			}
+			driver.Notify("agent_done", map[string]any{
+				"agent_id": t.ID, "label": t.Label, "status": status,
+				"note": "delivered to the model with its next turn, or mid-turn if one is running",
+			})
+		})
 		jobExitHook = func(st tools.JobStatus) {
 			driver.Notify("job_exit", map[string]any{
 				"job_id": st.ID, "name": st.Name, "exit_code": st.ExitCode,
@@ -1789,12 +1802,25 @@ func run(cmd *cobra.Command, opts *options) error {
 			partial = newPartialEmitter(out, sessionID, &writeMu).emit
 		}
 	}
+	// Background sub-agents in a one-shot run: their results join the job
+	// inbox, so they reach the model mid-run, and the run does not end while
+	// one is still working (see the follow-up loop after Run). Without this a
+	// headless run kept every sub-agent in the foreground.
+	bgDone := make(chan struct{}, 1)
+	headlessBG := agent.NewBackground(ctx, func(t agent.BackgroundTask) {
+		jobInbox.Add(t.Notice())
+		select {
+		case bgDone <- struct{}{}:
+		default:
+		}
+	})
 	headlessOpts := baseOptions(agent.Turn{
-		Prompt:    opts.prompt,
-		History:   initialMessages,
-		Emit:      emit,
-		Approver:  approver,
-		Interject: jobInbox.Interject,
+		Prompt:     opts.prompt,
+		History:    initialMessages,
+		Emit:       emit,
+		Approver:   approver,
+		Interject:  jobInbox.Interject,
+		Background: headlessBG,
 	}, turnSettings{
 		Model:           model,
 		Permission:      permCtx,
@@ -1812,6 +1838,37 @@ func run(cmd *cobra.Command, opts *options) error {
 	headlessOpts.PartialMessages = partial
 	headlessOpts.DeferredTools = currentDeferred()
 	res, err := loop.Run(ctx, headlessOpts, emit)
+	// The model may finish its turn while background agents it started are
+	// still working: wait for them, and give their results (and anything
+	// else queued meanwhile) to the model as a turn of its own, until nothing
+	// is outstanding. The result reports the final answer and the totals.
+	// Only when the run used background agents: an ordinary -p run is not
+	// extended because a job happened to exit near its end.
+	for err == nil && len(headlessBG.List()) > 0 {
+		if headlessBG.Running() > 0 {
+			select {
+			case <-bgDone:
+			case <-ctx.Done():
+				err = ctx.Err()
+				continue
+			}
+		}
+		in := jobInbox.Interject()
+		if in.Empty() {
+			if headlessBG.Running() == 0 {
+				break
+			}
+			continue
+		}
+		prev := res
+		headlessOpts.Prompt, headlessOpts.InitialMessages = in.Text, res.Messages
+		res, err = loop.Run(ctx, headlessOpts, emit)
+		res.NumTurns += prev.NumTurns
+		res.InputTokens += prev.InputTokens
+		res.OutputTokens += prev.OutputTokens
+		res.CacheReadInputTokens += prev.CacheReadInputTokens
+		res.CacheCreationInputTokens += prev.CacheCreationInputTokens
+	}
 
 	out := ResultMessage{
 		Type:          "result",

@@ -307,7 +307,7 @@ events that follow are `agent.Event` serialised as is — `type` is one of
 ends with a `result` line. A background job that exits on its own writes
 `{"type":"system","subtype":"job_exit","job_id":…,"exit_code":…}` when it
 happens, between turns or not (and `job_output` when a watched job prints a
-matching line); the model gets the report with its next turn
+matching line, `agent_done` when a background sub-agent finishes); the model gets the report with its next turn
 (mid-turn if one is running), and a headless `-p` run hands it over mid-run.
 `schema_version` is `agent.EventSchemaVersion`:
 new event types and optional fields keep it (ignore what you do not know);
@@ -386,8 +386,11 @@ and carries on. A background agent is listed under the prompt with its latest
 step, survives Esc (which ends the turn, not the research), and when it
 finishes its result goes to the model — straight away if Klaudia is idle, or
 at its next step if it is mid-turn. `/stopjob agent_N` stops one and passes on
-what it had. Headless, stream-json and ACP runs keep sub-agents in the
-foreground: there is no one left to report to once the turn ends.
+what it had. A headless `-p` run does not end while a background agent it
+started is still working: it waits, and gives the result to the model as one
+more turn. Over stream-json the result reaches the model with its next turn
+(or the running one) and the peer gets a `system/agent_done` line. ACP keeps
+sub-agents in the foreground.
 
 A sub-agent can also be a **fork** (`fork` on the Agent tool): it starts from
 a copy of the conversation so far, so it knows what has been read and decided
