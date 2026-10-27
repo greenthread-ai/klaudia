@@ -110,7 +110,7 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 		}
 		sess = t.server.sess()
 	}
-	res, err := sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args})
+	res, err := sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args, Meta: traceMeta(ctx)})
 	if err == nil {
 		return []tools.Result{resultOf(res)}, nil
 	}
@@ -138,7 +138,7 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 	if sess == nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP call failed: %v", err), IsError: true}}, nil
 	}
-	res, err = sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args})
+	res, err = sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args, Meta: traceMeta(ctx)})
 	if err != nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP call failed after restarting server %q: %v", t.server.Name, err), IsError: true}}, nil
 	}

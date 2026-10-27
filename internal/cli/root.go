@@ -1954,7 +1954,9 @@ func hostChangeWasBlocked(g *hostgate.HostGate) bool {
 // SIGTERM from main) unwinds the run, which tears down background jobs,
 // browsers, MCP servers and the transcript through the existing defers.
 func ExecuteContext(ctx context.Context) int {
+	stopTracing := setupTracing(ctx, os.Getenv)
 	err := NewRootCommand().ExecuteContext(ctx)
+	stopTracing()
 	if err == nil {
 		return ExitOK
 	}

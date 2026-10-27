@@ -266,7 +266,7 @@ func New(provider api.Provider, registry *tools.Registry) *Loop {
 }
 
 // Run executes the loop until the model stops calling tools or MaxTurns is hit.
-func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, error) {
+func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, error) {
 	maxTokens, maxTokensSource := opts.MaxTokens, opts.MaxTokensSource
 	fallbackNext := 0 // next index into opts.FallbackModels
 	if maxTokens <= 0 {
@@ -796,7 +796,9 @@ func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewPa
 		},
 		OnRawEvent: rawSink,
 	}
+	ctx, span := startChatSpan(ctx, params)
 	assistant, err := l.provider.StreamTurn(ctx, params, sink)
+	endChatSpan(span, assistant, err)
 	if err != nil {
 		return assistant, "", fmt.Errorf("stream: %w", err)
 	}
@@ -1089,7 +1091,7 @@ func shortCircuit(emit Emitter, tu anthropic.BetaToolUseBlock, msg string) anthr
 	return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
 }
 
-func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), fs *failureState) anthropic.BetaContentBlockParamUnion {
+func (l *Loop) dispatchCall(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), fs *failureState) anthropic.BetaContentBlockParamUnion {
 	raw, _ := json.Marshal(tu.Input)
 	// Repair string-encoded scalars ("offset": "180") before anything reads the
 	// input, so the gate, the permission check, the breaker key, the hooks and

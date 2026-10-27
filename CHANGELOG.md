@@ -6,6 +6,12 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **OpenTelemetry tracing.** With `OTEL_EXPORTER_OTLP_ENDPOINT` (or the
+  traces-specific variable) set, Klaudia exports GenAI-convention spans over
+  OTLP/HTTP: `invoke_agent` per turn, `chat` per model request with token
+  usage and finish reason, `execute_tool` per tool call, sub-agents nested.
+  MCP tool calls pass the trace on as `traceparent` in `_meta`. `pkg/agent`
+  depends only on the OTel API; with no provider the spans are no-ops.
 - **Background sub-agents outside the TUI.** A headless `-p` run starts them
   in the background and does not end while one is working: their results go
   to the model mid-run, or as one more turn once they arrive, and the result

@@ -617,6 +617,22 @@ is selected.
   transient throttle: retries won't help. Add usage credits, or reduce context
   (lower `contextWindow` so autocompaction triggers earlier, and `/compact`).
 
+### Tracing (OpenTelemetry)
+
+Set the standard OpenTelemetry variables and Klaudia exports traces over
+OTLP/HTTP — `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` is enough for
+a local collector or Jaeger; headers, timeouts and `OTEL_SERVICE_NAME` come
+from the same variables, and `OTEL_SDK_DISABLED=true` turns it off. Unset,
+nothing is exported and the spans cost nothing.
+
+Spans follow the GenAI semantic conventions (pinned to 1.37.0): an
+`invoke_agent` span per turn, a `chat <model>` span per model request with
+token usage (cache included) and finish reason, and an `execute_tool <name>`
+span per tool call, with a sub-agent's spans nested under the Agent call that
+started it. MCP tool calls carry the trace on as `traceparent` in the request's
+`_meta`, so a server that traces joins it. The core (`pkg/agent`) imports only
+the OTel API: an embedder installs whatever provider it already uses.
+
 ### Logs & diagnostics
 
 The TUI paints inline and coordinates every write it makes; anything else
