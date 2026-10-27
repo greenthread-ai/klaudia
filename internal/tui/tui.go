@@ -460,6 +460,8 @@ type Model struct {
 	// checklist, for the panel.
 	loopPlan bool
 	goalList plan.Snapshot
+	// quitting is set by quit, so the last frame clears the live region.
+	quitting bool
 	// jobsTicking is set while a jobsTickMsg is scheduled (see jobsTick).
 	jobsTicking bool
 	// bg runs the Agent tool's run_in_background sub-agents (background.go).

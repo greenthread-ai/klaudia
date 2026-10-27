@@ -1,19 +1,32 @@
 package tui
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// isQuit reports whether cmd resolves to tea.Quit.
+// isQuit reports whether cmd resolves to tea.Quit — directly, or as the last
+// step of a tea.Sequence (quit prints a line first). Bubble Tea's sequence
+// message is unexported, so it is recognised by shape: a slice of commands.
 func isQuit(cmd tea.Cmd) bool {
 	if cmd == nil {
 		return false
 	}
-	_, ok := cmd().(tea.QuitMsg)
-	return ok
+	msg := cmd()
+	if _, ok := msg.(tea.QuitMsg); ok {
+		return true
+	}
+	v := reflect.ValueOf(msg)
+	if v.Kind() == reflect.Slice && v.Len() > 0 {
+		if last, ok := v.Index(v.Len() - 1).Interface().(tea.Cmd); ok {
+			return isQuit(last)
+		}
+	}
+	return false
 }
 
 func ctrlC(m *Model) (*Model, tea.Cmd) {
@@ -172,5 +185,24 @@ func TestCtrlDDeletesForward(t *testing.T) {
 	m = model.(*Model)
 	if got := m.input.Value(); got != "bc" {
 		t.Fatalf("Ctrl+D should delete forward, got %q want %q", got, "bc")
+	}
+}
+
+// Quitting says how to come back, then draws nothing, so the input box does not
+// stay behind in scrollback.
+func TestQuitLeavesAResumeLineAndAnEmptyFrame(t *testing.T) {
+	m := newTestModel()
+	m.resize(100, 30)
+	m.sess.SessionID = "abc-123"
+	m.history = make([]anthropic.BetaMessageParam, 1)
+	_, cmd := m.handleSlash("/quit")
+	if !isQuit(cmd) {
+		t.Fatal("/quit should quit")
+	}
+	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "klaudia -r abc-123") {
+		t.Errorf("no resume line:\n%s", out)
+	}
+	if v := m.View(); v != "" {
+		t.Errorf("final frame should be empty, got %q", v)
 	}
 }

@@ -197,7 +197,9 @@ func (m *Model) introText() string {
 // View draws only the live region. Everything finished has already been printed
 // into the terminal's scrollback by the print queue.
 func (m *Model) View() string {
-	if !m.ready {
+	if !m.ready || m.quitting {
+		// Quitting draws nothing, so the final frame erases the live region:
+		// the input box and status line used to stay behind in scrollback.
 		return ""
 	}
 

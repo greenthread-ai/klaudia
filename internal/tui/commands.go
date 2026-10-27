@@ -234,7 +234,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	case "/help", "/?":
 		m.appendLine(bannerStyle.Render(slashHelp(m.keyHints()) + m.skillHelpLines()))
 	case "/quit", "/exit":
-		return m, tea.Quit
+		return m, m.quit()
 	case "/clear":
 		if m.busyGuard("/clear") {
 			break

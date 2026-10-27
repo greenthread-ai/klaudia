@@ -39,7 +39,7 @@ func (m *Model) interruptTurn() {
 // turn context is what releases the blocked agent goroutine.
 func (m *Model) onCtrlC() (tea.Model, tea.Cmd) {
 	if m.quitArmed {
-		return m, tea.Quit
+		return m, m.quit()
 	}
 	if m.turnCancel != nil {
 		m.interruptTurn()
@@ -489,4 +489,16 @@ func (m *Model) cursorAtEnd() bool {
 	lines := strings.Split(m.input.Value(), "\n")
 	last := lines[len(lines)-1]
 	return m.input.Line() == len(lines)-1 && m.input.LineInfo().StartColumn+m.input.LineInfo().CharOffset == len([]rune(last))
+}
+
+// quit leaves Klaudia: one line saying how to come back to this session, then
+// an empty frame and exit. Sequenced, not batched — a batched Println could
+// lose the race with Quit and never be printed.
+func (m *Model) quit() tea.Cmd {
+	m.quitting = true
+	if len(m.history) > 0 && m.sess != nil && m.sess.SessionID != "" {
+		m.appendLine(hintStyle.Render("Session saved — run klaudia here to pick it up again, or klaudia -r " +
+			m.sess.SessionID + " for this one."))
+	}
+	return tea.Sequence(m.out.drainCmd(), tea.Quit)
 }
