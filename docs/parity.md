@@ -48,7 +48,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | NotebookEdit | 05-app-core | `tools/notebookedit.go` | ✅ done | |
 | AskUserQuestion | 05-app-core | `tools/askuser.go` | ✅ done | Interactive via `Asker` seam. The TUI always appends a "something else" option (the model writes the choices, so its framing can be wrong); picking it — or just typing — opens free text, and the answer goes back verbatim. |
 | ExitPlanMode | 05-app-core | `tools/exitplan.go` | ✅ done | Via `Planner` seam. |
-| Agent (Task / sub-agents) | 07-app-features | `tools/agent.go` + `subagent/` | ✅ done | Dynamic description from `subagent.Builtin()`. `run_in_background` (TUI) and `fork` (starts from a copy of the conversation, `Spawner.SpawnFork`). |
+| Agent (Task / sub-agents) | 07-app-features | `tools/agent.go` + `subagent/` | ✅ done | Dynamic description from `subagent.Builtin()`. `run_in_background` (TUI, headless and stream-json; ACP runs sub-agents in the foreground) and `fork` (starts from a copy of the conversation, `Spawner.SpawnFork`). |
 | Memory | 07-app-features | `tools/memory.go` + `memory/` | 🔀 divergent | Auto-memory + recall via `.klaudia/memory/`. |
 | ToolSearch (deferred loading) | 07-app-features | `tools/toolsearch.go` | ✅ done | Per-turn `buildToolParams` filter + `Context.Reveal`. |
 | SlashCommand (model-invoked) | 07-app-features | `tools/skill.go` | 🔀 divergent | Covered by the Skill tool (user-defined skills the model can invoke). |
@@ -154,12 +154,12 @@ closed. `docs/trust.md` is the design record.
 
 | Feature | JS ref | Klaudia pkg | Status | Notes |
 | --- | --- | --- | --- | --- |
-| API key / env credential | 03-providers | `api/auth.go` | ✅ done | |
-| OAuth keychain session | 07-app-features | `api/auth.go` | ✅ done | macOS `security` CLI. |
-| OAuth token refresh | 07-app-features | `api/oauth.go` | ✅ done | Workstream 1d; refresh on expiry, write-back preserves unknown fields. |
+| API key / env credential | 03-providers | `anthropicauth/auth.go` | ✅ done | |
+| OAuth keychain session | 07-app-features | `anthropicauth/auth.go` | ✅ done | macOS `security` CLI. |
+| OAuth token refresh | 07-app-features | `anthropicauth/oauth.go` | ✅ done | Workstream 1d; refresh on expiry, write-back preserves unknown fields. |
 | Host sandbox confinement | — | `sandbox/seatbelt.go`, `bwrap.go` | ✅ done | Workstream 1a (divergent: JS had no host confinement). |
 | Container sandbox | — | `sandbox/container.go` | 🔀 divergent | New capability: run/validate code in docker/podman. |
-| Telemetry / analytics | 00/07 | — | ⛔ skipped | Intentionally not ported. |
+| Telemetry / analytics | 00/07 | `pkg/agent/trace.go`, `cli/tracing.go` | 🔀 divergent | Usage analytics intentionally not ported. OpenTelemetry tracing (GenAI semconv, OTLP when `OTEL_EXPORTER_OTLP_*` is set) is opt-in and goes only where the user points it. |
 | CLAUDECODE env vars | 08-entry | — | ⛔ skipped | Only referenced in JS + test-*.sh; Go never needed them. |
 | Auto-updater | 00-runtime | — | ⛔ skipped | Distributed as a static binary; out of scope. |
 

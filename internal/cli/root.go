@@ -962,6 +962,11 @@ func run(cmd *cobra.Command, opts *options) error {
 		if err := os.Setenv("KLAUDIA_CONFIG_DIR", dir); err != nil {
 			return err
 		}
+		// For the readers outside the config root (~/.claude skills and
+		// CLAUDE.md): see session.Restricted.
+		if err := os.Setenv("KLAUDIA_RESTRICTED", "1"); err != nil {
+			return err
+		}
 	}
 
 	cwd, _ := os.Getwd()

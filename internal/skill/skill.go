@@ -79,7 +79,7 @@ func Load(cwd string, warn func(string)) []Skill {
 	// should work here without being moved. Klaudia's own directory wins at
 	// each level, so a project can override an installed skill by name.
 	dirs := make([]string, 0, 4)
-	if home, err := os.UserHomeDir(); err == nil {
+	if home, err := os.UserHomeDir(); err == nil && !session.Restricted() {
 		dirs = append(dirs, filepath.Join(home, ".claude", "skills"))
 	}
 	// Klaudia's own user directory is the config root, so KLAUDIA_CONFIG_DIR

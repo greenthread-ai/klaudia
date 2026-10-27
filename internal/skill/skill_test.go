@@ -267,3 +267,19 @@ body`)
 		t.Errorf("containers should be silent, got %q", warnings)
 	}
 }
+
+// --restricted skips ~/.claude/skills, which lies outside the config root the
+// flag empties.
+func TestRestrictedSkipsClaudeSkills(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	write(t, filepath.Join(home, ".claude", "skills", "mine.md"), "---\nname: mine\ndescription: personal\n---\nbody")
+	if len(Load(t.TempDir(), nil)) != 1 {
+		t.Fatal("precondition: the ~/.claude skill loads normally")
+	}
+	t.Setenv("KLAUDIA_RESTRICTED", "1")
+	if got := Load(t.TempDir(), nil); len(got) != 0 {
+		t.Errorf("restricted run loaded %v", got)
+	}
+}

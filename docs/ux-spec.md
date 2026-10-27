@@ -21,7 +21,7 @@ of the spec. Each was a decision, not an oversight.
 | §12: logs with independent scrollback, paging, search, and follow mode that doesn't "snap the viewport back down" | No log viewer. `/logs` hands the file to `$PAGER`; `/logs -f` prints into real scrollback | The snapping problem *only exists because* an app owns a viewport. Phase 1 deleted ours; rebuilding one to satisfy the checklist would reintroduce the bug the checklist is about. `less` does paging, search and selection-copy better anyway. |
 | §11: `[j] jobs`, `[l] logs`, `[r] restart` key bindings | `/jobs`, `/logs`, `/restart` slash commands | A global single-letter key collides with typing the letter. |
 | §13: "resize propagates to child processes" | **Not implemented.** `COLUMNS`/`LINES` are set; anything querying the terminal directly sees nothing | Needs a PTY, and a PTY would make `vim` and `top` "work" in a surface the model cannot drive and the user cannot see — the turn would look successful while sitting in an editor forever. Interactive programs are refused fast instead, naming the flag that would have worked. |
-| §9: "routine reads don't flood the transcript" | **Partly met.** Tool lines match Claude Code's density; a 20-file investigation still produces 20 lines | Explicit user choice for familiarity over the spec's aggressive collapsing. The other half of §9 — the results-first completion block — did land. Worth revisiting after the agent-loop torture test. |
+| §9: "routine reads don't flood the transcript" | **Met, Claude Code's way.** One line per tool call, written when it finishes; consecutive reads share one line ("✓ Read 3 files · …"); output previews only for commands | Explicit user choice for Claude Code's density over the spec's more aggressive collapsing of whole investigations. The other half of §9 — the results-first completion block — also landed. |
 | §2: "the machine is a protected boundary" | A **command classifier**, not the OS sandbox | The sandbox (`internal/sandbox`, `mode = "os"`) is real kernel enforcement but breaks `go build`'s module cache and cannot tell remote work from local, which §6 requires. The classifier is a guardrail against well-intentioned mistakes; that phrasing is enforced by a test that fails on "protected", "secure", "cannot", "prevents". |
 | §17: undo | Git blob checkpoints, never the index or a stash | A stash moves the *whole* working tree including the user's unrelated edits. |
 | §19: "Jobs: local #1 postgres running" on resume | Jobs are always reported as **stopped** | They were children of a process that exited. Reporting them as running would be a lie the moment it was written. |
@@ -183,8 +183,6 @@ and exit codes.
   bytes, and `internal/tui/e2e` now runs the real binary in a pty against a
   scripted mock provider (`KLAUDIA_E2E=1 go test ./internal/tui/e2e/...`, in
   CI) — resize itself is still only covered by hand.
-- **§9's narration collapsing**, per the deviation above. The torture test's
-  67 tool lines for one task is the number to judge it against.
 - **Subagents**: parallel dispatch restricted to read-only types, child
   observability, per-type models, user-defined `.klaudia/agents/*.md`, and the
   adversarial-review idea. Deliberately parked.

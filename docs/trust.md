@@ -60,8 +60,9 @@ How hard the line is depends on the sandbox, and `/doctor` says which:
 - **Advisory** in `local` mode and under bubblewrap: curl, git, npm, pip, go
   and most HTTP clients honour the proxy, but a program that opens its own
   sockets is not stopped.
-- **Not applied** in a container, or with `network = "none"`: those cut the
-  host loopback the proxy listens on, and pointing commands at a proxy they
+- **Not applied** in a container, or with `network = "none"` (either OS
+  sandbox): those cut the host loopback the proxy listens on, or all network,
+  and pointing commands at a proxy they
   cannot reach would break every download rather than limit them. Klaudia
   warns and leaves networking as configured. A socket bridge into the
   container is the missing piece.
@@ -135,8 +136,9 @@ from nothing. The result was a stream of consent decisions that carried no
 information and conferred no lasting permission, which is how people learn to
 approve without reading.
 
-Plan mode still refuses MCP calls. That is about what the session is for, not
-about who vouches for the call.
+Plan mode refuses MCP calls except tools marked read-only (`readOnlyHint`, or
+`readOnly` in `.mcp.json`). That is about what the session is for, not about
+who vouches for the call.
 
 If you want a server available without granting it a trusting session, mark it
 read-only in `.mcp.json` and reach for it from a read-only sub-agent; that path

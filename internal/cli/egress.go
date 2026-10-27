@@ -49,7 +49,10 @@ func egressReach(sb config.Sandbox, exec sandbox.Executor) string {
 		}
 		return "advisory"
 	case *sandbox.Seatbelt:
-		if runtime.GOOS == "darwin" && sb.Network != "none" {
+		if sb.Network == "none" {
+			return "unreachable" // the profile denies all network, the proxy included
+		}
+		if runtime.GOOS == "darwin" {
 			return "enforced"
 		}
 	}

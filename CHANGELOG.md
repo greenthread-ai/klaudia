@@ -93,8 +93,9 @@ port mirrors (see `internal/version`).
   shows which, and the hosts refused.
 - **`--restricted`** for evals and reproducible runs: an empty config root for
   the process (no user config, global instructions or MCP, skills,
-  approvals, session history or job logs, and nothing written back), and no
-  memory or hooks. Project files still apply.
+  approvals, session history or job logs, and nothing written back; nor
+  `~/.claude` skills and `CLAUDE.md`), and no memory or hooks. Project files
+  still apply.
 - **OpenTelemetry tracing.** With `OTEL_EXPORTER_OTLP_ENDPOINT` (or the
   traces-specific variable) set, Klaudia exports GenAI-convention spans over
   OTLP/HTTP: `invoke_agent` per turn, `chat` per model request with token

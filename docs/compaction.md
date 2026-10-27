@@ -110,7 +110,7 @@ and stream-json runs have no idle time to use and keep compacting in-turn.
 
 Compaction deals with history that has already accumulated. The cheaper defence
 is not letting a single tool result become enormous in the first place, and that
-happens at dispatch time in `internal/tools/output.go`.
+happens at dispatch time in `pkg/tool/output.go`.
 
 Two levels, deliberately:
 

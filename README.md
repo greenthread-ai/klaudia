@@ -625,7 +625,8 @@ is selected.
 `--restricted` runs without this machine's state, for evals and CI: the
 process gets an empty config root, so user config, the global `AGENTS.md` and
 `.mcp.json`, skills, hook and MCP approvals, session history and job logs are
-all absent (and nothing is written back), and memory and hooks are off. The
+all absent (and nothing is written back); `~/.claude/skills` and
+`~/.claude/CLAUDE.md` are skipped too; and memory and hooks are off. The
 repository's own files still apply, since they are what is being run. Pass the
 key as `ANTHROPIC_API_KEY` if it normally lives in your user `config.toml`.
 

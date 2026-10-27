@@ -28,6 +28,12 @@ func ConfigRoot() string {
 	return base
 }
 
+// Restricted reports whether this process runs under --restricted, which sets
+// KLAUDIA_RESTRICTED=1 alongside an empty config root. The config root covers
+// Klaudia's own user files; the few readers that also look outside it — the
+// ecosystem's ~/.claude skills and CLAUDE.md — check this to skip them too.
+func Restricted() bool { return os.Getenv("KLAUDIA_RESTRICTED") == "1" }
+
 // SessionsRoot returns ~/.klaudia/sessions (honoring KLAUDIA_CONFIG_DIR).
 func SessionsRoot() string {
 	return filepath.Join(ConfigRoot(), "sessions")

@@ -230,10 +230,11 @@ func osVersion() string {
 // that no path comparison can.
 func loadProjectInstructions(cwd string) (string, []string) {
 	var paths []string
-	if home, err := os.UserHomeDir(); err == nil {
+	if home, err := os.UserHomeDir(); err == nil && !session.Restricted() {
 		// ~/.claude is read for the same reason skill.Load reads it: that is
 		// where the ecosystem's installers put things. Klaudia's own global
-		// comes after, so it wins at that level.
+		// comes after, so it wins at that level. --restricted skips it with
+		// the rest of the user's state.
 		paths = append(paths, filepath.Join(home, ".claude", "CLAUDE.md"))
 	}
 	// Klaudia's own global file lives in the config root, which follows
