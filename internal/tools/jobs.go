@@ -47,6 +47,10 @@ type Job struct {
 	exitCode int
 	ended    time.Time
 	restarts int
+	// stopping is set when the job is killed on request (/stopjob, KillShell,
+	// a restart, shutdown), so its exit is reported as a stop rather than
+	// delivered to the model as news.
+	stopping bool
 }
 
 // JobStatus is a snapshot for display.
@@ -63,6 +67,12 @@ type JobStatus struct {
 	Restarts int
 	LogPath  string
 	LogBytes int64
+	// Stopped is true when the job ended because someone stopped it.
+	Stopped bool
+	// LastOutput is when the job last wrote anything; zero if it never has.
+	// A provisioning run can be quiet for half an hour and fine, so this is
+	// reported, not judged.
+	LastOutput time.Time
 }
 
 // JobStore holds the background jobs started by the Bash tool, shared with the
@@ -204,6 +214,7 @@ func (s *JobStore) jobExited(id string, code int) {
 	j.exitCode = code
 	j.ended = time.Now()
 	st, fn := j.status(), s.onExit
+	st.Stopped, j.stopping = j.stopping, false
 	s.mu.Unlock()
 	if fn != nil {
 		fn(st)
@@ -218,6 +229,10 @@ type ShellOutput struct {
 	Output   string
 	Running  bool
 	ExitCode int
+	// Started and LastOutput let the reader say how long the job has run and
+	// how long it has been quiet.
+	Started    time.Time
+	LastOutput time.Time
 }
 
 // Read returns output produced since the last read, advancing the cursor.
@@ -239,10 +254,52 @@ func (s *JobStore) Read(ref string) (ShellOutput, bool) {
 	out := ShellOutput{
 		ID: j.ID, Name: j.Name, Command: j.Command, Output: data,
 		Running: !j.exited, ExitCode: j.exitCode,
+		Started: j.Started, LastOutput: j.log.LastWrite(),
 	}
 	s.mu.Unlock()
 	return out, true
 }
+
+// Wait blocks until the job exits, until output it has not yet returned
+// through Read matches match (when non-nil), until d passes, or until ctx
+// ends — whichever is first — and says which. It is how the model waits on a
+// long job (a VM provisioning, a rollout) without spending a model call per
+// poll; Read then returns what arrived.
+func (s *JobStore) Wait(ctx context.Context, ref string, match *regexp.Regexp, d time.Duration) (string, bool) {
+	deadline := time.NewTimer(d)
+	defer deadline.Stop()
+	tick := time.NewTicker(waitPoll)
+	defer tick.Stop()
+	for {
+		s.mu.Lock()
+		j := s.lookupLocked(ref)
+		if j == nil {
+			s.mu.Unlock()
+			return "", false
+		}
+		exited, offset, log := j.exited, j.offset, j.log
+		s.mu.Unlock()
+		if exited {
+			return "exited", true
+		}
+		if match != nil {
+			if data, _ := log.ReadFrom(offset); match.MatchString(data) {
+				return "matched", true
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return "interrupted", true
+		case <-deadline.C:
+			return "timed out", true
+		case <-tick.C:
+		}
+	}
+}
+
+// waitPoll is how often Wait looks. Half a second is invisible next to the
+// minutes being waited for, and costs nothing.
+var waitPoll = 500 * time.Millisecond
 
 // Log returns a job's whole log and its file path.
 func (s *JobStore) Log(ref string) (text, path string, ok bool) {
@@ -260,10 +317,12 @@ func (s *JobStore) Log(ref string) (text, path string, ok bool) {
 func (s *JobStore) Kill(ref string) bool {
 	s.mu.Lock()
 	j := s.lookupLocked(ref)
-	s.mu.Unlock()
 	if j == nil {
+		s.mu.Unlock()
 		return false
 	}
+	j.stopping = true
+	s.mu.Unlock()
 	j.proc.Kill()
 	return true
 }
@@ -280,6 +339,7 @@ func (s *JobStore) Restart(ref string) (JobStatus, bool) {
 	}
 	req := sandbox.Request{Command: j.Command, WorkingDir: j.Dir}
 	proc := j.proc
+	j.stopping = true
 	s.mu.Unlock()
 
 	proc.Kill()
@@ -331,6 +391,7 @@ func (s *JobStore) KillAll() {
 	s.mu.Lock()
 	jobs := make([]*Job, 0, len(s.jobs))
 	for _, j := range s.jobs {
+		j.stopping = true
 		jobs = append(jobs, j)
 	}
 	s.mu.Unlock()
@@ -374,6 +435,7 @@ func (j *Job) status() JobStatus {
 		Running: !j.exited, ExitCode: j.exitCode, Port: j.port,
 		Where: jobWhere(j.Target), Started: j.Started, Ended: j.ended,
 		Restarts: j.restarts, LogPath: j.log.Path(), LogBytes: j.log.Size(),
+		LastOutput: j.log.LastWrite(),
 	}
 }
 

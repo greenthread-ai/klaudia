@@ -6,6 +6,14 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Long-running background jobs.** A job that exits on its own is delivered
+  to the model, as a background agent's result is (mid-turn as steering, or a
+  turn of its own when idle, with the end of its output), so the model can
+  start a 40-minute provisioning run, end its turn and be woken by it. A job
+  stopped on request is not. `BashOutput` takes `wait_seconds` (up to 600)
+  to wait for exit or a `filter` match in one call. `Jobs`, `BashOutput`
+  and the jobs panel show run time and time since the last output. `/quit`
+  and the double Ctrl+C name the running work that quitting stops.
 - **`/commit` drafts the message.** A bare `/commit` asks the model, in one
   call outside the conversation (`agent.Loop.Complete`), for a message
   describing exactly what will be committed, in the style of the

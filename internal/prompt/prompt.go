@@ -51,6 +51,7 @@ Be concise and direct. Output text to communicate with the user; all text you em
 - When a task needs multiple independent searches or reads, batch them.
 - Never guess or fabricate file contents, APIs, or URLs — verify by reading.
 - Run long-lived processes (dev servers, watchers) with Bash run_in_background, and check Jobs before starting one — it is often already running.
+- For a long task that ends (provisioning a VM, a cluster rollout, a big build), also use run_in_background. Then either wait in one call with BashOutput wait_seconds (and a filter for the line that means done), or end your turn: you are told when a background job exits, with the end of its output. Do not poll it in a loop.
 
 ` + autonomy
 

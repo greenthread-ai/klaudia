@@ -44,6 +44,12 @@ func (m *Model) jobsPanel() string {
 			if j.Where != "" && j.Where != "local" {
 				head += " · " + j.Where
 			}
+			// Quiet is worth seeing on a long job — a provisioning step that
+			// has said nothing for twenty minutes may be fine or may be stuck,
+			// and only the person watching can tell. Reported, not judged.
+			if !j.LastOutput.IsZero() && time.Since(j.LastOutput) >= time.Minute {
+				head += " · quiet " + elapsed(time.Since(j.LastOutput))
+			}
 			rows = append(rows, row{j.Started, head, oneline(j.Command, 200)})
 		}
 	}
@@ -72,6 +78,25 @@ func (m *Model) jobsPanel() string {
 		lines = append(lines, caption(toolStyle.Render(ansi.Truncate(r.head, limit, "…"))+hintStyle.Render(tail)))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// runningWorkSummary names what quitting would stop — running jobs with their
+// age, then background agents — or "" when nothing is running.
+func (m *Model) runningWorkSummary() string {
+	var parts []string
+	if m.sess != nil && m.sess.Jobs != nil {
+		for _, j := range runningJobs(m.sess.Jobs.List()) {
+			name := j.Name
+			if name == "" {
+				name = j.ID
+			}
+			parts = append(parts, fmt.Sprintf("%s (%s)", name, elapsed(time.Since(j.Started))))
+		}
+	}
+	for _, a := range m.runningAgents() {
+		parts = append(parts, a.ID)
+	}
+	return shortList(parts, 3)
 }
 
 // jobsTickMsg redraws the panel so its elapsed times move while idle, when

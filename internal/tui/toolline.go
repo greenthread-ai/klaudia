@@ -56,7 +56,10 @@ func (m *Model) startTool(ev agent.Event) {
 	if showsEarly[ev.ToolName] {
 		m.showTool(p)
 	}
-	m.activeToolName = ev.ToolName + oneline(p.summary, 40)
+	m.activeToolName = ev.ToolName
+	if sum := oneline(p.summary, 40); sum != "" {
+		m.activeToolName += " " + sum // oneline trims the summary's leading space
+	}
 	m.activeToolStart = p.start
 }
 

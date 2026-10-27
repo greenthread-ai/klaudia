@@ -228,6 +228,12 @@ func (m *Model) runningJobCount() int {
 // bypass are worth interrupting for; "working normally" is not.
 func (m *Model) statusLine() string {
 	if m.quitArmed {
+		// Quitting stops every job and background agent. A provisioning run
+		// forty minutes in should not end on a reflex double-tap unannounced.
+		if work := m.runningWorkSummary(); work != "" {
+			return askStyle.Render("Press Ctrl+C again to quit — stops "+work) +
+				hintStyle.Render("  ·  any other key cancels")
+		}
 		return askStyle.Render("Press Ctrl+C again to quit") +
 			hintStyle.Render("  ·  any other key cancels")
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/schema"
@@ -60,9 +61,15 @@ func (t *Jobs) Execute(context.Context, Context, json.RawMessage) ([]Result, err
 	}
 	var b strings.Builder
 	for _, j := range list {
-		state := "running"
-		if !j.Running {
+		now := time.Now()
+		state := "running " + roundAge(now.Sub(j.Started))
+		switch {
+		case !j.Running:
 			state = fmt.Sprintf("exited (%d)", j.ExitCode)
+		case j.LastOutput.IsZero():
+			state += ", no output yet"
+		case now.Sub(j.LastOutput) >= time.Minute:
+			state += ", quiet " + roundAge(now.Sub(j.LastOutput))
 		}
 		fmt.Fprintf(&b, "%s  %s  %q  %s", j.ID, j.Name, j.Command, state)
 		if j.Port != "" {

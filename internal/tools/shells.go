@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/schema"
@@ -16,7 +17,12 @@ import (
 type BashOutputInput struct {
 	BashID string `json:"bash_id" jsonschema:"description=The background job's id (e.g. bash_1) or name (e.g. dev)"`
 	Filter string `json:"filter,omitempty" jsonschema:"description=Optional regex; only matching output lines are returned"`
+	// WaitSeconds lets one call wait out a long job instead of polling it.
+	WaitSeconds int `json:"wait_seconds,omitempty" jsonschema:"description=Wait up to this many seconds (max 600) for the job to exit or for output matching filter before returning"`
 }
+
+// maxBashOutputWait caps wait_seconds at Bash's own longest timeout.
+const maxBashOutputWait = 600
 
 type BashOutput struct {
 	schema *schema.Schema
@@ -36,7 +42,11 @@ func (t *BashOutput) Name() string { return "BashOutput" }
 func (t *BashOutput) Description(context.Context) (string, error) {
 	return "Read new output from a background job started by Bash with run_in_background. " +
 		"Accepts the job's id (bash_1) or its name (dev, api). Returns only output produced " +
-		"since the last read, plus whether the job is still running.", nil
+		"since the last read, plus whether the job is still running, how long it has run and how " +
+		"long since it last printed anything. For a long job (provisioning a VM, a rollout), pass " +
+		"wait_seconds (max 600) to wait for it to exit — or, with filter, for a matching line — in " +
+		"one call instead of polling. You are also told when a background job exits, so you can " +
+		"end your turn and be woken by it.", nil
 }
 
 func (t *BashOutput) InputSchema() json.RawMessage { return t.schema.Raw }
@@ -57,6 +67,9 @@ func (t *BashOutput) ValidateInput(raw json.RawMessage) error {
 			return fmt.Errorf("invalid filter regex: %w", err)
 		}
 	}
+	if in.WaitSeconds < 0 || in.WaitSeconds > maxBashOutputWait {
+		return fmt.Errorf("wait_seconds must be between 0 and %d", maxBashOutputWait)
+	}
 	return nil
 }
 
@@ -68,13 +81,25 @@ func (t *BashOutput) CheckPermissions(pctx permission.Context, _ permission.Perm
 	return allowAlways(pctx) // reading output of a shell we already started
 }
 
-func (t *BashOutput) Execute(_ context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (t *BashOutput) Execute(ctx context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
 	var in BashOutputInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
 	if t.shells == nil {
 		return []Result{{Content: "background jobs are not available", IsError: true}}, nil
+	}
+	waited := ""
+	if in.WaitSeconds > 0 {
+		var match *regexp.Regexp
+		if in.Filter != "" {
+			match = regexp.MustCompile(in.Filter) // validated above
+		}
+		why, ok := t.shells.Wait(ctx, in.BashID, match, time.Duration(in.WaitSeconds)*time.Second)
+		if !ok {
+			return []Result{{Content: t.shells.unknownJobMsg(in.BashID), IsError: true}}, nil
+		}
+		waited = why
 	}
 	out, ok := t.shells.Read(in.BashID)
 	if !ok {
@@ -90,12 +115,41 @@ func (t *BashOutput) Execute(_ context.Context, _ Context, raw json.RawMessage) 
 	} else {
 		b.WriteString(body)
 	}
-	if out.Running {
-		fmt.Fprintf(&b, "\n[job %s running]", out.Name)
-	} else {
-		fmt.Fprintf(&b, "\n[job %s exited, code %d]", out.Name, out.ExitCode)
+	b.WriteString("\n" + jobStateLine(out, time.Now()))
+	if waited == "timed out" {
+		fmt.Fprintf(&b, " — waited %ds; still going", in.WaitSeconds)
 	}
 	return []Result{{Content: b.String()}}, nil
+}
+
+// jobStateLine is BashOutput's last line: running or exited, for how long,
+// and — while running — how long since it last printed. Quiet is reported,
+// not judged: a provisioning step can say nothing for twenty minutes and be
+// fine, and the model is better placed than a threshold to know which it is.
+func jobStateLine(out ShellOutput, now time.Time) string {
+	if !out.Running {
+		return fmt.Sprintf("[job %s exited, code %d]", out.Name, out.ExitCode)
+	}
+	s := fmt.Sprintf("[job %s running for %s", out.Name, roundAge(now.Sub(out.Started)))
+	switch {
+	case out.LastOutput.IsZero():
+		s += ", no output yet"
+	case now.Sub(out.LastOutput) >= time.Minute:
+		s += ", last output " + roundAge(now.Sub(out.LastOutput)) + " ago"
+	}
+	return s + "]"
+}
+
+// roundAge renders a duration to the unit that matters: 42s, 7m, 3h12m.
+func roundAge(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return d.Round(time.Second).String()
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	}
 }
 
 // filterLines keeps only lines matching the (already-validated) regex.

@@ -100,3 +100,12 @@ func TestReadRunIsOneLine(t *testing.T) {
 		t.Errorf("got:\n%s\nwant prefix:\n%s", out, want)
 	}
 }
+
+// The live line names the running call with a space between tool and input.
+func TestActiveToolLabelIsSpaced(t *testing.T) {
+	m := newTestModel()
+	m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: "1", ToolName: "BashOutput", Input: map[string]any{"bash_id": "bash_1"}})
+	if m.activeToolName != "BashOutput bash_1" {
+		t.Errorf("activeToolName = %q", m.activeToolName)
+	}
+}

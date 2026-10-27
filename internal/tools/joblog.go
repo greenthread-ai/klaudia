@@ -22,7 +22,8 @@ type jobLog struct {
 	mu   sync.Mutex
 	path string
 	f    *os.File
-	n    int64 // bytes written
+	n    int64     // bytes written
+	last time.Time // when output last arrived; how a quiet job is told apart
 	// memOnly holds output when no file could be opened. Falling back to memory
 	// keeps a job working on a read-only home directory; it is bounded so the
 	// degraded path cannot become the unbounded growth this type exists to fix.
@@ -54,6 +55,7 @@ func newJobLog(dir, name string) *jobLog {
 func (l *jobLog) Write(b []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.last = time.Now()
 	if l.f == nil {
 		l.memOnly = append(l.memOnly, b...)
 		if len(l.memOnly) > maxMemLog {
@@ -103,6 +105,13 @@ func (l *jobLog) Size() int64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.n
+}
+
+// LastWrite is when output last arrived, zero if none has.
+func (l *jobLog) LastWrite() time.Time {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.last
 }
 
 // Path is the log file, or "" when the log is memory-only.

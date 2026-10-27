@@ -396,6 +396,9 @@ type Model struct {
 	// Ctrl+C quits; any other key disarms it. This is what stops a reflexive
 	// "stop the running thing" Ctrl+C from destroying the session.
 	quitArmed bool
+	// quitConfirmed is set by a /quit that warned about running work; the
+	// next /quit goes ahead.
+	quitConfirmed bool
 	// cancelling is set when the user pressed Esc but the agent goroutine
 	// hasn't returned yet (e.g. blocked in SDK retry backoff or a tool that's
 	// slow to honour ctx). The bottom view swaps "working…" for "cancelling…"
@@ -730,8 +733,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case jobExitMsg:
-		m.onJobExit(msg.status)
-		return m, m.waitForEvent()
+		return m, tea.Batch(m.onJobExit(msg.status), m.waitForEvent())
 
 	case mcpReloadMsg:
 		m.onMCPReload(msg.event)

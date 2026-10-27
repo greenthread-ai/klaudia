@@ -229,13 +229,50 @@ func (m *Model) stopFollow() bool {
 //
 // A dev server that dies at 14:02 and is noticed at 14:40 costs the intervening
 // half hour. The line is printed whether or not anyone was looking at the job.
-func (m *Model) onJobExit(st tools.JobStatus) {
-	if st.ExitCode == 0 {
-		m.appendLine(bannerStyle.Render(fmt.Sprintf("job %s exited cleanly", st.Name)))
-		return
+func (m *Model) onJobExit(st tools.JobStatus) tea.Cmd {
+	took := elapsed(st.Ended.Sub(st.Started).Truncate(time.Second))
+	switch {
+	case st.Stopped:
+		m.appendLine(hintStyle.Render(fmt.Sprintf("job %s stopped after %s", st.Name, took)))
+		// Stopped on request: the model asked, or the user did. Not news.
+		return nil
+	case st.ExitCode == 0:
+		m.appendLine(bannerStyle.Render(fmt.Sprintf("job %s exited cleanly after %s", st.Name, took)))
+	default:
+		m.appendLine(errStyle.Render(fmt.Sprintf(
+			"job %s exited with code %d after %s — /logs %s", st.Name, st.ExitCode, took, st.Name)))
 	}
-	m.appendLine(errStyle.Render(fmt.Sprintf(
-		"job %s exited with code %d — /logs %s", st.Name, st.ExitCode, st.Name)))
+	// The model is told too, as a background agent's result is: a job left to
+	// provision a VM or wait on a rollout is only useful if finishing it
+	// wakes the model, rather than waiting for it to think to poll. Idle,
+	// that starts a turn; mid-turn, it arrives at the next safe point.
+	notice := m.jobExitNotice(st, took)
+	if m.state == stateIdle {
+		m.setState(stateRunning)
+		return m.startTurn(notice)
+	}
+	m.steer.add(fmt.Sprintf("[%s exited %d]", st.ID, st.ExitCode), notice)
+	return nil
+}
+
+// jobExitNotice is what the model reads when a job ends: which job, how it
+// ended, and the end of its output, which is where the verdict usually is.
+func (m *Model) jobExitNotice(st tools.JobStatus, took string) string {
+	tail := ""
+	if m.sess != nil && m.sess.Jobs != nil {
+		if log, _, ok := m.sess.Jobs.Log(st.ID); ok {
+			lines := strings.Split(strings.TrimRight(log, "\n"), "\n")
+			if len(lines) > 20 {
+				lines = lines[len(lines)-20:]
+			}
+			tail = strings.Join(lines, "\n")
+		}
+	}
+	if strings.TrimSpace(tail) == "" {
+		tail = "(no output)"
+	}
+	return fmt.Sprintf("<background-job id=%q name=%q exit_code=\"%d\">\nBackground job %s (%s) exited with code %d after %s. Last output:\n\n%s\n</background-job>",
+		st.ID, st.Name, st.ExitCode, st.ID, st.Command, st.ExitCode, took, tail)
 }
 
 // restartCommand handles /restart <job>.

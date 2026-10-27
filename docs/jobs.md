@@ -18,7 +18,18 @@ gets:
   at your vocabulary. A collision gets `-2`.
 - **A log file** at `~/.klaudia/jobs/<session>/<name>.log`, pruned after a week.
 - **Exit detection.** A crash is reported when it happens, not when someone next
-  looks.
+  looks — to you, and to the model: a job that ends on its own (not one
+  stopped on request) is delivered as a background agent's result is, as a
+  steering message mid-turn or a turn of its own when idle, with the end of
+  its output. That is what makes a long job (a VM provisioning, a rollout)
+  workable: the model can end its turn and be woken by it.
+- **Waiting without polling.** `BashOutput` takes `wait_seconds` (up to 600):
+  one call that returns when the job exits, when a line matches `filter`, or
+  at the limit, whichever is first. Esc ends the wait.
+- **Quiet is reported, not judged.** `Jobs`, `BashOutput` and the panel under
+  the prompt say how long a job has run and how long since it last printed
+  (`running for 42m, last output 25m ago`). A provisioning step can be silent
+  for twenty minutes and fine; whoever is watching decides.
 - **A port**, when the job announces one recognisably.
 - **A location** — `local`, or the host a job started over ssh runs on.
 
@@ -66,6 +77,10 @@ This matters more than it sounds. Before, cancelling `sh -c "npm run dev"`
 reaped the shell and left node holding the port — so stopping a job did not stop
 it, Esc during a command did not end it, and the next start became a second
 copy.
+
+Quitting stops every job and background agent, so with any running the first
+`/quit` names them and the second goes ahead, and the double Ctrl+C hint says
+what it will stop.
 
 A consequence: Ctrl+C at your terminal no longer reaches Klaudia's children by
 accident. That is the point — a stray signal should not kill a managed job — and

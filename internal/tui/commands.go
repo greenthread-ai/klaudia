@@ -302,6 +302,13 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		m.appendLine(bannerStyle.Render(slashHelp(m.keyHints(), m.skillNamesForHelp()...)))
 	case "/quit", "/exit":
+		// Quitting stops every job and background agent, so with any running
+		// the first /quit says which and the second means it.
+		if work := m.runningWorkSummary(); work != "" && !m.quitConfirmed {
+			m.quitConfirmed = true
+			m.appendLine(noticeStyle.Render("Quitting stops " + work + ". /quit again to quit anyway, or /jobs to look first."))
+			break
+		}
 		return m, m.quit()
 	case "/clear":
 		if m.busyGuard("/clear") {

@@ -270,6 +270,24 @@ that span, and fix what does not:
 - **Frontends.** The same guarantees over stream-json and headless `-p`, where
   background agents currently run in the foreground.
 
+Status 2026-10-27, verified with tests in `internal/tools/longjob_test.go` and
+`internal/tui/jobsview_test.go`:
+
+- Done: a job that ends on its own reaches the model (steering mid-turn, a turn
+  when idle, with the last 20 lines); one stopped on request does not.
+  `BashOutput wait_seconds` (≤600) waits for exit or a `filter` match in one
+  call. Run time and time since last output are shown to the model (`Jobs`,
+  `BashOutput`) and in the panel. Stopping a job kills its process tree
+  (grandchildren included). `/quit` and the double Ctrl+C name the running
+  work they will stop. The system prompt tells the model to background long
+  tasks and wait or end its turn rather than poll.
+- Open: a job that should **outlive the session** (detach, and re-attach on
+  resume) — today quitting stops it, now with a warning. Job-exit delivery in
+  stream-json and headless, which have no idle loop to wake. Hang detection
+  for a background *agent* (a sub-agent waiting on one long call shows its last
+  step, but nothing flags a stall). Log growth: a job's log file is unbounded
+  until the weekly prune.
+
 ## Plan mode and goal runs: one work loop
 
 Driven end to end against the mock (`TestPlanApprovalRuns`,

@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/greenthread-ai/klaudia/internal/tools"
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 type fakeJobs struct {
@@ -34,7 +37,9 @@ func (f *fakeJobs) Restart(ref string) (tools.JobStatus, bool) {
 
 func jobsModel(t *testing.T, f *fakeJobs) *Model {
 	t.Helper()
-	return &Model{sess: &Session{Jobs: f}, height: 40}
+	// A turn in flight, so an exit is queued for the model rather than
+	// starting a turn of its own (which needs a full Model).
+	return &Model{sess: &Session{Jobs: f}, height: 40, state: stateRunning}
 }
 
 // A crash has to be reported when it happens, not when someone next looks.
@@ -202,5 +207,73 @@ func TestJobsWithoutAStoreSaysSo(t *testing.T) {
 	m.jobsCommand()
 	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "not available") {
 		t.Errorf("output = %s", out)
+	}
+}
+
+// A job that ends on its own is news for the model, as a background agent's
+// result is: left to provision something, it must be able to wake the model
+// rather than wait to be polled. One stopped on request is not.
+func TestJobExitReachesTheModelUnlessStopped(t *testing.T) {
+	f := &fakeJobs{}
+	m := jobsModel(t, f)
+	m.onJobExit(tools.JobStatus{ID: "bash_2", Name: "provision", Command: "./provision.sh", ExitCode: 0})
+	in := m.steer.drain()
+	for _, want := range []string{`<background-job id="bash_2"`, "provision.sh", "exited with code 0"} {
+		if !strings.Contains(in.Text, want) {
+			t.Errorf("notice lacks %q:\n%s", want, in.Text)
+		}
+	}
+
+	m.onJobExit(tools.JobStatus{ID: "bash_3", Name: "dev", Stopped: true})
+	if m.steer.pending() {
+		t.Error("a job stopped on request was delivered to the model")
+	}
+	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "job dev stopped") {
+		t.Errorf("the stop was not reported to the user:\n%s", out)
+	}
+}
+
+// Idle, the exit starts a turn — the model wakes on its own.
+func TestJobExitWakesAnIdleSession(t *testing.T) {
+	m := newTestModel()
+	m.resize(100, 30)
+	m.ctx = t.Context()
+	m.sess.Jobs = &fakeJobs{}
+	prompts := make(chan string, 1)
+	m.run = func(_ context.Context, turn agent.Turn) (agent.Result, error) {
+		prompts <- turn.Prompt
+		return agent.Result{}, nil
+	}
+	if cmd := m.onJobExit(tools.JobStatus{ID: "bash_1", Name: "rollout", ExitCode: 1}); cmd == nil {
+		t.Fatal("idle: want a turn started")
+	}
+	select {
+	case p := <-prompts:
+		if !strings.Contains(p, `<background-job id="bash_1"`) {
+			t.Errorf("turn prompt = %q", p)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no turn ran")
+	}
+}
+
+// Quitting stops every job; with one running, it says so first.
+func TestQuitWarnsAboutRunningJobs(t *testing.T) {
+	m := newTestModel()
+	m.sess.Jobs = &fakeJobs{jobs: []tools.JobStatus{{ID: "bash_1", Name: "provision", Running: true, Started: time.Now().Add(-42 * time.Minute)}}}
+	if _, cmd := m.handleSlash("/quit"); cmd != nil || m.quitting {
+		t.Fatal("quit with a job running did not warn first")
+	}
+	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "Quitting stops provision (42m") {
+		t.Errorf("warning = %q", out)
+	}
+	if _, cmd := m.handleSlash("/quit"); cmd == nil || !m.quitting {
+		t.Error("the second /quit did not quit")
+	}
+	m2 := newTestModel()
+	m2.sess.Jobs = m.sess.Jobs
+	m2.quitArmed = true
+	if got := visibleText(m2.statusLineAt(200)); !strings.Contains(got, "stops provision") {
+		t.Errorf("Ctrl+C hint = %q", got)
 	}
 }
