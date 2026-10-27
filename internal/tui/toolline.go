@@ -112,6 +112,52 @@ func (m *Model) abandonPendingTools() {
 	m.pendingTools = nil
 }
 
+// readEntry is one successful Read waiting to be written with its run.
+type readEntry struct{ name, detail string }
+
+// flushReads writes the held run of Reads. Models read in batches — the file,
+// its test, go.mod — and one line per file was three lines saying one thing.
+// A run of one is written as it always was; two or more become
+// "✓ Read 3 files · main.go, main_test.go, go.mod". commit calls this before
+// anything else reaches scrollback, so the run lands in its place.
+func (m *Model) flushReads() {
+	run := m.readRun
+	if len(run) == 0 {
+		return
+	}
+	m.readRun = nil
+	if len(run) == 1 {
+		line := "✓ Read " + run[0].name
+		if run[0].detail != "" {
+			line += " · " + run[0].detail
+		}
+		m.appendLine(toolStyle.Render(line))
+		return
+	}
+	names := make([]string, len(run))
+	for i, r := range run {
+		names[i] = r.name
+	}
+	m.appendLine(toolStyle.Render(fmt.Sprintf("✓ Read %s · %s", countOf(len(run), "file"), shortList(names, 6))))
+}
+
+// heldReadsLine is the line the held run would be written as, for the live
+// region; "" when nothing is held.
+func (m *Model) heldReadsLine() string {
+	switch n := len(m.readRun); {
+	case n == 0:
+		return ""
+	case n == 1:
+		return toolStyle.Render("✓ Read " + m.readRun[0].name)
+	default:
+		names := make([]string, n)
+		for i, r := range m.readRun {
+			names[i] = r.name
+		}
+		return toolStyle.Render(fmt.Sprintf("✓ Read %s · %s", countOf(n, "file"), shortList(names, 6)))
+	}
+}
+
 // renderToolResult writes a finished call: one line, plus whatever below it
 // is worth reading — an Edit's diff, a command's output, an error.
 func (m *Model) renderToolResult(ev agent.Event, p *pendingTool, seq int) {
@@ -155,7 +201,13 @@ func (m *Model) renderToolResult(ev agent.Event, p *pendingTool, seq int) {
 		m.appendLine(toolStyle.Render(indent + "✓ " + head + ": " + exitPlanResultLine(s)))
 		return
 	case compactTools[ev.ToolName]:
-		if d := compactDetail(ev.ToolName, s, p.input); d != "" {
+		d := compactDetail(ev.ToolName, s, p.input)
+		if ev.ToolName == "Read" && !p.shown && head == p.header() {
+			// Held, so a run of reads becomes one line (flushReads).
+			m.readRun = append(m.readRun, readEntry{name: strings.TrimSpace(p.summary), detail: d})
+			return
+		}
+		if d != "" {
 			head += " · " + d
 		}
 		m.appendLine(toolStyle.Render(indent + "✓ " + head))

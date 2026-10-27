@@ -323,6 +323,11 @@ func (m *Model) bottomView() string {
 		if tail := m.streamTail(); tail != "" {
 			bottom = tail + "\n" + bottom
 		}
+		// Reads held for grouping are not in scrollback yet; show them here
+		// so a long think after a batch of reads does not hide them.
+		if held := m.heldReadsLine(); held != "" {
+			bottom = truncateToWidth(held, m.width-1) + "\n" + bottom
+		}
 		if m.steer.pending() {
 			bottom += "\n" + caption(m.renderQueuedHint())
 		}

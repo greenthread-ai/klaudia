@@ -359,6 +359,9 @@ type Model struct {
 	pendingRecent map[string][]string
 	// pendingTools are calls whose line waits for their result, in call order.
 	pendingTools []*pendingTool
+	// readRun holds consecutive successful Reads until something else is
+	// written, so they can share one line (flushReads).
+	readRun []readEntry
 	// pendingCommands maps an in-flight tool_use id to its Bash command line,
 	// so a result can be attributed to the command that produced it.
 	pendingCommands map[string]string

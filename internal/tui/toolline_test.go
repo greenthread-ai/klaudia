@@ -20,6 +20,7 @@ func TestReadIsOneLine(t *testing.T) {
 	m := newTestModel()
 	m.sess.CWD = "/proj"
 	call(m, "1", "Read", map[string]any{"file_path": "/proj/main.go"}, "1\tpackage main\n2\t\n3\tfunc main() {}", false)
+	m.flushReads()
 	out := strings.TrimSpace(stripANSI(m.transcript.String()))
 	if out != "✓ Read main.go · 3 lines" {
 		t.Errorf("got %q", out)
@@ -72,5 +73,26 @@ func TestInterruptedCallsAreNotLost(t *testing.T) {
 	m.update(doneMsg{err: context.Canceled})
 	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "⊘ Bash sleep 60 · stopped") {
 		t.Errorf("got:\n%s", out)
+	}
+}
+
+// A batch of reads is one line, written before whatever follows it, and
+// visible in the live region while it is held.
+func TestReadRunIsOneLine(t *testing.T) {
+	m := newTestModel()
+	m.resize(100, 30)
+	m.sess.CWD = "/proj"
+	m.setState(stateRunning)
+	for i, f := range []string{"main.go", "main_test.go", "go.mod"} {
+		call(m, string(rune('a'+i)), "Read", map[string]any{"file_path": "/proj/" + f}, "1\tx", false)
+	}
+	if !strings.Contains(stripANSI(m.View()), "✓ Read 3 files · main.go, main_test.go, go.mod") {
+		t.Errorf("held reads not shown live:\n%s", stripANSI(m.View()))
+	}
+	call(m, "d", "Bash", map[string]any{"command": "go test ./..."}, "ok", false)
+	out := stripANSI(m.transcript.String())
+	want := "✓ Read 3 files · main.go, main_test.go, go.mod\n✓ Bash go test ./..."
+	if !strings.HasPrefix(out, want) {
+		t.Errorf("got:\n%s\nwant prefix:\n%s", out, want)
 	}
 }

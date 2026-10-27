@@ -211,6 +211,7 @@ func (m *Model) appendLine(s string) {
 // startup notices went out unwrapped and the terminal split them mid-word.
 // resize releases them.
 func (m *Model) commit(b transcriptBlock) {
+	m.flushReads() // a held run of Reads goes before whatever follows it
 	b.rendered = trimRenderedPadding(b.rendered)
 	m.transcript.add(b)
 	if !m.ready {

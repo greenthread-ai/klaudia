@@ -158,6 +158,10 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **A batch of reads is one line**: `✓ Read 3 files · main.go, main_test.go,
+  go.mod`. Consecutive successful Reads are held until the next thing is
+  written (shown in the live region meanwhile); a lone Read keeps its line
+  count.
 - **Edits show a real hunk.** An Edit printed all of `old_string` as `-`
   lines and all of `new_string` as `+` lines, with no position and the
   indentation collapsed. A one-word change inside ten lines read as twenty
