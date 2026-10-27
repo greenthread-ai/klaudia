@@ -102,6 +102,7 @@ func TestTruncationNoteNamesTheLimitSource(t *testing.T) {
 			loop := New(newTruncatingProvider(t, tt.limit), tools.NewRegistry(probe))
 			opts := tt.opts
 			opts.Prompt = "write the file"
+			opts.Hints = api.Hints{MaxTokens: "maxTokens in .klaudia/config.toml"} // Klaudia's wording; the default is neutral
 
 			var note string
 			_, err := loop.Run(context.Background(), opts, func(e Event) {

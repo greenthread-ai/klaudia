@@ -21,6 +21,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/mcp"
 	"github.com/greenthread-ai/klaudia/internal/memory"
@@ -771,7 +772,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case errors.Is(msg.err, context.Canceled):
 			m.appendLine(toolStyle.Render(fmt.Sprintf("  ⊘ interrupted after %s", fmtDuration(elapsed))))
 		case msg.err != nil:
-			m.appendLine(errStyle.Render("error: " + api.FriendlyError(msg.err)))
+			m.appendLine(errStyle.Render("error: " + config.Hints.FriendlyError(msg.err)))
 		default:
 			// A turn can complete at the protocol level and still say nothing —
 			// a refusal, or a truncation. Left alone that renders as "✓ done"
@@ -872,7 +873,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case modelsMsg:
 		if msg.err != nil {
-			m.appendLine(errStyle.Render("model: " + api.FriendlyError(msg.err)))
+			m.appendLine(errStyle.Render("model: " + config.Hints.FriendlyError(msg.err)))
 			m.appendLine(hintStyle.Render("  You can still set one by name: /model <id>"))
 			return m, nil
 		}
@@ -890,7 +891,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case compactDoneMsg:
 		if msg.err != nil {
-			m.appendLine(errStyle.Render("compact: " + api.FriendlyError(msg.err)))
+			m.appendLine(errStyle.Render("compact: " + config.Hints.FriendlyError(msg.err)))
 		} else {
 			m.history = msg.history
 			m.appendLine(bannerStyle.Render("Compacted conversation. Summary:\n" + strings.TrimSpace(msg.summary)))

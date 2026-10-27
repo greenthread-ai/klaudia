@@ -43,10 +43,10 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
 
+	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/pkg/agent"
-	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
@@ -371,7 +371,7 @@ func resultEvent(res agent.Result, err error) map[string]any {
 	switch {
 	case err != nil:
 		m["subtype"] = "error_during_execution"
-		m["result"] = "Error: " + api.FriendlyError(err)
+		m["result"] = "Error: " + config.Hints.FriendlyError(err)
 	case agent.TurnEndedEmpty(res.Text):
 		// A refusal or a limit completes cleanly at the protocol level and says
 		// nothing. Reporting subtype "success" with an empty result let a

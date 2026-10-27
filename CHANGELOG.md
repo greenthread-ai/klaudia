@@ -86,6 +86,13 @@ port mirrors (see `internal/version`).
   Return.
 
 ### Changed (breaking)
+- **The core's advice is neutral unless the host words it.** `api.Hints`
+  carries a host's names for its settings, its compact command and the
+  sign-in whose token is often shared; `api.FriendlyError` uses neutral
+  wording and `Hints.FriendlyError` the host's. The loop takes the same value
+  as `agent.Options.Hints` (and `Spawner.WithHints`) for its two notes about
+  the output-token setting. Klaudia passes `config.Hints`, so its messages
+  are unchanged word for word.
 - **The provider layer is `pkg/api`, and the core's leaf packages are in
   `pkg/`** (`permission`, `plan`, `schema`, and `tool` — the tool contract,
   aliased from `internal/tools`). The Anthropic client there is neutral: no

@@ -164,7 +164,8 @@ aliases the contract), then an opt-in `pkg/tools/builtin`. The Anthropic
 client in `pkg/api` is neutral; Klaudia's request shaping and credential
 discovery are `internal/anthropicauth`.
 
-Left from stage 0: product text in the core. `api.FriendlyError` advises
+~~Left from stage 0: product text in the core.~~ Done: `api.Hints` (neutral by
+default; Klaudia's is `config.Hints`) and `agent.Options.Hints`. Was: `api.FriendlyError` advises
 `.klaudia/config.toml` keys (`maxRetries`, `streamIdleTimeout`,
 `contextWindow`, `baseURL`) and a Claude-Code-OAuth token-sharing cause, and
 two loop notes name `maxTokens in .klaudia/config.toml`. Only Klaudia's

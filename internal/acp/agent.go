@@ -44,8 +44,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
 
+	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/pkg/agent"
-	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/pkg/compaction"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/plan"
@@ -642,7 +642,7 @@ func (a *Agent) prompt(ctx context.Context, raw json.RawMessage) (any, error) {
 		if errors.Is(runErr, context.Canceled) {
 			return promptResult{StopReason: stopCancelled}, nil
 		}
-		return nil, errorf(codeInternalError, api.FriendlyError(runErr))
+		return nil, errorf(codeInternalError, config.Hints.FriendlyError(runErr))
 	}
 
 	// Two things leave an editor with nothing to show, and ACP has no status

@@ -13,11 +13,60 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
+// Hints are a host's own words for the settings and situations the core's
+// messages point a user at — "raise maxRetries in .klaudia/config.toml" is
+// right in Klaudia and wrong in anything else that embeds the loop. Each field
+// is a phrase dropped into a sentence; an empty one leaves the advice out or
+// words it neutrally, so the zero value is correct for any host.
+type Hints struct {
+	Retries       string // the retry budget setting, e.g. "maxRetries in .klaudia/config.toml"
+	IdleTimeout   string // the stream idle timeout setting (seconds, 0 disables)
+	ContextWindow string // the context-window setting compaction is sized against
+	MaxTokens     string // the output-token cap setting
+	Endpoint      string // where the endpoint URL is configured
+	Credentials   string // where a custom provider's credentials are configured
+	Compact       string // the command that compacts the conversation now, e.g. "/compact"
+	// SharedLogin names the sign-in whose token is commonly shared between
+	// sessions — a frequent cause of 429s — e.g. "you signed in via Claude
+	// Code OAuth". Empty words the cause neutrally.
+	SharedLogin string
+}
+
+// FriendlyError is FriendlyError with neutral wording (the zero Hints).
+func FriendlyError(err error) string { return Hints{}.FriendlyError(err) }
+
+func (h Hints) retryNote() string {
+	if h.Retries == "" {
+		return ""
+	}
+	return " (Raise " + h.Retries + " to retry more.)"
+}
+
+func (h Hints) sharedCause(capital bool) string {
+	if h.SharedLogin == "" {
+		if capital {
+			return "This often happens when the same credential is in use by another session"
+		}
+		return "this often happens when the same credential is in use by another session"
+	}
+	if capital {
+		return "If " + h.SharedLogin + " this often happens when the token is in use by another session"
+	}
+	return "if " + h.SharedLogin + " this often happens when the token is in use by another session"
+}
+
+func (h Hints) idleNote() string {
+	if h.IdleTimeout == "" {
+		return " Send your message again."
+	}
+	return " Send your message again; tune the window with " + h.IdleTimeout + " (seconds, 0 disables)."
+}
+
 // FriendlyError turns an API error into a concise, human-readable message.
 // Transient/auth failures (already retried for 429/5xx) get an actionable
 // explanation instead of a raw POST dump. Handles both the Anthropic and the
 // OpenAI-compatible providers. Non-API errors are returned as-is.
-func FriendlyError(err error) string {
+func (h Hints) FriendlyError(err error) string {
 	if err == nil {
 		return ""
 	}
@@ -33,8 +82,7 @@ func FriendlyError(err error) string {
 						" (Retries won't help — top up your plan/billing or switch to a different key.)"
 				}
 				if oai.Message != "" {
-					return "Rate limited (429): " + strings.TrimSpace(oai.Message) +
-						" (Raise maxRetries in .klaudia/config.toml to retry more.)"
+					return "Rate limited (429): " + strings.TrimSpace(oai.Message) + h.retryNote()
 				}
 			}
 			// Anthropic: pass through whatever the API actually said when it's
@@ -62,11 +110,22 @@ func FriendlyError(err error) string {
 					// add credits, or shrink the request below the long-context
 					// threshold via earlier autocompaction / /compact.
 					if isLongContextCredits(detail) {
-						return out + ": " + detail + " (Retries won't help — this needs pay-as-you-go usage credits for the long-context tier. Add credits, or reduce context: lower `contextWindow` in .klaudia/config.toml so autocompaction triggers earlier, and run /compact.)"
+						reduce := "lower the context window compaction is sized against so it triggers earlier"
+						if h.ContextWindow != "" {
+							reduce = "lower " + h.ContextWindow + " so autocompaction triggers earlier"
+						}
+						if h.Compact != "" {
+							reduce += ", and run " + h.Compact
+						}
+						return out + ": " + detail + " (Retries won't help — this needs pay-as-you-go usage credits for the long-context tier. Add credits, or reduce context: " + reduce + ".)"
 					}
-					return out + ": " + detail + " (If you signed in via Claude Code OAuth this often happens when the token is in use by another session. Raise maxRetries in .klaudia/config.toml to retry more.)"
+					note := " (" + h.sharedCause(true) + "."
+					if h.Retries != "" {
+						note += " Raise " + h.Retries + " to retry more."
+					}
+					return out + ": " + detail + note + ")"
 				}
-				return out + ": if you signed in via Claude Code OAuth this often happens when the token is in use by another session — try closing other sessions and waiting a moment. (Raise maxRetries in .klaudia/config.toml to retry more.)"
+				return out + ": " + h.sharedCause(false) + " — try closing other sessions and waiting a moment." + h.retryNote()
 			}
 			// Fallback (no parseable provider payload). The OAuth-token-sharing
 			// cause is Anthropic-specific, so still include it when the error
@@ -74,9 +133,13 @@ func FriendlyError(err error) string {
 			out := "Rate limited (429): the API is busy and retries were exhausted. "
 			var anthErr *anthropic.Error
 			if errors.As(err, &anthErr) {
-				out += "If you signed in via Claude Code OAuth, this often happens when the token is in use by another session. "
+				if h.SharedLogin != "" {
+					out += "If " + h.SharedLogin + ", this often happens when the token is in use by another session. "
+				} else {
+					out += h.sharedCause(true) + ". "
+				}
 			}
-			return out + "Wait a moment and try again. (Raise maxRetries in .klaudia/config.toml to retry more.)"
+			return out + "Wait a moment and try again." + h.retryNote()
 		case 400:
 			// A 400 is usually the model rejecting an input shape, but two
 			// patterns are really "your conversation outgrew the model's context
@@ -88,8 +151,14 @@ func FriendlyError(err error) string {
 			// autocompaction) and /compact to recover the current session.
 			if detail := providerDetail(err); detail != "" {
 				if isContextOverflow(detail) {
-					return "Conversation outgrew the model's context window — the provider returned: " + detail +
-						" Set `contextWindow` in .klaudia/config.toml to match this model so autocompaction triggers earlier, and run /compact to summarise the current session."
+					fix := " Lower the context window compaction is sized against to match this model so it triggers earlier"
+					if h.ContextWindow != "" {
+						fix = " Set " + h.ContextWindow + " to match this model so autocompaction triggers earlier"
+					}
+					if h.Compact != "" {
+						fix += ", and run " + h.Compact + " to summarise the current session"
+					}
+					return "Conversation outgrew the model's context window — the provider returned: " + detail + fix + "."
 				}
 				return fmt.Sprintf("Bad request (400): %s", detail)
 			}
@@ -99,10 +168,9 @@ func FriendlyError(err error) string {
 			// API key provided", "You don't have access to …"); surface them and
 			// keep the generic where-to-fix-it hint.
 			if detail := providerDetail(err); detail != "" {
-				return fmt.Sprintf("Authentication failed (%d): %s. Check your API key / sign-in (or .klaudia/config.toml for a custom provider).", status, detail)
+				return fmt.Sprintf("Authentication failed (%d): %s. Check your API key / sign-in%s.", status, detail, h.credentialsNote())
 			}
-			return fmt.Sprintf("Authentication failed (%d): check your API key / sign-in "+
-				"(or .klaudia/config.toml for a custom provider).", status)
+			return fmt.Sprintf("Authentication failed (%d): check your API key / sign-in%s.", status, h.credentialsNote())
 		case 529:
 			if detail := providerDetail(err); detail != "" {
 				return fmt.Sprintf("The API is overloaded (529): %s Try again shortly.", detail)
@@ -122,8 +190,12 @@ func FriendlyError(err error) string {
 	var dnsErr *net.DNSError
 	var netErr *net.OpError
 	if errors.As(err, &dnsErr) || errors.As(err, &netErr) {
+		where := "the endpoint URL"
+		if h.Endpoint != "" {
+			where = h.Endpoint
+		}
 		return "Could not reach the model endpoint (network error). Check your internet " +
-			"connection and the baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml.\n" +
+			"connection and " + where + ".\n" +
 			"Details: " + err.Error()
 	}
 	// The stall wraps DeadlineExceeded, so check it first: the connection went
@@ -136,13 +208,11 @@ func FriendlyError(err error) string {
 		if errors.Is(err, errStallMidStream) {
 			return "The model connection went quiet mid-reply (no data before the idle timeout), so the " +
 				"partial answer above is all that arrived. It was not retried automatically — that would " +
-				"repeat what you already saw. Send your message again; tune the window with " +
-				"streamIdleTimeout in .klaudia/config.toml (seconds, 0 disables)."
+				"repeat what you already saw." + h.idleNote()
 		}
 		return "The model connection stalled (no data received before the idle timeout) and was " +
 			"auto-retried without success — usually a flaky network, proxy, or VPN dropping the " +
-			"streaming connection. Send your message again; tune the window with streamIdleTimeout " +
-			"in .klaudia/config.toml (seconds, 0 disables)."
+			"streaming connection." + h.idleNote()
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "The request to the model endpoint timed out. Check the endpoint is reachable " +
@@ -393,4 +463,11 @@ func IsImmutableThinking(err error) bool {
 	}
 	return strings.Contains(d, "cannot be modified") &&
 		(strings.Contains(d, "thinking") || strings.Contains(d, "redacted_thinking"))
+}
+
+func (h Hints) credentialsNote() string {
+	if h.Credentials == "" {
+		return ""
+	}
+	return " (or " + h.Credentials + ")"
 }

@@ -177,6 +177,10 @@ type Options struct {
 	// loop announces with a "plan" event whenever it changes; see planevent.go.
 	// Nil leaves those tools on the store they were built with.
 	Plan *plan.Store
+	// Hints are the host's words for its own settings, used where the loop
+	// tells the user or the model how to change one (see api.Hints). The
+	// zero value words that advice neutrally.
+	Hints api.Hints
 	// Background runs sub-agents started with run_in_background (passed on
 	// as tools.Context.Background). Nil runs them in the foreground. A
 	// spawned child never gets one: a background child of a background child
@@ -408,8 +412,8 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			maxTokensLowered = true
 			if emit != nil {
 				emit(Event{Type: "notice", Content: fmt.Sprintf(
-					"the model's output limit is %d tokens, not the %d requested — retrying this turn at %d "+
-						"(set maxTokens in .klaudia/config.toml to avoid the wasted round-trip)", limit, maxTokens, limit)})
+					"the model's output limit is %d tokens, not the %d requested — retrying this turn at %d%s",
+					limit, maxTokens, limit, maxTokensAdvice(opts.Hints))})
 			}
 			maxTokens, maxTokensSource = int64(limit), api.LimitSourceRejected
 			continue
@@ -509,7 +513,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		truncID, wasTruncated := truncatedToolUseID(assistant)
 		preempt := func(tu anthropic.BetaToolUseBlock) (string, bool) {
 			if wasTruncated && tu.ID == truncID {
-				return truncatedToolNote(maxTokens, maxTokensSource), true
+				return truncatedToolNote(maxTokens, maxTokensSource, opts.Hints), true
 			}
 			return "", false
 		}
@@ -955,7 +959,7 @@ func isEmptyToolInput(raw json.RawMessage) bool {
 // read as the model's limit and sent the model splitting files it could have
 // written whole. The other sources are the model's real cap, so they get the
 // label and no hint.
-func truncatedToolNote(maxTokens int64, source string) string {
+func truncatedToolNote(maxTokens int64, source string, hints api.Hints) string {
 	limit := fmt.Sprintf("max_tokens=%d", maxTokens)
 	if source != "" {
 		limit += ", from " + source
@@ -965,13 +969,17 @@ func truncatedToolNote(maxTokens int64, source string) string {
 		"run — nothing was written or changed. Produce less in one turn: write a large file "+
 		"in smaller pieces (create it, then append/edit the rest), or shorten the content, "+
 		"then continue.", limit)
+	setting := hints.MaxTokens
+	if setting == "" {
+		setting = "the host's output-token setting"
+	}
 	switch source {
 	case api.LimitSourceConfig:
-		note += " This limit is set by maxTokens in .klaudia/config.toml; if the model allows more, " +
+		note += " This limit is set by " + setting + "; if the model allows more, " +
 			"tell the user it can be raised there."
 	case api.LimitSourceFallback:
 		note += " The model id was not recognised, so this is a conservative floor rather than " +
-			"the model's real limit; tell the user to set maxTokens in .klaudia/config.toml."
+			"the model's real limit; tell the user to set " + setting + "."
 	}
 	return note
 }
@@ -1473,4 +1481,14 @@ func hostChangeFor(opts Options) tools.HostApprover {
 		return nil
 	}
 	return opts.Gate.HostChanges(opts.Approver)
+}
+
+// maxTokensAdvice is the parenthetical on the retried-at-the-limit notice: how
+// to stop paying for the round-trip, when the host has said where its setting
+// lives.
+func maxTokensAdvice(h api.Hints) string {
+	if h.MaxTokens == "" {
+		return ""
+	}
+	return " (set " + h.MaxTokens + " to avoid the wasted round-trip)"
 }

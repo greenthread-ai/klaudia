@@ -19,6 +19,7 @@ import (
 type Spawner struct {
 	context    func(dir string) string // shared context after each role prompt (WithContext)
 	types      func(name string) (SubagentType, bool)
+	hints      api.Hints
 	provider   api.Provider
 	base       *tools.Registry
 	model      anthropic.Model
@@ -159,6 +160,13 @@ func (s *Spawner) WithEffort(e api.Effort) *Spawner {
 // lookup, so a Spawner built without this still behaves sanely.
 func (s *Spawner) WithLimits(l api.ModelLimits) *Spawner {
 	s.limits = l
+	return s
+}
+
+// WithHints gives sub-agents the host's wording for its settings (api.Hints),
+// so a child's notes point at the same place the parent's do.
+func (s *Spawner) WithHints(h api.Hints) *Spawner {
+	s.hints = h
 	return s
 }
 
@@ -333,6 +341,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		Hooks:         s.hooks,
 		SubAgent:      true,
 		Spill:         s.spill,
+		Hints:         s.hints,
 	}, emit)
 	if err != nil {
 		// Whatever the child wrote stays where it is. A failed or interrupted

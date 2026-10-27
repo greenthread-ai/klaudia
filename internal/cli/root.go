@@ -103,6 +103,7 @@ type agentWiring struct {
 func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *hostgate.HostGate, worktrees bool) (*agentWiring, error) {
 	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).
 		WithTypes(subagentTypes).
+		WithHints(config.Hints).
 		WithWorkingDir(workingDir).
 		WithGate(gateFor(host)).
 		WithIsolator(isolator(worktrees))
@@ -1369,6 +1370,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Effort:          s.Effort,
 			Permission:      s.Permission,
 			Gate:            gateFor(hostGate),
+			Hints:           config.Hints,
 			DeferredTools:   currentDeferred(),
 			Recorder:        recorder,
 			WebTools:        true,
@@ -1636,7 +1638,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 	if err != nil {
 		out.Subtype = "error_during_execution"
-		out.Result = "Error: " + api.FriendlyError(err)
+		out.Result = "Error: " + config.Hints.FriendlyError(err)
 	} else if agent.TurnEndedEmpty(res.Text) {
 		// The turn completed but produced no answer — a refusal, or a limit.
 		// Reporting "success" with empty output would let a pipeline treat a

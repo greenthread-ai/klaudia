@@ -25,7 +25,7 @@ func (w safeWrap) Unwrap() error { return w.inner }
 
 func TestFriendlyErrorRateLimit(t *testing.T) {
 	// Pass the API error directly: the 429 branch returns before .Error().
-	msg := FriendlyError(&anthropic.Error{StatusCode: 429})
+	msg := hinted.FriendlyError(&anthropic.Error{StatusCode: 429})
 	if !strings.Contains(msg, "Rate limited (429)") {
 		t.Errorf("got %q, want a rate-limit message", msg)
 	}
@@ -36,19 +36,19 @@ func TestFriendlyErrorRateLimit(t *testing.T) {
 
 func TestFriendlyErrorUnwrapsThroughWrapper(t *testing.T) {
 	err := safeWrap{inner: &anthropic.Error{StatusCode: 429}}
-	if !strings.Contains(FriendlyError(err), "Rate limited (429)") {
+	if !strings.Contains(hinted.FriendlyError(err), "Rate limited (429)") {
 		t.Error("FriendlyError should unwrap to the API error and classify it")
 	}
 }
 
 func TestFriendlyErrorOpenAI(t *testing.T) {
 	// The OpenAI-compatible provider's error must classify like Anthropic's.
-	msg := FriendlyError(&OpenAIError{StatusCode: 429, Body: "rate limited"})
+	msg := hinted.FriendlyError(&OpenAIError{StatusCode: 429, Body: "rate limited"})
 	if !strings.Contains(msg, "Rate limited (429)") {
 		t.Errorf("OpenAI 429 not classified: %q", msg)
 	}
-	if FriendlyError(&OpenAIError{StatusCode: 401}) == "" ||
-		!strings.Contains(FriendlyError(&OpenAIError{StatusCode: 401}), "Authentication failed") {
+	if hinted.FriendlyError(&OpenAIError{StatusCode: 401}) == "" ||
+		!strings.Contains(hinted.FriendlyError(&OpenAIError{StatusCode: 401}), "Authentication failed") {
 		t.Error("OpenAI 401 not classified as auth failure")
 	}
 }
@@ -65,7 +65,7 @@ func TestFriendlyError429AnthropicSurfacesUpstreamMessage(t *testing.T) {
 	}
 	anthErr.StatusCode = 429 // the status comes off the HTTP response, not the body
 
-	got := FriendlyError(&anthErr)
+	got := hinted.FriendlyError(&anthErr)
 	for _, want := range []string{
 		"Rate limited (429)",
 		"[rate_limit_error]",
@@ -97,7 +97,7 @@ func TestFriendlyError429AnthropicUselessMessageFallsBack(t *testing.T) {
 	}
 	anthErr.StatusCode = 429
 
-	got := FriendlyError(&anthErr)
+	got := hinted.FriendlyError(&anthErr)
 	// Type still surfaces — that's actually informative.
 	if !strings.Contains(got, "[rate_limit_error]") {
 		t.Errorf("type label missing: %q", got)
@@ -118,14 +118,14 @@ func TestFriendlyError429HintIsProviderSpecific(t *testing.T) {
 	// The Claude Code OAuth-token hint is Anthropic-specific and must not surface
 	// for OpenAI-compatible providers (the original "even though we're using
 	// ChatGPT we're told to check our Claude Code OAuth" bug).
-	openAI := FriendlyError(&OpenAIError{StatusCode: 429})
+	openAI := hinted.FriendlyError(&OpenAIError{StatusCode: 429})
 	if strings.Contains(openAI, "OAuth") || strings.Contains(openAI, "Claude Code") {
 		t.Errorf("OpenAI 429 leaked the Claude-Code OAuth hint: %q", openAI)
 	}
 	if !strings.Contains(openAI, "maxRetries") {
 		t.Errorf("OpenAI 429 should still mention the retries env: %q", openAI)
 	}
-	anth := FriendlyError(&anthropic.Error{StatusCode: 429})
+	anth := hinted.FriendlyError(&anthropic.Error{StatusCode: 429})
 	if !strings.Contains(anth, "Claude Code OAuth") {
 		t.Errorf("Anthropic 429 should mention the OAuth-token cause: %q", anth)
 	}
@@ -136,7 +136,7 @@ func TestFriendlyErrorInsufficientQuotaDoesNotRecommendRetry(t *testing.T) {
 	// useful message, and retries won't help — so we surface their wording and
 	// drop the misleading "retries / maxRetries" advice.
 	body := `{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","param":null,"code":"insufficient_quota"}}`
-	msg := FriendlyError(&OpenAIError{StatusCode: 429, Body: body})
+	msg := hinted.FriendlyError(&OpenAIError{StatusCode: 429, Body: body})
 
 	for _, want := range []string{"Insufficient quota", "exceeded your current quota", "Retries won't help"} {
 		if !strings.Contains(msg, want) {
@@ -154,7 +154,7 @@ func TestFriendlyError429PassesThroughOpenAIMessage(t *testing.T) {
 	// For a non-quota 429 with a useful provider message, surface it verbatim
 	// instead of the generic "API is busy" guess.
 	body := `{"error":{"message":"You are sending requests too quickly.","type":"requests","code":"rate_limit_exceeded"}}`
-	msg := FriendlyError(&OpenAIError{StatusCode: 429, Body: body})
+	msg := hinted.FriendlyError(&OpenAIError{StatusCode: 429, Body: body})
 	if !strings.Contains(msg, "You are sending requests too quickly") {
 		t.Errorf("expected the upstream message to pass through: %q", msg)
 	}
@@ -195,7 +195,7 @@ func TestFriendlyErrorPassesThroughUpstreamDetail(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := FriendlyError(&OpenAIError{StatusCode: tc.status, Body: tc.body})
+			got := hinted.FriendlyError(&OpenAIError{StatusCode: tc.status, Body: tc.body})
 			for _, w := range tc.wantSubs {
 				if !strings.Contains(got, w) {
 					t.Errorf("missing %q in %q", w, got)
@@ -204,7 +204,7 @@ func TestFriendlyErrorPassesThroughUpstreamDetail(t *testing.T) {
 		})
 	}
 	// Without a parseable body, the generic templates are still used.
-	if got := FriendlyError(&OpenAIError{StatusCode: 401, Body: "plain text"}); !strings.Contains(got, "check your API key") {
+	if got := hinted.FriendlyError(&OpenAIError{StatusCode: 401, Body: "plain text"}); !strings.Contains(got, "check your API key") {
 		t.Errorf("401 without payload should fall back to the generic template; got %q", got)
 	}
 }
@@ -242,7 +242,7 @@ func TestBackoffGrows(t *testing.T) {
 
 func TestFriendlyErrorAuth(t *testing.T) {
 	for _, code := range []int{401, 403} {
-		msg := FriendlyError(&anthropic.Error{StatusCode: code})
+		msg := hinted.FriendlyError(&anthropic.Error{StatusCode: code})
 		if !strings.Contains(msg, "Authentication failed") {
 			t.Errorf("code %d: got %q", code, msg)
 		}
@@ -250,10 +250,10 @@ func TestFriendlyErrorAuth(t *testing.T) {
 }
 
 func TestFriendlyErrorPassthrough(t *testing.T) {
-	if FriendlyError(errors.New("some non-api failure")) != "some non-api failure" {
+	if hinted.FriendlyError(errors.New("some non-api failure")) != "some non-api failure" {
 		t.Errorf("non-API errors should pass through verbatim")
 	}
-	if FriendlyError(nil) != "" {
+	if hinted.FriendlyError(nil) != "" {
 		t.Errorf("nil error should yield empty string")
 	}
 }
@@ -263,19 +263,19 @@ func TestFriendlyErrorNetwork(t *testing.T) {
 	// stream error should hint at the endpoint, not dump a raw dial error.
 	dns := &net.DNSError{Err: "no such host", Name: "api.example.com"}
 	wrapped := fmt.Errorf("stream: %w", dns)
-	msg := FriendlyError(wrapped)
+	msg := hinted.FriendlyError(wrapped)
 	if !strings.Contains(msg, "Could not reach the model endpoint") || !strings.Contains(msg, "baseURL") {
 		t.Errorf("DNS error not made friendly: %q", msg)
 	}
 
 	// A connection refused (*net.OpError) should also be softened.
 	op := &net.OpError{Op: "dial", Err: errors.New("connection refused")}
-	if !strings.Contains(FriendlyError(op), "Could not reach the model endpoint") {
-		t.Errorf("OpError not made friendly: %q", FriendlyError(op))
+	if !strings.Contains(hinted.FriendlyError(op), "Could not reach the model endpoint") {
+		t.Errorf("OpError not made friendly: %q", hinted.FriendlyError(op))
 	}
 
 	// A timeout maps to the timeout hint.
-	if !strings.Contains(FriendlyError(fmt.Errorf("x: %w", context.DeadlineExceeded)), "timed out") {
+	if !strings.Contains(hinted.FriendlyError(fmt.Errorf("x: %w", context.DeadlineExceeded)), "timed out") {
 		t.Error("deadline-exceeded not classified as a timeout")
 	}
 }
@@ -287,7 +287,7 @@ func TestFriendlyError400ContextOverflowSuggestsContextWindow(t *testing.T) {
 	// user can't tell from that string that their context window is the real
 	// issue — translate it.
 	body := `{"error":{"message":"max_tokens must be at least 1, got -71. (parameter=max_tokens, value=-71)","type":"BadRequestError","param":"max_tokens","code":400}}`
-	msg := FriendlyError(&OpenAIError{StatusCode: 400, Body: body})
+	msg := hinted.FriendlyError(&OpenAIError{StatusCode: 400, Body: body})
 	for _, want := range []string{
 		"outgrew the model's context window",
 		"contextWindow",
@@ -305,7 +305,7 @@ func TestFriendlyError400OtherStillSurfacesUpstream(t *testing.T) {
 	// A normal 400 (bad input shape) gets the upstream message but NOT the
 	// context-window advice.
 	body := `{"error":{"message":"invalid model parameter","type":"BadRequestError","code":400}}`
-	msg := FriendlyError(&OpenAIError{StatusCode: 400, Body: body})
+	msg := hinted.FriendlyError(&OpenAIError{StatusCode: 400, Body: body})
 	if !strings.Contains(msg, "Bad request (400)") || !strings.Contains(msg, "invalid model parameter") {
 		t.Errorf("upstream 400 should pass through; got %q", msg)
 	}
@@ -327,7 +327,7 @@ func TestFriendlyError429SessionLimitAdvisesNotToRetry(t *testing.T) {
 	}
 	anthErr.StatusCode = 429
 
-	got := FriendlyError(&anthErr)
+	got := hinted.FriendlyError(&anthErr)
 	if !strings.Contains(got, "session limit") {
 		t.Errorf("upstream session-limit message must be surfaced; got %q", got)
 	}
@@ -352,7 +352,7 @@ func TestFriendlyError429LongContextCreditsAdvisesNotToRetry(t *testing.T) {
 	}
 	anthErr.StatusCode = 429
 
-	got := FriendlyError(&anthErr)
+	got := hinted.FriendlyError(&anthErr)
 	if !strings.Contains(got, "Usage credits are required") {
 		t.Errorf("upstream long-context-credits message must be surfaced; got %q", got)
 	}
@@ -545,5 +545,40 @@ func TestMaxTokensTooLargeReadsAnthropicBody(t *testing.T) {
 	limit, ok := MaxTokensTooLarge(err)
 	if !ok || limit != 64000 {
 		t.Errorf("MaxTokensTooLarge() = (%d, %v), want (64000, true) — the cap is in the body", limit, ok)
+	}
+}
+
+// hinted carries Klaudia's wording (internal/config.Hints, which this package
+// cannot import), so these tests pin that a host's hints reproduce its
+// messages exactly.
+var hinted = Hints{
+	Retries:       "maxRetries in .klaudia/config.toml",
+	IdleTimeout:   "streamIdleTimeout in .klaudia/config.toml",
+	ContextWindow: "`contextWindow` in .klaudia/config.toml",
+	MaxTokens:     "maxTokens in .klaudia/config.toml",
+	Endpoint:      "the baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml",
+	Credentials:   ".klaudia/config.toml for a custom provider",
+	Compact:       "/compact",
+	SharedLogin:   "you signed in via Claude Code OAuth",
+}
+
+// With no hints the advice is worded for any host: nothing names Klaudia's
+// files, commands or sign-in.
+func TestFriendlyErrorNeutralByDefault(t *testing.T) {
+	errs := []error{
+		fmt.Errorf("x: %w", context.DeadlineExceeded),
+		&net.DNSError{Err: "no such host", Name: "api.example.com"},
+		fmt.Errorf("%w: %w", ErrStreamStalled, errStallMidStream),
+		&OpenAIError{StatusCode: 429, Body: `{"error":{"message":"slow down","type":"rate_limit"}}`},
+		&OpenAIError{StatusCode: 401, Body: `{"error":{"message":"bad key"}}`},
+		&OpenAIError{StatusCode: 400, Body: `{"error":{"message":"context length exceeded"}}`},
+	}
+	for _, e := range errs {
+		msg := FriendlyError(e)
+		for _, product := range []string{".klaudia", "Klaudia", "Claude Code", "/compact", "maxRetries", "streamIdleTimeout", "contextWindow"} {
+			if strings.Contains(msg, product) {
+				t.Errorf("neutral message names %q: %s", product, msg)
+			}
+		}
 	}
 }
