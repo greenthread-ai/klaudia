@@ -2,6 +2,7 @@ package agent
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
@@ -46,7 +47,13 @@ const haltInstruction = "The user asked you to stop after the current step. Do n
 // steerMessage renders an interjection as a user message.
 func steerMessage(in Interjection) (anthropic.BetaMessageParam, bool) {
 	var parts []string
-	if t := strings.TrimSpace(in.Text); t != "" {
+	if t := strings.TrimSpace(in.Text); t != "" && strings.HasPrefix(t, "<background-") {
+		// A report from work the model started (a job exiting, a background
+		// agent finishing), not something the user said. Framed as an
+		// interruption it read as a new order; it is news to act on.
+		parts = append(parts, "Background work you started has reported back. Take it into account "+
+			"for what you do next:\n\n"+t)
+	} else if t != "" {
 		// Framed so the model treats it as a live instruction rather than as
 		// conversational filler arriving mid-task. Without the framing, an
 		// interjection reads like an aside and gets acknowledged instead of
@@ -61,6 +68,32 @@ func steerMessage(in Interjection) (anthropic.BetaMessageParam, bool) {
 		return anthropic.BetaMessageParam{}, false
 	}
 	return anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(strings.Join(parts, "\n\n"))), true
+}
+
+// Inbox queues reports for a running turn — a background job's exit, say —
+// from goroutines the loop does not own, and hands them over through
+// Turn.Interject at the loop's next safe point. It is for frontends that have
+// no steering box of their own (headless, stream-json). Safe for concurrent
+// use; the zero value is ready.
+type Inbox struct {
+	mu    sync.Mutex
+	items []string
+}
+
+// Add queues a report.
+func (b *Inbox) Add(text string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.items = append(b.items, text)
+}
+
+// Interject drains the queue as one interjection; use it as Turn.Interject.
+func (b *Inbox) Interject() Interjection {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	in := Interjection{Text: strings.Join(b.items, "\n\n")}
+	b.items = nil
+	return in
 }
 
 // pollInterjection reads pending user input, if the caller wired a source.

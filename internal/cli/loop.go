@@ -23,8 +23,10 @@ const loopStallLimit = 3
 // itself reasons about: where the project is, that the mode can run unattended,
 // how many iterations are allowed, and where output goes.
 type loopRun struct {
-	run        agent.RunFunc
-	approver   agent.Approver
+	run      agent.RunFunc
+	approver agent.Approver
+	// interject feeds each iteration reports that arrive mid-run (job exits).
+	interject  func() agent.Interjection
 	cwd        string
 	mode       permission.Mode
 	iterations int
@@ -80,9 +82,10 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 	// per the Ralph principle (bounded context over long runs).
 	runTurn := func(prompt string) (agent.Result, error) {
 		return p.run(ctx, agent.Turn{
-			Prompt:   prompt,
-			Emit:     emit,
-			Approver: p.approver,
+			Prompt:    prompt,
+			Emit:      emit,
+			Approver:  p.approver,
+			Interject: p.interject,
 		})
 	}
 

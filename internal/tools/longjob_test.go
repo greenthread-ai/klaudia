@@ -130,3 +130,20 @@ func TestKillTakesTheWholeProcessTree(t *testing.T) {
 	store.Kill(st.Job.ID)
 	waitJob(t, func() bool { return syscall.Kill(pid, 0) != nil }, "the grandchild outlived its job")
 }
+
+// Every frontend sends the model the same exit report.
+func TestExitNoticeCarriesTheTail(t *testing.T) {
+	store := newTestJobStore(t)
+	got := make(chan JobStatus, 1)
+	store.OnExit(func(st JobStatus) { got <- st })
+	if _, err := store.Start(sandbox.NewLocal(), sandbox.Request{Command: "echo vm-01 ready at 10.0.0.12; exit 0"}); err != nil {
+		t.Fatal(err)
+	}
+	st := <-got
+	n := store.ExitNotice(st)
+	for _, want := range []string{"<background-job", `exit_code="0"`, "10.0.0.12"} {
+		if !strings.Contains(n, want) {
+			t.Errorf("notice lacks %q:\n%s", want, n)
+		}
+	}
+}

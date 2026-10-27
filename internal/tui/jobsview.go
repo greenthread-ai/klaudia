@@ -35,6 +35,8 @@ type JobController interface {
 	Read(ref string) (tools.ShellOutput, bool)
 	Kill(ref string) bool
 	Restart(ref string) (tools.JobStatus, bool)
+	// ExitNotice is the model-facing report of a job that ended on its own.
+	ExitNotice(st tools.JobStatus) string
 }
 
 // jobExitMsg reports that a job finished, so the user hears about a crash
@@ -246,33 +248,13 @@ func (m *Model) onJobExit(st tools.JobStatus) tea.Cmd {
 	// provision a VM or wait on a rollout is only useful if finishing it
 	// wakes the model, rather than waiting for it to think to poll. Idle,
 	// that starts a turn; mid-turn, it arrives at the next safe point.
-	notice := m.jobExitNotice(st, took)
+	notice := m.sess.Jobs.ExitNotice(st)
 	if m.state == stateIdle {
 		m.setState(stateRunning)
 		return m.startTurn(notice)
 	}
 	m.steer.add(fmt.Sprintf("[%s exited %d]", st.ID, st.ExitCode), notice)
 	return nil
-}
-
-// jobExitNotice is what the model reads when a job ends: which job, how it
-// ended, and the end of its output, which is where the verdict usually is.
-func (m *Model) jobExitNotice(st tools.JobStatus, took string) string {
-	tail := ""
-	if m.sess != nil && m.sess.Jobs != nil {
-		if log, _, ok := m.sess.Jobs.Log(st.ID); ok {
-			lines := strings.Split(strings.TrimRight(log, "\n"), "\n")
-			if len(lines) > 20 {
-				lines = lines[len(lines)-20:]
-			}
-			tail = strings.Join(lines, "\n")
-		}
-	}
-	if strings.TrimSpace(tail) == "" {
-		tail = "(no output)"
-	}
-	return fmt.Sprintf("<background-job id=%q name=%q exit_code=\"%d\">\nBackground job %s (%s) exited with code %d after %s. Last output:\n\n%s\n</background-job>",
-		st.ID, st.Name, st.ExitCode, st.ID, st.Command, st.ExitCode, took, tail)
 }
 
 // restartCommand handles /restart <job>.

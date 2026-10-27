@@ -304,7 +304,11 @@ with the session id, model, working directory, permission mode and tools. The
 events that follow are `agent.Event` serialised as is — `type` is one of
 `assistant`, `tool_use`, `tool_progress`, `tool_result`, `usage`,
 `compaction`, `notice`, `permission_mode`, `plan` or `steer`, and each turn
-ends with a `result` line. `schema_version` is `agent.EventSchemaVersion`:
+ends with a `result` line. A background job that exits on its own writes
+`{"type":"system","subtype":"job_exit","job_id":…,"exit_code":…}` when it
+happens, between turns or not; the model gets the report with its next turn
+(mid-turn if one is running), and a headless `-p` run hands it over mid-run.
+`schema_version` is `agent.EventSchemaVersion`:
 new event types and optional fields keep it (ignore what you do not know);
 renaming or removing a field, or changing what one means, bumps it. One-shot
 `-p --output-format stream-json` writes Claude Code's envelopes instead, and

@@ -260,6 +260,25 @@ func (s *JobStore) Read(ref string) (ShellOutput, bool) {
 	return out, true
 }
 
+// ExitNotice is what the model reads when a job ends on its own: which job,
+// how it ended, and the end of its output, where the verdict usually is.
+// Every frontend sends the same text.
+func (s *JobStore) ExitNotice(st JobStatus) string {
+	tail := "(no output)"
+	if log, _, ok := s.Log(st.ID); ok {
+		lines := strings.Split(strings.TrimRight(log, "\n"), "\n")
+		if len(lines) > 20 {
+			lines = lines[len(lines)-20:]
+		}
+		if t := strings.Join(lines, "\n"); strings.TrimSpace(t) != "" {
+			tail = t
+		}
+	}
+	took := st.Ended.Sub(st.Started).Round(time.Second)
+	return fmt.Sprintf("<background-job id=%q name=%q exit_code=\"%d\">\nBackground job %s (%s) exited with code %d after %s. Last output:\n\n%s\n</background-job>",
+		st.ID, st.Name, st.ExitCode, st.ID, st.Command, st.ExitCode, took, tail)
+}
+
 // Wait blocks until the job exits, until output it has not yet returned
 // through Read matches match (when non-nil), until d passes, or until ctx
 // ends — whichever is first — and says which. It is how the model waits on a

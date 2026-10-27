@@ -6,6 +6,13 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Job exits reach the model outside the TUI too.** Headless `-p`, `--loop`
+  and stream-json runs queue a job's exit in `agent.Inbox`, polled through
+  `Turn.Interject`, so it arrives mid-run or with the next turn; a
+  stream-json peer also gets a `system/job_exit` line when it happens. A
+  background report injected mid-turn is now framed as news ("Background work
+  you started has reported back") rather than as the user interrupting with
+  an instruction.
 - **Long-running background jobs.** A job that exits on its own is delivered
   to the model, as a background agent's result is (mid-turn as steering, or a
   turn of its own when idle, with the end of its output), so the model can

@@ -96,10 +96,13 @@ type planAnswer struct {
 type Driver struct {
 	// Init is added to the system/init line Run writes first (session id,
 	// model, cwd — whatever the host knows).
-	Init    map[string]any
-	out     io.Writer
-	mu      sync.Mutex // serializes writes to out
-	pending sync.Map   // request_id -> chan *controlResp
+	Init map[string]any
+	// Interject, if set, is each turn's source of reports that arrive while
+	// it runs (a background job exiting); see agent.Inbox.
+	Interject func() agent.Interjection
+	out       io.Writer
+	mu        sync.Mutex // serializes writes to out
+	pending   sync.Map   // request_id -> chan *controlResp
 }
 
 // NewDriver builds a Driver writing to w.
@@ -153,12 +156,13 @@ func (d *Driver) Run(ctx context.Context, r io.Reader, history []anthropic.BetaM
 				continue
 			}
 			res, err := run(ctx, agent.Turn{
-				Prompt:   prompt,
-				History:  history,
-				Emit:     func(ev agent.Event) { d.write(ev) },
-				Approver: &controlApprover{driver: d},
-				Asker:    &controlAsker{driver: d},
-				Planner:  &controlPlanner{driver: d},
+				Prompt:    prompt,
+				History:   history,
+				Emit:      func(ev agent.Event) { d.write(ev) },
+				Approver:  &controlApprover{driver: d},
+				Asker:     &controlAsker{driver: d},
+				Planner:   &controlPlanner{driver: d},
+				Interject: d.Interject,
 			})
 			if res.Messages != nil {
 				history = res.Messages // carry conversation forward
@@ -166,6 +170,17 @@ func (d *Driver) Run(ctx context.Context, r io.Reader, history []anthropic.BetaM
 			d.write(resultEvent(res, err))
 		}
 	}
+}
+
+// Notify writes a system line outside any turn — {"type":"system",
+// "subtype":subtype, ...fields} — for something the peer should know about
+// between turns, such as a background job exiting. Safe from any goroutine.
+func (d *Driver) Notify(subtype string, fields map[string]any) {
+	line := map[string]any{"type": "system", "subtype": subtype}
+	for k, v := range fields {
+		line[k] = v
+	}
+	d.write(line)
 }
 
 // write emits one JSON line, serialized against concurrent writers.

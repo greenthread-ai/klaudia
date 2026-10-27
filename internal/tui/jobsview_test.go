@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +34,11 @@ func (f *fakeJobs) Kill(ref string) bool { f.killed = append(f.killed, ref); ret
 func (f *fakeJobs) Restart(ref string) (tools.JobStatus, bool) {
 	f.restarts = append(f.restarts, ref)
 	return tools.JobStatus{ID: "bash_1", Name: ref, Running: true}, true
+}
+
+func (f *fakeJobs) ExitNotice(st tools.JobStatus) string {
+	return fmt.Sprintf("<background-job id=%q>\nBackground job %s (%s) exited with code %d.\n</background-job>",
+		st.ID, st.ID, st.Command, st.ExitCode)
 }
 
 func jobsModel(t *testing.T, f *fakeJobs) *Model {

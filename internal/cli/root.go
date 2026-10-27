@@ -1154,6 +1154,24 @@ func run(cmd *cobra.Command, opts *options) error {
 	// them and so a resumed session lands on its own logs.
 	jobStore := tools.NewJobStore(ctx, filepath.Join(session.ConfigRoot(), "jobs"), sessionID)
 	defer jobStore.KillAll()
+	// A job that ends on its own is news for the model, in every frontend.
+	// The TUI installs its own handler (a steering message, or a turn when
+	// idle). Everywhere else exits queue in jobInbox, which each turn polls
+	// through Turn.Interject, and jobExitHook lets stream-json tell its peer
+	// between turns. Set before any job can start, so it needs no lock.
+	jobInbox := &agent.Inbox{}
+	var jobExitHook func(tools.JobStatus)
+	if !interactive {
+		jobStore.OnExit(func(st tools.JobStatus) {
+			if st.Stopped {
+				return
+			}
+			jobInbox.Add(jobStore.ExitNotice(st))
+			if jobExitHook != nil {
+				jobExitHook(st)
+			}
+		})
+	}
 	// Where clamped tool output is kept in full (24h). The core no longer
 	// picks these directories itself — an embedded agent must not decide on
 	// its own to write under ~/.klaudia — so the host names both here.
@@ -1594,6 +1612,13 @@ func run(cmd *cobra.Command, opts *options) error {
 	// by the peer.
 	if opts.inputFormat == "stream-json" {
 		driver := streamjson.NewDriver(cmd.OutOrStdout())
+		driver.Interject = jobInbox.Interject
+		jobExitHook = func(st tools.JobStatus) {
+			driver.Notify("job_exit", map[string]any{
+				"job_id": st.ID, "name": st.Name, "exit_code": st.ExitCode,
+				"note": "delivered to the model with its next turn, or mid-turn if one is running",
+			})
+		}
 		driver.Init = map[string]any{
 			"session_id": sessionID, "cwd": cwd, "model": string(model),
 			"permissionMode": string(mode), "tools": registry.Names(),
@@ -1682,6 +1707,7 @@ func run(cmd *cobra.Command, opts *options) error {
 				}), turn.Emit)
 			},
 			approver:   approver,
+			interject:  jobInbox.Interject,
 			cwd:        cwd,
 			mode:       mode,
 			iterations: opts.maxIterations,
@@ -1725,10 +1751,11 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 	}
 	headlessOpts := baseOptions(agent.Turn{
-		Prompt:   opts.prompt,
-		History:  initialMessages,
-		Emit:     emit,
-		Approver: approver,
+		Prompt:    opts.prompt,
+		History:   initialMessages,
+		Emit:      emit,
+		Approver:  approver,
+		Interject: jobInbox.Interject,
 	}, turnSettings{
 		Model:           model,
 		Permission:      permCtx,

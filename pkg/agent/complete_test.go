@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -41,5 +42,28 @@ func TestCompleteAsksOneQuestion(t *testing.T) {
 	p.stop = "max_tokens"
 	if _, err := l.Complete(context.Background(), "x", "m", 200, api.EffortUnset); err == nil {
 		t.Error("a truncated reply was accepted")
+	}
+}
+
+// The inbox drains once, and a background report is framed as news, not as
+// the user interrupting with an order.
+func TestInboxAndReportFraming(t *testing.T) {
+	var b Inbox
+	b.Add("<background-job id=\"bash_1\">done</background-job>")
+	b.Add("<background-job id=\"bash_2\">done</background-job>")
+	in := b.Interject()
+	if !strings.Contains(in.Text, "bash_1") || !strings.Contains(in.Text, "bash_2") {
+		t.Fatalf("drained %q", in.Text)
+	}
+	if !b.Interject().Empty() {
+		t.Error("the inbox did not empty")
+	}
+	msg, ok := steerMessage(in)
+	if !ok {
+		t.Fatal("no message")
+	}
+	b2, _ := json.Marshal(msg)
+	if strings.Contains(string(b2), "The user interrupted") || !strings.Contains(string(b2), "Background work you started has reported back") {
+		t.Errorf("framing = %s", b2)
 	}
 }

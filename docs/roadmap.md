@@ -280,10 +280,13 @@ Status 2026-10-27, verified with tests in `internal/tools/longjob_test.go` and
   `BashOutput`) and in the panel. Stopping a job kills its process tree
   (grandchildren included). `/quit` and the double Ctrl+C name the running
   work they will stop. The system prompt tells the model to background long
-  tasks and wait or end its turn rather than poll.
+  tasks and wait or end its turn rather than poll. Stream-json and headless
+  get the same reports through `agent.Inbox` (`Turn.Interject`), plus a
+  `system/job_exit` line for a stream-json peer; ACP is not covered.
 - Open: a job that should **outlive the session** (detach, and re-attach on
-  resume) — today quitting stops it, now with a warning. Job-exit delivery in
-  stream-json and headless, which have no idle loop to wake. Hang detection
+  resume) — today quitting stops it, now with a warning, and a resumed
+  session tells the model which jobs stopped (decided 2026-10-27: that is
+  enough). Hang detection
   for a background *agent* (a sub-agent waiting on one long call shows its last
   step, but nothing flags a stall). Log growth: a job's log file is unbounded
   until the weekly prune.
