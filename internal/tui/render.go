@@ -93,9 +93,18 @@ func (m *Model) appendLine(s string) {
 // block backgrounds, and lipgloss pads a multi-line block out to its widest
 // line. Both are invisible on screen and both are trailing whitespace on every
 // line once the text is selected and pasted.
+//
+// Until the terminal has reported its size, blocks are held rather than
+// printed: fitScrollback cannot wrap to a width it does not know, so the
+// startup notices went out unwrapped and the terminal split them mid-word.
+// resize releases them.
 func (m *Model) commit(b transcriptBlock) {
 	b.rendered = trimRenderedPadding(b.rendered)
 	m.transcript.add(b)
+	if !m.ready {
+		m.unsized = append(m.unsized, b)
+		return
+	}
 	m.out.push(m.linkify(m.fitScrollback(b.rendered), b.text))
 }
 

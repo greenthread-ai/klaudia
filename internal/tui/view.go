@@ -175,6 +175,10 @@ func (m *Model) phaseLabel() string {
 func (m *Model) resize(w, h int) {
 	m.width, m.height = w, h
 	m.ready = true
+	for _, b := range m.unsized { // committed before the size was known (see commit)
+		m.out.push(m.linkify(m.fitScrollback(b.rendered), b.text))
+	}
+	m.unsized = nil
 	// Children have no terminal of their own, so COLUMNS/LINES is the only way
 	// a command's output wraps to the width the user is actually looking at
 	// rather than the 80 columns a pipe implies.

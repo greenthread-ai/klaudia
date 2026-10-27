@@ -280,6 +280,8 @@ type Model struct {
 	ready  bool
 	width  int
 	height int
+	// unsized holds blocks committed before the first resize (see commit).
+	unsized []transcriptBlock
 	// out queues finished blocks for printing into the terminal's own
 	// scrollback (see scrollback.go). Drained once per Update cycle.
 	out printQueue

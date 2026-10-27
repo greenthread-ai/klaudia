@@ -193,6 +193,7 @@ func TestHyperlinksEnabled(t *testing.T) {
 // Links go to the screen only: the transcript feeds /copy, /export and $PAGER.
 func TestCommitLinksScreenNotTranscript(t *testing.T) {
 	m := New(t.Context(), nil, nil, &Session{Hyperlinks: true})
+	m.resize(100, 30)
 	m.appendLine("see https://go.dev/doc")
 	if strings.Contains(m.transcript.String(), "\x1b]8;") {
 		t.Errorf("transcript holds OSC 8: %q", m.transcript.String())

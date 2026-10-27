@@ -320,3 +320,29 @@ func TestScrollbackWrapsAtWordsAndKeepsIndent(t *testing.T) {
 		}
 	}
 }
+
+// Startup notices are committed before the terminal reports its size. They used
+// to go out unwrapped, and the terminal split them mid-word ("separa|tes");
+// they are held until the first resize and wrapped to the real width.
+func TestCommitsBeforeTheFirstResizeWrapToTheRealWidth(t *testing.T) {
+	m := New(t.Context(), nil, nil, &Session{})
+	_, _ = m.out.drainText() // the intro, if any
+	m.ready = false
+	m.appendLine("1 file was already modified before this session: .gitignore. /changes separates them from Klaudia's.")
+	if _, ok := m.out.drainText(); ok {
+		t.Fatal("a block was printed before the width was known")
+	}
+	m.resize(60, 20)
+	body, ok := m.out.drainText()
+	if !ok {
+		t.Fatal("held block was not released by resize")
+	}
+	for _, row := range strings.Split(body, "\n") {
+		if w := ansi.StringWidth(row); w >= 60 {
+			t.Errorf("row is %d wide at 60 columns: %q", w, row)
+		}
+		if strings.HasSuffix(row, "separa") {
+			t.Errorf("split mid-word: %q", row)
+		}
+	}
+}
