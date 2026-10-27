@@ -243,7 +243,8 @@ func baseStyle() lipgloss.Style {
 
 // chrome is a chrome style. Lip Gloss v2 honours NoTabConversion only for a
 // single line: a multi-line string goes through its alignment step, which
-// replaces every tab with four spaces regardless (getLines, lipgloss v2.0.6).
+// replaces every tab with four spaces regardless (getLines, lipgloss v2.0.6;
+// charmbracelet/lipgloss#774 — drop this type when that is fixed).
 // So chrome renders a multi-line string a line at a time, which these
 // styles — colour and weight only, no width, padding or border — render
 // identically.

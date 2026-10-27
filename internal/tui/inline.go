@@ -26,8 +26,10 @@ import (
 // 60fps tick, so the frame the prediction used was not the one on screen), a
 // faster drag erased history rows, and on a terminal that does not rewrap at
 // all (xterm) every narrowing erased the visible conversation. v2's cell
-// renderer, unaided, strands a box on the first fast narrowing, and loses an
-// editor's output across tea.ExecProcess.
+// renderer, unaided, strands a box on the first fast narrowing
+// (charmbracelet/bubbletea#1867; the fix proposed in #1868 predicts the
+// rewrap, which is what failed above), and loses an editor's output across
+// tea.ExecProcess (#431).
 //
 // This renderer parks the cursor at column 0 of the frame's *first* line
 // instead. Every terminal keeps the cursor in its cell across a resize —

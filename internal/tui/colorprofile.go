@@ -14,6 +14,7 @@ import (
 // whoever writes to the terminal. Bubble Tea does it for the live region; it
 // does not for tea.Println, which writes its text as is, so scrollback goes
 // through downsample. Under v1 the global renderer did both, invisibly.
+// charmbracelet/bubbletea#1709 (fix in #1714) covers the Println half.
 var termProfile = colorprofile.Detect(os.Stdout, os.Environ())
 
 // noColor reports whether the terminal shows no colour at all, which is
