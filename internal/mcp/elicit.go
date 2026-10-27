@@ -106,10 +106,11 @@ func (e *Elicitor) handlerFor(server string) func(context.Context, *mcpsdk.Elici
 // these are matched leniently (see matchesLabel) — someone who types "cancel"
 // at a prompt meant the Cancel option, not a value of "cancel".
 const (
-	optCancel = "Cancel"
-	optSkip   = "Skip"
-	optYes    = "Yes"
-	optNo     = "No"
+	optCancel  = "Cancel"
+	optSkip    = "Skip"
+	optDefault = "Use default"
+	optYes     = "Yes"
+	optNo      = "No"
 )
 
 const (
@@ -170,9 +171,12 @@ func (e *Elicitor) elicit(ctx context.Context, server string, p *mcpsdk.ElicitPa
 			return nil, err
 		}
 		switch {
-		case matchesLabel(answer, optCancel):
+		case matchesLabel(answer, f.label(optCancel)):
 			return &mcpsdk.ElicitResult{Action: actionCancel}, nil
-		case !f.required && matchesLabel(answer, optSkip):
+		case !f.required && matchesLabel(answer, f.label(optSkip)):
+			continue
+		case f.hasDef && matchesLabel(answer, f.label(optDefault)):
+			content[f.key] = f.def
 			continue
 		}
 		v, ok := f.coerce(answer)
@@ -196,6 +200,9 @@ func elicitHeader(server, message string) string {
 
 // elicitField is one top-level property of a requested schema. Nesting is not
 // allowed by the spec, so there is no recursion here.
+//
+// A multi-select field (an array of enum strings) keeps its item type in typ
+// and sets multi; the answer is then a comma-separated list of choices.
 type elicitField struct {
 	key       string
 	title     string
@@ -204,16 +211,60 @@ type elicitField struct {
 	enum      []string
 	enumNames []string
 	required  bool
+	multi     bool
+	minItems  int
+	maxItems  int // 0 is unbounded
+	def       any
+	hasDef    bool
+}
+
+// enumSchema is the part of a property that can list choices: "enum" (with
+// the legacy "enumNames" for labels), or "oneOf"/"anyOf" of {const, title},
+// which is how the spec spells a titled enum.
+type enumSchema struct {
+	Type      string   `json:"type"`
+	Enum      []any    `json:"enum"`
+	EnumNames []string `json:"enumNames"`
+	OneOf     []choice `json:"oneOf"`
+	AnyOf     []choice `json:"anyOf"`
+}
+
+type choice struct {
+	Const any    `json:"const"`
+	Title string `json:"title"`
+}
+
+// choices returns the enum members and their display names.
+func (e enumSchema) choices() (values []string, names []string) {
+	for _, v := range e.Enum {
+		values = append(values, enumLabel(v))
+	}
+	names = e.EnumNames
+	if len(values) > 0 {
+		return values, names
+	}
+	titled := e.OneOf
+	if len(titled) == 0 {
+		titled = e.AnyOf
+	}
+	names = nil
+	for _, c := range titled {
+		values = append(values, enumLabel(c.Const))
+		names = append(names, c.Title)
+	}
+	return values, names
 }
 
 // schemaDoc is the subset of JSON Schema that form elicitation permits.
 type schemaDoc struct {
 	Properties map[string]struct {
-		Type        string   `json:"type"`
-		Title       string   `json:"title"`
-		Description string   `json:"description"`
-		Enum        []any    `json:"enum"`
-		EnumNames   []string `json:"enumNames"`
+		enumSchema
+		Title       string          `json:"title"`
+		Description string          `json:"description"`
+		Default     json.RawMessage `json:"default"`
+		Items       *enumSchema     `json:"items"`
+		MinItems    int             `json:"minItems"`
+		MaxItems    int             `json:"maxItems"`
 	} `json:"properties"`
 	Required []string `json:"required"`
 }
@@ -249,15 +300,21 @@ func elicitFields(raw any) ([]elicitField, error) {
 			return elicitField{}, false
 		}
 		f := elicitField{
-			key:       key,
-			title:     p.Title,
-			desc:      p.Description,
-			typ:       strings.ToLower(strings.TrimSpace(p.Type)),
-			enumNames: p.EnumNames,
-			required:  required[key],
+			key:      key,
+			title:    p.Title,
+			desc:     p.Description,
+			typ:      strings.ToLower(strings.TrimSpace(p.Type)),
+			required: required[key],
 		}
-		for _, v := range p.Enum {
-			f.enum = append(f.enum, enumLabel(v))
+		f.enum, f.enumNames = p.choices()
+		if f.typ == "array" && p.Items != nil {
+			f.multi = true
+			f.typ = strings.ToLower(strings.TrimSpace(p.Items.Type))
+			f.enum, f.enumNames = p.Items.choices()
+			f.minItems, f.maxItems = p.MinItems, p.MaxItems
+		}
+		if len(p.Default) > 0 && string(p.Default) != "null" {
+			f.hasDef = json.Unmarshal(p.Default, &f.def) == nil
 		}
 		return f, true
 	}
@@ -324,6 +381,12 @@ func (f elicitField) prompt() string {
 	if !f.required {
 		b.WriteString(" — optional")
 	}
+	if f.multi {
+		b.WriteString(" — pick one or more, separated by commas")
+	}
+	if f.hasDef {
+		fmt.Fprintf(&b, "\nDefault: %s", f.defLabel())
+	}
 	if d := strings.TrimSpace(f.desc); d != "" {
 		b.WriteString("\n")
 		b.WriteString(d)
@@ -349,16 +412,59 @@ func (f elicitField) options() []tools.AskOption {
 	case f.typ == "boolean":
 		out = append(out, tools.AskOption{Label: optYes}, tools.AskOption{Label: optNo})
 	}
-	if !f.required {
-		out = append(out, tools.AskOption{Label: optSkip, Description: "leave this field unset"})
+	// A single choice's default is already a row of its own; a typed value or
+	// a set of choices needs one to accept it without retyping.
+	if f.hasDef && (f.multi || (len(f.enum) == 0 && f.typ != "boolean")) {
+		out = append(out, tools.AskOption{Label: f.label(optDefault), Description: f.defLabel()})
 	}
-	return append(out, tools.AskOption{Label: optCancel, Description: "answer nothing and tell the server you cancelled"})
+	if !f.required {
+		out = append(out, tools.AskOption{Label: f.label(optSkip), Description: "leave this field unset"})
+	}
+	return append(out, tools.AskOption{Label: f.label(optCancel), Description: "answer nothing and tell the server you cancelled"})
+}
+
+// label returns a sentinel option's label for this field, reworded when the
+// field offers a choice of the same name — a server asking "Skip or Retry?"
+// must get "Skip" back, not have its field silently left unset.
+func (f elicitField) label(sentinel string) string {
+	for i, v := range f.enum {
+		if strings.EqualFold(v, sentinel) || (i < len(f.enumNames) && strings.EqualFold(f.enumNames[i], sentinel)) {
+			return map[string]string{
+				optCancel:  "Cancel the form",
+				optSkip:    "Skip this field",
+				optDefault: "Use the default",
+			}[sentinel]
+		}
+	}
+	return sentinel
+}
+
+// defLabel renders the default for display: its enum name when it has one.
+func (f elicitField) defLabel() string {
+	vals, ok := f.def.([]any)
+	if !ok {
+		vals = []any{f.def}
+	}
+	parts := make([]string, 0, len(vals))
+	for _, v := range vals {
+		l := enumLabel(v)
+		for i, e := range f.enum {
+			if e == l && i < len(f.enumNames) && f.enumNames[i] != "" {
+				l = f.enumNames[i]
+			}
+		}
+		parts = append(parts, l)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // coerce turns the user's answer into a value of the field's declared type.
 // The second result is false when it cannot, which cancels the elicitation.
 func (f elicitField) coerce(answer string) (any, bool) {
 	answer = strings.TrimSpace(answer)
+	if f.multi {
+		return f.coerceMulti(answer)
+	}
 	// An enum answered with a display name has to be mapped back to the wire
 	// value, or the server is handed a label it never offered.
 	if len(f.enum) > 0 {
@@ -399,6 +505,37 @@ func (f elicitField) coerce(answer string) (any, bool) {
 		}
 		return answer, true
 	}
+}
+
+// coerceMulti reads a comma-separated multi-select answer. Every item must be
+// one of the choices, and the count must sit within minItems/maxItems — the
+// server's schema says anything else will be rejected.
+func (f elicitField) coerceMulti(answer string) (any, bool) {
+	out := []any{}
+	seen := map[string]bool{}
+	for _, part := range strings.Split(answer, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		item := f
+		item.multi = false
+		v, ok := item.coerce(part)
+		if !ok {
+			return nil, false
+		}
+		if k := enumLabel(v); !seen[k] {
+			seen[k] = true
+			out = append(out, v)
+		}
+	}
+	if len(out) < f.minItems || (f.maxItems > 0 && len(out) > f.maxItems) {
+		return nil, false
+	}
+	if len(out) == 0 && f.required && f.minItems == 0 {
+		return nil, false
+	}
+	return out, true
 }
 
 // enumValue returns the i-th enum member in its declared type. Booleans and

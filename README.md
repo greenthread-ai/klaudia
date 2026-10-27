@@ -733,10 +733,12 @@ Klaudia speaks protocol **2026-07-28**, which lets a server ask *you* for
 something mid-call — a token it has no other way to obtain, a branch name, a
 yes/no before something destructive. The question arrives at the same prompt the
 model's own `AskUserQuestion` uses, labelled with the server that asked. Each
-field in the server's schema is one question; booleans and enums become choices,
-and anything else is answered by picking the free-text row and typing. You can always skip an optional field or cancel the
-whole form, and cancelling tells the server you cancelled rather than handing it
-a guess.
+field in the server's schema is one question; booleans and enums (titled ones
+too) become choices, a multi-select is answered as a comma-separated list, a
+declared default is shown and can be accepted as is, and anything else is
+answered by picking the free-text row and typing. You can always skip an
+optional field or cancel the whole form, and cancelling tells the server you
+cancelled rather than handing it a guess.
 
 Two deliberate limits. Only **form** elicitation is supported, and only form is
 advertised: the spec's other mode hands the client a URL to open out of band,

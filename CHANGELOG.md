@@ -66,6 +66,13 @@ port mirrors (see `internal/version`).
   useless until a restart. Reconnect now rebuilds them, as a config reload
   does. `ToolSearch` also searches only the tools it can load — it used to
   offer back the built-ins already in every request.
+- **MCP elicitation reads the whole form schema.** Titled enums (`oneOf` /
+  `anyOf` of `const` + `title`) offered no choices and took any text;
+  multi-select (`array` of enum items) and `default` were ignored. Titles are
+  now the choices and the `const` is sent; a multi-select takes a
+  comma-separated list checked against `minItems`/`maxItems`; a default is
+  shown and can be accepted. A choice literally named Skip or Cancel is now a
+  value, and the escape rows are reworded for that field.
 - **Read-only MCP tools work in plan mode, and so in Explore and Plan.** Those
   sub-agents run in plan mode and are handed MCP tools marked read-only, but
   plan mode refused every MCP call, so they could never use them. Plan mode

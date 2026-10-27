@@ -189,6 +189,47 @@ func TestElicitForm(t *testing.T) {
 			params: &mcpsdk.ElicitParams{Message: "hi", RequestedSchema: json.RawMessage(`{"properties":[]}`)},
 			want:   actionDecline,
 		},
+		{
+			name:    "titled oneOf sends the const for a picked title",
+			schema:  `{"type":"object","properties":{"env":{"type":"string","oneOf":[{"const":"prd","title":"Production"},{"const":"stg","title":"Staging"}]}},"required":["env"]}`,
+			answers: []string{"Staging"},
+			want:    actionAccept,
+			content: map[string]any{"env": "stg"},
+		},
+		{
+			name:    "multi-select takes a comma list of titles or values",
+			schema:  `{"type":"object","properties":{"tags":{"type":"array","items":{"anyOf":[{"const":"a","title":"Alpha"},{"const":"b","title":"Beta"}]}}},"required":["tags"]}`,
+			answers: []string{"Alpha, b, alpha"},
+			want:    actionAccept,
+			content: map[string]any{"tags": []any{"a", "b"}},
+		},
+		{
+			name:    "multi-select outside maxItems cancels",
+			schema:  `{"type":"object","properties":{"tags":{"type":"array","maxItems":1,"items":{"type":"string","enum":["a","b"]}}},"required":["tags"]}`,
+			answers: []string{"a,b"},
+			want:    actionCancel,
+		},
+		{
+			name:    "use default sends the declared default",
+			schema:  `{"type":"object","properties":{"branch":{"type":"string","default":"main"}},"required":["branch"]}`,
+			answers: []string{"Use default"},
+			want:    actionAccept,
+			content: map[string]any{"branch": "main"},
+		},
+		{
+			name:    "an enum value named Skip is a value, not the sentinel",
+			schema:  `{"type":"object","properties":{"next":{"type":"string","enum":["Skip","Retry"]}}}`,
+			answers: []string{"Skip"},
+			want:    actionAccept,
+			content: map[string]any{"next": "Skip"},
+		},
+		{
+			name:    "the reworded sentinel still skips",
+			schema:  `{"type":"object","properties":{"next":{"type":"string","enum":["Skip","Retry"]}}}`,
+			answers: []string{"Skip this field"},
+			want:    actionAccept,
+			content: map[string]any{},
+		},
 	}
 
 	for _, tc := range tests {
@@ -564,4 +605,33 @@ func (a *overlapAsker) Ask(context.Context, string, []tools.AskOption) (string, 
 func toString(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+// The default is stated in the question; a typed field gets a row to accept
+// it, while a choice's default is already a row of its own.
+func TestElicitShowsTheDefault(t *testing.T) {
+	fields, err := elicitFields(schemaOf(t, `{"type":"object","properties":{
+		"branch":{"type":"string","default":"main"},
+		"env":{"type":"string","oneOf":[{"const":"prd","title":"Production"},{"const":"stg","title":"Staging"}],"default":"stg"}}}`))
+	if err != nil || len(fields) != 2 {
+		t.Fatalf("fields = %+v, %v", fields, err)
+	}
+	branch, env := fields[0], fields[1]
+	if !strings.Contains(branch.prompt(), "Default: main") || !strings.Contains(env.prompt(), "Default: Staging") {
+		t.Errorf("prompts do not state the default:\n%s\n%s", branch.prompt(), env.prompt())
+	}
+	has := func(opts []tools.AskOption, label string) bool {
+		for _, o := range opts {
+			if o.Label == label {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(branch.options(), optDefault) {
+		t.Error("a typed field with a default offers no row to accept it")
+	}
+	if has(env.options(), optDefault) {
+		t.Error("a choice field duplicates its default as a separate row")
+	}
 }
