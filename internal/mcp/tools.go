@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -154,6 +155,14 @@ func (t *mcpTool) revive(ctx context.Context) bool {
 	return t.mgr.revive(ctx, t.server)
 }
 
+// listTimeout bounds one server's tools/list or resources/list, every page of
+// it. Listing runs at startup, on every reload and reconnect, and behind /mcp,
+// all on the caller's goroutine, so one connected server that stops answering
+// used to hang all of them. A server that runs out of time contributes
+// nothing, as one whose listing fails always has. A var so a test can shorten
+// it.
+var listTimeout = 15 * time.Second
+
 // Tools lists every connected server's tools and wraps them. Servers that fail
 // to list are skipped.
 func (m *Manager) Tools(ctx context.Context) []tools.Tool {
@@ -168,13 +177,15 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 		// nothing, as a failed listing always has.
 		var listed []*mcpsdk.Tool
 		failed := false
-		for rt, err := range sess.Tools(ctx, nil) {
+		lctx, cancel := context.WithTimeout(ctx, listTimeout)
+		for rt, err := range sess.Tools(lctx, nil) {
 			if err != nil {
 				failed = true
 				break
 			}
 			listed = append(listed, rt)
 		}
+		cancel()
 		if failed {
 			continue
 		}
@@ -230,12 +241,14 @@ func (m *Manager) formatResourceList(ctx context.Context) string {
 		if sess == nil {
 			continue
 		}
-		for r, err := range sess.Resources(ctx, nil) { // every page
+		lctx, cancel := context.WithTimeout(ctx, listTimeout)
+		for r, err := range sess.Resources(lctx, nil) { // every page
 			if err != nil {
 				break
 			}
 			fmt.Fprintf(&b, "%s\t%s\t%s\n", srv.Name, r.URI, r.Name)
 		}
+		cancel()
 	}
 	if b.Len() == 0 {
 		return "No MCP resources available."

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
@@ -87,5 +89,51 @@ func TestDialWithinTimesOutAndClosesTheLateSession(t *testing.T) {
 			t.Fatal("the late session was left open")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// A connected server that stops answering tools/list used to hang every
+// listing — startup, reload, reconnect and /mcp — for as long as it stayed
+// silent. It now costs listTimeout and contributes nothing.
+func TestToolListingTimesOutOnASilentServer(t *testing.T) {
+	defer func(d time.Duration) { listTimeout = d }(listTimeout)
+	listTimeout = 100 * time.Millisecond
+
+	release := make(chan struct{})
+	defer close(release)
+	srv := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "silent", Version: "0.0.1"}, nil)
+	mcpsdk.AddTool(srv, &mcpsdk.Tool{Name: "echo"},
+		func(context.Context, *mcpsdk.CallToolRequest, echoIn) (*mcpsdk.CallToolResult, any, error) {
+			return &mcpsdk.CallToolResult{}, nil, nil
+		})
+	srv.AddReceivingMiddleware(func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {
+		return func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
+			if method == "tools/list" {
+				<-release
+			}
+			return next(ctx, method, req)
+		}
+	})
+	clientT, serverT := mcpsdk.NewInMemoryTransports()
+	if _, err := srv.Connect(context.Background(), serverT, nil); err != nil {
+		t.Fatal(err)
+	}
+	server, err := ConnectTransport(context.Background(), "silent", clientT, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Manager{}
+	m.Add(server)
+	defer m.Close()
+
+	done := make(chan []tools.Tool, 1)
+	go func() { done <- m.Tools(context.Background()) }()
+	select {
+	case got := <-done:
+		if len(got) != 0 {
+			t.Errorf("a server that never answered contributed %d tools", len(got))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Tools is still waiting on a server that will not answer")
 	}
 }

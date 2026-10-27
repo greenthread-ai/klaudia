@@ -73,6 +73,10 @@ port mirrors (see `internal/version`).
   comma-separated list checked against `minItems`/`maxItems`; a default is
   shown and can be accepted. A choice literally named Skip or Cancel is now a
   value, and the escape rows are reworded for that field.
+- **A silent MCP server no longer hangs tool listing.** Listing a connected
+  server's tools or resources had no deadline, so one server that stopped
+  answering stalled startup, config reload, `/mcp` and reconnect. Each
+  server's listing now gives up after 15s and contributes nothing.
 - **Read-only MCP tools work in plan mode, and so in Explore and Plan.** Those
   sub-agents run in plan mode and are handed MCP tools marked read-only, but
   plan mode refused every MCP call, so they could never use them. Plan mode
