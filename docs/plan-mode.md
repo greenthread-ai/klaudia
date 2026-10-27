@@ -7,7 +7,7 @@ through the list marking progress and revising it when reality disagrees.
 
 This document is the design record for that loop. The first half is what was
 measured to be wrong with the implementation in October 2026; the second half is
-the four decisions that follow, in the order they should land. Everything marked
+the decisions that followed — five, all landed (see Order). Everything marked
 **measured** was observed by probe or by reading the code path; everything marked
 **assumed** is a judgement that has not been tested.
 
@@ -35,8 +35,9 @@ to the machine Klaudia runs on are already stopped in every mode. What plan mode
 uniquely protects is the user's working tree. So it should gate **mutation**,
 and a command that only inspects should run.
 
-The same cause restricts the `Plan` sub-agent to `Read`/`Glob`/`Grep`
-(`docs/parity.md`), so delegating research does not work around it.
+The same cause restricted the `Plan` sub-agent to `Read`/`Glob`/`Grep`
+(`docs/parity.md`), so delegating research did not work around it. (Fixed by
+D2: Explore and Plan now hold `Bash` and run in plan mode.)
 
 ### A permission denial was counted as a tool failure
 
@@ -79,6 +80,8 @@ derived from it is stale.
 
 ### The plan was discarded on approval
 
+**Fixed by D3.**
+
 `ExitPlanMode.Execute` passes the markdown to the frontend for display and, on
 approval, returns the string `"Plan approved. Plan mode is now off — proceed
 with the implementation."` Nothing structures it, stores it or tracks it. The
@@ -87,6 +90,8 @@ summarise it away. There is no step list, so nothing can mark progress against
 it.
 
 ### Nothing rendered the task list, except ACP
+
+**Fixed by D4.**
 
 **Measured:** `todos := &TodoStore{}` is constructed inside
 `internal/tools/registry_default.go` and never handed to a frontend.
@@ -114,9 +119,11 @@ does the plan live", none of which knows about the others.
 Goal mode is the one that works. The spec is a file; `goal.CountUnchecked`
 mechanically counts remaining boxes and rejects a completion claim that leaves
 any unticked; `goal.RequiresStubFix` catches a tracker missing rows for phases
-the body describes; each iteration starts with **no history** and re-reads the
-spec, which is the Ralph principle the goal loop is explicitly built on. The
-TUI shows iteration progress in the status bar. `.klaudia/` is gitignored, so the
+the body describes; each iteration's *prompt* is fixed and re-reads the spec,
+which is the Ralph principle the goal loop is explicitly built on (the TUI
+still passes the conversation along — see D5). The TUI shows iteration
+progress in the status bar, and since D5 the spec's checklist in the live
+panel. `.klaudia/` is gitignored, so the
 default location does not litter the repo.
 
 Plan mode is the one that does not persist anything at all — and it is the
@@ -227,7 +234,7 @@ What the implementation settled that the design left open:
 writes to it. The four `Task*` tools either back onto it or are retired; they
 have no consumer today, so retiring them costs nothing but a parity note.
 
-An **approved** plan is written through to a file under `.klaudia/`, in goal
+An **approved** plan is written through to a file under `~/.klaudia/plans/`, in goal
 mode's checkbox format. Approval is the line because an approved plan is by
 definition multi-step work the user has blessed; a three-item ad-hoc todo list
 should not touch the disk. **Assumed:** that this is the right line. The
@@ -271,8 +278,8 @@ What the implementation settled:
   boxes" as done and a plan approved a second ago is the opposite of done.
 - **A failed write never costs the model its plan.** `Replace` and `Approve`
   return the error and keep the in-memory list; `TodoWrite` and `ExitPlanMode`
-  pass the message to the model as a note on an otherwise successful call. A
-  read-only `.klaudia` degrades to a session with no artefact.
+  pass the message to the model as a note on an otherwise successful call. An
+  unwritable `~/.klaudia/plans` degrades to a session with no artefact.
 - **`ExitPlanMode`'s approval result now drives execution.** It was the bare
   sentence "Plan approved. Plan mode is now off — proceed with the
   implementation"; it now also tells the model to record the steps with
@@ -368,6 +375,8 @@ The live panel draws whichever list is active (`workList`): the plan, or during
    plan mode usable for its stated purpose. ✅ landed
 3. **D3** — one store, written to `~/.klaudia/plans/` on approval. ✅ landed
 4. **D4** — the plan event, and rendering in the TUI, stream-json and ACP. ✅ landed
+5. **D5** — plan runs: the approval picker and the goal loop over the approved
+   plan; one live panel for plan and goal. ✅ landed
 
 D1 is a bug fix. D2 is the one that makes plan mode work. D3 and D4 are the
 consolidation, and are the point at which `internal/goal` and plan mode stop
@@ -381,7 +390,9 @@ being two features that solve the same problem differently.
   the full conversation to every iteration. Battletesting showed the cost of
   the split: a plan the model abandoned at 1/3 simply stopped, with nothing to
   send it back.
-- It does not make the plan file a committed artefact. `.klaudia/` is
-  gitignored; `PRD.md` stays the opt-in committed form, as it is for goal mode.
-- It does not change what `ExitPlanMode` shows the user. The approval prompt
-  works; what was missing was everything after the approval.
+- It does not make the plan file a committed artefact. It lives under
+  `~/.klaudia/plans/`, outside the repository; `PRD.md` stays the opt-in
+  committed form, as it is for goal mode.
+- ~~It does not change what `ExitPlanMode` shows the user.~~ Revised by D5: the
+  y/n prompt became a three-row picker (run it / keep going / keep planning),
+  and the model-facing result is folded to one line on screen.

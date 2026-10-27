@@ -109,13 +109,15 @@ Two levels, deliberately:
    verdict (`FAIL`, the error that stopped the build, the last stack frame) is at
    the end, and it appends the exit-code annotation after clamping so that
    survives too.
-2. **Loop-level, dumb, universal.** `tools.Cap` is the backstop the agent loop
+2. **Loop-level, dumb, universal.** `tools.SpillStore.Cap` is the backstop the agent loop
    applies to whatever a tool returned. It is byte-level and content-blind — the
    weaker of the two — but it is the only one that covers tools nobody tuned,
    including every MCP tool.
 
 Both clamp to `maxToolOutput` (30000 bytes, head-heavy at 20000/10000) and write
-the untruncated text to `~/.klaudia/outputs/<tool>-*.log`, appending a
+the untruncated text to `<config root>/outputs/<tool>-*.log` (`~/.klaudia`
+unless `KLAUDIA_CONFIG_DIR` says otherwise — the host passes the directory in
+`tools.SpillStore`; an empty one clamps without writing), appending a
 `[full output: <path>]` notice so the model can read the elided middle. Files
 older than 24h are pruned on each spill. Output already within budget is
 returned unchanged, so the backstop never re-cuts a self-clamped result.

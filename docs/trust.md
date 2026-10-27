@@ -79,8 +79,10 @@ Some consequences worth being explicit about:
 
 ## MCP tools
 
-An enforcing session calls MCP tools without asking. An observing or disabled
-one asks before every call, as it always did.
+MCP tools are called without asking in every mode except plan, where only tools
+marked read-only (the server's `readOnlyHint`, or `readOnly` in `.mcp.json`)
+are allowed. There is no enforcing/observing posture any more — the gate is
+always on (`internal/agent/hostgate.go`).
 
 This is the one place where the zone model is trusted without being able to see
 what it is trusting. The classifier reads command lines and tool inputs; it has
@@ -131,13 +133,15 @@ system directory is refused before it reaches you.
 
 ## Most blocks are not worth your attention
 
-The gate stops far more than it asks about, and that is deliberate. The
-overwhelming majority of hits are incidental — a `2>/dev/null`, a scratch file
-under `/tmp` — where taking another route is trivial and obviously correct.
-Klaudia is told to do exactly that, and the attempt is drawn quietly:
+The gate stops far more than it asks about, and that is deliberate. Most hits
+are incidental — a convenience write to a shell rc file, a cache under a system
+path — where taking another route is trivial and obviously correct. (The two
+commonest used to be `2>/dev/null` and scratch files under `/tmp`; both are
+free now, see above.) Klaudia is told to take the other route, and the attempt
+is drawn quietly:
 
 ```
-⊘ Bash  changes this machine: writes /dev/null — trying another way
+⊘ Bash  changes this machine: writes ~/.zshrc — trying another way
 ```
 
 That is not a failure and is not styled as one. Asking about it would be the

@@ -41,12 +41,17 @@ reason `-buildvcs=false` must never appear in the build flags.
 - **doctor** - `/doctor` environment diagnostics
 - **streamjson** - Bidirectional stream-json frontend
 - **acp** - Agent Client Protocol v1 agent (editor-driven sessions)
-- **tui** - Terminal UI (Bubble Tea)
+- **tui** - Terminal UI (Bubble Tea); `tui/e2e` drives the real binary in a pty
+  against a scripted mock provider (`KLAUDIA_E2E=1 go test ./internal/tui/e2e/...`)
 - **prompt** - Prompt construction
 - **cli** - CLI entry point and wiring
 - **native** - Pure-Go search / bash-parsing / PDF
 - **sandbox** - Local / OS-confined / container Bash execution
 - **schema** - Type/schema definitions
+- **config** - `config.toml` schema and loading (user file under the config root, project overlay)
+- **goal** - Goal specs and the loop's prompts and gates (also drives plan runs)
+- **lsp** - Language-server pool behind the code-intelligence tools
+- **fuzzy** - Fuzzy matching for `@` completion and pickers
 - **version** - Version info
 
 ## Design record
@@ -55,10 +60,12 @@ reason `-buildvcs=false` must never appear in the build flags.
 where the implementation deliberately differs from them — read it before
 "fixing" something that looks unimplemented. `docs/trust.md`, `docs/jobs.md`,
 `docs/working-tree.md`, `docs/hooks.md`, `docs/acp.md`, `docs/effort.md`,
-`docs/plan-mode.md` and `docs/releasing.md` cover eight subsystems in detail.
+`docs/plan-mode.md`, `docs/releasing.md`, `docs/compaction.md`,
+`docs/memory-architecture.md` and `docs/server-side-tools.md` cover subsystems
+in detail; `docs/parity.md` maps features against Claude Code, and
+`docs/roadmap.md` is the forward plan (recommendations, not records).
 
-`docs/plan-mode.md` is a design record in progress rather than a description of
-what is built. Two of its four decisions have landed: a permission refusal
+`docs/plan-mode.md` records five decisions, all landed. In brief: a permission refusal
 feeds neither loop-breaker (a refusal is a decision, not a malfunction, and
 unlike a host-gate refusal it is revoked mid-run by routes the loop never
 sees), and plan mode gates **mutation** rather than execution via
@@ -80,7 +87,10 @@ snapshot, not the file. Treat the format as latent, not wiring, but don't drift
 it. D4 landed: the loop emits a `plan`
 event when the store's revision moves, and the TUI, stream-json and ACP all render from it. The store is
 **per conversation** — `agent.Turn.Plan` → `Options.Plan` → `tools.Context.Plans` — because a
-process-wide one let ACP threads share a list and let a sub-agent's `TodoWrite` replace the user's plan.
+process-wide one let ACP threads share a list and let a sub-agent's `TodoWrite` replace the user's plan. D5: plan
+approval is a picker (run it / keep going / keep planning), and "keep going" or
+`/plan run` drives the goal loop over the approved plan — one loop, plan-specific
+prompts, no branch switch.
 
 Hooks are the one subsystem that executes a string from a config file, so
 `docs/hooks.md` is where the reasoning for the trust prompt lives. A hook runs

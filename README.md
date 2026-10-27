@@ -34,15 +34,15 @@ extras we lean on day to day:
 ### Install
 
 ```bash
-go install github.com/greenthread-ai/klaudia/cmd/klaudia@main
+CGO_ENABLED=0 go install github.com/greenthread-ai/klaudia/cmd/klaudia@latest
 ```
 
 This installs the `klaudia` binary into `$(go env GOPATH)/bin` (commonly
-`~/go/bin`) — make sure that's on your `PATH`. We track `main` while a release
-tag isn't published yet; `@main` always resolves to the current HEAD, whereas
-`@latest` (the usual Go default) routes through `proxy.golang.org` and can lag
-behind new commits on an untagged module. To force a refresh:
-`GOPROXY=direct go install github.com/greenthread-ai/klaudia/cmd/klaudia@latest`.
+`~/go/bin`) — make sure that's on your `PATH`. `@latest` is the newest tagged
+release (tags start at `v0.1.0`; each also ships prebuilt binaries on the
+GitHub releases page); `@main` tracks HEAD. `@latest` routes through
+`proxy.golang.org` and can lag a fresh tag by a few minutes — to force a
+refresh, prefix the command with `GOPROXY=direct`.
 
 Prefer to build from a checkout? See [Build](#build).
 
@@ -111,13 +111,18 @@ Once the TUI starts, type `/doctor` to verify auth and environment status.
 Pure Go, no CGO, no system libraries:
 
 ```bash
-CGO_ENABLED=0 go install ./cmd/klaudia   # or: go build -o klaudia ./cmd/klaudia
+CGO_ENABLED=0 go install ./cmd/klaudia   # puts the build on your PATH
 go test ./internal/...
+KLAUDIA_E2E=1 go test ./internal/tui/e2e/...   # the real binary in a pty, against a mock model
 ```
 
-The result is one self-contained binary (Linux + macOS).
+The result is one self-contained binary (Linux + macOS). Prefer `go install`
+to `go build`: a `go build` binary lands in the working directory, and running
+`klaudia` afterwards runs whatever was installed last (`klaudia --version`
+prints the commit it was built from).
 
-Two end-to-end rigs go beyond the unit tests (both need a working credential):
+The e2e suite needs no credential and runs in CI. Two more rigs go further
+(both need a working credential):
 `scripts/smoke.sh` drives the real agent loop across modes, the client-side
 tools and the resume path on `haiku`; `scripts/torture.sh` runs the spec's
 agent-loop torture test — one task needing 20+ file inspections, edits, a dev
@@ -129,7 +134,7 @@ scores the transcript against the spec's checklist.
 ### Interactive (TUI)
 
 ```bash
-./klaudia
+klaudia
 ```
 
 A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
@@ -258,16 +263,16 @@ watcher and keep working. Jobs get a name, a port and a log file; see
 
 ```bash
 # Print the final result and exit
-./klaudia -p "What files are in this directory?"
+klaudia -p "What files are in this directory?"
 
 # Unattended, including changes to this machine
-./klaudia -p "Install and configure nginx" --allow-host-changes
+klaudia -p "Install and configure nginx" --allow-host-changes
 
 # Stream events as JSON (tool calls, results) as they happen
-./klaudia -p "Explain the build" --output-format stream-json --verbose
+klaudia -p "Explain the build" --output-format stream-json --verbose
 
 # Partial message deltas, JS-compatible (only with --print + stream-json)
-./klaudia -p "…" --output-format stream-json --verbose --include-partial-messages
+klaudia -p "…" --output-format stream-json --verbose --include-partial-messages
 ```
 
 ### Embedding (stream-json over stdin)
@@ -277,7 +282,7 @@ channel for SDK integrations and for an editor without ACP support (no terminal
 needed):
 
 ```bash
-./klaudia --input-format stream-json --verbose
+klaudia --input-format stream-json --verbose
 ```
 
 Permission asks, the model's questions (`AskUserQuestion`) and plan approvals
@@ -289,7 +294,7 @@ rather than an answer the user never gave being attributed to them.
 ### Editors (ACP)
 
 ```bash
-./klaudia --input-format acp
+klaudia --input-format acp
 ```
 
 Klaudia serves the [Agent Client Protocol](https://agentclientprotocol.com) v1
@@ -324,11 +329,11 @@ purpose — the reasoning, and the rest of the surface, is in
 ### Resuming
 
 ```bash
-./klaudia                            # auto-resume the most recent session here
-./klaudia --new-session              # start fresh instead of auto-resuming
-./klaudia --continue                 # explicitly resume the most recent session here
-./klaudia -r <session-id>            # resume a specific session
-./klaudia -r <session-id> --full     # replay the whole transcript (not the summary)
+klaudia                            # auto-resume the most recent session here
+klaudia --new-session              # start fresh instead of auto-resuming
+klaudia --continue                 # explicitly resume the most recent session here
+klaudia -r <session-id>            # resume a specific session
+klaudia -r <session-id> --full     # replay the whole transcript (not the summary)
 ```
 
 Auto-resume is an interactive convenience: headless (`-p`) and the embedding
@@ -386,8 +391,9 @@ about it, a third rewrites the first one's edit. So a sub-agent holding `Write`,
 `Edit`, `NotebookEdit` or `Bash` runs in its own `git worktree` under
 `~/.klaudia/worktrees/`, seeded with your *uncommitted* work rather than `HEAD`,
 and its changes are applied back to your tree with `git apply` when it finishes
-— files only, never your index. `Explore` and `Plan` keep sharing the tree;
-they have nothing to isolate. Anything that could not be applied because the
+— files only, never your index. `Explore` and `Plan` keep sharing the tree:
+they run in plan mode, so they cannot write (under `bypassPermissions` they get
+a checkout like any writer). Anything that could not be applied because the
 file moved underneath is named to you *and* to the model, and the checkout is
 kept so you still have that version. Ignored files are not copied, so a child
 that needs an install step before it can test will pay for it — turn the whole
@@ -519,8 +525,8 @@ apiKeyEnv = "MY_API_KEY"
 # file = "vscode://file/{path}:{line}:{col}"   # or cursor://file/{path}:{line}
 ```
 
-Create a commented starter config with `./klaudia --create-config=global` for
-`~/.klaudia/config.toml`, or `./klaudia --create-config=local` for
+Create a commented starter config with `klaudia --create-config=global` for
+`~/.klaudia/config.toml`, or `klaudia --create-config=local` for
 `./.klaudia/config.toml`.
 
 `--model haiku|sonnet|opus` (or a full model ID) overrides per-run. The
@@ -650,7 +656,7 @@ Chrome-backed tools above are what non-Claude providers use, and what you get
 when you explicitly ask Klaudia to drive the browser.
 
 Requires a Chrome/Chromium install (auto-discovered; set `KLAUDIA_CHROME_PATH`
-on Linux/Windows if not on `PATH`). Tunable via `.klaudia/config.toml` →
+if it isn't found). Tunable via `.klaudia/config.toml` →
 `browser` (`engine`, `headless`, `chromePath`, `userDataDir`, `headedFallback`,
 …) or `KLAUDIA_*` env vars. When a search or a fetch comes back with a
 bot-challenge page instead of the content (Cloudflare, DataDome, a captcha),
@@ -701,7 +707,7 @@ something mid-call — a token it has no other way to obtain, a branch name, a
 yes/no before something destructive. The question arrives at the same prompt the
 model's own `AskUserQuestion` uses, labelled with the server that asked. Each
 field in the server's schema is one question; booleans and enums become choices,
-anything else is typed. You can always skip an optional field or cancel the
+and anything else is answered by picking the free-text row and typing. You can always skip an optional field or cancel the
 whole form, and cancelling tells the server you cancelled rather than handing it
 a guess.
 
@@ -724,7 +730,9 @@ an issue tracker and a chat archive is what `Explore` and `Plan` are for, and it
 is also the work whose bulk should never reach the main thread — a sub-agent
 spends its own context and hands back a summary. A tool qualifies by declaring
 the protocol's `readOnlyHint`; a tool that says nothing is treated as a write, so
-`delete_branch` never arrives via this route.
+`delete_branch` never arrives via this route. Those sub-agents run in plan mode,
+and plan mode allows exactly these: an MCP tool marked read-only is callable
+there, any other is refused — in the main session's plan mode too.
 
 `readOnlyHint` is a claim a server makes *about itself*, and nothing verifies it.
 Per server, `readOnly` overrides that claim in either direction:
@@ -739,9 +747,10 @@ Per server, `readOnly` overrides that claim in either direction:
 
 `true` for a server that annotates nothing — including one you launched in its
 own read-only mode, where you know something the protocol wasn't told. `false`
-to decline to take a server's word, without giving up the server: the main agent
-keeps it and still asks before every call. This decides which tools a read-only
-sub-agent is *handed*; it is not a claim that calling them is safe.
+to decline to take a server's word, without giving up the server: read-only
+sub-agents and plan mode stop seeing its tools as read-only, and the main agent
+keeps calling them without asking, as it does every MCP tool outside plan mode.
+This is not a claim that calling them is safe.
 
 There is no `${VAR}` expansion — a value is used exactly as written — but the
 server subprocess inherits Klaudia's environment, so export credentials in your
@@ -752,9 +761,9 @@ want a secret-free team config in the repo.
 
 Worth pairing with the `readOnly` guidance above: `-r` and `-S` on the server
 command narrow what exists at all, and `readOnly` decides who is handed it.
-`-S issue,pull_request,actions` matters more than it looks, because every tool's
-schema is sent on *every* request — loading 54 tools to use four is a permanent
-context tax.
+`-S issue,pull_request,actions` still matters: MCP tools are deferred behind
+`ToolSearch`, but every tool the model has discovered rides on each request
+from then on, and a smaller toolset makes discovery itself more accurate.
 
 ## Code intelligence (LSP)
 
@@ -887,6 +896,27 @@ a default in config (project `.klaudia` overrides `~/.klaudia`):
 theme = "nord"
 ```
 
+## Plan mode and plan runs
+
+`/plan` makes the session read-only: edits, writes and MCP tools not marked
+read-only are refused, commands that only inspect (`git log`, `git diff`,
+`ls`, `sed -n`, …) run, and a command Klaudia cannot classify asks you. The
+model researches, then presents a plan, and you pick:
+
+1. **Yes — run it** (`y`): plan mode ends and the model works the plan.
+2. **Yes — and keep going until every step is done**: a *plan run*. If the
+   model stops with steps left it is sent back to them, every step done is
+   followed by one verification turn, and the run ends with a single summary.
+3. **No — keep planning** (`n`): say what should change; it goes to the model.
+
+The approved plan is saved to `~/.klaudia/plans/<session-id>.md` and kept in
+step with the model's `TodoWrite` list, which the live panel above the prompt
+shows (`Ctrl+T` collapses it). `/plan run [N]` resumes a plan with steps left
+(up to N turns, default 10), and `/plan stop` — or Esc — halts it. `/plan off`
+leaves plan mode without a plan. Questions the model asks (`AskUserQuestion`)
+use the same picker: ↑↓ or a digit, Enter to confirm, and the last row to
+answer in your own words — typing alone never answers.
+
 ## Goals & autonomous iteration
 
 Two complementary modes for working toward an objective:
@@ -981,7 +1011,8 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 | `tui` | Bubble Tea terminal UI |
 | `cli` | command entry, flags, wiring |
 | `native` | pure-Go search / bash-parsing / PDF |
-| `prompt`, `schema`, `config`, `version`, `tasks` | supporting packages |
+| `plan`, `goal` | the session plan and its artefact; goal specs and the loop that also drives plan runs |
+| `prompt`, `schema`, `config`, `fuzzy`, `lsp`, `version` | supporting packages |
 
 ## Documentation
 
@@ -1002,6 +1033,8 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 - [docs/compaction.md](docs/compaction.md) — context-window management
 - [docs/memory-architecture.md](docs/memory-architecture.md) — index→detail memory store
 - [docs/server-side-tools.md](docs/server-side-tools.md) — Anthropic server-side tool schemas (reference)
+- [docs/plan-mode.md](docs/plan-mode.md) — plan mode's design record: the mutation gate, the plan store, plan runs
+- [docs/roadmap.md](docs/roadmap.md) — recommendations and the extraction plan (forward-looking, not a record)
 
 ## Background
 
@@ -1029,8 +1062,9 @@ tools.
   tools of their own (the reference was Anthropic-only, and used its server-side
   `web_search`/`web_fetch` — which Klaudia still prefers on Claude models,
   because their results come back cited).
-- Config and sessions live under `~/.klaudia` (`KLAUDIA_CONFIG_DIR`), not
-  `~/.claude`.
+- Config, sessions, plans, hooks approvals, user skills and the global
+  `AGENTS.md` live under `~/.klaudia` (moved together by `KLAUDIA_CONFIG_DIR`),
+  not `~/.claude`.
 - New capabilities with no reference analogue: language-server code intelligence
   (Diagnostics/Definition/References), OS/container Bash sandboxing, persisted
   resume summaries, project `KNOWLEDGE.md`, an index→detail memory store,
@@ -1041,12 +1075,9 @@ tools.
 
 ## Roadmap
 
-- **Web**: more robust search-result parsing; optional custom MCP auth headers.
-- **Provider breadth**: image tool-results and richer translation across more
-  OpenAI-compatible backends.
-- **Knowledge**: let the agent curate `KNOWLEDGE.md` via scoped Memory writes;
-  evaluate embeddings for recall.
-- **Extended tooling**: project-specific analyzers and custom Go MCP servers.
+[docs/roadmap.md](docs/roadmap.md) — where agentic tooling is heading, ranked
+recommendations, the plan for extracting the agent loop as an embeddable Go
+library, and the TUI audit.
 
 ## Non-goals
 

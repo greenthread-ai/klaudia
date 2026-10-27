@@ -94,7 +94,8 @@ one's edit, and every step succeeds. The alternative is running children one at
 a time, which is the thing concurrency was for.
 
 So a sub-agent whose toolset can write — anything holding Write, Edit,
-NotebookEdit or Bash — is given its own `git worktree`:
+NotebookEdit or Bash, and not running read-only — is given its own `git
+worktree` (under the config root, `~/.klaudia` by default):
 
 ```
 ~/.klaudia/worktrees/<project>/<agent-type>-<timestamp>/
@@ -104,9 +105,11 @@ Not inside the project. A checkout under the project root is walked by the
 parent's own Glob and Grep, so the model finds two of every file and reads a
 copy of the code it is editing.
 
-Explore and Plan do not get one. They hold Read, Glob and Grep, so there is
-nothing to isolate them from, and their entire output is paths — which a
-checkout would make wrong.
+Explore and Plan do not get one. They hold Bash, but they run in plan mode
+(`subagent.Type.Mode`), so nothing they run can write and there is nothing to
+isolate them from — and their entire output is paths, which a checkout would
+make wrong. (Under `bypassPermissions` plan mode does not bind them, so they
+are given a checkout like any writer.)
 
 ### It holds your uncommitted work, not HEAD
 

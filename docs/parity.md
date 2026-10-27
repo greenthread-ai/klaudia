@@ -80,7 +80,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Resume / continue / fork | 07/08 | `session/` + `cli/` | ✅ done | Auto-resumes most recent project session by default; `--new-session` starts fresh; `-r/--resume`, `--continue`, `--fork-session` remain. |
 | Microcompaction (local) | 07-app-features | `compaction/` | ✅ done | |
 | Autocompaction (model summary) | 07-app-features | `compaction/` | ✅ done | |
-| Persisted summaries + resume seeding | — | `session/summary.go` + `agent.OnSummary` | 🔀 divergent | Compaction summaries persisted to `.klaudia/sessions/<id>.summary.md`, plus a `compact_boundary` line in the transcript; `--resume` seeds from the last summary **and the entries after it** (token-saving), `--full` replays the transcript. |
+| Persisted summaries + resume seeding | — | `session/summary.go` + `agent.OnSummary` | 🔀 divergent | Compaction summaries persisted to `~/.klaudia/sessions/<encoded-cwd>/<id>.summary.md` (the old project-local `.klaudia/sessions/` path is still read), plus a `compact_boundary` line in the transcript; `--resume` seeds from the last summary **and the entries after it** (token-saving), `--full` replays the transcript. |
 | Project knowledge recall (KNOWLEDGE.md) | — | `prompt.recalledKnowledge` | 🔀 divergent | `.klaudia/KNOWLEDGE.md` injected into the system prompt; curated, distinct from free-form memory. |
 
 ## Permissions
@@ -123,11 +123,11 @@ closed. `docs/trust.md` is the design record.
 | Headless `-p` / `--print` | 08-entry | `cli/` | ✅ done | text / json / stream-json. |
 | stream-json input (embedding frontend) | 08-entry | `cli/` + `streamjson/` | ✅ done | `--input-format stream-json`. |
 | @ file autocomplete | 06-app-ui | `tui/pathmenu.go` | ✅ done | Live dropdown as you type `@…` (ranked, ↑↓ to pick, Tab cycles, Esc dismisses). The earlier Tab-only completion was recorded here as a deliberate divergence; it was really invisible — typing `@` showed nothing, so the feature was reported as missing. Paths with spaces are inserted quoted, and references outside the working directory complete from the filesystem. |
-| Slash command type-ahead | 06-app-ui | `tui/tui.go` | ✅ done | Live suggestions as you type `/…`; Tab completes (unique → fill, many → common prefix). |
+| Slash command type-ahead | 06-app-ui | `tui/input.go` | ✅ done | Live suggestions as you type `/…`; Tab completes (unique → fill, many → common prefix). |
 | Bracketed paste / drag-drop | 06-app-ui | bubbletea default | ✅ done | Bracketed paste on by default (multi-line pastes atomic). |
-| Help bar / keymap / input history | 06-app-ui | `tui/tui.go` | ✅ done | Up/Down ring-buffer history, Tab completion, key hints; /help generated from one command table. |
+| Help bar / keymap / input history | 06-app-ui | `tui/keymap.go` + `tui/input.go` | ✅ done | Up/Down ring-buffer history, Tab completion, key hints; /help generated from one command table. |
 | Scrollback | 06-app-ui | terminal-native (inline render) | ✅ done | Output is printed into the terminal's own scrollback via `tea.Println`; no alt-screen and no mouse capture, so scrolling, selection, search and tmux copy mode are the terminal's. `/search`, `/outline`, `/errors` add structured lookup on top. |
-| Interrupt the model (Esc) | 06-app-ui | `tui/tui.go` + per-turn ctx | ✅ done | Esc cancels the in-flight turn (and any pending approval); loop-level test confirms cancellation propagates. |
+| Interrupt the model (Esc) | 06-app-ui | `tui/keys.go` + per-turn ctx | ✅ done | Esc cancels the in-flight turn (and any pending approval); loop-level test confirms cancellation propagates. |
 | Elapsed-time indicator | 06-app-ui | `tui` + bubbles/stopwatch | 🔀 divergent | Live stopwatch while running + "done in"/"interrupted after" duration (replaces the removed /cost). |
 | Welcome intro | 06-app-ui | `tui.intro` | 🔀 divergent | Coloured logo + model/branch + key hints at startup. |
 | Markdown rendering | 06-app-ui | `tui` + glamour | ✅ done | Assistant answers stream raw, then render through glamour (headings, bold, syntax-highlighted code) on completion. |
@@ -137,17 +137,18 @@ closed. `docs/trust.md` is the design record.
 
 | Command | Klaudia | Status | Notes |
 | --- | --- | --- | --- |
-| /help, /quit, /exit, /clear | `tui/tui.go` | ✅ done | |
-| /model | `tui/tui.go` | ✅ done | |
-| /goal | `tui/tui.go` | ✅ done | |
-| /memory | `tui/tui.go` | ✅ done | |
-| /mcp | `tui/tui.go` | ✅ done | |
-| /stats, /status | `tui/tui.go` | ✅ done | |
+| /help, /quit, /exit, /clear | `tui/commands.go` | ✅ done | |
+| /model | `tui/commands.go` | ✅ done | |
+| /goal | `tui/commands.go` | ✅ done | |
+| /memory | `tui/commands.go` | ✅ done | |
+| /mcp | `tui/commands.go` | ✅ done | |
+| /stats, /status | `tui/commands.go` | ✅ done | |
 | /allow, /deny | — | 🔀 divergent | Removed with the rule model; `/trust` is the replacement. |
-| /config, /agents, /context | `tui/tui.go` | ✅ done | Group A (render-only); friendly permission labels. |
-| /mode, /permissions | `tui/tui.go` + `permission.Mode.Label` | ✅ done | Interactive picker (or direct set) to change permission mode mid-session. The picker (`choice.go`) is a live filterable dropdown shared by `/model`, `/theme`, `/mode` and `/mcp`. |
-| /compact, /cost, /add-dir | `tui/tui.go` + `agent.Loop.Compact` | ✅ done | Group B. |
-| /plan, /doctor, /diff, /commit, /export | `tui/tui.go` + `doctor/` | ✅ done | Group C; /commit gated by a y/n confirm. |
+| /config, /agents, /context | `tui/commands.go` | ✅ done | Group A (render-only); friendly permission labels. |
+| /mode | `tui/commands.go` + `permission.Mode.Label` | ✅ done | Interactive picker (or direct set) to change permission mode mid-session. The picker (`choice.go`) is a live filterable dropdown shared by `/model`, `/theme`, `/mode` and `/mcp`. |
+| /compact, /add-dir | `tui/commands.go` + `agent.Loop.Compact` | ✅ done | Group B. |
+| /cost, /permissions | — | 🔀 divergent | Not present: /cost was replaced by the per-turn "done in · tokens · tok/s" line and `/stats`; /permissions by `/mode` and `/trust`. |
+| /plan, /doctor, /diff, /commit, /export | `tui/commands.go` + `doctor/` | ✅ done | Group C; /commit gated by a y/n confirm. /plan also takes `run [N]` and `stop` (plan runs, docs/plan-mode.md D5). |
 
 ## Auth & infra
 

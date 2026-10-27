@@ -71,9 +71,9 @@ declares what it intends to change and why, and the package install, config
 write, validate and restart that follow all proceed. Approvals are
 session-scoped, never written to disk, and there is no always-allow.
 
-Modes collapsed from six to three (autonomous, plan, bypass). Autonomous is
-refused unless the guardrail is enforcing — without it, it would be
-`bypassPermissions` under a friendlier name.
+Modes collapsed from six to three (autonomous, plan, bypass). The host gate
+has no off or observe setting — it is always on — so autonomous cannot become
+`bypassPermissions` under a friendlier name; bypass is the only way past it.
 
 ### §9–14 Loop, jobs, shell — [docs/jobs.md](jobs.md)
 
@@ -179,8 +179,10 @@ and exit codes.
   re-tested by hand in Terminal.app. It took three attempts, and the two that
   failed are the interesting part — the first treated a symptom, and the second
   was verified against `View()` rather than against what the renderer emits.
-  `internal/tui/renderer_test.go` now drives the real renderer and asserts on
-  the bytes, which is the only automated coverage of that layer.
+  `internal/tui/renderer_test.go` drives the real renderer and asserts on the
+  bytes, and `internal/tui/e2e` now runs the real binary in a pty against a
+  scripted mock provider (`KLAUDIA_E2E=1 go test ./internal/tui/e2e/...`, in
+  CI) — resize itself is still only covered by hand.
 - **§9's narration collapsing**, per the deviation above. The torture test's
   67 tool lines for one task is the number to judge it against.
 - **Subagents**: parallel dispatch restricted to read-only types, child

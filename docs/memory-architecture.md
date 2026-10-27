@@ -56,8 +56,8 @@ infrastructure.
 ## The Store + Knowledge interfaces
 
 Both are in `internal/memory/store.go`. The filesystem implementation
-lives in `internal/memory/fs.go` + `fs_lookup.go` + `fs_lifecycle.go`
-+ `fs_links.go`. A future Postgres implementation will land in the
+(`fsStore`) lives in `internal/memory/memory.go` + `fs_lookup.go` +
+`fs_lifecycle.go`, with the knowledge file in `knowledge.go`. A future Postgres implementation will land in the
 same package as `pg.go` when pgmarkdown is buildable.
 
 ```go
@@ -89,7 +89,8 @@ type Knowledge interface {
 }
 ```
 
-Both interfaces have a `Disabled()` constructor returning a no-op
+Both interfaces have a disabled constructor — `Disabled()` and
+`DisabledKnowledge()` — returning a no-op
 implementation for headless mode — reads return zero values; writes
 return `ErrDisabled`. Lets the TUI / CLI / tool drop nil-guard
 boilerplate.
@@ -104,14 +105,15 @@ between writable (must round-trip `Add`, must surface
 must return `ErrDisabled`).
 
 Today the suite drives `fsStore` (writable) and `Disabled()` (read-only).
-22 subtests, all green. When the pgmarkdown backend lands, the same
+All subtests green (run `go test ./internal/memory -run Conformance -v`). When the pgmarkdown backend lands, the same
 suite will drive `pgStore` with `wantWrites: true` — and if it passes,
 klaudia can swap backends at config time without touching any agent
 code.
 
 Note: the conformance suite asserts **behaviour**, not on-disk format.
 The FS-shape assertions (timestamp format, header structure, linked-
-section idempotency) stay in `fs_test.go` and `knowledge_test.go` —
+section idempotency) stay in `memory_test.go`, `fs_lookup_test.go` and
+`knowledge_test.go` —
 they encode "this is what `.klaudia/MEMORY.md` looks like on disk",
 which the PG implementation will and should not mimic.
 
@@ -321,9 +323,10 @@ backend is just the substrate.
   truncation errors. Mitigation today: prune detail notes via Stale +
   manual archive. Future: pgmarkdown can score-rank the index so only
   the salient bullets get injected.
-- **`Disabled.SyncLinks()` returns nil**, not `ErrDisabled`. Today's
-  call site (`internal/cli/root.go:672`) calls it for side effect and
-  treats errors as best-effort; surfacing `ErrDisabled` there would
+- **`Disabled().SyncLinks()` returns nil**, not `ErrDisabled`. The
+  startup call in `internal/cli/root.go` (on the real store, just before
+  the system prompt is built) is for side effect and treats errors as
+  best-effort, and a disabled store must behave the same; surfacing `ErrDisabled` there would
   print a spurious warning every headless run.
 
 ## See also
