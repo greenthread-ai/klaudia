@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.2.0 — 2026-10-27
+
 ### Highlights
 - **The TUI reads like a review, not a log.** One line per tool call (reads
   batched), numbered edit hunks, a one-line resume card, a 21-line `/help`,
