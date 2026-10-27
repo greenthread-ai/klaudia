@@ -42,6 +42,14 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **The status bar's numbers are real.** "ctx N%" estimated the message
+  history alone, without the system prompt and tools, and read "ctx 0%" on a
+  1M window. "N tokens" counted only the uncached input, a small tail under
+  prompt caching ("1.4k tokens" for a turn that sent 60k). Usage events now
+  carry `context_tokens`, the prompt each call actually sent: the context
+  share comes from it (and a share under 1% reads "<1%"), and the token
+  count includes cache reads and writes, as `/stats` now says. `/context`
+  calls the top level "(project root)" rather than `*`.
 - **Markdown spacing.** A code block or list at a streaming chunk boundary
   sat between two blank lines: glamour pads blank lines with spaces, so
   trimming newlines kept them. Rendered blocks now lose their visually blank

@@ -275,7 +275,11 @@ func (m *Model) statusLine() string {
 	// for what it is.
 	if m.sess != nil && m.sess.ContextWindow > 0 && m.residentTokens > 0 {
 		pct := float64(m.residentTokens) / float64(m.sess.ContextWindow) * 100
-		segments = append(segments, hintStyle.Render(fmt.Sprintf("ctx %.0f%%", pct)))
+		label := fmt.Sprintf("ctx %.0f%%", pct)
+		if pct < 1 {
+			label = "ctx <1%" // "0%" read as empty, on a 1M window with 20k in it
+		}
+		segments = append(segments, hintStyle.Render(label))
 	}
 	segments = append(segments, hintStyle.Render(fmt.Sprintf("%s tokens", humanTokens(m.statIn+m.statOut))))
 

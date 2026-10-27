@@ -895,3 +895,23 @@ func TestHelpIsShortAndDetailIsOneAway(t *testing.T) {
 		t.Error("an unknown command had help")
 	}
 }
+
+// With prompt caching the uncached input is a small tail: the status bar read
+// "1.4k tokens" and "ctx 0%" for a turn that sent tens of thousands. The usage
+// event's context size drives both now, and a small share reads "<1%".
+func TestStatusUsesTheMeasuredContext(t *testing.T) {
+	m := newTestModel()
+	m.sess.ContextWindow = 1_000_000
+	m.renderEvent(agent.Event{Type: "usage", InputDelta: 3, OutputDelta: 400, TurnDelta: 1, ContextTokens: 20_000})
+	if m.statIn != 20_000 || m.residentTokens != 20_400 {
+		t.Errorf("statIn=%d resident=%d, want 20000 and 20400", m.statIn, m.residentTokens)
+	}
+	got := visibleText(m.statusLineAt(200))
+	if !strings.Contains(got, "ctx 2%") || !strings.Contains(got, "20.4k tokens") {
+		t.Errorf("status = %q", got)
+	}
+	m.residentTokens = 5_000
+	if got := visibleText(m.statusLineAt(200)); !strings.Contains(got, "ctx <1%") {
+		t.Errorf("status = %q, want ctx <1%%", got)
+	}
+}

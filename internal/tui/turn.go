@@ -42,6 +42,7 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	// doneMsg can't poison the next reconcile. The normal path also resets
 	// these on doneMsg, so this is just a guard.
 	m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
+	m.contextMeasured = false
 	// Phase tracking: start every turn in "thinking" and mark the clock now
 	// so the quiet-detector doesn't fire on a fresh turn that legitimately
 	// takes 30s+ to receive its first event (some providers stream slowly).
@@ -247,12 +248,26 @@ func (m *Model) renderEvent(ev agent.Event) {
 		// counted. No scrollback line — the status bar at the bottom shows
 		// the running totals, and we don't want a stream of "+1234 tokens"
 		// noise during an iteration.
+		// Input counts everything the call sent, cache included: with prompt
+		// caching InputDelta is only the uncached tail, and the status bar
+		// read "1.4k tokens" for a turn that sent 60k.
+		in := ev.ContextTokens
+		if in == 0 {
+			in = ev.InputDelta
+		}
 		m.statTurns += ev.TurnDelta
-		m.statIn += ev.InputDelta
+		m.statIn += in
 		m.statOut += ev.OutputDelta
 		m.turnLiveTurns += ev.TurnDelta
-		m.turnLiveIn += ev.InputDelta
+		m.turnLiveIn += in
 		m.turnLiveOut += ev.OutputDelta
+		// The real context size, not an estimate of the history alone (which
+		// leaves out the system prompt and tools): what was sent, plus the
+		// reply that the next call will send back.
+		if in > 0 {
+			m.residentTokens = int(in + ev.OutputDelta)
+			m.contextMeasured = true
+		}
 		// Demote streaming → thinking when a usage event arrives mid-turn —
 		// it signals the model has finished one inner call. Don't clobber a
 		// "running <Tool>" phase, since a usage event between tool_use and

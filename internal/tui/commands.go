@@ -272,7 +272,7 @@ func (m *Model) busyGuard(what string) bool {
 // Unknown limits omit the suffix rather than show a misleading percentage.
 // Extracted so the test can pin the format without standing up a Model.
 func formatStats(turns int, inTok, outTok int64, resident, ctxLimit int, ctxSource string) string {
-	base := fmt.Sprintf("Session: model_calls=%d  input_tokens=%d  output_tokens=%d", turns, inTok, outTok)
+	base := fmt.Sprintf("Session: model_calls=%d  input_tokens=%d (cache included)  output_tokens=%d", turns, inTok, outTok)
 	if ctxLimit <= 0 {
 		return base
 	}

@@ -86,6 +86,11 @@ type Event struct {
 	InputDelta  int64 `json:"input_delta,omitempty"`
 	OutputDelta int64 `json:"output_delta,omitempty"`
 	TurnDelta   int   `json:"turn_delta,omitempty"`
+	// ContextTokens is the size of the prompt that call sent: InputDelta plus
+	// the cache reads and writes. With prompt caching, InputDelta alone is the
+	// small uncached tail, so a frontend that showed it understated both the
+	// context and the tokens used many times over.
+	ContextTokens int64 `json:"context_tokens,omitempty"`
 	// Plan is the session's plan after a change, on a "plan" event. A full
 	// snapshot rather than a diff: frontends replace what they show, so a
 	// dropped or reordered event cannot leave one drawing a list that never
@@ -482,6 +487,8 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 				InputDelta:  assistant.Usage.InputTokens,
 				OutputDelta: assistant.Usage.OutputTokens,
 				TurnDelta:   1,
+				ContextTokens: assistant.Usage.InputTokens + assistant.Usage.CacheReadInputTokens +
+					assistant.Usage.CacheCreationInputTokens,
 			})
 		}
 

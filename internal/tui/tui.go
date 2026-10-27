@@ -433,6 +433,9 @@ type Model struct {
 	// rather than per render — compaction.EstimateTokens walks the whole
 	// history and isn't cheap on long sessions.
 	residentTokens int
+	// contextMeasured is set when this turn's usage reported the real prompt
+	// size, which then stands in for the estimate at doneMsg.
+	contextMeasured bool
 	// results holds the full, untruncated content of recent tool results so
 	// /last can reach past the newest one. The event stream is not truncated
 	// upstream, so what's stored is exactly what the model saw.
@@ -833,13 +836,15 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// avoids walking history on every render, which gets expensive on
 		// long sessions — the indicator updates once per turn, which is
 		// the natural rhythm for context-pressure feedback anyway.
-		m.residentTokens = compaction.EstimateTokens(m.history)
+		if !m.contextMeasured {
+			m.residentTokens = compaction.EstimateTokens(m.history)
+		}
 		// Reconcile live usage with the authoritative Result. If every "usage"
 		// event made it through, these deltas are zero (no double-count); if
 		// some were dropped due to channel pressure, this catches the gap up
 		// to the final accurate totals.
 		m.statTurns += msg.res.NumTurns - m.turnLiveTurns
-		m.statIn += msg.res.InputTokens - m.turnLiveIn
+		m.statIn += msg.res.InputTokens + msg.res.CacheReadInputTokens + msg.res.CacheCreationInputTokens - m.turnLiveIn
 		m.statOut += msg.res.OutputTokens - m.turnLiveOut
 		m.turnLiveTurns, m.turnLiveIn, m.turnLiveOut = 0, 0, 0
 		// Clear phase state too so a queued-message follow-up turn starts

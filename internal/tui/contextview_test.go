@@ -99,10 +99,13 @@ func TestActiveAreasCollapseByDirectory(t *testing.T) {
 	areas := activeAreas([]string{
 		"src/auth/a.go", "src/auth/b.go", "src/auth/c.go",
 		"test/auth/a_test.go",
-		"README.md",
+		"README.md", "go.mod",
 	})
 	joined := strings.Join(areas, "\n")
-	if !strings.Contains(joined, "src/auth/*  (3 files)") {
+	if !strings.Contains(joined, "(project root)  2 files") {
+		t.Errorf("the top level should be named, not \"*\":\n%s", joined)
+	}
+	if !strings.Contains(joined, "src/auth/  3 files") {
 		t.Errorf("directory was not collapsed:\n%s", joined)
 	}
 	if !strings.Contains(joined, "test/auth/") {

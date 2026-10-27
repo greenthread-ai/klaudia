@@ -97,11 +97,12 @@ func activeAreas(paths []string) []string {
 		case dir == "" && n == 1:
 			continue // a single top-level file is not an "area"
 		case dir == "":
-			out = append(out, fmt.Sprintf("*  (%d files)", n))
+			// A bare "*" read as a glob or a bullet, not as "the top level".
+			out = append(out, fmt.Sprintf("(project root)  %s", countOf(n, "file")))
 		case n == 1:
 			out = append(out, dir+"/")
 		default:
-			out = append(out, fmt.Sprintf("%s/*  (%d files)", dir, n))
+			out = append(out, fmt.Sprintf("%s/  %s", dir, countOf(n, "file")))
 		}
 	}
 	sort.Strings(out)
