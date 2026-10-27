@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 // /model sized the new model on its own: provider figures over the table, and

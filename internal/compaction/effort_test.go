@@ -5,7 +5,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 // A summary is extraction from a transcript already in front of the model, so

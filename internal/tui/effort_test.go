@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 func effortModel(t *testing.T, model string, start api.Effort) *Model {

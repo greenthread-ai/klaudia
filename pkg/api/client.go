@@ -14,25 +14,12 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// DefaultBetas is the Claude Code default beta set (Cn1 in 03-providers.js).
-// These identify the client as Claude Code and enable context management.
+// DefaultBetas are sent on every request that names none: context management,
+// which the loop's tool-result clearing relies on. A host that wants more adds
+// them with WithPrepare.
 var DefaultBetas = []anthropic.AnthropicBeta{
-	"claude-code-20250219",
 	"context-management-2025-06-27",
 }
-
-// OAuthBeta is the header Claude Code attaches when the credential is an OAuth
-// token. Without it, the Anthropic API treats the same token as "external" use
-// and applies much stricter rate limits — observed in practice as immediate
-// 429s on the first turn while `claude` itself, holding the same Keychain
-// token, works normally. (03-providers.js: `if (Y7()) q.push(BZ)`.)
-const OAuthBeta anthropic.AnthropicBeta = "oauth-2025-04-20"
-
-// claudeCodeVersion appears inside the billing-header system block. The value
-// is logged by Anthropic for analytics but not validated — bump it when a new
-// claude release lands if you want the analytics to stay accurate; nothing
-// breaks if it lags.
-const claudeCodeVersion = "2.1.153"
 
 // WebToolBetas are sent with the request when the server-side web_search /
 // web_fetch tools are enabled. The tools are GA now (the current 20260318 types
@@ -196,12 +183,15 @@ func ResolveModel(m string) anthropic.Model {
 	return anthropic.Model(m)
 }
 
-// Client is Klaudia's Anthropic API client: the SDK client plus the resolved
-// credential (so callers know whether they are on the OAuth path).
+// Client is an Anthropic Messages API client: the SDK client plus the
+// credential it was built with.
 type Client struct {
 	sdk    anthropic.Client
 	cred   Credential
 	tuning Tuning
+	// prepare and listOpts are the host's (WithPrepare, WithListOptions).
+	prepare  func(*anthropic.BetaMessageNewParams)
+	listOpts []option.RequestOption
 	// httpc is the client the SDK was built with, kept so a stalled stream can
 	// drop its idle connections before retrying — see streamRetrying.
 	httpc *http.Client
@@ -215,67 +205,47 @@ func (c *Client) dropIdleConnections() {
 	}
 }
 
-// augmentBetas adds credential-specific betas to a request's beta list — today
-// just oauth-2025-04-20 when the credential is an OAuth token. The agent loop
-// constructs params.Betas from package-level DefaultBetas + WebToolBetas, so
-// adding it here keeps callers ignorant of the credential. Idempotent: a beta
-// already in the list is not added again.
-func (c *Client) augmentBetas(in []anthropic.AnthropicBeta) []anthropic.AnthropicBeta {
-	if !c.cred.IsOAuth() {
-		return in
-	}
-	for _, b := range in {
-		if b == OAuthBeta {
-			return in
-		}
-	}
-	return append(in, OAuthBeta)
-}
-
-// claudeCodeBillingPrefix is the literal prefix Anthropic looks for in the
-// *first* system block on OAuth requests. Without it, every request — even
-// with a perfect set of impersonation headers — falls into a strict default
-// bucket and returns instant 429s. The values that follow are observed for
-// server-side analytics but NOT validated (verified by sending bogus values
-// and watching them all 200), so we put honest klaudia metadata in there.
-const claudeCodeBillingPrefix = "x-anthropic-billing-header:"
-
-// augmentSystem prepends Claude Code's billing-header system block on the
-// OAuth path. The block must come *first* in the system array — claude itself
-// emits it as system[0] and a real `claude -p` against a local proxy confirms
-// the format. Idempotent: if the caller already sent a billing block (e.g. on
-// retry), don't double up.
-func (c *Client) augmentSystem(in []anthropic.BetaTextBlockParam) []anthropic.BetaTextBlockParam {
-	if !c.cred.IsOAuth() {
-		return in
-	}
-	if len(in) > 0 && strings.HasPrefix(in[0].Text, claudeCodeBillingPrefix) {
-		return in
-	}
-	billing := anthropic.BetaTextBlockParam{
-		Text: claudeCodeBillingPrefix + " cc_version=" + claudeCodeVersion + "; cc_entrypoint=klaudia;",
-	}
-	return append([]anthropic.BetaTextBlockParam{billing}, in...)
-}
-
-// defaultMaxRetries is higher than the SDK default (2) so transient 429s — common
-// when an OAuth token is shared with another active session — recover
+// defaultMaxRetries is higher than the SDK default (2) so transient 429s —
+// common when one token is shared by several sessions — recover
 // transparently. The SDK uses exponential backoff and honors Retry-After.
 const defaultMaxRetries = 5
 
-// New builds a Client from the resolved credential and optional custom base
-// URL (KLAUDIA_CUSTOM_ENDPOINT, or baseURL/baseURLAnthropic in the config).
-// baseURL == "" uses the Anthropic production API.
-//
-// On the OAuth path Anthropic's rate-limit bucket is selected entirely by the
-// presence of an `x-anthropic-billing-header:` prefix on system[0] — see
-// augmentSystem. We previously mirrored claude's UA + Stainless fingerprint to
-// fix 429s; turned out none of it was the discriminator. The Go SDK's native
-// identity is fine on both paths.
-func New(cred Credential, baseURL string, tuning Tuning) *Client {
+// ClientOption adjusts a Client at construction.
+type ClientOption func(*clientConfig)
+
+type clientConfig struct {
+	request []option.RequestOption
+	list    []option.RequestOption
+	prepare func(*anthropic.BetaMessageNewParams)
+}
+
+// WithRequestOptions adds SDK request options to every call the client makes
+// (headers, say).
+func WithRequestOptions(opts ...option.RequestOption) ClientOption {
+	return func(c *clientConfig) { c.request = append(c.request, opts...) }
+}
+
+// WithListOptions adds SDK request options to model listing only.
+func WithListOptions(opts ...option.RequestOption) ClientOption {
+	return func(c *clientConfig) { c.list = append(c.list, opts...) }
+}
+
+// WithPrepare sets a function applied to every Messages request just before
+// it is sent — after the default betas, before cache breakpoints — for a host
+// that needs requests shaped a particular way.
+func WithPrepare(fn func(*anthropic.BetaMessageNewParams)) ClientOption {
+	return func(c *clientConfig) { c.prepare = fn }
+}
+
+// New builds a Client from a credential and an optional base URL ("" is the
+// Anthropic production API).
+func New(cred Credential, baseURL string, tuning Tuning, options ...ClientOption) *Client {
+	var cfg clientConfig
+	for _, o := range options {
+		o(&cfg)
+	}
 	httpc := newHTTPClient()
 	opts := []option.RequestOption{
-		option.WithHeader("x-app", "cli"),
 		option.WithMaxRetries(tuning.maxRetries()),
 		option.WithHTTPClient(httpc),
 	}
@@ -287,7 +257,9 @@ func New(cred Credential, baseURL string, tuning Tuning) *Client {
 	if baseURL != "" {
 		opts = append(opts, option.WithBaseURL(baseURL))
 	}
-	return &Client{sdk: anthropic.NewClient(opts...), cred: cred, tuning: tuning, httpc: httpc}
+	opts = append(opts, cfg.request...)
+	return &Client{sdk: anthropic.NewClient(opts...), cred: cred, tuning: tuning, httpc: httpc,
+		prepare: cfg.prepare, listOpts: cfg.list}
 }
 
 // IsOAuth reports whether this client authenticates via OAuth bearer token.

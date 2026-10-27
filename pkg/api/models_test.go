@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 )
@@ -65,15 +66,20 @@ func TestProvidersImplementModelLister(t *testing.T) {
 	var _ ModelLister = (*OpenAIProvider)(nil)
 }
 
-// Live check against the real endpoint. Skipped without credentials, so CI and
-// contributors without a key are unaffected.
+// Live check against the real endpoint. Opt-in (KLAUDIA_LIVE_MODELS) with a
+// key from the environment: it used to run whenever any credential could be
+// found, the Keychain login included, so `go test` called the real API with
+// the developer's account.
 func TestListModelsLive(t *testing.T) {
-	if testing.Short() {
-		t.Skip("live test")
+	if os.Getenv(liveModelsEnv) == "" {
+		t.Skipf("set %s=1 to run against the real endpoint", liveModelsEnv)
 	}
-	cred, err := ResolveCredential()
-	if err != nil {
-		t.Skip("no credentials")
+	cred := Credential{APIKey: os.Getenv("ANTHROPIC_API_KEY"), AuthToken: os.Getenv("ANTHROPIC_AUTH_TOKEN")}
+	if cred.APIKey == "" && cred.AuthToken == "" {
+		t.Skip("set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN)")
+	}
+	if cred.APIKey != "" {
+		cred.AuthToken = ""
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

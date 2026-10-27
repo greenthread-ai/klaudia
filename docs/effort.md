@@ -61,7 +61,7 @@ Klaudia checks before sending: at startup `--effort` is validated against the
 model, `/effort` refuses a level the current model cannot do, and `/model`
 lowers the live level to the new model's ceiling and says so.
 
-The table lives in `internal/api/effort.go` (`modelMaxEffort`) and is keyed by
+The table lives in `pkg/api/effort.go` (`modelMaxEffort`) and is keyed by
 resolved model id, so aliases work. Keep it in step with `modelContextWindows`
 and `modelMaxOutputTokens`: `TestModelTablesAgreeWithEachOther` asserts all
 three agree offline, and `TestLiveModelTablesMatchProvider`

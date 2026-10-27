@@ -76,6 +76,17 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed (breaking)
+- **The provider layer is `pkg/api`, and the core's leaf packages are in
+  `pkg/`** (`permission`, `plan`, `schema`, and `tool` — the tool contract,
+  aliased from `internal/tools`). The Anthropic client there is neutral: no
+  Claude Code beta, `x-app` header, OAuth beta or billing block. Klaudia
+  adds exactly what it sent before through the client's new `WithPrepare` /
+  `WithRequestOptions` / `WithListOptions` hooks, in
+  `internal/anthropicauth`, which also owns credential discovery
+  (`ResolveCredential`). Live API tests (`KLAUDIA_LIVE_MODELS=1`) now take
+  `ANTHROPIC_API_KEY` from the environment and no longer run by default —
+  two of them used to call the real API with the Keychain login whenever
+  one was found.
 - **The agent loop no longer knows about Klaudia's product packages.**
   `internal/agent` now imports only `api`, `compaction`, `permission`,
   `plan`, `schema` and `tools` (it also imported `trust`, `hooks`,

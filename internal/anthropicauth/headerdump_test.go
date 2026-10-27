@@ -1,4 +1,4 @@
-package api
+package anthropicauth
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 // TestDumpOutgoingHeaders is a debugging helper, not an assertion. Run with
@@ -31,20 +32,19 @@ func TestDumpOutgoingHeaders(t *testing.T) {
 
 	for _, tc := range []struct {
 		label string
-		cred  Credential
+		cred  api.Credential
 	}{
-		{"OAUTH", Credential{AuthToken: "oauth-fake"}},
-		{"API-KEY", Credential{APIKey: "sk-fake"}},
+		{"OAUTH", api.Credential{AuthToken: "oauth-fake"}},
+		{"API-KEY", api.Credential{APIKey: "sk-fake"}},
 	} {
 		captured = nil
-		c := New(tc.cred, server.URL, noRetries)
+		c := NewClient(tc.cred, server.URL, noRetries)
 		params := anthropic.BetaMessageNewParams{
-			Model:     anthropic.Model(DefaultModel),
+			Model:     anthropic.Model(api.DefaultModel),
 			MaxTokens: 16,
 			Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
-			Betas:     c.augmentBetas(DefaultBetas),
 		}
-		_, _ = c.StreamTurn(context.Background(), params, StreamSink{})
+		_, _ = c.StreamTurn(context.Background(), params, api.StreamSink{})
 
 		fmt.Printf("=== %s ===\n", tc.label)
 		keys := make([]string, 0, len(captured))

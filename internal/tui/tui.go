@@ -22,7 +22,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/mcp"

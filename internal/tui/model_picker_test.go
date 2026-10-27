@@ -3,10 +3,12 @@ package tui
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/anthropicauth"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 func pickerModel(t *testing.T, models []api.ModelInfo, err error) *Model {
@@ -259,13 +261,18 @@ func TestModelWithoutListerReportsCurrent(t *testing.T) {
 }
 
 // End to end through the real provider: /model → live endpoint → picker.
-// Skipped without credentials.
+// Opt-in, like the model-table check in pkg/api: it used to run whenever a
+// credential could be found — the Keychain login included — so a plain
+// `go test` on a developer's machine called the real API with their account.
 func TestModelPickerAgainstLiveProvider(t *testing.T) {
-	cred, err := api.ResolveCredential()
+	if os.Getenv("KLAUDIA_LIVE_MODELS") == "" {
+		t.Skip("set KLAUDIA_LIVE_MODELS=1 to run against the real provider")
+	}
+	cred, err := anthropicauth.ResolveCredential()
 	if err != nil {
 		t.Skip("no credentials")
 	}
-	client := api.New(cred, "", api.Tuning{})
+	client := anthropicauth.NewClient(cred, "", api.Tuning{})
 
 	m := newTestModel()
 	m.resize(100, 40)

@@ -31,9 +31,15 @@ func TestLiveModelTablesMatchProvider(t *testing.T) {
 	if os.Getenv(liveModelsEnv) == "" {
 		t.Skipf("set %s=1 to check the model tables against GET /v1/models", liveModelsEnv)
 	}
-	cred, err := ResolveCredential()
-	if err != nil {
-		t.Skipf("no Anthropic credential: %v", err)
+	// An API key or token from the environment: the Keychain login Klaudia
+	// can also use is the product's (internal/anthropicauth), not this
+	// package's.
+	cred := Credential{APIKey: os.Getenv("ANTHROPIC_API_KEY"), AuthToken: os.Getenv("ANTHROPIC_AUTH_TOKEN")}
+	if cred.APIKey == "" && cred.AuthToken == "" {
+		t.Skip("set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) to reach GET /v1/models")
+	}
+	if cred.APIKey != "" {
+		cred.AuthToken = ""
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -95,9 +101,15 @@ func TestLiveMaxTokensTooLargeWording(t *testing.T) {
 	if os.Getenv(liveModelsEnv) == "" {
 		t.Skipf("set %s=1 to re-measure the over-cap 400", liveModelsEnv)
 	}
-	cred, err := ResolveCredential()
-	if err != nil {
-		t.Skipf("no Anthropic credential: %v", err)
+	// An API key or token from the environment: the Keychain login Klaudia
+	// can also use is the product's (internal/anthropicauth), not this
+	// package's.
+	cred := Credential{APIKey: os.Getenv("ANTHROPIC_API_KEY"), AuthToken: os.Getenv("ANTHROPIC_AUTH_TOKEN")}
+	if cred.APIKey == "" && cred.AuthToken == "" {
+		t.Skip("set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) to reach GET /v1/models")
+	}
+	if cred.APIKey != "" {
+		cred.AuthToken = ""
 	}
 	const (
 		model = "claude-sonnet-4-5-20250929"
@@ -110,7 +122,7 @@ func TestLiveMaxTokensTooLargeWording(t *testing.T) {
 		MaxTokens: int64(want * 2),
 		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
 	}
-	_, err = New(cred, "", Tuning{}).StreamTurn(ctx, params, StreamSink{})
+	_, err := New(cred, "", Tuning{}).StreamTurn(ctx, params, StreamSink{})
 	if err == nil {
 		t.Fatalf("max_tokens=%d on %s was accepted — the cap moved; re-check modelMaxOutputTokens", want*2, model)
 	}

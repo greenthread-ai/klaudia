@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 // The resolver /model gets must carry the config overrides; it is the reason

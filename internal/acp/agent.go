@@ -45,7 +45,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/plan"

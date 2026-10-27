@@ -44,14 +44,7 @@ type ModelLister interface {
 
 // ListModels enumerates the models this credential can reach, newest first.
 func (c *Client) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	var opts []option.RequestOption
-	// An OAuth credential needs the same beta header the messages path sends.
-	// /v1/models happens to answer without it today, but the requirement is
-	// endpoint-dependent and undocumented per-endpoint — sending it everywhere
-	// is what keeps this from breaking silently later.
-	if c.cred.IsOAuth() {
-		opts = append(opts, option.WithHeaderAdd("anthropic-beta", string(OAuthBeta)))
-	}
+	opts := append([]option.RequestOption(nil), c.listOpts...)
 	var out []ModelInfo
 	// The SDK auto-pages; the account's list is short enough that fetching it
 	// all is cheaper than threading a cursor through the UI.

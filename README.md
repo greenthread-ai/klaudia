@@ -1000,7 +1000,8 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 | Package | Responsibility |
 |---------|----------------|
 | `agent` | the agentic loop + sub-agent spawning |
-| `api` | provider abstraction (Anthropic client + OpenAI-compatible shim) |
+| `pkg/api` | provider abstraction (Anthropic client + OpenAI-compatible shim), model sizing |
+| `anthropicauth` | Klaudia's credential discovery (env, Keychain login) and Anthropic request shaping |
 | `tools` | local tool implementations |
 | `browser` | lazy headless-Chrome engine + web search |
 | `lsp` | language-server client for code intelligence (Diagnostics/Definition/References) |

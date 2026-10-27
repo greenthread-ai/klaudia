@@ -27,13 +27,14 @@ reason `-buildvcs=false` must never appear in the build flags.
 other products (see docs/roadmap.md, "The extraction"); it must not import
 `internal/`. `internal/` is Klaudia the product.
 
+- **pkg/api** - Provider abstraction: Anthropic client + OpenAI-compatible shim, model sizing, tuning
 - **pkg/permission** - The three permission modes (a leaf package)
 - **pkg/plan** - The session plan: step list + the approved-plan artefact
 - **pkg/schema** - Type/schema definitions
 - **pkg/tool** - The tool contract: `Tool`, `Registry`, `Context`, `Result`, the spill store and the approver interfaces (`internal/tools` aliases them)
 
 - **agent** - Main event loop, orchestration, and sub-agent spawning
-- **api** - Provider abstraction: Anthropic client + OpenAI-compatible shim
+- **anthropicauth** - Klaudia's Anthropic client: credential discovery (env, Keychain login) and the request shaping it sends; kept out of `pkg/api`
 - **tools** - Klaudia's built-in tool implementations (the contract is `pkg/tool`)
 - **browser** - Lazy headless-Chrome engine + web search
 - **trust** - Zones, command/tool classification, session-scoped grants
@@ -133,8 +134,8 @@ allowlist of model ids, and an allowlist goes stale the day a model ships — th
 whole Claude 5.5 lineup was missing from all three at once, so Opus 5.5 ran at
 `max_tokens=8192` against a cap of 128000 and compacted as if it had 200k of
 1M. Neither failure looked like a stale map. So: add a model to all three
-tables or none, and run `KLAUDIA_LIVE_MODELS=1 go test ./internal/api` when you
-touch them. It is not in CI — the repository holds no API key — so the
+tables or none, and run `KLAUDIA_LIVE_MODELS=1 go test ./pkg/api` (with
+`ANTHROPIC_API_KEY` set) when you touch them. It is not in CI — the repository holds no API key — so the
 runtime is the backstop: the provider's figures beat the table (cached daily),
 and `/doctor` warns when the two disagree.
 `DefaultMaxOutputTokens` is a floor for a model nothing can size, not a

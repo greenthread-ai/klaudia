@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 func TestResolveEffort(t *testing.T) {

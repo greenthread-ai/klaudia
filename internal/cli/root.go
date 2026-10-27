@@ -19,7 +19,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/acp"
 	"github.com/greenthread-ai/klaudia/internal/agent"
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/anthropicauth"
 	"github.com/greenthread-ai/klaudia/internal/browser"
 	"github.com/greenthread-ai/klaudia/internal/compaction"
 	"github.com/greenthread-ai/klaudia/internal/config"
@@ -39,6 +39,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/trust"
 	"github.com/greenthread-ai/klaudia/internal/tui"
 	"github.com/greenthread-ai/klaudia/internal/version"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
@@ -210,7 +211,7 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, limits api.Model
 		if cfg.ResolveAPIKey() != "" {
 			in.AuthOK, in.AuthKind = true, "api-key"
 		}
-	} else if cred, err := api.ResolveCredential(); err == nil {
+	} else if cred, err := anthropicauth.ResolveCredential(); err == nil {
 		in.AuthOK = true
 		if cred.IsOAuth() {
 			in.AuthKind = "oauth"
@@ -472,11 +473,11 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 		}
 		return api.NewOpenAIProvider(endpoint, key, cfg.Temperature, apiTuning(cfg)), cfg.Model, nil
 	default:
-		cred, err := api.ResolveCredential()
+		cred, err := anthropicauth.ResolveCredential()
 		if err != nil {
 			return nil, "", err
 		}
-		return api.New(cred, endpoint, apiTuning(cfg)), cfg.Model, nil
+		return anthropicauth.NewClient(cred, endpoint, apiTuning(cfg)), cfg.Model, nil
 	}
 }
 

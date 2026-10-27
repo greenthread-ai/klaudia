@@ -1,4 +1,4 @@
-package api
+package anthropicauth
 
 import (
 	"bytes"
@@ -50,7 +50,7 @@ func refreshOAuth(ctx context.Context, refreshToken string) (refreshedTokens, er
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		snippet, _ := readAll(resp.Body, 1024)
+		snippet, _ := readLimited(resp.Body, 1024)
 		snippet = strings.TrimSpace(snippet)
 		if snippet != "" {
 			return refreshedTokens{}, fmt.Errorf("refresh oauth token: %s: %s", resp.Status, snippet)
@@ -78,4 +78,11 @@ func refreshOAuth(ctx context.Context, refreshToken string) (refreshedTokens, er
 		RefreshToken: tokenResp.RefreshToken,
 		ExpiresAt:    time.Now().UnixMilli() + tokenResp.ExpiresIn*1000,
 	}, nil
+}
+
+// readLimited reads up to max bytes of r, for an error body worth quoting.
+func readLimited(r interface{ Read([]byte) (int, error) }, max int) (string, error) {
+	buf := make([]byte, max)
+	n, _ := r.Read(buf)
+	return string(buf[:n]), nil
 }

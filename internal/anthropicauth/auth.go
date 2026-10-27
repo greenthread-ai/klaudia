@@ -1,4 +1,4 @@
-package api
+package anthropicauth
 
 import (
 	"context"
@@ -10,20 +10,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
-
-// Credential is the resolved auth used to talk to the Anthropic API.
-//
-// Exactly one of APIKey / AuthToken is set. APIKey maps to the `x-api-key`
-// header; AuthToken is an OAuth bearer token (Authorization: Bearer …), used
-// when the user is signed in via a Claude Code OAuth session.
-type Credential struct {
-	APIKey    string
-	AuthToken string
-}
-
-// IsOAuth reports whether this credential is an OAuth bearer token.
-func (c Credential) IsOAuth() bool { return c.AuthToken != "" }
 
 // keychainService is the macOS Keychain service name Claude Code stores the
 // OAuth session under (mc("-credentials") in 05-app-core.js with the default
@@ -38,17 +27,17 @@ const keychainService = "Claude Code-credentials"
 //  1. ANTHROPIC_API_KEY            → x-api-key
 //  2. ANTHROPIC_AUTH_TOKEN         → Bearer (explicit override)
 //  3. macOS Keychain OAuth session → Bearer
-func ResolveCredential() (Credential, error) {
+func ResolveCredential() (api.Credential, error) {
 	if k := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY")); k != "" {
-		return Credential{APIKey: k}, nil
+		return api.Credential{APIKey: k}, nil
 	}
 	if t := strings.TrimSpace(os.Getenv("ANTHROPIC_AUTH_TOKEN")); t != "" {
-		return Credential{AuthToken: t}, nil
+		return api.Credential{AuthToken: t}, nil
 	}
 	if tok, ok := oauthTokenFromKeychain(); ok {
-		return Credential{AuthToken: tok}, nil
+		return api.Credential{AuthToken: tok}, nil
 	}
-	return Credential{}, fmt.Errorf(`Klaudia needs credentials before it can start.
+	return api.Credential{}, fmt.Errorf(`Klaudia needs credentials before it can start.
 
 Choose one:
   1. Anthropic API key:

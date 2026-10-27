@@ -8,7 +8,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/plan"
 	tools "github.com/greenthread-ai/klaudia/pkg/tool"

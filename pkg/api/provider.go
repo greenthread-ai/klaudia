@@ -88,14 +88,11 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	if len(params.Betas) == 0 {
 		params.Betas = DefaultBetas
 	}
-	// Credential-specific betas (e.g. oauth-2025-04-20) make our request match
-	// what Claude Code itself sends with the same OAuth token, so the API doesn't
-	// treat us as external usage and rate-limit aggressively.
-	params.Betas = c.augmentBetas(params.Betas)
-	// The OAuth bucket also requires an `x-anthropic-billing-header:` prefix
-	// on the first system block — without it, every request 429s regardless of
-	// headers. See augmentSystem for why.
-	params.System = c.augmentSystem(params.System)
+	// The host's own shaping (WithPrepare), after the defaults and before
+	// cache breakpoints, so whatever it adds is cached like the rest.
+	if c.prepare != nil {
+		c.prepare(&params)
+	}
 	// Cache the stable prefix (tools + system) plus a rolling conversation
 	// breakpoint so each turn doesn't re-pay full price for the whole history.
 	if !c.tuning.NoPromptCache {

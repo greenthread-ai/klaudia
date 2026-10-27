@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 // setEffort backs /effort: no argument reports the levels and which one is

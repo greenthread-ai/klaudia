@@ -1,4 +1,4 @@
-package api
+package anthropicauth
 
 import (
 	"context"
@@ -11,19 +11,19 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 func TestAugmentBetasAddsOAuthForOAuthCredential(t *testing.T) {
 	// OAuth credential: oauth-2025-04-20 must be appended so Anthropic doesn't
 	// treat the same token as external/throttled usage (Claude Code itself
 	// always sends this when on OAuth — `if (Y7()) q.push(BZ)`).
-	c := &Client{cred: Credential{AuthToken: "fake-oauth"}}
-	got := c.augmentBetas(DefaultBetas)
+	got := addBeta(api.DefaultBetas, OAuthBeta)
 	if !containsBeta(got, OAuthBeta) {
 		t.Errorf("OAuth credential should add %q; got %v", OAuthBeta, got)
 	}
 	// Idempotent: calling again shouldn't duplicate.
-	got = c.augmentBetas(got)
+	got = addBeta(got, OAuthBeta)
 	count := 0
 	for _, b := range got {
 		if b == OAuthBeta {
@@ -41,11 +41,10 @@ func TestAugmentSystemPrependsBillingHeaderForOAuth(t *testing.T) {
 	// our requests and binary-searching the diff: with the prefix, 200; without,
 	// 429 instantly. Values after the prefix (cc_version, cc_entrypoint, cch)
 	// are server-logged but not validated, so we ship klaudia branding honestly.
-	c := &Client{cred: Credential{AuthToken: "fake-oauth"}}
 
 	// Existing system block: billing must land in front of it, not at the end.
 	user := []anthropic.BetaTextBlockParam{{Text: "You are a helpful assistant."}}
-	got := c.augmentSystem(user)
+	got := augmentSystem(user)
 	if len(got) != 2 {
 		t.Fatalf("system blocks = %d, want 2", len(got))
 	}
@@ -61,39 +60,15 @@ func TestAugmentSystemPrependsBillingHeaderForOAuth(t *testing.T) {
 
 	// Empty input: still gets the billing block — otherwise requests with no
 	// user-supplied system would 429.
-	got = c.augmentSystem(nil)
+	got = augmentSystem(nil)
 	if len(got) != 1 || !strings.HasPrefix(got[0].Text, claudeCodeBillingPrefix) {
 		t.Errorf("nil input must yield a single billing block; got %+v", got)
 	}
 
 	// Idempotent: re-augmenting an already-augmented slice doesn't double up.
-	twice := c.augmentSystem(got)
+	twice := augmentSystem(got)
 	if len(twice) != 1 {
 		t.Errorf("idempotency violated: %d blocks after second augment, want 1", len(twice))
-	}
-}
-
-func TestAugmentSystemNoOpForAPIKey(t *testing.T) {
-	// API-key callers go straight to their own Anthropic tenant; the billing-
-	// header gate doesn't apply, and prepending one would just confuse logs.
-	c := &Client{cred: Credential{APIKey: "sk-..."}}
-	user := []anthropic.BetaTextBlockParam{{Text: "You are a helpful assistant."}}
-	got := c.augmentSystem(user)
-	if len(got) != 1 || got[0].Text != user[0].Text {
-		t.Errorf("API-key system should pass through unchanged; got %+v", got)
-	}
-	if got := c.augmentSystem(nil); got != nil {
-		t.Errorf("API-key + nil system should stay nil; got %+v", got)
-	}
-}
-
-func TestAugmentBetasNoOpForAPIKey(t *testing.T) {
-	// API-key credential: NOT in the OAuth quota bucket, so the OAuth beta
-	// would just be misleading. Don't add it.
-	c := &Client{cred: Credential{APIKey: "sk-..."}}
-	got := c.augmentBetas(DefaultBetas)
-	if containsBeta(got, OAuthBeta) {
-		t.Errorf("API-key credential should not get %q; got %v", OAuthBeta, got)
 	}
 }
 
@@ -131,7 +106,7 @@ func TestOAuthRequestCarriesBillingHeaderInBody(t *testing.T) {
 
 	for _, tc := range []struct {
 		name        string
-		cred        Credential
+		cred        api.Credential
 		wantPrefix  bool
 		userSystem  string
 		wantSysLen  int    // expected length of body.system array
@@ -139,7 +114,7 @@ func TestOAuthRequestCarriesBillingHeaderInBody(t *testing.T) {
 	}{
 		{
 			name:        "oauth/with user system",
-			cred:        Credential{AuthToken: "oauth-token"},
+			cred:        api.Credential{AuthToken: "oauth-token"},
 			wantPrefix:  true,
 			userSystem:  "You are a helpful assistant.",
 			wantSysLen:  2,
@@ -147,13 +122,13 @@ func TestOAuthRequestCarriesBillingHeaderInBody(t *testing.T) {
 		},
 		{
 			name:       "oauth/empty user system",
-			cred:       Credential{AuthToken: "oauth-token"},
+			cred:       api.Credential{AuthToken: "oauth-token"},
 			wantPrefix: true,
 			wantSysLen: 1,
 		},
 		{
 			name:        "api-key/with user system",
-			cred:        Credential{APIKey: "sk-..."},
+			cred:        api.Credential{APIKey: "sk-..."},
 			wantPrefix:  false,
 			userSystem:  "You are a helpful assistant.",
 			wantSysLen:  1,
@@ -170,13 +145,13 @@ func TestOAuthRequestCarriesBillingHeaderInBody(t *testing.T) {
 				sys = []anthropic.BetaTextBlockParam{{Text: tc.userSystem}}
 			}
 
-			c := New(tc.cred, server.URL, noRetries)
+			c := NewClient(tc.cred, server.URL, noRetries)
 			_, _ = c.StreamTurn(context.Background(), anthropic.BetaMessageNewParams{
-				Model:     anthropic.Model(DefaultModel),
+				Model:     anthropic.Model(api.DefaultModel),
 				MaxTokens: 16,
 				Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))},
 				System:    sys,
-			}, StreamSink{})
+			}, api.StreamSink{})
 
 			mu.Lock()
 			b := body
