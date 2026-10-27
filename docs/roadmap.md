@@ -171,6 +171,9 @@ spend), snapshotted through a small VT emulator at 100×30 and 60×20.
 
 **Bugs**
 
+Status 2026-10-27: 1–3 and 15 are done (6bc7909, ce5b5fc + cda401c, 469e853,
+ec7625a), each with an e2e scenario that fails on the code before the fix.
+
 1. **AskUserQuestion takes the next prompt as its answer.** Arrow keys and
    Enter do nothing; only a digit or free text answers, so a user who types
    their next message while a question is up answers the question with it.
@@ -220,3 +223,47 @@ input, two-press Ctrl+C, Esc interrupt keeping the partial reply, long-output
 clamp with `/last`, ✗ on failed tools, the verification footer, the `/model`
 picker, and OSC 8 links on paths and URLs. Not observed: the live plan panel
 (the mock finished too fast).
+
+## Plan mode and goal runs: one work loop
+
+Driven end to end against the mock (`TestPlanApprovalRuns`,
+`TestGoalRunCompletesWithOneSummary`). They are two halves of the same
+thing, each missing what the other has.
+
+| | `/plan` | `/goal run` |
+|---|---|---|
+| Front half | read-only exploration, `ExitPlanMode`, y/n | goal-setting chat drafts a spec |
+| Artefact | `~/.klaudia/plans/<session>.md`, checkbox format, kept in step by `TodoWrite` | `PRD.md` / `.klaudia/GOAL.md`, ticked by the model's edits |
+| Execution | one turn; stops wherever the model stops | up to N iterations on a branch |
+| Done means | nothing checks | no unchecked boxes, then a verification turn |
+| Live UI | plan panel (Ctrl+T) | "↻ iteration k/N" lines only |
+
+Seen in the battletest: a plan the model abandoned at 1/3 just stops, and
+its panel then sits on screen through an unrelated goal run that has no
+panel of its own.
+
+**Recommendation — one loop, two front halves:**
+
+1. **Plan approval uses the question picker** (`askView`) instead of y/n:
+   1) *Approve — run it*, 2) *Approve — keep going until every step is
+   done*, 3) *Keep planning — say what to change*. Option 3 does not exist
+   today: "n" has no way to say why. This is also Claude Code's shape.
+2. **Option 2 is the goal loop with the approved plan as its spec.** The
+   plan file is already in goal's checkbox format and `goal.CountUnchecked`
+   already reads it — the latent wiring CLAUDE.md describes. It needs an
+   iteration prompt that records progress with `TodoWrite` (the store owns
+   the file) rather than by editing it, and no branch switch: a plan is
+   approved on the user's branch.
+3. **One panel.** The live panel renders whichever work list is active: the
+   plan store, or during `/goal run` the spec's checkboxes with
+   "iteration k/N" in its header. That also retires the stale-panel case.
+4. One completion block per run — done for goal runs (b2e95c1).
+
+Keep the two front halves: exploring read-only and writing a spec are
+different jobs.
+
+**Running work below the prompt.** The status line counts running jobs;
+nothing lists them. A panel in the same live-region slot — each job's name,
+elapsed time and last output line, and later each background sub-agent
+(#4) — is what Claude Code shows under its prompt and the natural home for
+#4's results.
