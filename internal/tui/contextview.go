@@ -128,7 +128,7 @@ func (m *Model) renderContext() string {
 		}
 	}
 	fmt.Fprintf(&b, "  cwd=%s\n  git-branch=%s\n  session-id=%s\n  messages=%d\n",
-		cwd, branch, sid, len(m.history))
+		tildePath(cwd), branch, sid, len(m.history))
 	for _, d := range m.sess.ExtraDirs {
 		b.WriteString("  also=" + d + "\n")
 	}

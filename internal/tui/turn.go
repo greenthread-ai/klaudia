@@ -119,7 +119,7 @@ func (m *Model) renderEvent(ev agent.Event) {
 	case "tool_use":
 		m.flushAssistant() // the assistant message before a tool call is complete
 		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
-		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + toolSummary(ev.ToolName, ev.Input)))
+		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + m.displayPaths(toolSummary(ev.ToolName, ev.Input))))
 		// Remember files Klaudia touches so @-completion can rank them first.
 		// Ownership is NOT recorded here: this event is emitted before the tool
 		// runs, so stamping the file now would capture its pre-write state and
@@ -184,7 +184,7 @@ func (m *Model) renderEvent(ev agent.Event) {
 			}
 			delete(m.pendingPaths, ev.ToolUseID)
 		}
-		s := strings.TrimSpace(ev.Content)
+		s := m.displayPaths(strings.TrimSpace(ev.Content))
 		if s == "" {
 			s = "completed"
 		}

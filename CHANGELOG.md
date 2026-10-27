@@ -13,6 +13,14 @@ port mirrors (see `internal/version`).
   (or Ctrl+P/N) and Enter, digits still pick, "Something else" opens free
   text. Typing is ignored and explained, and the Enter that ends typed text
   does not confirm. Scrollback keeps the question and the answer only.
+- **Paths on screen are relative.** Tool headers and result previews show
+  paths under the working directory relative to it, and others under the home
+  directory as `~/…`; `/context` shows the working directory under `~`.
+  Display only — the model, `/last` and the transcript keep absolute paths, and
+  OSC 8 links still resolve.
+- **Long lines wrap between words**, with continuation rows keeping the
+  line's indent, instead of splitting words at the last column. The startup
+  hint fits in 80 columns.
 
 ### Changed (breaking)
 - **Environment settings the core read at runtime are gone.** They were
