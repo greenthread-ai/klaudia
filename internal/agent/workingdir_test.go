@@ -50,7 +50,7 @@ func TestToolsReceiveTheWorkingDir(t *testing.T) {
 // Sub-agents share the parent's project root; without it their tools would run
 // in the process cwd while the parent's ran in the project.
 func TestSpawnerCarriesTheWorkingDir(t *testing.T) {
-	s := NewSpawner(nil, tools.NewRegistry(), "m", permission.Context{}, nil, 1).
+	s := newTestSpawner(nil, tools.NewRegistry(), "m", permission.Context{}, nil, 1).
 		WithWorkingDir("/project/root")
 	if s.workingDir != "/project/root" {
 		t.Errorf("spawner workingDir = %q", s.workingDir)

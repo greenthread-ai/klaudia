@@ -91,7 +91,7 @@ func TestResearchSubagentsRunUnderPlanMode(t *testing.T) {
 			provider := &scriptedProvider{turns: []anthropic.BetaMessage{
 				toolUseTurn(t, "tu1", "Bash", map[string]any{"command": "git log -1"}),
 			}}
-			s := NewSpawner(provider, tools.NewRegistry(probe), "claude-opus-4-8",
+			s := newTestSpawner(provider, tools.NewRegistry(probe), "claude-opus-4-8",
 				permission.Context{Mode: permission.StaticMode(tc.parent)}, nil, 2).
 				WithWorkingDir(dir)
 
@@ -139,7 +139,7 @@ func TestResearchSubagentCannotWriteThroughTheShell(t *testing.T) {
 			provider := &scriptedProvider{turns: []anthropic.BetaMessage{
 				toolUseTurn(t, "tu1", "Bash", map[string]any{"command": tc.command}),
 			}}
-			s := NewSpawner(provider, tools.NewRegistry(read, bash), "claude-opus-4-8",
+			s := newTestSpawner(provider, tools.NewRegistry(read, bash), "claude-opus-4-8",
 				permission.Context{Mode: permission.StaticMode(tc.parent)}, nil, 2).
 				WithWorkingDir(dir)
 

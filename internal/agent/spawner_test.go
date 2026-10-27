@@ -31,7 +31,7 @@ func readOnlySpawner(t *testing.T, provider api.Provider, dir string, maxTurns i
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewSpawner(provider, tools.NewRegistry(read), "claude-opus-4-8",
+	return newTestSpawner(provider, tools.NewRegistry(read), "claude-opus-4-8",
 		bypassPerm(), nil, maxTurns).WithWorkingDir(dir)
 }
 

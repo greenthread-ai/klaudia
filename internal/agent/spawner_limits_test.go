@@ -70,7 +70,7 @@ func TestSpawnedChildInheritsResolvedLimits(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			s := NewSpawner(provider, tools.NewRegistry(read), unlistedModel,
+			s := newTestSpawner(provider, tools.NewRegistry(read), unlistedModel,
 				bypassPerm(), nil, 1).WithWorkingDir(t.TempDir())
 			if tt.limits != (api.ModelLimits{}) {
 				s = s.WithLimits(tt.limits)
@@ -95,7 +95,7 @@ func TestSpawnedChildGetsSharedContext(t *testing.T) {
 	}
 	dir := t.TempDir()
 	var gotDir string
-	s := NewSpawner(provider, tools.NewRegistry(read), "unlisted-test-model", bypassPerm(), nil, 1).
+	s := newTestSpawner(provider, tools.NewRegistry(read), "unlisted-test-model", bypassPerm(), nil, 1).
 		WithWorkingDir(dir).
 		WithContext(func(d string) string { gotDir = d; return "\n\nSHARED CONTEXT" })
 	if _, err := s.Spawn(context.Background(), "Explore", "look around", nil); err != nil {

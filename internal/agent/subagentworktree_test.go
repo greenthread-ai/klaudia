@@ -101,7 +101,7 @@ func (namedStub) Execute(context.Context, tools.Context, json.RawMessage) ([]too
 
 func writingSpawner(t *testing.T, w *relWriteTool, dir string) *Spawner {
 	t.Helper()
-	return NewSpawner(&scriptedProvider{turns: []anthropic.BetaMessage{
+	return newTestSpawner(&scriptedProvider{turns: []anthropic.BetaMessage{
 		toolUseTurn(t, "tu1", "Write", map[string]any{}),
 	}}, tools.NewRegistry(w), "claude-opus-4-8", bypassPerm(), nil, 2).
 		WithWorkingDir(dir)
@@ -185,7 +185,7 @@ func textTurn(t *testing.T, text string) anthropic.BetaMessage {
 func TestSubAgentResultNamesPathsInTheUsersTree(t *testing.T) {
 	root := gitRepo(t)
 	w := &relWriteTool{rel: "made.txt", body: "x\n"}
-	s := NewSpawner(&reportProvider{t: t, w: w}, tools.NewRegistry(w), "claude-opus-4-8",
+	s := newTestSpawner(&reportProvider{t: t, w: w}, tools.NewRegistry(w), "claude-opus-4-8",
 		bypassPerm(), nil, 3).WithWorkingDir(root).WithWorktrees(true)
 
 	text, err := s.Spawn(context.Background(), "general-purpose", "write it", nil)
@@ -235,7 +235,7 @@ func TestSubAgentSharesTheTreeWhenItShould(t *testing.T) {
 			if tt.canWrite {
 				reg, toolName = tools.NewRegistry(w), "Write"
 			}
-			s := NewSpawner(&scriptedProvider{turns: []anthropic.BetaMessage{
+			s := newTestSpawner(&scriptedProvider{turns: []anthropic.BetaMessage{
 				toolUseTurn(t, "tu1", toolName, map[string]any{}),
 			}}, reg, "claude-opus-4-8", bypassPerm(), nil, 2).
 				WithWorkingDir(root).WithWorktrees(tt.worktrees)
@@ -263,7 +263,7 @@ func TestSubAgentSharesTheTreeWhenItShould(t *testing.T) {
 func TestFailedSubAgentKeepsItsCheckoutAndSaysWhere(t *testing.T) {
 	root := gitRepo(t)
 	w := &relWriteTool{rel: "made.txt", body: "half-finished\n"}
-	s := NewSpawner(&errorProvider{}, tools.NewRegistry(w), "claude-opus-4-8",
+	s := newTestSpawner(&errorProvider{}, tools.NewRegistry(w), "claude-opus-4-8",
 		bypassPerm(), nil, 2).WithWorkingDir(root).WithWorktrees(true)
 
 	_, err := s.Spawn(context.Background(), "general-purpose", "go", nil)

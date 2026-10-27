@@ -150,7 +150,7 @@ func TestTranscriptResumeRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgs, err := MessagesFromEntries(entries)
+	msgs, err := session.Messages(entries)
 	if err != nil {
 		t.Fatalf("MessagesFromEntries: %v", err)
 	}

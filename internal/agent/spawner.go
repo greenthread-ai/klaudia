@@ -12,7 +12,6 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/hooks"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/plan"
-	"github.com/greenthread-ai/klaudia/internal/subagent"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/worktree"
 )
@@ -21,6 +20,7 @@ import (
 // launch a child loop with a filtered toolset and the type's system prompt.
 type Spawner struct {
 	context    func(dir string) string // shared context after each role prompt (WithContext)
+	types      func(name string) (SubagentType, bool)
 	provider   api.Provider
 	base       *tools.Registry
 	model      anthropic.Model
@@ -134,9 +134,27 @@ func (s *Spawner) WithLimits(l api.ModelLimits) *Spawner {
 	return s
 }
 
-// WithSpill gives sub-agents the parent's spill store, so a child's clamped
-// output and elided results stay recoverable from the same directory as the
-// parent's. Unset, a child clamps without writing (see tools.SpillStore).
+// SubagentType is what the spawner needs to know about one kind of sub-agent.
+// The kinds themselves — their names, prompts and toolsets — are the host's:
+// Klaudia's are in internal/subagent, supplied through WithTypes.
+type SubagentType struct {
+	// SystemPrompt is the child's role, followed by WithContext's text.
+	SystemPrompt string
+	// Mode, when set, holds the child to that permission mode (plan, for a
+	// read-only researcher) unless the session is in bypassPermissions.
+	Mode permission.Mode
+	// Tools picks the child's tools from the spawner's base registry; nil
+	// gives it all of them.
+	Tools func(*tools.Registry) *tools.Registry
+}
+
+// WithTypes sets how a subagent_type name resolves. Without it every Spawn
+// fails as an unknown type.
+func (s *Spawner) WithTypes(lookup func(name string) (SubagentType, bool)) *Spawner {
+	s.types = lookup
+	return s
+}
+
 // WithContext sets what follows each child's role prompt: fn receives the
 // child's working directory (an isolated checkout's, when it has one) and
 // returns the shared context — environment, project instructions, the rules
@@ -148,6 +166,9 @@ func (s *Spawner) WithContext(fn func(dir string) string) *Spawner {
 	return s
 }
 
+// WithSpill gives sub-agents the parent's spill store, so a child's clamped
+// output and elided results stay recoverable from the same directory as the
+// parent's. Unset, a child clamps without writing (see tools.SpillStore).
 func (s *Spawner) WithSpill(store tools.SpillStore) *Spawner {
 	s.spill = store
 	return s
@@ -184,11 +205,18 @@ const defaultSubagentMaxTurns = 50
 // progress, when non-nil, receives a short line per child tool call. Passing
 // nil (as headless callers do) restores the previous silent behaviour.
 func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progress func(string)) (string, error) {
-	t, ok := subagent.Lookup(subagentType)
+	var t SubagentType
+	ok := false
+	if s.types != nil {
+		t, ok = s.types(subagentType)
+	}
 	if !ok {
 		return "", fmt.Errorf("unknown subagent_type %q", subagentType)
 	}
-	childTools := t.Filter(s.base)
+	childTools := s.base
+	if t.Tools != nil {
+		childTools = t.Tools(s.base)
+	}
 
 	// A read-only sub-agent is held to it by mode, not by a short tool list.
 	// Bypass is left alone: it means the user has taken responsibility for the

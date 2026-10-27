@@ -72,7 +72,7 @@ func resumeFromSummary(cwd, sessionID string) ([]anthropic.BetaMessageParam, boo
 			after = session.EntriesAfter(rp.After, at)
 		}
 	}
-	rest, err := agent.MessagesFromEntries(after)
+	rest, err := session.Messages(after)
 	if err != nil {
 		return nil, false, err
 	}
@@ -100,6 +100,7 @@ type agentWiring struct {
 // wired to a sub-agent spawner that draws from the base tools.
 func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *agent.HostGate, worktrees bool) (*agentWiring, error) {
 	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).
+		WithTypes(subagentTypes).
 		WithWorkingDir(workingDir).
 		WithHostGate(host).
 		WithWorktrees(worktrees)
@@ -378,7 +379,7 @@ func acpLoadHistory(cwd string) func(string) ([]anthropic.BetaMessageParam, erro
 		if err != nil {
 			return nil, fmt.Errorf("no session %s in this project: %w", sessionID, err)
 		}
-		return agent.MessagesFromEntries(entries)
+		return session.Messages(entries)
 	}
 }
 
@@ -994,7 +995,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			if rerr != nil {
 				return fmt.Errorf("resume %s: %w", resumeID, rerr)
 			}
-			initialMessages, rerr = agent.MessagesFromEntries(entries)
+			initialMessages, rerr = session.Messages(entries)
 			if rerr != nil {
 				return fmt.Errorf("resume %s: %w", resumeID, rerr)
 			}
@@ -1708,4 +1709,14 @@ func ExecuteContext(ctx context.Context) int {
 		fmt.Fprintln(os.Stderr, "Error:", msg)
 	}
 	return exitCodeFor(err)
+}
+
+// subagentTypes resolves a subagent_type for the spawner from Klaudia's
+// built-in types.
+func subagentTypes(name string) (agent.SubagentType, bool) {
+	t, ok := subagent.Lookup(name)
+	if !ok {
+		return agent.SubagentType{}, false
+	}
+	return agent.SubagentType{SystemPrompt: t.SystemPrompt, Mode: t.Mode, Tools: t.Filter}, true
 }

@@ -41,7 +41,7 @@ func TestTodoWriteLandsInTheConversationsOwnPlan(t *testing.T) {
 		{
 			name: "a sub-agent's TodoWrite leaves the user's plan alone",
 			run: func(t *testing.T, reg *tools.Registry, provider api.Provider, _ *plan.Store) {
-				s := NewSpawner(provider, reg, "claude-opus-4-8",
+				s := newTestSpawner(provider, reg, "claude-opus-4-8",
 					permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)}, nil, 2).
 					WithWorkingDir(t.TempDir())
 				if _, err := s.Spawn(context.Background(), "general-purpose", "work", nil); err != nil {
