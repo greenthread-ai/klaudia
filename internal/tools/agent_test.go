@@ -129,3 +129,28 @@ func (c *countingSpawner) Spawn(context.Context, string, string, func(string)) (
 	c.calls++
 	return c.result, nil
 }
+
+type forkingSpawner struct {
+	fakeSpawner
+	forkedWith any
+}
+
+func (f *forkingSpawner) SpawnFork(_ context.Context, _, _ string, conversation any, _ func(string)) (string, error) {
+	f.forkedWith = conversation
+	return "forked", nil
+}
+
+// fork: true goes to SpawnFork with the turn's conversation; without a
+// ForkSpawner the child starts from the prompt and the tool says so.
+func TestAgentForkRoutesTheConversation(t *testing.T) {
+	fs := &forkingSpawner{}
+	raw, _ := json.Marshal(AgentInput{Prompt: "p", SubagentType: "Explore", Description: "d", Fork: true})
+	res, _ := newTestAgent(t, fs).Execute(context.Background(), Context{Conversation: "the conversation"}, raw)
+	if res[0].Content != "forked" || fs.forkedWith != "the conversation" {
+		t.Errorf("result %q, forked with %v", res[0].Content, fs.forkedWith)
+	}
+	res, _ = newTestAgent(t, &fakeSpawner{result: "plain"}).Execute(context.Background(), Context{}, raw)
+	if !strings.Contains(res[0].Content, "Forking is not available") {
+		t.Errorf("no fork support was not reported: %q", res[0].Content)
+	}
+}

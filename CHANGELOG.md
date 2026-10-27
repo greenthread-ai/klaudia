@@ -6,6 +6,11 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Forked sub-agents.** The Agent tool takes `fork`: the child starts from a
+  copy of the conversation so far (through the turn that made the call), so it
+  knows what has been read and decided, and returns only its answer; the
+  main thread is untouched. Tools are handed the conversation as
+  `tool.Context.Conversation`, and a spawner opts in with `SpawnFork`.
 - **`/doctor` says whether links are on, and why**: the override
   (`KLAUDIA_HYPERLINKS`), the config, the terminal it detected — or "terminal
   not recognised — KLAUDIA_HYPERLINKS=1 if it supports OSC 8".

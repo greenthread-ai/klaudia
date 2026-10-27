@@ -389,6 +389,12 @@ at its next step if it is mid-turn. `/stopjob agent_N` stops one and passes on
 what it had. Headless, stream-json and ACP runs keep sub-agents in the
 foreground: there is no one left to report to once the turn ends.
 
+A sub-agent can also be a **fork** (`fork` on the Agent tool): it starts from
+a copy of the conversation so far, so it knows what has been read and decided
+without being told, works on its own task, and hands back only its answer —
+the main thread is untouched. It costs the whole context again, so the model
+is told to keep it for tasks that depend on the discussion.
+
 Commands run in their own process group, so stopping one stops what it started —
 and they inherit your `PATH`, ssh agent and git credential helpers. Klaudia does
 not allocate a PTY, so `vim`, `less`, `top` and `git commit` with no `-m` are

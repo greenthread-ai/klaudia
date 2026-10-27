@@ -48,7 +48,7 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | NotebookEdit | 05-app-core | `tools/notebookedit.go` | ✅ done | |
 | AskUserQuestion | 05-app-core | `tools/askuser.go` | ✅ done | Interactive via `Asker` seam. The TUI always appends a "something else" option (the model writes the choices, so its framing can be wrong); picking it — or just typing — opens free text, and the answer goes back verbatim. |
 | ExitPlanMode | 05-app-core | `tools/exitplan.go` | ✅ done | Via `Planner` seam. |
-| Agent (Task / sub-agents) | 07-app-features | `tools/agent.go` + `subagent/` | ✅ done | Dynamic description from `subagent.Builtin()`. |
+| Agent (Task / sub-agents) | 07-app-features | `tools/agent.go` + `subagent/` | ✅ done | Dynamic description from `subagent.Builtin()`. `run_in_background` (TUI) and `fork` (starts from a copy of the conversation, `Spawner.SpawnFork`). |
 | Memory | 07-app-features | `tools/memory.go` + `memory/` | 🔀 divergent | Auto-memory + recall via `.klaudia/memory/`. |
 | ToolSearch (deferred loading) | 07-app-features | `tools/toolsearch.go` | ✅ done | Per-turn `buildToolParams` filter + `Context.Reveal`. |
 | SlashCommand (model-invoked) | 07-app-features | `tools/skill.go` | 🔀 divergent | Covered by the Skill tool (user-defined skills the model can invoke). |

@@ -229,6 +229,12 @@ type Options struct {
 	// model is unavailable (overloaded or a server error that survived the
 	// client's retries). Empty means the error is reported, as before.
 	FallbackModels []anthropic.Model
+
+	// forkBase is the conversation up to and including the assistant turn
+	// whose tools are being dispatched, handed to tools as
+	// Context.Conversation (a forked sub-agent starts from it). Set by Run,
+	// never by callers.
+	forkBase []anthropic.BetaMessageParam
 }
 
 // Result is the outcome of a Run.
@@ -577,6 +583,9 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			}
 			return "", false
 		}
+		// Capacity-capped, so a fork that appends to it cannot write into the
+		// array this loop goes on using.
+		opts.forkBase = messages[:len(messages):len(messages)]
 		resultBlocks := l.dispatchAll(ctx, toolUses, opts, emit, reveal, fs, preempt)
 		// The aggregate cap, after the per-result one. Results that each pass
 		// the 30 KB budget still add up, and a turn is not limited to a few
@@ -1285,16 +1294,17 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		}
 	}
 	results, err := tool.Execute(ctx, tools.Context{
-		WorkingDir: opts.WorkingDir,
-		Ask:        opts.Asker,
-		Plan:       opts.Planner,
-		Plans:      opts.Plan,
-		Reveal:     reveal,
-		HostChange: hostChangeFor(opts),
-		Progress:   progress,
-		ReadText:   opts.ReadText,
-		Spill:      opts.Spill,
-		Background: opts.Background,
+		WorkingDir:   opts.WorkingDir,
+		Ask:          opts.Asker,
+		Plan:         opts.Planner,
+		Plans:        opts.Plan,
+		Reveal:       reveal,
+		HostChange:   hostChangeFor(opts),
+		Progress:     progress,
+		ReadText:     opts.ReadText,
+		Spill:        opts.Spill,
+		Background:   opts.Background,
+		Conversation: opts.forkBase,
 	}, raw)
 	if err != nil {
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))

@@ -100,6 +100,12 @@ type Context struct {
 	// one left to report to, such as a headless run — means the work runs in
 	// the foreground.
 	Background BackgroundRunner
+	// Conversation is the run's messages up to and including the assistant
+	// turn that made this call — what a forked sub-agent starts from. It is
+	// the agent package's []anthropic.BetaMessageParam, typed any so the tool
+	// contract stays free of the SDK; only a ForkSpawner reads it. A copy:
+	// the loop goes on appending to its own.
+	Conversation any
 	// Reveal, if non-nil, marks deferred tools active for the rest of the run
 	// (used by ToolSearch to load tools on demand).
 	Reveal func(names ...string)

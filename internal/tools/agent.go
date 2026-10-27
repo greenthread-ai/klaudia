@@ -34,6 +34,15 @@ type AgentInput struct {
 	// RunInBackground starts the sub-agent and returns at once; its result
 	// arrives later as a message.
 	RunInBackground bool `json:"run_in_background,omitempty" jsonschema:"description=Run the sub-agent in the background and return immediately; its result arrives as a message when it finishes. Use for independent work you do not need before your next step"`
+	// Fork starts the child from a copy of this conversation.
+	Fork bool `json:"fork,omitempty" jsonschema:"description=Start the sub-agent with a copy of this conversation so far, so it knows what has been read and decided without being told. Costs the whole context again; use when the task depends on the discussion, not for self-contained work"`
+}
+
+// ForkSpawner is a Spawner that can also start a child from the parent's
+// conversation (tools.Context.Conversation). Optional: without it, fork is
+// ignored and the tool says so.
+type ForkSpawner interface {
+	SpawnFork(ctx context.Context, subagentType, prompt string, conversation any, progress func(line string)) (string, error)
 }
 
 // Agent launches a sub-agent (its own agentic loop with a filtered toolset)
@@ -111,14 +120,18 @@ func (a *Agent) Execute(ctx context.Context, tctx Context, raw json.RawMessage) 
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	spawn := func(ctx context.Context, progress func(string)) (string, error) {
+		if fs, ok := a.spawner.(ForkSpawner); ok && in.Fork {
+			return fs.SpawnFork(ctx, in.SubagentType, in.Prompt, tctx.Conversation, progress)
+		}
+		return a.spawner.Spawn(ctx, in.SubagentType, in.Prompt, progress)
+	}
 	if in.RunInBackground && tctx.Background != nil {
 		label := in.SubagentType
 		if d := strings.TrimSpace(in.Description); d != "" {
 			label += ": " + d
 		}
-		id := tctx.Background.Start(label, func(ctx context.Context, progress func(string)) (string, error) {
-			return a.spawner.Spawn(ctx, in.SubagentType, in.Prompt, progress)
-		})
+		id := tctx.Background.Start(label, spawn)
 		return []Result{{Content: fmt.Sprintf("Started sub-agent %s (%s) in the background. Its result "+
 			"will arrive as a message when it finishes — carry on with other work meanwhile; do not "+
 			"wait for it or poll.", id, label)}}, nil
@@ -129,7 +142,10 @@ func (a *Agent) Execute(ctx context.Context, tctx Context, raw json.RawMessage) 
 		// waiting for a message that will never come.
 		note = "(Background runs are not available here, so this sub-agent ran in the foreground.)\n\n"
 	}
-	result, err := a.spawner.Spawn(ctx, in.SubagentType, in.Prompt, tctx.Progress)
+	if _, ok := a.spawner.(ForkSpawner); in.Fork && !ok {
+		note += "(Forking is not available here, so this sub-agent started from the prompt alone.)\n\n"
+	}
+	result, err := spawn(ctx, tctx.Progress)
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Sub-agent failed: %v", err), IsError: true}}, nil
 	}

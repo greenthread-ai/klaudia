@@ -241,6 +241,63 @@ const defaultSubagentMaxTurns = 50
 // progress, when non-nil, receives a short line per child tool call. Passing
 // nil (as headless callers do) restores the previous silent behaviour.
 func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progress func(string)) (string, error) {
+	return s.spawn(ctx, subagentType, prompt, nil, progress)
+}
+
+// SpawnFork is Spawn for a fork: the child starts from conversation (the
+// parent's messages, as tools.Context.Conversation carries them) rather than
+// from the prompt alone, so it knows what has been read, decided and ruled out
+// without being told again. The parent's thread is not touched — the child
+// works on a copy — and only its final answer comes back, as for any child.
+func (s *Spawner) SpawnFork(ctx context.Context, subagentType, prompt string, conversation any, progress func(string)) (string, error) {
+	history, _ := conversation.([]anthropic.BetaMessageParam)
+	if len(history) == 0 {
+		return s.spawn(ctx, subagentType, prompt, nil, progress)
+	}
+	history = append([]anthropic.BetaMessageParam(nil), history...)
+	// The conversation ends with the main agent's turn that made this call,
+	// and an API conversation cannot stop at a tool call: each one gets its
+	// result. The Agent call's says the fork is this sub-agent; the rest ran
+	// in the main agent. The task then joins that same message. Forking from
+	// before the turn instead put the task in the same message as the user's
+	// original instruction, and a live run's fork obeyed that instruction —
+	// it tried to call the Agent tool itself.
+	if results := forkToolResults(history[len(history)-1]); len(results) > 0 {
+		history = append(history, anthropic.NewBetaUserMessage(results...))
+	}
+	return s.spawn(ctx, subagentType, forkPrompt+prompt, history, progress)
+}
+
+// forkPrompt frames a fork's task: the conversation above is shared context,
+// not its own to continue.
+const forkPrompt = "You are a fork of the conversation above, running as a sub-agent the main agent just " +
+	"started. Everything above is context you share with it and has already been acted on: do not continue " +
+	"it, repeat its tool calls, or answer earlier requests. Do only this task, then reply with what the main " +
+	"agent needs from it:\n\n"
+
+// forkToolResults answers each tool call in the parent's last turn, so the
+// fork's history is a valid conversation: the Agent call (this fork) and
+// anything else in the batch, which the main agent is running.
+func forkToolResults(last anthropic.BetaMessageParam) []anthropic.BetaContentBlockParamUnion {
+	if last.Role != anthropic.BetaMessageParamRoleAssistant {
+		return nil
+	}
+	var out []anthropic.BetaContentBlockParamUnion
+	for _, b := range last.Content {
+		tu := b.OfToolUse
+		if tu == nil {
+			continue
+		}
+		text := "Running in the main agent; not available to this fork."
+		if tu.Name == "Agent" {
+			text = "This sub-agent is you. Your task follows."
+		}
+		out = append(out, anthropic.NewBetaToolResultBlock(tu.ID, text, false))
+	}
+	return out
+}
+
+func (s *Spawner) spawn(ctx context.Context, subagentType, prompt string, history []anthropic.BetaMessageParam, progress func(string)) (string, error) {
 	var t SubagentType
 	ok := false
 	if s.types != nil {
@@ -321,6 +378,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 	loop := New(s.provider, childTools)
 	res, err := loop.Run(ctx, Options{
 		Prompt:          prompt,
+		InitialMessages: history,
 		Model:           s.model,
 		System:          t.SystemPrompt + s.contextFor(dir),
 		MaxTurns:        maxTurns,
