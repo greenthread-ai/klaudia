@@ -49,42 +49,50 @@ import (
 // that print the URL inline, and an unreadable transcript is a worse failure
 // than an unclickable one.
 func HyperlinksEnabled(setting *bool, getenv func(string) string) bool {
+	on, _ := HyperlinksDecision(setting, getenv)
+	return on
+}
+
+// HyperlinksDecision is HyperlinksEnabled with its reason, for /doctor: a
+// terminal whose links do not work is answered by "not recognised — set
+// KLAUDIA_HYPERLINKS=1", not by reading this function.
+func HyperlinksDecision(setting *bool, getenv func(string) string) (bool, string) {
 	for _, k := range []string{"KLAUDIA_HYPERLINKS", "FORCE_HYPERLINK"} {
 		if v := getenv(k); v != "" {
-			return v != "0" && !strings.EqualFold(v, "false")
+			return v != "0" && !strings.EqualFold(v, "false"), k + "=" + v
 		}
 	}
 	if setting != nil {
-		return *setting
+		return *setting, "config links.enabled = " + strconv.FormatBool(*setting)
 	}
 	if getenv("TERM") == "dumb" {
-		return false
+		return false, "TERM=dumb"
 	}
-	switch getenv("TERM_PROGRAM") {
+	switch p := getenv("TERM_PROGRAM"); p {
 	case "iTerm.app", "WezTerm", "vscode", "ghostty", "Hyper", "Tabby", "rio", "WarpTerminal":
-		return true
+		return true, "detected " + p
 	}
 	// These survive into tmux and over ssh, where TERM_PROGRAM is replaced.
 	// tmux 3.4+ forwards OSC 8 to a terminal that supports it, and an older
 	// tmux drops the sequence rather than printing it.
 	if getenv("LC_TERMINAL") == "iTerm2" {
-		return true
+		return true, "detected iTerm2 (LC_TERMINAL)"
 	}
 	for _, k := range []string{"KITTY_WINDOW_ID", "WEZTERM_EXECUTABLE", "GHOSTTY_RESOURCES_DIR", "WT_SESSION", "KONSOLE_VERSION"} {
 		if getenv(k) != "" {
-			return true
+			return true, "detected " + k
 		}
 	}
 	if v, err := strconv.Atoi(getenv("VTE_VERSION")); err == nil && v >= 5000 {
-		return true
+		return true, "detected VTE " + getenv("VTE_VERSION")
 	}
 	term := getenv("TERM")
 	for _, t := range []string{"kitty", "ghostty", "wezterm", "foot", "alacritty"} {
 		if strings.Contains(term, t) {
-			return true
+			return true, "detected TERM=" + term
 		}
 	}
-	return false
+	return false, "terminal not recognised — KLAUDIA_HYPERLINKS=1 if it supports OSC 8"
 }
 
 // linkSeq numbers links for the OSC 8 id parameter. A link wrapped across rows

@@ -184,7 +184,10 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, limits api.Model
 	for _, s := range servers {
 		lspServers = append(lspServers, doctor.LSPServer{Name: s.Bin, Language: s.Language, Version: s.Version})
 	}
+	links, linksWhy := tui.HyperlinksDecision(cfg.Links.Enabled, os.Getenv)
 	in := doctor.Input{
+		Hyperlinks:      links,
+		HyperlinksWhy:   linksWhy,
 		Provider:        providerName(cfg),
 		Model:           string(model),
 		SandboxMode:     sandboxMode(cfg.Sandbox),

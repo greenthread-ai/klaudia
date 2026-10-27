@@ -6,6 +6,9 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **`/doctor` says whether links are on, and why**: the override
+  (`KLAUDIA_HYPERLINKS`), the config, the terminal it detected — or "terminal
+  not recognised — KLAUDIA_HYPERLINKS=1 if it supports OSC 8".
 - **Idle compaction.** When the conversation is at 85% or more of the
   compaction point, the TUI compacts it after four idle minutes — before the
   prompt cache expires, so the summary is cheap — instead of making the next

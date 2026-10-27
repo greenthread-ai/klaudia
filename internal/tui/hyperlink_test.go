@@ -203,3 +203,22 @@ func TestCommitLinksScreenNotTranscript(t *testing.T) {
 		t.Errorf("screen links = %v, want the URL", l)
 	}
 }
+
+// /doctor's links row: the decision and the reason, which is the fix.
+func TestHyperlinksDecisionSaysWhy(t *testing.T) {
+	env := func(kv map[string]string) func(string) string { return func(k string) string { return kv[k] } }
+	for _, tc := range []struct {
+		kv   map[string]string
+		on   bool
+		want string
+	}{
+		{map[string]string{"TERM_PROGRAM": "iTerm.app"}, true, "detected iTerm.app"},
+		{map[string]string{"KLAUDIA_HYPERLINKS": "0", "TERM_PROGRAM": "iTerm.app"}, false, "KLAUDIA_HYPERLINKS=0"},
+		{map[string]string{"TERM": "xterm-256color"}, false, "KLAUDIA_HYPERLINKS=1"},
+	} {
+		on, why := HyperlinksDecision(nil, env(tc.kv))
+		if on != tc.on || !strings.Contains(why, tc.want) {
+			t.Errorf("%v: %v %q", tc.kv, on, why)
+		}
+	}
+}

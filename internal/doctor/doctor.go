@@ -45,6 +45,10 @@ type Input struct {
 	LSPServers   []LSPServer // detected language servers
 	Skills       []Skill     // user-defined skills loaded for this session
 	Hooks        []Hook      // configured lifecycle hooks
+	// Hyperlinks says whether the TUI writes OSC 8 links, and why — the
+	// override, the config, or the terminal it detected (or did not).
+	Hyperlinks    bool
+	HyperlinksWhy string
 	// Context-window facts resolved by the CLI (api.ContextWindow). Zero limit
 	// means the model isn't in our table and no config override was set — we
 	// fall back to compaction's default at request time.
@@ -286,6 +290,16 @@ func Run(in Input) []Check {
 	// Hooks run shell commands around the model's work, so the report says what
 	// is attached where even when everything is healthy.
 	checks = append(checks, hooksCheck(in.Hooks))
+
+	// Clickable paths and URLs depend on detecting the terminal; when they do
+	// not work, the reason is the fix.
+	if in.HyperlinksWhy != "" {
+		state := "off"
+		if in.Hyperlinks {
+			state = "on"
+		}
+		checks = append(checks, Check{"links", StatusInfo, state + " (" + in.HyperlinksWhy + ")"})
+	}
 
 	// Container runtimes (informational, useful regardless of mode).
 	for _, rt := range []string{"docker", "podman"} {

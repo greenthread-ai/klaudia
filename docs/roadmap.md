@@ -93,7 +93,7 @@ Size is a guess: S ≈ a day, M ≈ a week, L ≈ several.
 | 9 | **Fallback model chain** and an effort cap in config — *chain landed 2026-10-27 (`fallbackModels`, `--fallback-model`; main loop only, not sub-agents); effort cap not done* | Small, and the 5.5-sizing incident showed provider-side surprises are real | S |
 | 10 | **Idle compaction** above a threshold, before the cache expires — *landed 2026-10-27 (TUI; `idleCompact`)* | Cheaper than compacting under pressure mid-turn | S |
 | 11 | **Eval mode**: `--restricted` (no user config, no memory, no hooks) plus replaying saved sessions as regression tests | The transcript already records sizing per line; turning sessions into tests catches loop regressions before users do | M |
-| 12 | **TUI**: links on the live region and in `/doctor`'s output, a hyperlink row in `/doctor` | Small follow-ups to the OSC 8 work | S |
+| 12 | **TUI**: links on the live region and in `/doctor`'s output, a hyperlink row in `/doctor` — *landed 2026-10-27: the `/doctor` row (on/off and why); its output was already linked like all scrollback. The live region stays unlinked by decision: it is transient, what matters reaches scrollback (linked), and the inline renderer's line arithmetic is where the resize bugs lived* | Small follow-ups to the OSC 8 work | S |
 
 Not recommended: plugin bundles (skills + agents + hooks + MCP in one
 installable package) — not the direction for Klaudia, by decision 2026-10-27;
