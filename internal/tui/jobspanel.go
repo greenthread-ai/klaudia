@@ -58,7 +58,11 @@ func (m *Model) jobsPanel() string {
 		if a.Last != "" {
 			tail += " — " + a.Last
 		}
-		rows = append(rows, row{a.Started, "⏵ " + a.ID + " · " + elapsed(time.Since(a.Started)), oneline(tail, 200)})
+		head := "⏵ " + a.ID + " · " + elapsed(time.Since(a.Started))
+		if q := time.Since(a.LastAt); !a.LastAt.IsZero() && q >= time.Minute {
+			head += " · quiet " + elapsed(q) // as for jobs: reported, not judged
+		}
+		rows = append(rows, row{a.Started, head, oneline(tail, 200)})
 	}
 	if len(rows) == 0 {
 		return ""

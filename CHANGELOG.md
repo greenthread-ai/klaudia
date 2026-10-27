@@ -82,6 +82,11 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **Job logs are bounded.** A log grew without limit until the weekly prune,
+  and `BashOutput` read everything since its last call into memory. Logs now
+  rotate at 64 MiB (one previous file kept) and a read returns at most the
+  newest 4 MiB, saying how much was skipped. Background agents show "quiet
+  Xm" in the panel, as jobs do.
 - **Inline code copies as itself.** The colour themes padded it with a space
   either side, which pasted as " go test "; without colour it rendered as
   bare words. The padding is gone (the tint stays), and without colour it

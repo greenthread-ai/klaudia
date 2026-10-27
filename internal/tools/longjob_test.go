@@ -213,3 +213,46 @@ func TestWatchNeedsABackgroundJob(t *testing.T) {
 		t.Error("an invalid watch regex was accepted")
 	}
 }
+
+// A job that runs for days rotates its log and never returns more than the
+// read cap at once; offsets keep working across the rotation.
+func TestJobLogRotatesAndCapsReads(t *testing.T) {
+	defer func(f, r int64) { maxJobLogFile, maxJobLogRead = f, r }(maxJobLogFile, maxJobLogRead)
+	maxJobLogFile, maxJobLogRead = 1000, 600
+	dir := t.TempDir()
+	l := newJobLog(dir, "dev")
+	defer l.Close()
+	line := strings.Repeat("x", 99) + "\n" // 100 bytes
+	for i := 0; i < 25; i++ {
+		l.Write([]byte(line))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "dev.log.1")); err != nil {
+		t.Errorf("no rotated file: %v", err)
+	}
+	if fi, _ := os.Stat(filepath.Join(dir, "dev.log")); fi.Size() > 1000 {
+		t.Errorf("current file is %d bytes, over the cap", fi.Size())
+	}
+	out, next := l.ReadFrom(0)
+	if next != 2500 {
+		t.Errorf("logical size = %d, want 2500", next)
+	}
+	// Rotated at 1000 and 2000: the current file holds the last 500 bytes.
+	if !strings.HasPrefix(out, "[… 2000 bytes of earlier output skipped") || strings.Count(out, line) != 5 {
+		t.Errorf("read from 0:\n%q", out)
+	}
+	l.Write([]byte("tail\n"))
+	if out, _ := l.ReadFrom(next); out != "tail\n" {
+		t.Errorf("incremental read after rotation = %q", out)
+	}
+
+	// The read cap, in a file that has not rotated: only the newest 600.
+	big := newJobLog(t.TempDir(), "big")
+	defer big.Close()
+	maxJobLogFile = 1 << 20
+	for i := 0; i < 10; i++ {
+		big.Write([]byte(line))
+	}
+	if out, _ := big.ReadFrom(0); !strings.HasPrefix(out, "[… 400 bytes") || strings.Count(out, line) != 6 {
+		t.Errorf("capped read:\n%q", out)
+	}
+}

@@ -22,7 +22,8 @@ type jobLog struct {
 	mu   sync.Mutex
 	path string
 	f    *os.File
-	n    int64     // bytes written
+	n    int64     // bytes written, ever: offsets are logical and survive rotation
+	base int64     // the logical offset the current file starts at
 	last time.Time // when output last arrived; how a quiet job is told apart
 	// memOnly holds output when no file could be opened. Falling back to memory
 	// keeps a job working on a read-only home directory; it is bounded so the
@@ -32,6 +33,16 @@ type jobLog struct {
 
 // maxMemLog bounds the in-memory fallback (256 KiB), keeping the tail.
 const maxMemLog = 256 << 10
+
+// A job can run for days. Its log rotates at maxJobLogFile, keeping one
+// previous file (name.log.1), so a chatty dev server cannot fill the disk
+// before the weekly prune; and one read returns at most maxJobLogRead of the
+// newest output, so BashOutput after hours does not load gigabytes. Vars so
+// tests can shrink them.
+var (
+	maxJobLogFile int64 = 64 << 20
+	maxJobLogRead int64 = 4 << 20
+)
 
 // newJobLog opens dir/name.log. An empty dir means the host gave the store no
 // log directory, and the log is memory-only from the start.
@@ -64,9 +75,30 @@ func (l *jobLog) Write(b []byte) (int, error) {
 		l.n = int64(len(l.memOnly))
 		return len(b), nil
 	}
+	if l.n-l.base >= maxJobLogFile {
+		l.rotate()
+	}
 	n, err := l.f.Write(b)
 	l.n += int64(n)
 	return n, err
+}
+
+// rotate moves the current file to name.log.1 (replacing the last one) and
+// starts a new one. Called with l.mu held. A failure keeps writing to the
+// file it has: a full log is better than a lost one.
+func (l *jobLog) rotate() {
+	old := l.path + ".1"
+	_ = os.Remove(old)
+	if err := os.Rename(l.path, old); err != nil {
+		return
+	}
+	f, err := os.OpenFile(l.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		_ = os.Rename(old, l.path)
+		return
+	}
+	_ = l.f.Close()
+	l.f, l.base = f, l.n
 }
 
 // note writes a Klaudia-generated line into the log, marked so it cannot be
@@ -78,7 +110,7 @@ func (l *jobLog) note(format string, args ...any) {
 // ReadFrom returns the bytes written since offset, and the new offset.
 func (l *jobLog) ReadFrom(offset int64) (string, int64) {
 	l.mu.Lock()
-	path, size, mem := l.path, l.n, l.memOnly
+	path, size, base, mem := l.path, l.n, l.base, l.memOnly
 	l.mu.Unlock()
 
 	if offset < 0 || offset > size {
@@ -87,17 +119,31 @@ func (l *jobLog) ReadFrom(offset int64) (string, int64) {
 	if path == "" {
 		return string(mem[offset:]), size
 	}
+	// What is gone (rotated out) or too much to return at once is skipped,
+	// and the reader is told how much.
+	skipped := int64(0)
+	if offset < base {
+		skipped, offset = base-offset, base
+	}
+	if size-offset > maxJobLogRead {
+		skipped += size - maxJobLogRead - offset
+		offset = size - maxJobLogRead
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return "", size
 	}
 	defer f.Close()
-	if _, err := f.Seek(offset, 0); err != nil {
+	if _, err := f.Seek(offset-base, 0); err != nil {
 		return "", size
 	}
 	buf := make([]byte, size-offset)
 	n, _ := f.Read(buf)
-	return string(buf[:n]), size
+	out := string(buf[:n])
+	if skipped > 0 {
+		out = fmt.Sprintf("[… %d bytes of earlier output skipped — /logs has the file …]\n", skipped) + out
+	}
+	return out, size
 }
 
 // Size is the number of bytes written so far.

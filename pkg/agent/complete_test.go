@@ -67,3 +67,28 @@ func TestInboxAndReportFraming(t *testing.T) {
 		t.Errorf("framing = %s", b2)
 	}
 }
+
+// A background task's LastAt starts at Started and moves with each progress
+// line, so a frontend can say how long it has been quiet.
+func TestBackgroundTaskTracksLastProgress(t *testing.T) {
+	b := NewBackground(t.Context(), nil)
+	step := make(chan struct{})
+	done := make(chan struct{})
+	b.Start("x", func(_ context.Context, progress func(string)) (string, error) {
+		<-step
+		progress("step")
+		close(done)
+		<-step
+		return "", nil
+	})
+	first := b.List()[0]
+	if !first.LastAt.Equal(first.Started) {
+		t.Errorf("LastAt = %v, want Started %v", first.LastAt, first.Started)
+	}
+	step <- struct{}{}
+	<-done
+	if got := b.List()[0]; !got.LastAt.After(first.Started) || got.Last != "step" {
+		t.Errorf("after progress: %+v", got)
+	}
+	step <- struct{}{}
+}

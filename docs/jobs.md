@@ -16,7 +16,10 @@ gets:
   loud. Both work everywhere. Names are derived from the command — `npm run dev`
   is `dev`, `make dev-api` is `dev-api` — not mapped from a table that guesses
   at your vocabulary. A collision gets `-2`.
-- **A log file** at `~/.klaudia/jobs/<session>/<name>.log`, pruned after a week.
+- **A log file** at `~/.klaudia/jobs/<session>/<name>.log`, pruned after a week,
+  rotated at 64 MiB (`<name>.log.1` keeps the previous one) so a job left up
+  for days cannot fill the disk. One `BashOutput` returns at most the newest
+  4 MiB and says how much it skipped.
 - **Exit detection.** A crash is reported when it happens, not when someone next
   looks — to you, and to the model: a job that ends on its own (not one
   stopped on request) is delivered as a background agent's result is, as a

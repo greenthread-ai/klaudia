@@ -286,10 +286,10 @@ Status 2026-10-27, verified with tests in `internal/tools/longjob_test.go` and
 - Open: a job that should **outlive the session** (detach, and re-attach on
   resume) — today quitting stops it, now with a warning, and a resumed
   session tells the model which jobs stopped (decided 2026-10-27: that is
-  enough). Hang detection
-  for a background *agent* (a sub-agent waiting on one long call shows its last
-  step, but nothing flags a stall). Log growth: a job's log file is unbounded
-  until the weekly prune.
+  enough).
+- Also done: background agents show "quiet Xm" in the panel, as jobs do; job
+  logs rotate at 64 MiB (one previous file kept) and a read returns at most
+  the newest 4 MiB, saying how much it skipped.
 
 ## Plan mode and goal runs: one work loop
 

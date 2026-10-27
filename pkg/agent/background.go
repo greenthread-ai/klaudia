@@ -32,8 +32,12 @@ type BackgroundTask struct {
 	Ended   time.Time // zero while running
 	Running bool
 	Last    string // the most recent progress line
-	Result  string
-	Err     error
+	// LastAt is when progress was last reported (Started until the first).
+	// A sub-agent waiting on one long call or command says nothing for a
+	// while; how long is for whoever is watching to judge.
+	LastAt time.Time
+	Result string
+	Err    error
 }
 
 type bgTask struct {
@@ -55,6 +59,7 @@ func (b *Background) Start(label string, work func(ctx context.Context, progress
 	t := &bgTask{BackgroundTask: BackgroundTask{
 		ID: fmt.Sprintf("agent_%d", b.seq), Label: label, Started: time.Now(), Running: true,
 	}, cancel: cancel}
+	t.LastAt = t.Started
 	b.tasks = append(b.tasks, t)
 	b.mu.Unlock()
 
@@ -62,7 +67,7 @@ func (b *Background) Start(label string, work func(ctx context.Context, progress
 		defer cancel()
 		result, err := work(ctx, func(line string) {
 			b.mu.Lock()
-			t.Last = line
+			t.Last, t.LastAt = line, time.Now()
 			b.mu.Unlock()
 		})
 		b.mu.Lock()
