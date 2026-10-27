@@ -117,6 +117,20 @@ func (st resumeState) render() string {
 	return b.String()
 }
 
+// modelNote is what the model is told on the first turn after a resume: the
+// jobs its history started are gone. Without it the history says "Started job
+// provision (bash_1)" and the model's first move is BashOutput on an id that
+// no longer exists. "" when nothing died.
+func (st resumeState) modelNote() string {
+	if len(st.DeadJobs) == 0 {
+		return ""
+	}
+	return "<session-resumed>\nThis session was resumed in a new process. These background jobs from before " +
+		"stopped when the previous process ended and their ids no longer exist: " + strings.Join(st.DeadJobs, ", ") +
+		". Do not read their output; if one is still needed (a server, a watcher) or did not finish " +
+		"(a provisioning run), say so and start it again with Bash run_in_background.\n</session-resumed>"
+}
+
 // shortList joins up to n names, then "+N more".
 func shortList(names []string, n int) string {
 	if len(names) <= n {

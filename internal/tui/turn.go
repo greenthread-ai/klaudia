@@ -66,6 +66,10 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 	if shell := m.takeShellContext(); shell != "" {
 		prompt = shell + "\n\n" + prompt
 	}
+	if m.resumeNote != "" {
+		prompt = m.resumeNote + "\n\n" + prompt
+		m.resumeNote = ""
+	}
 
 	switch {
 	case m.goalSetting && m.sess != nil:

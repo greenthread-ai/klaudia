@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
@@ -125,5 +127,33 @@ func TestJobNamesIgnoresUnrelatedText(t *testing.T) {
 	}
 	if got := jobNamesFromResults(nil); len(got) != 0 {
 		t.Errorf("got %v from no input", got)
+	}
+}
+
+// The model is told what died, once, on the first turn after a resume.
+func TestResumeTellsTheModelWhichJobsStopped(t *testing.T) {
+	note := resumeState{DeadJobs: []string{"provision", "dev"}}.modelNote()
+	if !strings.Contains(note, "provision, dev") || !strings.Contains(note, "run_in_background") {
+		t.Errorf("note = %q", note)
+	}
+	if (resumeState{}).modelNote() != "" {
+		t.Error("a note with nothing to say")
+	}
+
+	m := newTestModel()
+	m.resize(100, 30)
+	m.ctx = t.Context()
+	m.resumeNote = note
+	prompts := make(chan string, 2)
+	m.run = func(_ context.Context, turn agent.Turn) (agent.Result, error) {
+		prompts <- turn.Prompt
+		return agent.Result{}, nil
+	}
+	m.startTurn("carry on")
+	if p := <-prompts; !strings.Contains(p, "<session-resumed>") || !strings.HasSuffix(p, "carry on") {
+		t.Errorf("first prompt = %q", p)
+	}
+	if m.resumeNote != "" {
+		t.Error("the note would be sent again")
 	}
 }

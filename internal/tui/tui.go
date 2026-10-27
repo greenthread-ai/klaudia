@@ -399,6 +399,10 @@ type Model struct {
 	// quitConfirmed is set by a /quit that warned about running work; the
 	// next /quit goes ahead.
 	quitConfirmed bool
+	// resumeNote tells the model, on the first turn after a resume, what did
+	// not survive (resumeState.modelNote). The card says it to the user; the
+	// model's history still says the jobs are running.
+	resumeNote string
 	// cancelling is set when the user pressed Esc but the agent goroutine
 	// hasn't returned yet (e.g. blocked in SDK retry backoff or a tool that's
 	// slow to honour ctx). The bottom view swaps "working…" for "cancelling…"
@@ -617,7 +621,9 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	// A resumed session gets the operational picture instead of the
 	// dirty-tree note: it subsumes it, and adds what did not survive.
 	if len(history) > 0 {
-		m.appendLine(bannerStyle.Render(m.buildResumeState().render()))
+		st := m.buildResumeState()
+		m.appendLine(bannerStyle.Render(st.render()))
+		m.resumeNote = st.modelNote()
 	} else {
 		m.warnIfDirtyAtStart()
 	}

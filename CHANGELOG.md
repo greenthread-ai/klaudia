@@ -55,6 +55,10 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **A resumed session tells the model which jobs stopped.** The resume card
+  said so to the user, but the model's history still read "Started job
+  provision (bash_1)", so its first move was to read an id that no longer
+  existed. The first turn after a resume now carries a note naming them.
 - **The status bar's numbers are real.** "ctx N%" estimated the message
   history alone, without the system prompt and tools, and read "ctx 0%" on a
   1M window. "N tokens" counted only the uncached input, a small tail under
