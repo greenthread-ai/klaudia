@@ -11,6 +11,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/schema"
+	"github.com/greenthread-ai/klaudia/pkg/tool"
 )
 
 // bashDefaultTimeout is applied when the model doesn't specify one.
@@ -287,13 +288,13 @@ func formatBashOutput(resp sandbox.Response, command string, spill SpillStore) (
 	}
 	raw := b.String()
 	out := raw
-	if clamped, elided := clampOutput(raw); elided > 0 {
+	if clamped, elided := tool.ClampOutput(raw); elided > 0 {
 		out = clamped
 		// The spill file is the *model's* escape hatch to the elided middle —
 		// it can Read or grep the path. The UI doesn't need it: `full` carries
 		// the same text in memory.
 		if path, ok := spill.Spill("bash", raw); ok {
-			out += "\n" + spillMarker + path + "]"
+			out += "\n" + tool.SpillMarker + path + "]"
 		}
 		full = raw
 	}

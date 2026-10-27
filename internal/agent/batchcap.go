@@ -5,7 +5,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread-ai/klaudia/internal/tools"
+	tools "github.com/greenthread-ai/klaudia/pkg/tool"
 )
 
 // maxMessageOutput caps the combined text of one turn's tool results.

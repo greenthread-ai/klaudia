@@ -1,4 +1,4 @@
-package tools
+package tool
 
 // Concurrency safety is opt-in, by implementing ConcurrencySafe.
 //

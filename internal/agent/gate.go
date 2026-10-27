@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/greenthread-ai/klaudia/internal/tools"
+	tools "github.com/greenthread-ai/klaudia/pkg/tool"
 )
 
 // Gate is a policy every tool call passes before the permission check, and

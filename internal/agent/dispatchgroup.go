@@ -7,8 +7,8 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
+	tools "github.com/greenthread-ai/klaudia/pkg/tool"
 )
 
 // maxConcurrentTools caps how many tool calls execute at once.

@@ -30,10 +30,11 @@ other products (see docs/roadmap.md, "The extraction"); it must not import
 - **pkg/permission** - The three permission modes (a leaf package)
 - **pkg/plan** - The session plan: step list + the approved-plan artefact
 - **pkg/schema** - Type/schema definitions
+- **pkg/tool** - The tool contract: `Tool`, `Registry`, `Context`, `Result`, the spill store and the approver interfaces (`internal/tools` aliases them)
 
 - **agent** - Main event loop, orchestration, and sub-agent spawning
 - **api** - Provider abstraction: Anthropic client + OpenAI-compatible shim
-- **tools** - Local tool implementations
+- **tools** - Klaudia's built-in tool implementations (the contract is `pkg/tool`)
 - **browser** - Lazy headless-Chrome engine + web search
 - **trust** - Zones, command/tool classification, session-scoped grants
 - **hostgate** - Klaudia's `agent.Gate`: the host gate, its approval card (`CardOf`), headless approver

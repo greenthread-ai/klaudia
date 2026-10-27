@@ -1024,6 +1024,7 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 | `native` | pure-Go search / bash-parsing / PDF |
 | `pkg/plan`, `goal` | the session plan and its artefact; goal specs and the loop that also drives plan runs |
 | `pkg/schema` | JSON Schema for tool inputs |
+| `pkg/tool` | the tool contract: interface, registry, per-call context, results, output spill |
 | `prompt`, `config`, `fuzzy`, `lsp`, `version` | supporting packages |
 
 ## Documentation

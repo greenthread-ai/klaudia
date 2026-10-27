@@ -1,10 +1,12 @@
-// Package tools defines the contract every local Klaudia tool implements and
-// the registry used to look tools up by name during agentic dispatch.
+// Package tool defines the contract every tool implements and the registry the
+// agent loop looks tools up in during dispatch. It is the part of tools a
+// product embedding the loop needs: Klaudia's own built-in tools (Bash, Read,
+// the browser, …) live in internal/tools and are written against this.
 //
 // The interface mirrors the JS tool contract (name, dynamic description,
 // input schema, input validation, execution, permission check, render) so the
 // Go port can be diffed against the JS reference one tool at a time.
-package tools
+package tool
 
 import (
 	"context"

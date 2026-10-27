@@ -1,4 +1,4 @@
-package tools
+package tool
 
 import (
 	"fmt"
@@ -218,3 +218,13 @@ func pruneSpills(dir string, maxAge time.Duration) {
 // middle. Local frontends don't parse it: they get the untruncated text
 // directly via Result.Full.
 const spillMarker = "[full output: "
+
+// SpillMarker opens the notice a clamped output ends with — "[full output:
+// <path>]" — so a tool that clamps its own output can name its spill file the
+// same way, and Cap can tell content that already names one.
+const SpillMarker = spillMarker
+
+// ClampOutput clamps out to the default per-tool budget, keeping a head and a
+// tail, and reports how many bytes it removed. For a tool that clamps itself
+// (Bash) rather than leaving it to the loop's Cap.
+func ClampOutput(out string) (string, int) { return clampOutput(out) }
