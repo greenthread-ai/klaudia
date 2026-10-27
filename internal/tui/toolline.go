@@ -52,6 +52,9 @@ func (m *Model) startTool(ev agent.Event) {
 		id: ev.ToolUseID, name: ev.ToolName, input: ev.Input, start: time.Now(),
 		summary: toolSummaryWith(ev.ToolName, ev.Input, m.displayPaths),
 	}
+	if len(m.pendingTools) == 0 {
+		m.toolsSince = p.start
+	}
 	m.pendingTools = append(m.pendingTools, p)
 	if showsEarly[ev.ToolName] {
 		m.showTool(p)
@@ -126,11 +129,32 @@ func (m *Model) takeTool(ev agent.Event) *pendingTool {
 	for i, p := range m.pendingTools {
 		if p.id == ev.ToolUseID {
 			m.pendingTools = append(m.pendingTools[:i], m.pendingTools[i+1:]...)
+			m.closeToolStretch()
 			return p
 		}
 	}
 	return &pendingTool{id: ev.ToolUseID, name: ev.ToolName, input: ev.Input,
 		summary: toolSummaryWith(ev.ToolName, ev.Input, m.displayPaths)}
+}
+
+// closeToolStretch adds the stretch of tool time that just ended, once no
+// call is left in flight.
+func (m *Model) closeToolStretch() {
+	if len(m.pendingTools) == 0 && !m.toolsSince.IsZero() {
+		m.toolTime += time.Since(m.toolsSince)
+		m.toolsSince = time.Time{}
+	}
+}
+
+// takeToolTime returns this turn's tool time and resets it for the next.
+func (m *Model) takeToolTime() time.Duration {
+	if !m.toolsSince.IsZero() {
+		m.toolTime += time.Since(m.toolsSince)
+		m.toolsSince = time.Time{}
+	}
+	d := m.toolTime
+	m.toolTime = 0
+	return d
 }
 
 // abandonPendingTools writes a line for each call that never reported back —
@@ -232,6 +256,16 @@ func (m *Model) renderToolResult(ev agent.Event, p *pendingTool, seq int) {
 	case ev.ToolName == "TodoWrite":
 		m.appendLine(toolStyle.Render(indent + "✓ " + head + ": " + todoResultLine(s)))
 		return
+	case ev.ToolName == "Bash" && dataString(ev.Data, "job") != "":
+		// A background start: the result text is how-to for the model
+		// (BashOutput, RestartJob, KillShell), three lines the user did not
+		// need. One line says what happened.
+		verb := "started as "
+		if ev.Data["duplicate"] == true {
+			verb = "already running as "
+		}
+		m.appendLine(toolStyle.Render(indent + "✓ " + head + " · " + verb + dataString(ev.Data, "job")))
+		return
 	case ev.ToolName == "ExitPlanMode":
 		m.appendLine(toolStyle.Render(indent + "✓ " + head + ": " + exitPlanResultLine(s)))
 		return
@@ -297,6 +331,12 @@ func (m *Model) editDiff(name string, input any, line int) string {
 func (m *Model) editPreview(input any, line int) string {
 	f := toolFields(input)
 	return m.editHunk(f["file_path"], f["old_string"], f["new_string"], line)
+}
+
+// dataString reads a string a tool reported in Result.Data.
+func dataString(data map[string]any, key string) string {
+	s, _ := data[key].(string)
+	return s
 }
 
 // dataInt reads an integer a tool reported in Result.Data: an int in

@@ -90,7 +90,9 @@ func throughput(outTokens int64, d time.Duration) string {
 		return ""
 	}
 	s := " · " + humanTokens(outTokens) + " written" // output only; the status bar counts input too
-	if d > 0 {
+	// d is the model's own time (the turn less its tool time). Under a second
+	// of it, a rate is noise.
+	if d >= time.Second {
 		s += fmt.Sprintf(" · %.0f tok/s", float64(outTokens)/d.Seconds())
 	}
 	return s

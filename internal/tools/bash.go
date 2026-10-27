@@ -144,12 +144,16 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 				"That command is already running as job %s (%s), started %s ago. "+
 					"Reusing it rather than starting a second copy — read its output with "+
 					"BashOutput(bash_id=%q), or restart it with RestartJob(job=%q).",
-				j.Name, j.ID, fmtShortDuration(time.Since(j.Started)), j.Name, j.Name)}}, nil
+				j.Name, j.ID, fmtShortDuration(time.Since(j.Started)), j.Name, j.Name),
+				Data: map[string]any{"job": j.Name, "job_id": j.ID, "duplicate": true}}}, nil
 		}
+		// The text is instructions for the model; Data is what a frontend
+		// shows instead ("started as provision.sh").
 		return []Result{{Content: fmt.Sprintf(
 			"Started job %s (%s). Read its output with BashOutput(bash_id=%q), restart it with "+
 				"RestartJob(job=%q), stop it with KillShell(shell_id=%q).",
-			j.Name, j.ID, j.Name, j.Name, j.Name)}}, nil
+			j.Name, j.ID, j.Name, j.Name, j.Name),
+			Data: map[string]any{"job": j.Name, "job_id": j.ID}}}, nil
 	}
 
 	timeout := bashDefaultTimeout

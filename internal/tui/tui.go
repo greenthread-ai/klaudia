@@ -362,6 +362,12 @@ type Model struct {
 	pendingRecent map[string][]string
 	// pendingTools are calls whose line waits for their result, in call order.
 	pendingTools []*pendingTool
+	// toolTime is this turn's wall-clock time with at least one tool call in
+	// flight (overlapping calls counted once), and toolsSince when the current
+	// stretch began. tok/s divides by the rest: a turn that waited 39s on a
+	// job read "7 tok/s" for a model streaming at 150.
+	toolTime   time.Duration
+	toolsSince time.Time
 	// readRun holds consecutive successful Reads until something else is
 	// written, so they can share one line (flushReads).
 	readRun []readEntry
@@ -828,7 +834,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.appendLine(hintStyle.Render("  ⚠ " + note))
 				}
 			}
-			m.appendLine(bannerStyle.Render("  ✓ done in " + fmtDuration(elapsed) + throughput(msg.res.OutputTokens, elapsed)))
+			m.appendLine(bannerStyle.Render("  ✓ done in " + fmtDuration(elapsed) + throughput(msg.res.OutputTokens, elapsed-m.takeToolTime())))
 		}
 		// Goal loop: decide now whether another iteration follows, because
 		// that decides whether this turn gets a completion block of its own.

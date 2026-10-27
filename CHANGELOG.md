@@ -175,6 +175,11 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **Starting a background job is one line** (`✓ Bash ./provision.sh ·
+  started as provision.sh`); the how-to text stays with the model. The done
+  line's tok/s now excludes the time tools were running, so a turn that
+  waited 39s on a job no longer reads "7 tok/s", and it is left out when the
+  model itself ran for under a second.
 - **`/diff` pages and colours.** It printed the whole diff, uncoloured, into
   scrollback. It now uses git's colours (none under `NO_COLOR`), opens a long
   diff in `$PAGER` as `/last` does, and names untracked files, which `git

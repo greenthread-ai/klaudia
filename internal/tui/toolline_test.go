@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/greenthread-ai/klaudia/pkg/agent"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
@@ -107,5 +108,41 @@ func TestActiveToolLabelIsSpaced(t *testing.T) {
 	m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: "1", ToolName: "BashOutput", Input: map[string]any{"bash_id": "bash_1"}})
 	if m.activeToolName != "BashOutput bash_1" {
 		t.Errorf("activeToolName = %q", m.activeToolName)
+	}
+}
+
+// Starting a background job is one line; the how-to text is for the model.
+func TestBackgroundStartIsOneLine(t *testing.T) {
+	m := newTestModel()
+	in := map[string]any{"command": "./provision.sh", "run_in_background": true}
+	m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: "1", ToolName: "Bash", Input: in})
+	m.renderEvent(agent.Event{Type: "tool_result", ToolUseID: "1", ToolName: "Bash",
+		Content: "Started job provision.sh (bash_1). Read its output with BashOutput…",
+		Data:    map[string]any{"job": "provision.sh", "job_id": "bash_1"}})
+	if out := strings.TrimSpace(stripANSI(m.transcript.String())); out != "✓ Bash ./provision.sh · started as provision.sh" {
+		t.Errorf("got %q", out)
+	}
+}
+
+// tok/s is the model's rate, not the turn's: tool time is taken out, once
+// even for overlapping calls.
+func TestToolTimeIsCountedOnce(t *testing.T) {
+	m := newTestModel()
+	m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: "a", ToolName: "Read", Input: map[string]any{"file_path": "x"}})
+	m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: "b", ToolName: "Read", Input: map[string]any{"file_path": "y"}})
+	m.toolsSince = time.Now().Add(-2 * time.Second) // both in flight for 2s
+	m.renderEvent(agent.Event{Type: "tool_result", ToolUseID: "a", ToolName: "Read", Content: "1\tx"})
+	m.renderEvent(agent.Event{Type: "tool_result", ToolUseID: "b", ToolName: "Read", Content: "1\ty"})
+	if d := m.takeToolTime(); d < 2*time.Second || d > 3*time.Second {
+		t.Errorf("tool time = %s, want ~2s", d)
+	}
+	if m.takeToolTime() != 0 {
+		t.Error("tool time was not reset for the next turn")
+	}
+	if got := throughput(300, 2*time.Second); !strings.Contains(got, "150 tok/s") {
+		t.Errorf("throughput = %q", got)
+	}
+	if got := throughput(300, 500*time.Millisecond); strings.Contains(got, "tok/s") {
+		t.Errorf("a sub-second rate was shown: %q", got)
 	}
 }
