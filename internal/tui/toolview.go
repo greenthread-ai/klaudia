@@ -253,6 +253,13 @@ func (m *Model) statusLine() string {
 		}
 		segments = append(segments, hintStyle.Render(fmt.Sprintf("%d %s", n, noun)))
 	}
+	if n := len(m.runningAgents()); n > 0 {
+		noun := "agents"
+		if n == 1 {
+			noun = "agent"
+		}
+		segments = append(segments, hintStyle.Render(fmt.Sprintf("%d %s", n, noun)))
+	}
 
 	// Goal state outranks the counters: it says the session is doing something
 	// unattended, which is the thing you would most want to notice.

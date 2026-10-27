@@ -217,3 +217,26 @@ func TestRunningJobsPanel(t *testing.T) {
 		t.Errorf("status line should still count the job: %q", first.StatusLine())
 	}
 }
+
+// A sub-agent sent to the background: the turn ends at once, the agent shows
+// under the prompt while it works, and its result reaches the model as a turn
+// of its own when it finishes.
+func TestBackgroundAgentReportsBack(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	env.Prompt(t, tm, "bgagent")
+	tm.WaitFor(t, "the parent turn to finish while the agent runs", 20*time.Second, func(s Snapshot) bool {
+		return strings.Contains(s.All(), "Started it; carrying on.") && strings.Contains(s.Screen(), "⏵ agent_1")
+	})
+	snap := tm.WaitText(t, "Got the background result.", 30*time.Second)
+	if !strings.Contains(snap.All(), "✓ background agent_1 (Explore: survey) finished") {
+		t.Errorf("no completion line\n%s", snap.All())
+	}
+	found := false
+	for _, p := range env.Mock.Prompts() {
+		found = found || (strings.Contains(p, `<background-agent id="agent_1"`) && strings.Contains(p, "three findings"))
+	}
+	if !found {
+		t.Errorf("the result never reached the model; prompts: %q", env.Mock.Prompts())
+	}
+}

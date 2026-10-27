@@ -31,6 +31,9 @@ type AgentInput struct {
 	Description  string `json:"description" jsonschema:"description=A short (3-5 word) description of the task"`
 	Prompt       string `json:"prompt" jsonschema:"description=The task for the sub-agent to perform autonomously"`
 	SubagentType string `json:"subagent_type" jsonschema:"description=The type of sub-agent to use"`
+	// RunInBackground starts the sub-agent and returns at once; its result
+	// arrives later as a message.
+	RunInBackground bool `json:"run_in_background,omitempty" jsonschema:"description=Run the sub-agent in the background and return immediately; its result arrives as a message when it finishes. Use for independent work you do not need before your next step"`
 }
 
 // Agent launches a sub-agent (its own agentic loop with a filtered toolset)
@@ -70,7 +73,10 @@ func (a *Agent) Description(context.Context) (string, error) {
 		fmt.Fprintf(&b, "- %s: %s\n", t.Name, t.Description)
 	}
 	b.WriteString("The sub-agent runs to completion and returns a single final message; it cannot " +
-		"ask follow-up questions, so give it a complete, self-contained prompt.")
+		"ask follow-up questions, so give it a complete, self-contained prompt. ")
+	b.WriteString("Set run_in_background for independent work you do not need before your next step — " +
+		"several can run at once — then carry on: each result arrives as a message when it is done, " +
+		"so do not wait for it or poll.")
 	return b.String(), nil
 }
 
@@ -105,9 +111,27 @@ func (a *Agent) Execute(ctx context.Context, tctx Context, raw json.RawMessage) 
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
 	}
+	if in.RunInBackground && tctx.Background != nil {
+		label := in.SubagentType
+		if d := strings.TrimSpace(in.Description); d != "" {
+			label += ": " + d
+		}
+		id := tctx.Background.Start(label, func(ctx context.Context, progress func(string)) (string, error) {
+			return a.spawner.Spawn(ctx, in.SubagentType, in.Prompt, progress)
+		})
+		return []Result{{Content: fmt.Sprintf("Started sub-agent %s (%s) in the background. Its result "+
+			"will arrive as a message when it finishes — carry on with other work meanwhile; do not "+
+			"wait for it or poll.", id, label)}}, nil
+	}
+	note := ""
+	if in.RunInBackground {
+		// Said rather than silently ignored, so the model does not go on
+		// waiting for a message that will never come.
+		note = "(Background runs are not available here, so this sub-agent ran in the foreground.)\n\n"
+	}
 	result, err := a.spawner.Spawn(ctx, in.SubagentType, in.Prompt, tctx.Progress)
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Sub-agent failed: %v", err), IsError: true}}, nil
 	}
-	return []Result{{Content: result}}, nil
+	return []Result{{Content: note + result}}, nil
 }

@@ -263,6 +263,14 @@ func (m *Model) restartCommand(args []string) {
 
 // stopJobCommand handles /stopjob <job|all>.
 func (m *Model) stopJobCommand(args []string) {
+	if len(args) > 0 && strings.HasPrefix(args[0], "agent_") {
+		if m.bg != nil && m.bg.Stop(args[0]) {
+			m.appendLine(bannerStyle.Render("stopping " + args[0] + " — its partial result will be passed on"))
+		} else {
+			m.appendLine(errStyle.Render("no running background agent " + args[0]))
+		}
+		return
+	}
 	if m.sess.Jobs == nil {
 		m.appendLine(errStyle.Render("background jobs are not available in this session"))
 		return

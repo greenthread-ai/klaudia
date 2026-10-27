@@ -353,7 +353,17 @@ said after it (token-saving) unless `--full`.
 gets a name and a log file, and Klaudia carries on. `/jobs` lists what is up and
 on what port, `/logs <job>` opens the log in your `$PAGER`, `/logs -f` tails it
 into real scrollback, `/restart` replaces the process in place rather than
-starting a second copy, and a crash is reported when it happens.
+starting a second copy, and a crash is reported when it happens. Running jobs
+are listed under the prompt with their age and port.
+
+Sub-agents can run in the background too: the model sets `run_in_background`
+on the Agent tool for independent work it does not need before its next step,
+and carries on. A background agent is listed under the prompt with its latest
+step, survives Esc (which ends the turn, not the research), and when it
+finishes its result goes to the model — straight away if Klaudia is idle, or
+at its next step if it is mid-turn. `/stopjob agent_N` stops one and passes on
+what it had. Headless, stream-json and ACP runs keep sub-agents in the
+foreground: there is no one left to report to once the turn ends.
 
 Commands run in their own process group, so stopping one stops what it started —
 and they inherit your `PATH`, ssh agent and git credential helpers. Klaudia does

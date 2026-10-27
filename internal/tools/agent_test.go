@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -79,4 +80,52 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+type fakeRunner struct {
+	label string
+	work  func(context.Context, func(string)) (string, error)
+}
+
+func (f *fakeRunner) Start(label string, work func(context.Context, func(string)) (string, error)) string {
+	f.label, f.work = label, work
+	return "agent_7"
+}
+
+// run_in_background hands the spawn to the host's runner and returns at once;
+// without a runner the sub-agent runs in the foreground and says so.
+func TestAgentRunInBackground(t *testing.T) {
+	sp := &countingSpawner{result: "child result"}
+	a, err := NewAgent(sp, []AgentTypeInfo{{Name: "Explore"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte(`{"description":"survey","prompt":"look","subagent_type":"Explore","run_in_background":true}`)
+
+	runner := &fakeRunner{}
+	res, err := a.Execute(context.Background(), Context{Background: runner}, raw)
+	if err != nil || len(res) != 1 || !strings.Contains(res[0].Content, "agent_7") || sp.calls != 0 {
+		t.Fatalf("background start: res=%+v err=%v spawns=%d", res, err, sp.calls)
+	}
+	if runner.label != "Explore: survey" {
+		t.Errorf("label = %q", runner.label)
+	}
+	if got, _ := runner.work(context.Background(), nil); got != "child result" || sp.calls != 1 {
+		t.Errorf("the runner's work should spawn the child: got %q, spawns %d", got, sp.calls)
+	}
+
+	res, _ = a.Execute(context.Background(), Context{}, raw)
+	if !strings.Contains(res[0].Content, "ran in the foreground") || !strings.Contains(res[0].Content, "child result") {
+		t.Errorf("no runner: %q", res[0].Content)
+	}
+}
+
+type countingSpawner struct {
+	result string
+	calls  int
+}
+
+func (c *countingSpawner) Spawn(context.Context, string, string, func(string)) (string, error) {
+	c.calls++
+	return c.result, nil
 }

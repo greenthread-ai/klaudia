@@ -93,6 +93,11 @@ type Context struct {
 	// HostChange, if non-nil, handles RequestHostChange approval. Nil means
 	// there is no one to ask, and the tool says so rather than pretending.
 	HostChange HostApprover
+	// Background, if non-nil, runs work past the end of this call and
+	// reports back later (see BackgroundRunner). Nil — a frontend with no
+	// one left to report to, such as a headless run — means the work runs in
+	// the foreground.
+	Background BackgroundRunner
 	// Reveal, if non-nil, marks deferred tools active for the rest of the run
 	// (used by ToolSearch to load tools on demand).
 	Reveal func(names ...string)
@@ -220,4 +225,15 @@ func (r *Registry) All() []Tool {
 		all = append(all, t)
 	}
 	return all
+}
+
+// BackgroundRunner runs work that outlives the tool call that started it, for
+// the Agent tool's run_in_background. The host owns everything after Start:
+// the work's lifetime (the session's, not the turn's — Esc ends a turn, not a
+// research task), what the user is shown while it runs, and how its result
+// reaches the model when it finishes.
+type BackgroundRunner interface {
+	// Start runs work in the background and returns its id at once. label
+	// describes it to the user; progress lines from work go to the host.
+	Start(label string, work func(ctx context.Context, progress func(line string)) (string, error)) (id string)
 }

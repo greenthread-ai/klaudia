@@ -235,7 +235,7 @@ func (m *Mock) complete(w http.ResponseWriter, r *http.Request) {
 const slowSentence = "This reply streams slowly so that it can be interrupted."
 
 // scriptKeywords are the words defaultScript answers to.
-var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "question", "wrapme", "planit", "longpara", "halfplan", "bgjob"}
+var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "question", "wrapme", "planit", "longpara", "halfplan", "bgjob", "bgagent", "childtask"}
 
 // keyword returns the scripted keyword that appears last in the prompt, or "".
 //
@@ -262,6 +262,10 @@ func defaultScript(prompt string, step int) Reply {
 	// working through its checkboxes (goalStep) rather than by keyword.
 	if strings.Contains(prompt, "autonomously iterating") || strings.Contains(prompt, "final independent review") {
 		return goalStep(prompt, step)
+	}
+	// A background sub-agent's result arriving as its own turn.
+	if strings.Contains(prompt, "<background-agent") {
+		return Reply{Text: "Got the background result."}
 	}
 	// A plan run's prompts: finish the open step, then confirm on review.
 	if strings.Contains(prompt, "Continue the plan the user approved") {
@@ -307,6 +311,16 @@ func defaultScript(prompt string, step int) Reply {
 			return Reply{Calls: []ToolCall{{"Bash", map[string]any{"command": "sleep 30", "description": "Background sleeper", "run_in_background": true}}}}
 		}
 		return Reply{Text: "Started it in the background."}
+	case "bgagent":
+		if step == 0 {
+			return Reply{Calls: []ToolCall{{"Agent", map[string]any{
+				"description": "survey", "subagent_type": "Explore", "run_in_background": true,
+				"prompt": "childtask: survey the project"}}}}
+		}
+		return Reply{Text: "Started it; carrying on."}
+	case "childtask":
+		// The sub-agent's own turn: slow enough to be seen running.
+		return Reply{Text: strings.Repeat("Child finished: three findings. ", 20), ChunkDelay: 40 * time.Millisecond}
 	case "wrapme":
 		if step == 0 {
 			return Reply{Calls: []ToolCall{{"Bash", map[string]any{"command": "echo " + wrapSentence + "; exit 3", "description": "A long failure"}}}}

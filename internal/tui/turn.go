@@ -106,6 +106,12 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 		// dispatch rather than waiting for the next turn boundary.
 		Mode: m.liveMode(),
 	}
+	// Sub-agents the model sends to the background report back here, as a
+	// steering message or a new turn (onBackgroundDone). Assigned only when
+	// set: a nil *Background in the interface would be a non-nil runner.
+	if m.bg != nil {
+		turn.Background = m.bg
+	}
 	go func() {
 		res, err := m.run(ctx, turn)
 		m.events <- doneMsg{res: res, err: err}

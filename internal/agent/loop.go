@@ -178,6 +178,11 @@ type Options struct {
 	// loop announces with a "plan" event whenever it changes; see planevent.go.
 	// Nil leaves those tools on the store they were built with.
 	Plan *plan.Store
+	// Background runs sub-agents started with run_in_background (passed on
+	// as tools.Context.Background). Nil runs them in the foreground. A
+	// spawned child never gets one: a background child of a background child
+	// would report to nobody.
+	Background tools.BackgroundRunner
 	// Spill is where clamped tool output is kept in full: the backstop cap,
 	// Bash's own clamp (via tools.Context.Spill) and microcompact's elisions
 	// all write here, so every truncation notice can name a file the model can
@@ -1194,6 +1199,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		Progress:   progress,
 		ReadText:   opts.ReadText,
 		Spill:      opts.Spill,
+		Background: opts.Background,
 	}, raw)
 	if err != nil {
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))

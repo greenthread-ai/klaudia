@@ -6,6 +6,15 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Background sub-agents.** The Agent tool takes `run_in_background`: the
+  sub-agent starts, the tool returns its id at once, and the model carries on.
+  In the TUI the agent is listed under the prompt with its latest step and
+  counted in the status line; it lives as long as the session (Esc ends the
+  turn, not the agent); and when it finishes its result reaches the model as a
+  steering message mid-turn, or as a turn of its own when idle. `/stopjob
+  agent_N` stops one. The runner is `agent.Background`, a field on
+  `agent.Turn`, so frontends that do not supply one (headless, stream-json,
+  ACP) run the sub-agent in the foreground and the tool says so.
 - **System prompt guidance**: when to keep a TodoWrite list (three or more
   steps — the user watches it), report failures with their output and never
   claim something works that was not run, refer to code as `path:line` (which

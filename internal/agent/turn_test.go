@@ -42,6 +42,7 @@ func fullTurn() Turn {
 		ReadText: func(context.Context, string, int, int) (string, error) {
 			return "", nil
 		},
+		Background: NewBackground(context.Background(), nil),
 	}
 }
 
@@ -62,6 +63,7 @@ func TestTurnApplyCopiesEveryField(t *testing.T) {
 		"Recorder":   "Recorder",
 		"Plan":       "Plan",
 		"ReadText":   "ReadText",
+		"Background": "Background",
 	}
 
 	var opts Options

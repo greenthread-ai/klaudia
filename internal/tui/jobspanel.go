@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,45 +23,55 @@ import (
 // jobsPanelRows caps the list; the rest are counted and /jobs shows them all.
 const jobsPanelRows = 3
 
-// jobsPanel renders the running jobs, oldest first, or "" when none are.
+// jobsPanel renders running jobs and background agents, oldest first, or ""
+// when nothing is running.
 func (m *Model) jobsPanel() string {
-	if m.sess == nil || m.sess.Jobs == nil {
+	type row struct {
+		started    time.Time
+		head, tail string
+	}
+	var rows []row
+	if m.sess != nil && m.sess.Jobs != nil {
+		for _, j := range runningJobs(m.sess.Jobs.List()) {
+			name := j.Name
+			if name == "" {
+				name = j.ID
+			}
+			head := "⏵ " + name + " · " + elapsed(time.Since(j.Started))
+			if j.Port != "" {
+				head += " · :" + j.Port
+			}
+			if j.Where != "" && j.Where != "local" {
+				head += " · " + j.Where
+			}
+			rows = append(rows, row{j.Started, head, oneline(j.Command, 200)})
+		}
+	}
+	for _, a := range m.runningAgents() {
+		tail := a.Label
+		if a.Last != "" {
+			tail += " — " + a.Last
+		}
+		rows = append(rows, row{a.Started, "⏵ " + a.ID + " · " + elapsed(time.Since(a.Started)), oneline(tail, 200)})
+	}
+	if len(rows) == 0 {
 		return ""
 	}
-	jobs := runningJobs(m.sess.Jobs.List())
-	if len(jobs) == 0 {
-		return ""
-	}
-	sort.SliceStable(jobs, func(i, j int) bool { return jobs[i].Started.Before(jobs[j].Started) })
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].started.Before(rows[j].started) })
 	limit := max(m.width-4, 20)
 	var lines []string
-	for i, j := range jobs {
+	for i, r := range rows {
 		if i == jobsPanelRows {
-			lines = append(lines, caption(hintStyle.Render(fmt.Sprintf("  +%d more · /jobs", len(jobs)-jobsPanelRows))))
+			lines = append(lines, caption(hintStyle.Render(fmt.Sprintf("  +%d more · /jobs", len(rows)-jobsPanelRows))))
 			break
 		}
-		name := j.Name
-		if name == "" {
-			name = j.ID
+		tail := ""
+		if room := limit - ansi.StringWidth(r.head) - 2; room > 10 {
+			tail = "  " + ansi.Truncate(r.tail, room, "…")
 		}
-		head := "⏵ " + name + " · " + elapsed(time.Since(j.Started))
-		if j.Port != "" {
-			head += " · :" + j.Port
-		}
-		if j.Where != "" && j.Where != "local" {
-			head += " · " + j.Where
-		}
-		cmd := ""
-		if room := limit - ansi.StringWidth(head) - 2; room > 10 {
-			cmd = "  " + ansi.Truncate(oneline(j.Command, room), room, "…")
-		}
-		lines = append(lines, caption(toolStyle.Render(ansi.Truncate(head, limit, "…"))+hintStyle.Render(cmd)))
+		lines = append(lines, caption(toolStyle.Render(ansi.Truncate(r.head, limit, "…"))+hintStyle.Render(tail)))
 	}
-	out := lines[0]
-	for _, l := range lines[1:] {
-		out += "\n" + l
-	}
-	return out
+	return strings.Join(lines, "\n")
 }
 
 // jobsTickMsg redraws the panel so its elapsed times move while idle, when
@@ -70,7 +81,7 @@ type jobsTickMsg struct{}
 // jobsTick schedules the next redraw while a job is running, and lets the
 // tick lapse once none is — so an idle session with no jobs costs nothing.
 func (m *Model) jobsTick() tea.Cmd {
-	if m.jobsTicking || m.runningJobCount() == 0 {
+	if m.jobsTicking || m.runningJobCount()+len(m.runningAgents()) == 0 {
 		return nil
 	}
 	m.jobsTicking = true

@@ -34,7 +34,7 @@ var commandList = []cmdInfo{
 	{"/jobs", "", "List background jobs: what's running, on what port, and where"},
 	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation"},
 	{"/restart", "<job>", "Restart a background job in place, keeping its name and log"},
-	{"/stopjob", "<job|all>", "Stop a background job and its whole process group"},
+	{"/stopjob", "<job|agent_N|all>", "Stop a background job (and its process group) or a background agent"},
 	{"/trust", "[revoke <id>|revoke all]", "Show what Klaudia may change on this machine, and what it already may"},
 	{"/goal", "[run N|stop|text]", "No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder"},
 	{"/memory", "[add|recent|stale|tag|promote|supersede]", "Show / audit / curate memory; no args views the index"},

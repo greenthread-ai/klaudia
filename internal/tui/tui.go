@@ -460,6 +460,8 @@ type Model struct {
 	goalList plan.Snapshot
 	// jobsTicking is set while a jobsTickMsg is scheduled (see jobsTick).
 	jobsTicking bool
+	// bg runs the Agent tool's run_in_background sub-agents (background.go).
+	bg *agent.Background
 	// Pending ExitPlanMode approval.
 	planReply chan bool
 	// Pending /commit-style confirmation: run on "y", returns a result line.
@@ -528,6 +530,16 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		history: history,
 		sess:    sess,
 	}
+	// Background sub-agents live as long as the session, and report through
+	// the event channel like everything else the TUI hears from other
+	// goroutines. The send gives up once the session is over, so a task that
+	// finishes during shutdown cannot block on a reader that has gone.
+	m.bg = agent.NewBackground(ctx, func(t agent.BackgroundTask) {
+		select {
+		case m.events <- bgDoneMsg{task: t}:
+		case <-ctx.Done():
+		}
+	})
 	m.executor = sess.Executor
 	// Capture the working tree before Klaudia touches anything. A file that is
 	// dirty now and dirty later looks the same either way; only this tells them
@@ -732,6 +744,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// what stays true: what was asked and what was answered.
 		m.appendLine(askStyle.Render("? " + msg.question))
 		return m, m.waitForEvent()
+
+	case bgDoneMsg:
+		cmd := m.onBackgroundDone(msg.task)
+		return m, tea.Batch(m.waitForEvent(), cmd)
 
 	case planMsg:
 		m.setState(stateAwaitingPlan)

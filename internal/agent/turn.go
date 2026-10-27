@@ -92,6 +92,12 @@ type Turn struct {
 	// unsaved edits is how the model ends up reasoning about text that is no
 	// longer there. Nil — every other frontend — reads disk.
 	ReadText func(ctx context.Context, path string, line, limit int) (string, error)
+	// Background, if set, runs the Agent tool's run_in_background work past
+	// the end of the call and reports it back to this frontend (see
+	// Background in background.go). Nil — a frontend with no one left to
+	// report to, like a one-shot headless run — keeps every sub-agent in the
+	// foreground.
+	Background tools.BackgroundRunner
 }
 
 // Apply copies the turn onto opts, leaving every other field of opts alone.
@@ -108,6 +114,7 @@ func (t Turn) Apply(opts *Options) {
 	opts.Interject = t.Interject
 	opts.BeforeEdit = t.BeforeEdit
 	opts.ReadText = t.ReadText
+	opts.Background = t.Background
 	// Overridden, not cleared: a nil Mode leaves whatever permission context
 	// the caller built, so a frontend with one fixed mode need not restate it
 	// on every turn.
