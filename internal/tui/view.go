@@ -319,8 +319,7 @@ func (m *Model) bottomView() string {
 	case stateAwaitingPermission:
 		bottom = caption(askStyle.Render(m.permissionPrompt()))
 	case stateAwaitingAnswer:
-		bottom = caption(askStyle.Render(fmt.Sprintf("Choose 1-%d", len(m.askOptions)+1)) +
-			hintStyle.Render(fmt.Sprintf("  (%d, or just start typing, to answer in your own words)", len(m.askOptions)+1)))
+		bottom = m.askView()
 	case stateAnsweringOther:
 		m.input.SetHeight(m.inputHeight())
 		bottom = m.promptBox() + m.inputAffordanceView() + "\n" + caption(askStyle.Render("Your answer")+

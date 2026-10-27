@@ -339,24 +339,47 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingAnswer {
-		// Digit keys 1..N select an option; N+1 is the "something else" escape
-		// hatch. Typing anything else also opens it — reaching for the keyboard
-		// to say "none of these" should not require finding its number first.
-		s := msg.String()
-		if len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
-			if n := int(s[0] - '0'); n <= len(m.askOptions) {
-				m.answerAsk(m.askOptions[n-1].Label)
+		// The same keys as the settings picker: ↑↓ (or Ctrl+P/N) move, Enter
+		// takes the highlighted row, 1..N+1 pick directly, and N+1 is the
+		// "something else" escape hatch.
+		//
+		// Other typing is ignored. It used to open free text seeded with the
+		// keystroke, so a message typed ahead while the model worked became the
+		// answer the moment a question appeared — the user answered a question
+		// they had not read. Free text is one deliberate step away instead, as
+		// in Claude Code. And Enter after stray text does nothing: text then
+		// Enter is someone finishing a message, not confirming row one.
+		n := len(m.askOptions) + 1
+		pick := func(i int) tea.Cmd {
+			if i == n-1 {
+				return m.beginOtherAnswer("")
+			}
+			m.answerAsk(m.askOptions[i].Label)
+			return nil
+		}
+		switch msg.Type {
+		case tea.KeyUp, tea.KeyCtrlP:
+			m.askIdx, m.askStray = (m.askIdx-1+n)%n, false
+			return m, nil
+		case tea.KeyDown, tea.KeyCtrlN:
+			m.askIdx, m.askStray = (m.askIdx+1)%n, false
+			return m, nil
+		case tea.KeyEnter:
+			if m.askStray {
+				m.askStray = false
 				return m, nil
 			}
-			if int(s[0]-'0') == len(m.askOptions)+1 {
-				return m, m.beginOtherAnswer("")
+			return m, pick(m.askIdx)
+		}
+		if s := msg.String(); len(s) == 1 && s[0] >= '1' && s[0] <= '9' {
+			if i := int(s[0] - '1'); i < n {
+				return m, pick(i)
 			}
-			return m, nil // a digit past the list: ignore rather than guess
 		}
-		if msg.Type == tea.KeyRunes && len(msg.Runes) > 0 {
-			return m, m.beginOtherAnswer(string(msg.Runes)) // start typing straight away
+		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+			m.askStray = true
 		}
-		return m, nil
+		return m, nil // a digit past the list, or text: ignore rather than guess
 	}
 
 	if m.state == stateAnsweringOther {

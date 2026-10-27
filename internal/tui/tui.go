@@ -439,6 +439,8 @@ type Model struct {
 	askReply    chan string
 	askOptions  []tools.AskOption
 	askQuestion string
+	askIdx      int  // highlighted row; len(askOptions) is the escape hatch
+	askStray    bool // text was typed at the picker since the last move (see onKey)
 	// Pending ExitPlanMode approval.
 	planReply chan bool
 	// Pending /commit-style confirmation: run on "y", returns a result line.
@@ -701,16 +703,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.askReply = msg.reply
 		m.askOptions = msg.options
 		m.askQuestion = msg.question
+		m.askIdx, m.askStray = 0, false
+		// Only the question goes to scrollback; the options are a live picker
+		// (askView), and answerAsk commits the one chosen. Scrollback keeps
+		// what stays true: what was asked and what was answered.
 		m.appendLine(askStyle.Render("? " + msg.question))
-		for i, o := range msg.options {
-			line := fmt.Sprintf("  %d) %s", i+1, o.Label)
-			if o.Description != "" {
-				line += " — " + o.Description
-			}
-			m.appendLine(toolStyle.Render(line))
-		}
-		// Always last, always present: see otherAnswerLabel.
-		m.appendLine(hintStyle.Render(fmt.Sprintf("  %d) %s", len(msg.options)+1, otherAnswerLabel)))
 		return m, m.waitForEvent()
 
 	case planMsg:

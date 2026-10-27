@@ -5,6 +5,15 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+- **A question no longer takes your next message as its answer.** Typing at
+  an `AskUserQuestion` used to open free text seeded with the keystroke, so a
+  message typed ahead while the model worked answered whatever question
+  appeared under it. The options are now a live picker like `/model`'s: ↑↓
+  (or Ctrl+P/N) and Enter, digits still pick, "Something else" opens free
+  text. Typing is ignored and explained, and the Enter that ends typed text
+  does not confirm. Scrollback keeps the question and the answer only.
+
 ### Changed (breaking)
 - **Environment settings the core read at runtime are gone.** They were
   process-wide, which an embedded loop cannot live with.

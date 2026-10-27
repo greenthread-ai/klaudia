@@ -15,6 +15,7 @@ import (
 func askTwo(t *testing.T) (*Model, chan string) {
 	t.Helper()
 	m := newTestModel()
+	m.resize(100, 30)
 	reply := make(chan string, 1)
 	m.update(askMsg{
 		question: "Which problem are you actually trying to solve?",
@@ -34,13 +35,12 @@ func askTwo(t *testing.T) (*Model, chan string) {
 // thought of. There must always be one more the user can reach for.
 func TestAskAlwaysOffersSomethingElse(t *testing.T) {
 	m, _ := askTwo(t)
-	out := stripANSI(m.transcript.String())
-	if !strings.Contains(out, "3) "+otherAnswerLabel) {
-		t.Errorf("no escape-hatch option offered:\n%s", out)
+	if bottom := stripANSI(m.bottomView()); !strings.Contains(bottom, "3) "+otherAnswerLabel) || !strings.Contains(bottom, "1-3 to pick") {
+		t.Errorf("no escape-hatch option offered, or the hint does not count it:\n%s", bottom)
 	}
-	// And the prompt has to say it is there, or nobody will find it.
-	if bottom := stripANSI(m.bottomView()); !strings.Contains(bottom, "Choose 1-3") {
-		t.Errorf("prompt does not count the extra option: %q", bottom)
+	// The options are a live picker; scrollback keeps only the question.
+	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "? Which problem") || strings.Contains(out, "Version skew") {
+		t.Errorf("scrollback should hold the question and not the options:\n%s", out)
 	}
 }
 
@@ -68,18 +68,49 @@ func TestSomethingElseSendsFreeText(t *testing.T) {
 	}
 }
 
-// Reaching for the keyboard to say "none of these" shouldn't require finding a
-// number first: the first character typed opens the box and is kept.
-func TestTypingOpensFreeTextAndKeepsTheFirstCharacter(t *testing.T) {
+// The audit failure: a message typed ahead while the model worked answered
+// the question that appeared under it. Text must not answer, and the Enter that
+// ends it must not confirm the highlighted row either.
+func TestTypingAheadDoesNotAnswer(t *testing.T) {
 	m, reply := askTwo(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	if m.state != stateAnsweringOther {
-		t.Fatalf("typing did not open free text (state %v)", m.state)
+	typeRunes(m, "also fix the tests")
+	if !strings.Contains(stripANSI(m.bottomView()), "typing doesn't answer") {
+		t.Error("ignored typing should be explained")
 	}
-	typeRunes(m, "one of these")
 	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if got := <-reply; got != "none of these" {
-		t.Errorf("answer = %q, want the first character preserved", got)
+	select {
+	case got := <-reply:
+		t.Fatalf("typed-ahead text answered the question: %q", got)
+	default:
+	}
+	if m.state != stateAwaitingAnswer {
+		t.Fatalf("state = %v, want still awaiting", m.state)
+	}
+	// The next Enter is deliberate and takes the highlighted row.
+	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := <-reply; got != "Explain the constraint" {
+		t.Errorf("answer = %q, want the first row", got)
+	}
+}
+
+// Arrow keys move the highlight, wrapping, and Enter takes it — including the
+// escape hatch, which opens free text rather than answering.
+func TestArrowsAndEnterPick(t *testing.T) {
+	m, reply := askTwo(t)
+	m.onKey(tea.KeyMsg{Type: tea.KeyDown})
+	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if got := <-reply; got != "Version skew" {
+		t.Errorf("answer = %q, want the second row", got)
+	}
+
+	m, _ = askTwo(t)
+	m.onKey(tea.KeyMsg{Type: tea.KeyUp}) // wraps to the escape hatch
+	if !strings.Contains(stripANSI(m.bottomView()), "❯ 3) "+otherAnswerLabel) {
+		t.Errorf("up from the top should wrap to the last row:\n%s", stripANSI(m.bottomView()))
+	}
+	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.state != stateAnsweringOther {
+		t.Errorf("state = %v, want answering other", m.state)
 	}
 }
 

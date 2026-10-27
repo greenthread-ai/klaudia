@@ -202,3 +202,38 @@ func (m *Model) choiceView() string {
 	b.WriteString(caption(hintStyle.Render("  " + hint)))
 	return b.String()
 }
+
+// askView renders a pending AskUserQuestion's options as a picker: the
+// model's options, then the escape hatch (see otherAnswerLabel), the
+// highlighted one marked, and a hint that names every key that works.
+func (m *Model) askView() string {
+	var b strings.Builder
+	width := max(m.width-8, 20)
+	n := len(m.askOptions) + 1
+	for i := 0; i < n; i++ {
+		label := otherAnswerLabel // always last, always present
+		if i < len(m.askOptions) {
+			label = m.askOptions[i].Label
+			if d := m.askOptions[i].Description; d != "" {
+				label += " — " + d
+			}
+		}
+		num := ""
+		if i < 9 {
+			num = strconv.Itoa(i+1) + ") "
+		}
+		label = ansi.Truncate(label, width, "…")
+		if i == m.askIdx {
+			b.WriteString(caption(suggestStyle.Render("❯ " + num + label)))
+		} else {
+			b.WriteString(caption(toolStyle.Render("  " + num + label)))
+		}
+		b.WriteString("\n")
+	}
+	hint := "↑↓ or 1-" + strconv.Itoa(min(n, 9)) + " to pick · enter to confirm · esc to interrupt"
+	if m.askStray {
+		hint = "typing doesn't answer — pick " + strconv.Itoa(n) + " to write your own · ↑↓ or 1-" + strconv.Itoa(min(n, 9)) + " to pick"
+	}
+	b.WriteString(caption(hintStyle.Render("  " + hint)))
+	return b.String()
+}
