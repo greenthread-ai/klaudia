@@ -43,6 +43,11 @@ func (m *Model) setEffort(args []string) {
 		m.appendLine(errStyle.Render(err.Error()))
 		return
 	}
+	if level.Exceeds(m.sess.MaxEffort) {
+		m.appendLine(errStyle.Render(fmt.Sprintf("Effort is capped at %s by maxEffort in config; /effort %s or lower.",
+			m.sess.MaxEffort, m.sess.MaxEffort)))
+		return
+	}
 	// Catch it here rather than on the wire: the API rejects an unsupported
 	// level with a 400 instead of dropping to the nearest one it supports, so
 	// without this the next turn simply fails.

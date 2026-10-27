@@ -53,6 +53,33 @@ func (e Effort) Describe() string {
 
 func (e Effort) String() string { return string(e) }
 
+// Exceeds reports whether e is a higher level than ceiling. An unset ceiling
+// caps nothing.
+func (e Effort) Exceeds(ceiling Effort) bool {
+	return ceiling != EffortUnset && e != EffortUnset && effortRank[e] > effortRank[ceiling]
+}
+
+// CapEffort applies a configured ceiling to a resolved level for model. A
+// level above it comes down to it. An unset level means the provider's own
+// default — high on most Claude models — which may be above a low ceiling, so
+// it becomes the ceiling too, for a model the table knows takes effort. Any
+// other model is left unset: an unknown OpenAI-compatible model may reject a
+// reasoning_effort it was never sent before, and failing the turn is worse
+// than its default. An unset ceiling changes nothing.
+func CapEffort(model string, e, ceiling Effort) Effort {
+	switch {
+	case ceiling == EffortUnset:
+		return e
+	case e.Exceeds(ceiling):
+		return ceiling
+	case e == EffortUnset && ceiling != EffortMax:
+		if top, known := modelMaxEffort[string(ResolveModel(model))]; known && effortRank[ceiling] <= effortRank[top] {
+			return ceiling
+		}
+	}
+	return e
+}
+
 // ParseEffort converts user input ("--effort XHigh") into a level. The empty
 // string parses to EffortUnset so clearing the setting is expressible.
 func ParseEffort(s string) (Effort, error) {

@@ -1120,6 +1120,13 @@ func run(cmd *cobra.Command, opts *options) error {
 	if err != nil {
 		return err
 	}
+	var maxEffort api.Effort
+	if cfg.MaxEffort != "" {
+		if maxEffort, err = api.ParseEffort(cfg.MaxEffort); err != nil {
+			return usageErrorf("maxEffort: %s", err)
+		}
+		effort = api.CapEffort(string(model), effort, maxEffort)
+	}
 	// Refuse a level this model rejects rather than letting the first turn die
 	// on a 400: the API errors on an unsupported combination instead of
 	// dropping to the nearest level it does support.
@@ -1363,7 +1370,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 		subEffort = e
 	}
-	wiring.spawner.WithEffort(subEffort)
+	wiring.spawner.WithEffort(api.CapEffort(string(model), subEffort, maxEffort))
 	// The child runs the parent's model, so it gets the parent's resolved
 	// sizing rather than re-deriving it from the offline table — otherwise a
 	// provider-reported cap or a maxTokens override is lost on exactly the
@@ -1572,6 +1579,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Model:          modelStr,
 			ResolvedModel:  string(model),
 			Effort:         effort,
+			MaxEffort:      maxEffort,
 			Theme:          themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
 			PermissionMode: string(mode),
 			EnterInserts:   tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),

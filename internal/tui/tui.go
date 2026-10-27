@@ -47,6 +47,7 @@ type Session struct {
 	Model          string         // model alias or full ID ("" = default)
 	ResolvedModel  string         // concrete model id for display
 	Effort         api.Effort     // how hard the model works per response ("" = provider default)
+	MaxEffort      api.Effort     // config maxEffort: /effort may not go above it ("" = no cap)
 	PermissionMode string         // live mode (ExitPlanMode flips it out of "plan")
 	Memory         memory.Store   // backs /memory; never nil — set to memory.Disabled() when unavailable
 	Goal           string         // standing goal re-injected each turn (Ralph-style)

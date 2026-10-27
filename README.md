@@ -693,6 +693,7 @@ effort = "low"          # unset = inherit the session's level
 Precedence is `--effort` → `KLAUDIA_EFFORT` → config; `/effort <level>` beats
 all three for the running session, and `/effort off` restores the provider's
 default. `/effort` with no argument lists the levels and marks the live one.
+`maxEffort = "high"` caps every one of those, `/effort` included.
 
 Unset is the default and sends nothing, so you get the provider's own default
 (high on most Claude models). The level reaches both backends from one field —

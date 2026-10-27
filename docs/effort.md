@@ -23,6 +23,12 @@ checked-in file and one run can override the shell. `/effort` beats all three
 for the session it is typed in. `/effort` with no argument lists the levels and
 marks the live one.
 
+`maxEffort = "high"` caps all of them — flag, environment, config, `[subagents]
+effort` and `/effort`, which refuses a level above it and says why. Unset
+effort means the provider's default, which can be above a low cap, so for a
+model the table knows takes effort, unset is sent as the cap; any other model
+stays unset rather than be sent a parameter it may reject.
+
 ## The levels
 
 | Level | What it is for |

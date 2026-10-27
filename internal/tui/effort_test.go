@@ -138,3 +138,18 @@ func TestSetModelKeepsSupportedEffort(t *testing.T) {
 		t.Errorf("message %q should not mention effort when nothing changed", msg)
 	}
 }
+
+// /effort above the configured cap is refused, saying why.
+func TestEffortRespectsTheCap(t *testing.T) {
+	m := newTestModel()
+	m.sess.Model = "claude-opus-5-5"
+	m.sess.MaxEffort = api.EffortHigh
+	m.setEffort([]string{"max"})
+	if m.sess.Effort == api.EffortMax || !strings.Contains(stripANSI(m.transcript.String()), "capped at high by maxEffort") {
+		t.Errorf("effort = %q, transcript:\n%s", m.sess.Effort, stripANSI(m.transcript.String()))
+	}
+	m.setEffort([]string{"medium"})
+	if m.sess.Effort != api.EffortMedium {
+		t.Errorf("a level under the cap was refused: %q", m.sess.Effort)
+	}
+}

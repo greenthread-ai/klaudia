@@ -78,6 +78,11 @@ type Config struct {
 	// apply its own default (high on most Claude models). --effort and
 	// KLAUDIA_EFFORT override it; /effort overrides those for one session.
 	Effort string `toml:"effort,omitempty"`
+	// MaxEffort caps every effort setting — config, --effort, [subagents]
+	// effort and /effort — at this level, e.g. "high" to stop max on a team
+	// budget. An unset effort is treated as the provider's default and brought
+	// down to it too.
+	MaxEffort string `toml:"maxEffort,omitempty"`
 	// APIKey is the bearer token. Prefer APIKeyEnv to keep secrets out of files.
 	APIKey string `toml:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable holding the key.
@@ -383,6 +388,9 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Effort != "" {
 		dst.Effort = src.Effort
+	}
+	if src.MaxEffort != "" {
+		dst.MaxEffort = src.MaxEffort
 	}
 	if src.Links.Enabled != nil {
 		dst.Links.Enabled = src.Links.Enabled

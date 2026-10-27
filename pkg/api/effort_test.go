@@ -115,3 +115,24 @@ func TestEffortTableTracksTheModelTables(t *testing.T) {
 		}
 	}
 }
+
+// The cap brings a level down to it, and an unset level (the provider's
+// default) too — unless the model takes no effort at all.
+func TestCapEffort(t *testing.T) {
+	for _, tc := range []struct {
+		model      string
+		e, ceiling Effort
+		want       Effort
+	}{
+		{"claude-opus-5-5", EffortMax, EffortHigh, EffortHigh},
+		{"claude-opus-5-5", EffortLow, EffortHigh, EffortLow},
+		{"claude-opus-5-5", EffortUnset, EffortMedium, EffortMedium},
+		{"claude-opus-5-5", EffortUnset, EffortMax, EffortUnset},
+		{"claude-opus-5-5", EffortXHigh, EffortUnset, EffortXHigh},
+		{"some-model-without-effort", EffortUnset, EffortMedium, EffortUnset},
+	} {
+		if got := CapEffort(tc.model, tc.e, tc.ceiling); got != tc.want {
+			t.Errorf("CapEffort(%s, %q, %q) = %q, want %q", tc.model, tc.e, tc.ceiling, got, tc.want)
+		}
+	}
+}

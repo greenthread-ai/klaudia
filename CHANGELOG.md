@@ -6,6 +6,10 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **`maxEffort`** in config caps every effort setting — `--effort`,
+  `KLAUDIA_EFFORT`, `effort`, `[subagents] effort` and `/effort`, which
+  refuses a level above it. An unset effort (the provider's default, often
+  high) is sent as the cap for models known to take effort.
 - **Egress control.** `[sandbox] egress = ["github.com", "*.npmjs.org", …]`
   routes every command through an in-process proxy that forwards to those
   hosts and refuses the rest with a 403 naming the host and the setting.

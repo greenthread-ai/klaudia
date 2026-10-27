@@ -35,8 +35,8 @@ What is left, in the order it will be taken:
 1. **Release.** Ship what has landed: vulnerability scan of the new
    dependencies, the build matrix, a GoReleaser snapshot, the live model
    checks, and the changelog read as release notes.
-2. **Small gaps worth closing first**: `/rewind`'s "summarise up to here",
-   an effort cap in config.
+2. **Small gaps worth closing first**: `/rewind`'s "summarise up to here".
+   (The effort cap landed: `maxEffort`.)
 3. **Session replay as regression tests** (eval mode's second half) — needs a
    decision on running recorded tool calls safely.
 
@@ -111,7 +111,7 @@ Size is a guess: S ≈ a day, M ≈ a week, L ≈ several.
 | 6 | **Conversation rewind**: rewind to a turn, restoring files via the existing checkpoint stack, optionally "summarise up to here" — *landed 2026-10-27 (`/rewind`, this process's turns; "summarise up to here" not done)* | `/undo` already does the hard file half | M |
 | 7 | **MCP serve mode**: `klaudia mcp serve` exposing "run an agent task" as a tool, long runs as Tasks | Makes Klaudia callable by every MCP host, which is most of them | M |
 | 8 | **Job events into the conversation** (Monitor-style) — *landed 2026-10-27: exits and `watch` matches reach the model in every frontend but ACP*: a background job's output lines matching a pattern wake the loop | Klaudia's jobs are richer than most; this is the missing half that makes "start the server, watch for errors" work | S–M |
-| 9 | **Fallback model chain** and an effort cap in config — *chain landed 2026-10-27 (`fallbackModels`, `--fallback-model`; main loop only, not sub-agents); effort cap not done* | Small, and the 5.5-sizing incident showed provider-side surprises are real | S |
+| 9 | **Fallback model chain** and an effort cap in config — *chain landed 2026-10-27 (`fallbackModels`, `--fallback-model`; main loop only, not sub-agents); effort cap landed (`maxEffort`)* | Small, and the 5.5-sizing incident showed provider-side surprises are real | S |
 | 10 | **Idle compaction** above a threshold, before the cache expires — *landed 2026-10-27 (TUI; `idleCompact`)* | Cheaper than compacting under pressure mid-turn | S |
 | 11 | **Eval mode**: `--restricted` (no user config, no memory, no hooks) plus replaying saved sessions as regression tests — *`--restricted` landed 2026-10-27; replay not done: it needs a decision on running recorded tool calls safely (a scratch copy of the tree, or schema-only checks)* | The transcript already records sizing per line; turning sessions into tests catches loop regressions before users do | M |
 | 12 | **TUI**: links on the live region and in `/doctor`'s output, a hyperlink row in `/doctor` — *landed 2026-10-27: the `/doctor` row (on/off and why); its output was already linked like all scrollback. The live region stays unlinked by decision: it is transient, what matters reaches scrollback (linked), and the inline renderer's line arithmetic is where the resize bugs lived* | Small follow-ups to the OSC 8 work | S |
