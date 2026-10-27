@@ -3,8 +3,11 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -135,5 +138,36 @@ func TestToolListingTimesOutOnASilentServer(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Tools is still waiting on a server that will not answer")
+	}
+}
+
+// "headers" in .mcp.json used to be decoded and dropped, so a server that
+// needed a token refused every request with nothing pointing at the config.
+func TestHTTPServerGetsConfiguredHeaders(t *testing.T) {
+	srv := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "authed", Version: "0.0.1"}, nil)
+	h := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server { return srv }, nil)
+	var seen atomic.Value
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer s3cret" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		seen.Store(true)
+		h.ServeHTTP(w, r)
+	}))
+	defer ts.Close()
+
+	s, err := connectServer(context.Background(), "authed",
+		ServerConfig{URL: ts.URL, Headers: map[string]string{"Authorization": "Bearer s3cret"}}, nil)
+	if err != nil {
+		t.Fatalf("connect with headers: %v", err)
+	}
+	defer func() { _ = s.sess().Close() }()
+	if seen.Load() == nil {
+		t.Error("the server never saw the header")
+	}
+
+	if _, err := connectServer(context.Background(), "authed", ServerConfig{URL: ts.URL}, nil); err == nil {
+		t.Error("precondition: without the header the server should refuse")
 	}
 }

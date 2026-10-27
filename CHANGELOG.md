@@ -77,6 +77,13 @@ port mirrors (see `internal/version`).
   server's tools or resources had no deadline, so one server that stopped
   answering stalled startup, config reload, `/mcp` and reconnect. Each
   server's listing now gives up after 15s and contributes nothing.
+- **HTTP MCP servers get their `headers`.** `.mcp.json` `headers` (e.g.
+  `Authorization`) were decoded and dropped, so a server needing a token
+  refused every request with nothing pointing at the config. They are now
+  sent on every request, over streamable HTTP and SSE.
+- **One broken `.mcp.json` no longer hides the others.** A file that failed to
+  parse stopped loading at that point, so a typo in a project's file took the
+  global servers with it. It is reported and skipped; the rest load.
 - **Read-only MCP tools work in plan mode, and so in Explore and Plan.** Those
   sub-agents run in plan mode and are handed MCP tools marked read-only, but
   plan mode refused every MCP call, so they could never use them. Plan mode

@@ -337,7 +337,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			servers = m.sess.MCP.Servers()
 		}
 		if len(servers) == 0 {
-			m.appendLine(bannerStyle.Render("No MCP servers configured. Add them in .mcp.json or .klaudia/.mcp.json."))
+			m.appendLine(bannerStyle.Render("No MCP servers configured. Add them in .mcp.json, .klaudia/.mcp.json, or ~/.klaudia/.mcp.json for every project."))
 			break
 		}
 		var b strings.Builder

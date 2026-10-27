@@ -189,74 +189,23 @@ Server-side file create/view/edit operations within the sandbox.
 
 ## MCP (Model Context Protocol)
 
-MCP servers provide additional tools dynamically. Klaudia supports both local
-MCP servers (stdio) and remote MCP servers (via Anthropic's proxy).
+Klaudia's MCP is **client-side**, not a server-side tool: it connects to the
+servers in `.mcp.json` itself (stdio, streamable HTTP, or legacy SSE — see the
+README) and offers their tools to the model as ordinary tools named
+`mcp__{server}__{tool}` (rewritten to fit the API's 64-character
+`[A-Za-z0-9_-]` limit). A call is a plain `tool_use`, and the answer goes back
+as a plain `tool_result` — text, plus image blocks when the server returns
+images. Nothing goes through an Anthropic proxy.
 
-### Remote MCP Proxy
+The API's own MCP connector — the `mcp_servers` request parameter, with
+`mcp_tool_use` / `mcp_tool_result` blocks in the response (listed below for
+completeness) — is a different mechanism, in which Anthropic's servers call
+the MCP server. Klaudia does not use it.
 
-**Proxy URL:** `https://mcp-proxy.anthropic.com/v1/mcp/{server_id}`
+### Server config
 
-Discovery endpoint: `GET https://api.anthropic.com/v1/mcp_servers?limit=1000`
-
-### Tool Naming Convention
-
-MCP tools are prefixed: `mcp__{server_name}__{tool_name}`
-
-Example: `mcp__slack__read_channel`, `mcp__github__create_issue`
-
-### MCP Tool Use
-
-**Request (model calls MCP tool):**
-```json
-{
-  "type": "tool_use",
-  "id": "toolu_...",
-  "name": "mcp__slack__read_channel",
-  "input": { "channel": "#general", "limit": 10 }
-}
-```
-
-**Response:**
-```json
-{
-  "type": "mcp_tool_result",
-  "tool_use_id": "toolu_...",
-  "content": [
-    { "type": "text", "text": "result data..." }
-  ]
-}
-```
-
-### Browser Automation (MCP-based)
-
-Computer use / browser automation runs through an MCP bridge:
-
-**Service pattern:** `claude-mcp-browser-bridge-*`
-
-**Available browser tools:**
-| Tool | Purpose |
-|------|---------|
-| `computer` | Mouse/keyboard/screenshot interactions |
-| `tabs_context_mcp` | Get browser tab context |
-| `find` | Find elements on page |
-| `read_page` | Read page content |
-| `navigate` | Navigate to URL |
-| `set_form_value` | Fill form fields |
-| `execute_javascript` | Run JS in page |
-| `get_accessibility_tree` | A11y tree for the page |
-| `read_console` | Browser console output |
-| `read_network` | Network request log |
-| `upload_image` | Upload image to page |
-| `read_text_content` | Extract text from page |
-| `create_empty_tab` | Open new tab |
-| `read_shortcuts` | Available keyboard shortcuts |
-| `resize_window` | Resize browser window |
-
-**Bridge connection:** WebSocket, authenticated via OAuth token or dev user ID.
-
-### MCP Server Config
-
-Local MCP servers are configured in settings:
+`~/.klaudia/.mcp.json`, `./.mcp.json` and `./.klaudia/.mcp.json`, later files
+overriding earlier ones per server name:
 ```json
 {
   "mcpServers": {
@@ -264,11 +213,14 @@ Local MCP servers are configured in settings:
       "command": "npx",
       "args": ["-y", "my-mcp-server"],
       "env": {}
+    },
+    "remote": {
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer ..." }
     }
   }
 }
 ```
-
 
 ---
 
@@ -287,8 +239,8 @@ All content block types that can appear in streamed responses:
 | `bash_code_execution_tool_result` | Server | Bash execution output |
 | `text_editor_code_execution_tool_result` | Server | File operation results |
 | `code_execution_tool_result` | Server | General code execution results |
-| `mcp_tool_use` | Model | MCP tool call |
-| `mcp_tool_result` | Server | MCP tool results |
+| `mcp_tool_use` | Server | MCP connector tool call (API-side MCP; unused by Klaudia) |
+| `mcp_tool_result` | Server | MCP connector tool result (unused by Klaudia) |
 | `tool_search_tool_result` | Server | Tool discovery results |
 | `container_upload` | Server | File upload indicator |
 

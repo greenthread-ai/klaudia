@@ -415,3 +415,25 @@ func TestReadOnlyOverrideIsPerServer(t *testing.T) {
 		t.Errorf("boastful override = %v, want explicit false", got)
 	}
 }
+
+// One broken file is reported by path and skipped; it no longer takes the
+// servers from the other files down with it.
+func TestLoadConfigSkipsABrokenFile(t *testing.T) {
+	root := isolateConfigRoot(t)
+	os.WriteFile(filepath.Join(root, ".mcp.json"),
+		[]byte(`{"mcpServers":{"godot":{"command":"godot-mcp"}}}`), 0o644)
+	dir := t.TempDir()
+	bad := filepath.Join(dir, ".mcp.json")
+	os.WriteFile(bad, []byte(`{"mcpServers":{`), 0o644)
+	os.MkdirAll(filepath.Join(dir, ".klaudia"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".klaudia", ".mcp.json"),
+		[]byte(`{"mcpServers":{"local":{"command":"local-mcp"}}}`), 0o644)
+
+	cfg, err := LoadConfig(dir)
+	if err == nil || !strings.Contains(err.Error(), bad) {
+		t.Errorf("err = %v, want one naming %s", err, bad)
+	}
+	if cfg.MCPServers["godot"].Command != "godot-mcp" || cfg.MCPServers["local"].Command != "local-mcp" {
+		t.Errorf("servers from the good files were lost: %+v", cfg.MCPServers)
+	}
+}

@@ -1156,9 +1156,10 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Connect configured MCP servers (.mcp.json) and fold in their tools and
 	// resource tools. Best effort: a server failure does not abort the run.
-	// A .mcp.json that does not parse yields no servers at all. Discarding
-	// that error made the session look like one with no MCP configured — the
-	// model reports the server is down, and nothing says why.
+	// A .mcp.json that does not parse contributes no servers (the other files
+	// still do). Discarding that error made the session look like one with
+	// that server unconfigured — the model reports it is down, and nothing
+	// says why.
 	mcpCfg, mcpCfgErr := mcp.LoadConfig(cwd)
 	if mcpCfgErr != nil {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning: mcp config:", mcpCfgErr)

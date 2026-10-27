@@ -705,15 +705,17 @@ increasing precedence: **global** `~/.klaudia/.mcp.json` (honours
 point a globally configured server at a different binary without disturbing it
 elsewhere. Put personal servers you want everywhere in the global file, and
 servers belonging to a repo in the project's. A server is **stdio** (`command` +
-`args`) or **HTTP** (`url`, with `type:"sse"` for the legacy SSE transport).
-`//` and `/* */` comments are allowed; a file that still doesn't parse is
-reported — naming the file, since all three share a base name — rather than
-silently loading nothing:
+`args`) or **HTTP** (`url`, with `type:"sse"` for the legacy SSE transport, and
+`headers` sent on every request — typically `Authorization`). `//` and `/* */`
+comments are allowed; a file that still doesn't parse is reported — naming the
+file, since all three share a base name — and skipped, while the other files
+still load:
 
 ```jsonc
 { "mcpServers": {
   "local":  { "command": "my-server", "args": ["--stdio"] },
-  "remote": { "type": "http", "url": "https://mcp.example.com/v1" }
+  "remote": { "type": "http", "url": "https://mcp.example.com/v1",
+              "headers": { "Authorization": "Bearer …" } }
 } }
 ```
 

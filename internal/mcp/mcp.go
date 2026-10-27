@@ -6,7 +6,9 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,6 +36,10 @@ type ServerConfig struct {
 	// HTTP transport
 	Type string `json:"type,omitempty"` // "http" (default when URL set) | "sse"
 	URL  string `json:"url,omitempty"`
+	// Headers are sent on every request to an HTTP server — typically
+	// Authorization. They were once accepted by the decoder and dropped, so a
+	// server needing a token failed with nothing pointing at the config.
+	Headers map[string]string `json:"headers,omitempty"`
 	// ReadOnly overrides what this server's tools claim about themselves, in
 	// either direction. Unset trusts the server's readOnlyHint annotations.
 	//
@@ -90,31 +96,38 @@ func ConfigPaths(dir string) []string {
 // later files override earlier ones per server name, so a project can redefine
 // or extend a globally configured server.
 //
+// A file that cannot be read or parsed is reported and skipped, and the others
+// still load: a typo in one project's .mcp.json used to take the global
+// servers down with it. The config returned alongside an error is therefore
+// usable, but partial — the reload path declines to apply it for that reason.
+//
 // The global scope is what makes a personal server — one you want in every
 // project rather than in one repo — installable once. Without it the only
 // answer was to copy the same file into every checkout.
 func LoadConfig(dir string) (Config, error) {
 	cfg := Config{MCPServers: map[string]ServerConfig{}}
+	var errs []error
 	for _, p := range ConfigPaths(dir) {
 		data, err := os.ReadFile(p)
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
+			if !os.IsNotExist(err) {
+				errs = append(errs, err)
 			}
-			return cfg, err
+			continue
 		}
 		var c Config
 		if err := json.Unmarshal(stripJSONComments(data), &c); err != nil {
 			// The full path, not the base name: three files share the name
 			// ".mcp.json", and "which one is broken" is the entire question
 			// when the answer is a config in a different directory.
-			return cfg, fmt.Errorf("%s: %w", p, err)
+			errs = append(errs, fmt.Errorf("%s: %w", p, err))
+			continue
 		}
 		for name, sc := range c.MCPServers {
 			cfg.MCPServers[name] = sc
 		}
 	}
-	return cfg, nil
+	return cfg, errors.Join(errs...)
 }
 
 // Server is a connected MCP server session and its configured name.
@@ -203,6 +216,28 @@ func newClient(name string, el *Elicitor) *mcpsdk.Client {
 	return mcpsdk.NewClient(&mcpsdk.Implementation{Name: "klaudia", Version: version.Version}, opts)
 }
 
+// clientWithHeaders returns an HTTP client that sets the configured headers on
+// every request, or nil (the transport's default client) when there are none.
+func clientWithHeaders(h map[string]string) *http.Client {
+	if len(h) == 0 {
+		return nil
+	}
+	return &http.Client{Transport: headerTransport{base: http.DefaultTransport, headers: h}}
+}
+
+type headerTransport struct {
+	base    http.RoundTripper
+	headers map[string]string
+}
+
+func (t headerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context()) // a RoundTripper must not modify the caller's request
+	for k, v := range t.headers {
+		r.Header.Set(k, v)
+	}
+	return t.base.RoundTrip(r)
+}
+
 // connectServer connects to a server using the transport its config implies:
 // HTTP (streamable, or SSE) when URL is set, otherwise stdio.
 func connectServer(ctx context.Context, name string, cfg ServerConfig, el *Elicitor) (*Server, error) {
@@ -210,9 +245,9 @@ func connectServer(ctx context.Context, name string, cfg ServerConfig, el *Elici
 		var t mcpsdk.Transport
 		switch strings.ToLower(strings.TrimSpace(cfg.Type)) {
 		case "sse":
-			t = &mcpsdk.SSEClientTransport{Endpoint: url}
+			t = &mcpsdk.SSEClientTransport{Endpoint: url, HTTPClient: clientWithHeaders(cfg.Headers)}
 		default: // "http" / "streamable" / unset
-			t = &mcpsdk.StreamableClientTransport{Endpoint: url}
+			t = &mcpsdk.StreamableClientTransport{Endpoint: url, HTTPClient: clientWithHeaders(cfg.Headers)}
 		}
 		return ConnectTransport(ctx, name, t, el)
 	}
