@@ -1353,6 +1353,21 @@ func run(cmd *cobra.Command, opts *options) error {
 	// refused with the flag that would permit them, so the output says what to
 	// do rather than only what failed.
 	approver := hostgate.HeadlessApprover(opts.allowHostChanges)
+	// The fallback chain: the flag, else config. Resolved once; a model that
+	// is also the primary is skipped, since falling back to it changes nothing.
+	fallbackNames := opts.fallbackModels
+	if len(fallbackNames) == 0 {
+		fallbackNames = cfg.FallbackModels
+	}
+	fallbacks := func(primary anthropic.Model) []anthropic.Model {
+		var out []anthropic.Model
+		for _, n := range fallbackNames {
+			if m := api.ResolveModel(n); m != primary && m != "" {
+				out = append(out, m)
+			}
+		}
+		return out
+	}
 	wiring, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd, hostGate, cfg.SubagentWorktrees())
 	if err != nil {
 		return err
@@ -1381,6 +1396,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	// provider-reported cap or a maxTokens override is lost on exactly the
 	// workload (a sub-agent writing a file) where it matters.
 	wiring.spawner.WithLimits(limits)
+	// Sub-agents run the parent's model, so an overloaded provider fails
+	// them exactly as it fails the parent; they get the same way out.
+	wiring.spawner.WithFallbacks(fallbacks(model))
 	// Children spill where the parent does, and know what the parent knows
 	// about the environment and the project.
 	wiring.spawner.WithSpill(spill)
@@ -1524,21 +1542,6 @@ func run(cmd *cobra.Command, opts *options) error {
 	// now comes from agent.Turn.Apply and the per-mode half from turnSettings,
 	// which is small enough to read at a glance and lists only what genuinely
 	// differs between modes.
-	// The fallback chain: the flag, else config. Resolved once; a model that
-	// is also the primary is skipped, since falling back to it changes nothing.
-	fallbackNames := opts.fallbackModels
-	if len(fallbackNames) == 0 {
-		fallbackNames = cfg.FallbackModels
-	}
-	fallbacks := func(primary anthropic.Model) []anthropic.Model {
-		var out []anthropic.Model
-		for _, n := range fallbackNames {
-			if m := api.ResolveModel(n); m != primary && m != "" {
-				out = append(out, m)
-			}
-		}
-		return out
-	}
 	baseOptions := func(turn agent.Turn, s turnSettings) agent.Options {
 		// Stamp the resolved sizing on the transcript before the turn runs.
 		// Here rather than at transcript construction because this is the one

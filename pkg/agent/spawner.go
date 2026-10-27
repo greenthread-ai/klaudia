@@ -41,6 +41,7 @@ type Spawner struct {
 	effort     api.Effort
 	limits     api.ModelLimits
 	spill      tools.SpillStore
+	fallbacks  []anthropic.Model
 }
 
 // SetDeferred replaces the deferred-tool set. A config reload can add or drop
@@ -160,6 +161,15 @@ func (s *Spawner) WithEffort(e api.Effort) *Spawner {
 // lookup, so a Spawner built without this still behaves sanely.
 func (s *Spawner) WithLimits(l api.ModelLimits) *Spawner {
 	s.limits = l
+	return s
+}
+
+// WithFallbacks gives sub-agents the parent's fallback chain
+// (Options.FallbackModels). Without it, a 529 that the parent survived by
+// switching model failed every sub-agent it started, which in a long
+// autonomous run is most of the work.
+func (s *Spawner) WithFallbacks(models []anthropic.Model) *Spawner {
+	s.fallbacks = models
 	return s
 }
 
@@ -393,13 +403,14 @@ func (s *Spawner) spawn(ctx context.Context, subagentType, prompt string, histor
 		// gets every tool, TodoWrite included, and without this it wrote to
 		// the store the registry was built with — the user's — replacing the
 		// approved plan with the child's working notes.
-		Plan:          plan.New(""),
-		Effort:        s.effort,
-		DeferredTools: filterDeferred(s.deferred(), childTools),
-		Hooks:         s.hooks,
-		SubAgent:      true,
-		Spill:         s.spill,
-		Hints:         s.hints,
+		Plan:           plan.New(""),
+		Effort:         s.effort,
+		DeferredTools:  filterDeferred(s.deferred(), childTools),
+		Hooks:          s.hooks,
+		SubAgent:       true,
+		Spill:          s.spill,
+		Hints:          s.hints,
+		FallbackModels: s.fallbacks,
 	}, emit)
 	if err != nil {
 		// Whatever the child wrote stays where it is. A failed or interrupted

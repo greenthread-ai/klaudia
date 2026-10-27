@@ -25,6 +25,9 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **Sub-agents fall back too.** The `fallbackModels` chain covered only the
+  main loop, so a 529 the parent survived by switching model still failed
+  every sub-agent it started. They now get the same chain.
 - **Release binaries are published again.** v0.2.0 and v0.3.0 were tagged
   but their release runs stopped at the test step, so neither has prebuilt
   binaries (`go install …@v0.3.0` was unaffected). Two tests passed on macOS

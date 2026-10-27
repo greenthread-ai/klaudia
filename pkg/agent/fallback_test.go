@@ -61,3 +61,23 @@ func TestFallbackModelChain(t *testing.T) {
 		t.Error("a 4xx is the request, not the model")
 	}
 }
+
+// A sub-agent shares the parent's model, so an overload that the parent
+// survives by switching model must not fail the children it starts.
+func TestSpawnedChildFallsBack(t *testing.T) {
+	p := &overloadedProvider{down: map[anthropic.Model]bool{"claude-opus-5-5": true}}
+	read, err := tools.NewRead()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newTestSpawner(p, tools.NewRegistry(read), "claude-opus-5-5", bypassPerm(), nil, 1).
+		WithWorkingDir(t.TempDir()).
+		WithFallbacks([]anthropic.Model{"claude-sonnet-5-5"})
+	out, err := s.Spawn(context.Background(), "Explore", "look around", nil)
+	if err != nil || !strings.Contains(out, "answered") {
+		t.Fatalf("Spawn = %q, %v", out, err)
+	}
+	if got := p.asked; len(got) != 2 || got[1] != "claude-sonnet-5-5" {
+		t.Errorf("models asked = %v", got)
+	}
+}
