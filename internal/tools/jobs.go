@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -47,6 +48,17 @@ type Job struct {
 	exitCode int
 	ended    time.Time
 	restarts int
+	// watch, when set, is the pattern whose output lines are reported to the
+	// model as they appear ("start the server and tell me about errors").
+	// partial is the unterminated tail of the last write; matched and dropped
+	// are what the next report carries; reportAt is when the last one went,
+	// and reporting is set while one is scheduled.
+	watch     *regexp.Regexp
+	partial   []byte
+	matched   []string
+	dropped   int
+	reportAt  time.Time
+	reporting bool
 	// stopping is set when the job is killed on request (/stopjob, KillShell,
 	// a restart, shutdown), so its exit is reported as a stop rather than
 	// delivered to the model as news.
@@ -69,6 +81,8 @@ type JobStatus struct {
 	LogBytes int64
 	// Stopped is true when the job ended because someone stopped it.
 	Stopped bool
+	// Watch is the pattern whose matching lines are reported, if any.
+	Watch string
 	// LastOutput is when the job last wrote anything; zero if it never has.
 	// A provisioning run can be quiet for half an hour and fine, so this is
 	// reported, not judged.
@@ -83,12 +97,13 @@ type JobStore struct {
 	executor sandbox.Executor
 	logDir   string
 
-	mu     sync.Mutex
-	jobs   map[string]*Job
-	order  []string // insertion order, so listings are stable
-	seq    int
-	names  map[string]int
-	onExit func(JobStatus)
+	mu      sync.Mutex
+	jobs    map[string]*Job
+	order   []string // insertion order, so listings are stable
+	seq     int
+	names   map[string]int
+	onExit  func(JobStatus)
+	onMatch func(JobStatus, []string, int)
 }
 
 // NewJobStore creates a store whose jobs are parented to ctx (cancelling it, or
@@ -142,6 +157,14 @@ type StartResult struct {
 // over one port is a confusing failure, and the second one usually loses in a
 // way that looks like the code is broken.
 func (s *JobStore) Start(e sandbox.Executor, req sandbox.Request) (StartResult, error) {
+	return s.StartWatched(e, req, nil)
+}
+
+// StartWatched is Start with a watch pattern: output lines matching it are
+// reported through OnMatch as they appear. Set at launch, so a server's first
+// error line is not missed in the gap before a separate call could set it.
+// An identical command already running keeps its own pattern.
+func (s *JobStore) StartWatched(e sandbox.Executor, req sandbox.Request, watch *regexp.Regexp) (StartResult, error) {
 	if e == nil {
 		e = s.executor
 	}
@@ -161,7 +184,7 @@ func (s *JobStore) Start(e sandbox.Executor, req sandbox.Request) (StartResult, 
 	j := &Job{
 		ID: id, Name: name, Command: req.Command, Dir: req.WorkingDir,
 		Target: jobTarget(req.Command), Started: time.Now(),
-		log: newJobLog(s.logDir, name),
+		log: newJobLog(s.logDir, name), watch: watch,
 	}
 	s.jobs[id] = j
 	s.order = append(s.order, id)
@@ -188,7 +211,7 @@ func (s *JobStore) Start(e sandbox.Executor, req sandbox.Request) (StartResult, 
 func (s *JobStore) launch(j *Job, req sandbox.Request) error {
 	req.Timeout = 0 // a job runs until it exits or is stopped
 	proc, err := sandbox.StartBackgroundWith(s.parent, s.executor, req, sandbox.BackgroundOptions{
-		Sink:   j.log,
+		Sink:   jobSink{s: s, j: j},
 		OnExit: func(code int) { s.jobExited(j.ID, code) },
 	})
 	if err != nil {
@@ -258,6 +281,96 @@ func (s *JobStore) Read(ref string) (ShellOutput, bool) {
 	}
 	s.mu.Unlock()
 	return out, true
+}
+
+// OnMatch registers the callback for a watched job's matching lines: the
+// lines, and how many more matched than were kept. Reports are batched — the
+// first match goes at once, later ones at most every matchReportGap — so a
+// log that errors in a tight loop cannot flood the conversation.
+func (s *JobStore) OnMatch(fn func(st JobStatus, lines []string, dropped int)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onMatch = fn
+}
+
+// matchReportGap is the least time between two reports from one job.
+var matchReportGap = 30 * time.Second
+
+// maxMatchLines is how many matching lines one report keeps.
+const maxMatchLines = 20
+
+// jobSink is a job's output path: the log, and the watch.
+type jobSink struct {
+	s *JobStore
+	j *Job
+}
+
+func (w jobSink) Write(b []byte) (int, error) {
+	n, err := w.j.log.Write(b)
+	w.s.scan(w.j, b)
+	return n, err
+}
+
+// scan collects the complete lines in b that match the job's watch.
+func (s *JobStore) scan(j *Job, b []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if j.watch == nil {
+		return
+	}
+	j.partial = append(j.partial, b...)
+	found := false
+	for {
+		i := bytes.IndexByte(j.partial, '\n')
+		if i < 0 {
+			break
+		}
+		line := strings.TrimRight(string(j.partial[:i]), "\r")
+		j.partial = j.partial[i+1:]
+		if !j.watch.MatchString(line) {
+			continue
+		}
+		found = true
+		if len(j.matched) < maxMatchLines {
+			j.matched = append(j.matched, line)
+		} else {
+			j.dropped++
+		}
+	}
+	if len(j.partial) > 64<<10 {
+		j.partial = j.partial[len(j.partial)-64<<10:] // a line with no end is not a line
+	}
+	if found && !j.reporting {
+		j.reporting = true
+		wait := time.Duration(0)
+		if since := time.Since(j.reportAt); since < matchReportGap {
+			wait = matchReportGap - since
+		}
+		time.AfterFunc(wait, func() { s.report(j) })
+	}
+}
+
+// report hands the collected lines to OnMatch.
+func (s *JobStore) report(j *Job) {
+	s.mu.Lock()
+	lines, dropped, fn := j.matched, j.dropped, s.onMatch
+	j.matched, j.dropped, j.reporting, j.reportAt = nil, 0, false, time.Now()
+	st := j.status()
+	s.mu.Unlock()
+	if fn != nil && len(lines) > 0 {
+		fn(st, lines, dropped)
+	}
+}
+
+// MatchNotice is what the model reads when a watched job prints lines that
+// match: the job, the pattern, and the lines.
+func (s *JobStore) MatchNotice(st JobStatus, lines []string, dropped int) string {
+	body := strings.Join(lines, "\n")
+	if dropped > 0 {
+		body += fmt.Sprintf("\n… and %d more matching lines (BashOutput to read them)", dropped)
+	}
+	return fmt.Sprintf("<background-job-output id=%q name=%q watch=%q>\nJob %s (%s) printed lines matching /%s/:\n\n%s\n</background-job-output>",
+		st.ID, st.Name, st.Watch, st.ID, st.Command, st.Watch, body)
 }
 
 // ExitNotice is what the model reads when a job ends on its own: which job,
@@ -455,6 +568,7 @@ func (j *Job) status() JobStatus {
 		Where: jobWhere(j.Target), Started: j.Started, Ended: j.ended,
 		Restarts: j.restarts, LogPath: j.log.Path(), LogBytes: j.log.Size(),
 		LastOutput: j.log.LastWrite(),
+		Watch:      watchString(j.watch),
 	}
 }
 
@@ -731,4 +845,11 @@ func (s *JobStore) unknownJobMsg(ref string) string {
 		names = append(names, fmt.Sprintf("%s (%s, %s)", j.Name, j.ID, state))
 	}
 	return fmt.Sprintf("No job %q. Current jobs: %s.", ref, strings.Join(names, "; "))
+}
+
+func watchString(re *regexp.Regexp) string {
+	if re == nil {
+		return ""
+	}
+	return re.String()
 }

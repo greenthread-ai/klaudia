@@ -37,6 +37,16 @@ type JobController interface {
 	Restart(ref string) (tools.JobStatus, bool)
 	// ExitNotice is the model-facing report of a job that ended on its own.
 	ExitNotice(st tools.JobStatus) string
+	// OnMatch and MatchNotice are the same pair for a watched job's lines.
+	OnMatch(func(st tools.JobStatus, lines []string, dropped int))
+	MatchNotice(st tools.JobStatus, lines []string, dropped int) string
+}
+
+// jobMatchMsg carries a watched job's matching lines to the event loop.
+type jobMatchMsg struct {
+	status  tools.JobStatus
+	lines   []string
+	dropped int
 }
 
 // jobExitMsg reports that a job finished, so the user hears about a crash
@@ -254,6 +264,21 @@ func (m *Model) onJobExit(st tools.JobStatus) tea.Cmd {
 		return m.startTurn(notice)
 	}
 	m.steer.add(fmt.Sprintf("[%s exited %d]", st.ID, st.ExitCode), notice)
+	return nil
+}
+
+// onJobMatch reports a watched job's matching lines: one line to the user,
+// the lines themselves to the model, delivered as an exit is.
+func (m *Model) onJobMatch(msg jobMatchMsg) tea.Cmd {
+	n := len(msg.lines) + msg.dropped
+	m.appendLine(noticeStyle.Render(fmt.Sprintf("job %s: %s matching /%s/ — %s",
+		msg.status.Name, countOf(n, "line"), msg.status.Watch, oneline(msg.lines[0], 80))))
+	notice := m.sess.Jobs.MatchNotice(msg.status, msg.lines, msg.dropped)
+	if m.state == stateIdle {
+		m.setState(stateRunning)
+		return m.startTurn(notice)
+	}
+	m.steer.add(fmt.Sprintf("[%s: %s]", msg.status.ID, countOf(n, "match")), notice)
 	return nil
 }
 

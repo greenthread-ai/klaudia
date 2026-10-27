@@ -6,6 +6,11 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Watched jobs.** `Bash` with `run_in_background` takes `watch`, a regex;
+  output lines that match reach the model as they appear, so "start the
+  server and tell me if it errors" works without polling. Reports are batched
+  (first at once, then at most every 30s, 20 lines with a count of the rest),
+  and stream-json peers get a `system/job_output` line.
 - **Job exits reach the model outside the TUI too.** Headless `-p`, `--loop`
   and stream-json runs queue a job's exit in `agent.Inbox`, polled through
   `Turn.Interject`, so it arrives mid-run or with the next turn; a

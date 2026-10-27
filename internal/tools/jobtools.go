@@ -81,6 +81,9 @@ func (t *Jobs) Execute(context.Context, Context, json.RawMessage) ([]Result, err
 		if j.Restarts > 0 {
 			fmt.Fprintf(&b, "  restarted %d×", j.Restarts)
 		}
+		if j.Watch != "" {
+			fmt.Fprintf(&b, "  watching /%s/", j.Watch)
+		}
 		b.WriteString("\n")
 	}
 	return []Result{{Content: strings.TrimRight(b.String(), "\n")}}, nil

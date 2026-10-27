@@ -306,7 +306,8 @@ events that follow are `agent.Event` serialised as is — `type` is one of
 `compaction`, `notice`, `permission_mode`, `plan` or `steer`, and each turn
 ends with a `result` line. A background job that exits on its own writes
 `{"type":"system","subtype":"job_exit","job_id":…,"exit_code":…}` when it
-happens, between turns or not; the model gets the report with its next turn
+happens, between turns or not (and `job_output` when a watched job prints a
+matching line); the model gets the report with its next turn
 (mid-turn if one is running), and a headless `-p` run hands it over mid-run.
 `schema_version` is `agent.EventSchemaVersion`:
 new event types and optional fields keep it (ignore what you do not know);

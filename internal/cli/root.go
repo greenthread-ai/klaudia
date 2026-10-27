@@ -1161,6 +1161,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// between turns. Set before any job can start, so it needs no lock.
 	jobInbox := &agent.Inbox{}
 	var jobExitHook func(tools.JobStatus)
+	var jobMatchHook func(tools.JobStatus, int)
 	if !interactive {
 		jobStore.OnExit(func(st tools.JobStatus) {
 			if st.Stopped {
@@ -1169,6 +1170,12 @@ func run(cmd *cobra.Command, opts *options) error {
 			jobInbox.Add(jobStore.ExitNotice(st))
 			if jobExitHook != nil {
 				jobExitHook(st)
+			}
+		})
+		jobStore.OnMatch(func(st tools.JobStatus, lines []string, dropped int) {
+			jobInbox.Add(jobStore.MatchNotice(st, lines, dropped))
+			if jobMatchHook != nil {
+				jobMatchHook(st, len(lines)+dropped)
 			}
 		})
 	}
@@ -1617,6 +1624,11 @@ func run(cmd *cobra.Command, opts *options) error {
 			driver.Notify("job_exit", map[string]any{
 				"job_id": st.ID, "name": st.Name, "exit_code": st.ExitCode,
 				"note": "delivered to the model with its next turn, or mid-turn if one is running",
+			})
+		}
+		jobMatchHook = func(st tools.JobStatus, n int) {
+			driver.Notify("job_output", map[string]any{
+				"job_id": st.ID, "name": st.Name, "watch": st.Watch, "lines": n,
 			})
 		}
 		driver.Init = map[string]any{

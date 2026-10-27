@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ type BashInput struct {
 	Description     string `json:"description,omitempty" jsonschema:"description=A short description of what the command does"`
 	Timeout         int    `json:"timeout,omitempty" jsonschema:"description=Timeout in milliseconds (default 120000)"`
 	RunInBackground bool   `json:"run_in_background,omitempty" jsonschema:"description=Run detached and return a shell id immediately; read its output with BashOutput and stop it with KillShell"`
+	Watch           string `json:"watch,omitempty" jsonschema:"description=With run_in_background: a regex; output lines matching it are reported to you as they appear (e.g. error|panic|FAIL), so you can carry on and be told"`
 }
 
 // Bash executes shell commands via a sandbox.Executor. When run_in_background is
@@ -73,6 +75,14 @@ func (b *Bash) ValidateInput(raw json.RawMessage) error {
 	}
 	if strings.TrimSpace(in.Command) == "" {
 		return fmt.Errorf("command must not be empty")
+	}
+	if in.Watch != "" {
+		if !in.RunInBackground {
+			return fmt.Errorf("watch applies to a background job; set run_in_background")
+		}
+		if _, err := regexp.Compile(in.Watch); err != nil {
+			return fmt.Errorf("invalid watch regex: %w", err)
+		}
 	}
 	return nil
 }
@@ -131,7 +141,11 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 		if b.shells == nil {
 			return []Result{{Content: "background execution is not available", IsError: true}}, nil
 		}
-		res, err := b.shells.Start(b.executor, sandbox.Request{Command: in.Command, WorkingDir: tctx.WorkingDir})
+		var watch *regexp.Regexp
+		if in.Watch != "" {
+			watch = regexp.MustCompile(in.Watch) // validated
+		}
+		res, err := b.shells.StartWatched(b.executor, sandbox.Request{Command: in.Command, WorkingDir: tctx.WorkingDir}, watch)
 		if err != nil {
 			return []Result{{Content: fmt.Sprintf("Failed to start background command: %v", err), IsError: true}}, nil
 		}

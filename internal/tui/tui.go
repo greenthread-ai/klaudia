@@ -601,6 +601,12 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 			default: // a full queue must never block the job's own goroutine
 			}
 		})
+		sess.Jobs.OnMatch(func(st tools.JobStatus, lines []string, dropped int) {
+			select {
+			case events <- jobMatchMsg{status: st, lines: lines, dropped: dropped}:
+			default:
+			}
+		})
 	}
 	// A broken .mcp.json edit used to be silent: the watcher reloaded, failed,
 	// and said nothing, so the config looked applied. Reload outcomes go down
@@ -746,6 +752,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case jobExitMsg:
 		return m, tea.Batch(m.onJobExit(msg.status), m.waitForEvent())
+
+	case jobMatchMsg:
+		return m, tea.Batch(m.onJobMatch(msg), m.waitForEvent())
 
 	case mcpReloadMsg:
 		m.onMCPReload(msg.event)

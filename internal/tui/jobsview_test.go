@@ -41,6 +41,12 @@ func (f *fakeJobs) ExitNotice(st tools.JobStatus) string {
 		st.ID, st.ID, st.Command, st.ExitCode)
 }
 
+func (f *fakeJobs) OnMatch(func(tools.JobStatus, []string, int)) {}
+
+func (f *fakeJobs) MatchNotice(st tools.JobStatus, lines []string, _ int) string {
+	return fmt.Sprintf("<background-job-output id=%q>\n%s\n</background-job-output>", st.ID, strings.Join(lines, "\n"))
+}
+
 func jobsModel(t *testing.T, f *fakeJobs) *Model {
 	t.Helper()
 	// A turn in flight, so an exit is queued for the model rather than
@@ -281,5 +287,17 @@ func TestQuitWarnsAboutRunningJobs(t *testing.T) {
 	m2.quitArmed = true
 	if got := visibleText(m2.statusLineAt(200)); !strings.Contains(got, "stops provision") {
 		t.Errorf("Ctrl+C hint = %q", got)
+	}
+}
+
+// A watched job's lines go to the model as an exit does.
+func TestJobMatchReachesTheModel(t *testing.T) {
+	m := jobsModel(t, &fakeJobs{})
+	m.onJobMatch(jobMatchMsg{status: tools.JobStatus{ID: "bash_1", Name: "dev", Watch: "ERROR"}, lines: []string{"ERROR: db down"}})
+	if in := m.steer.drain(); !strings.Contains(in.Text, "ERROR: db down") {
+		t.Errorf("notice = %q", in.Text)
+	}
+	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "job dev: 1 line matching /ERROR/") {
+		t.Errorf("user line = %q", out)
 	}
 }

@@ -147,3 +147,69 @@ func TestExitNoticeCarriesTheTail(t *testing.T) {
 		}
 	}
 }
+
+// "Start the server and tell me about errors": matching lines are reported,
+// batched, with a count of what did not fit.
+func TestWatchedJobReportsMatchingLines(t *testing.T) {
+	defer func(d time.Duration) { matchReportGap = d }(matchReportGap)
+	matchReportGap = 200 * time.Millisecond
+	store := newTestJobStore(t)
+	type report struct {
+		lines   []string
+		dropped int
+		st      JobStatus
+	}
+	got := make(chan report, 10)
+	store.OnMatch(func(st JobStatus, lines []string, dropped int) { got <- report{lines, dropped, st} })
+
+	cmd := "echo starting; echo 'ERROR: db down'; echo ok; sleep 0.5; for i in $(seq 1 30); do echo ERROR $i; done; sleep 30"
+	st, err := store.StartWatched(sandbox.NewLocal(), sandbox.Request{Command: cmd}, regexp.MustCompile("ERROR"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Kill(st.Job.ID)
+
+	// Every matching line is accounted for — kept or counted as dropped —
+	// across however many reports the timing makes, none over the cap.
+	total, reports := 0, 0
+	deadline := time.After(10 * time.Second)
+	for total < 31 {
+		select {
+		case r := <-got:
+			reports++
+			if len(r.lines) > maxMatchLines || r.st.Watch != "ERROR" {
+				t.Fatalf("report %d: %d lines, watch %q", reports, len(r.lines), r.st.Watch)
+			}
+			if reports == 1 && r.lines[0] != "ERROR: db down" {
+				t.Errorf("first line = %q", r.lines[0])
+			}
+			for _, l := range r.lines {
+				if !strings.Contains(l, "ERROR") {
+					t.Errorf("a non-matching line was reported: %q", l)
+				}
+			}
+			total += len(r.lines) + r.dropped
+		case <-deadline:
+			t.Fatalf("only %d of 31 matching lines reported", total)
+		}
+	}
+	if total != 31 {
+		t.Errorf("reported %d lines, want 31", total)
+	}
+	n := store.MatchNotice(JobStatus{ID: "bash_1", Name: "dev", Watch: "ERROR"}, []string{"ERROR x"}, 10)
+	if !strings.Contains(n, "/ERROR/") || !strings.Contains(n, "10 more matching lines") {
+		t.Errorf("notice:\n%s", n)
+	}
+}
+
+func TestWatchNeedsABackgroundJob(t *testing.T) {
+	b, _ := NewBash(sandbox.NewLocal())
+	raw, _ := json.Marshal(BashInput{Command: "make", Watch: "error"})
+	if b.ValidateInput(raw) == nil {
+		t.Error("watch without run_in_background was accepted")
+	}
+	raw, _ = json.Marshal(BashInput{Command: "make", Watch: "(", RunInBackground: true})
+	if b.ValidateInput(raw) == nil {
+		t.Error("an invalid watch regex was accepted")
+	}
+}

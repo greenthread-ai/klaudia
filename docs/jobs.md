@@ -26,6 +26,11 @@ gets:
 - **Waiting without polling.** `BashOutput` takes `wait_seconds` (up to 600):
   one call that returns when the job exits, when a line matches `filter`, or
   at the limit, whichever is first. Esc ends the wait.
+- **Watching.** `Bash` with `run_in_background` takes `watch`, a regex:
+  output lines matching it reach the model as they appear ("start the server
+  and tell me about errors"), the first at once and later ones batched at
+  most every 30 seconds, 20 lines a report with a count of the rest. `/jobs`
+  and `Jobs` show what each job is watching.
 - **Quiet is reported, not judged.** `Jobs`, `BashOutput` and the panel under
   the prompt say how long a job has run and how long since it last printed
   (`running for 42m, last output 25m ago`). A provisioning step can be silent
