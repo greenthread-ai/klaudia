@@ -25,14 +25,16 @@ type HostChange struct {
 	// Unlike the three scopes above these are not summarised or joined: the
 	// whole value of showing a command is that the user can read it.
 	Commands []string
-	// Hooks marks the one question on this card that is not about reconfiguring
-	// the machine: whether the shell commands a repository declared may run
-	// around Klaudia's tool calls. It shares the card because the decision has
-	// the same shape — unconfined execution the user has to agree to — but three
-	// of the framing sentences differ. A hook set is not "caught on the way
-	// past" (the model had nothing to do with it), and the answer is remembered
-	// rather than session-scoped.
-	Hooks bool
+	// RepoConfig marks the one question on this card that is not about
+	// reconfiguring the machine: whether commands a repository's config
+	// declared may run — its hooks, or the MCP servers in its .mcp.json. It
+	// names them ("hooks", "MCP servers") for the card's sentences. It shares
+	// the card because the decision has the same shape — unconfined execution
+	// the user has to agree to — but three of the framing sentences differ. A
+	// repository's config is not "caught on the way past" (the model had
+	// nothing to do with it), and the answer is remembered rather than
+	// session-scoped.
+	RepoConfig string
 	// Declared distinguishes "the model asked first" from "this was caught on
 	// the way past". The first is the flow working; the second is the fallback.
 	Declared bool
@@ -89,8 +91,13 @@ func (hc *HostChange) Fields() map[string]any {
 	if len(hc.Commands) > 0 {
 		m["commands"] = hc.Commands
 	}
-	if hc.Hooks {
-		m["hooks"] = true
+	if hc.RepoConfig != "" {
+		m["repo_config"] = hc.RepoConfig
+		// The original key, from before MCP servers shared the question;
+		// consumers that read it keep working.
+		if hc.RepoConfig == RepoHooks {
+			m["hooks"] = true
+		}
 	}
 	if hc.Drift {
 		m["drift"] = true

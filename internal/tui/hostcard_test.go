@@ -55,10 +55,10 @@ func TestHostAnswerLineDistinguishesRedirectFromRefusal(t *testing.T) {
 // decision that is in fact remembered.
 func TestHooksCardDoesNotReadLikeAHostChange(t *testing.T) {
 	card := strings.Join(hostCardLines(&hostgate.HostChange{
-		Hooks:    true,
-		Summary:  "run 2 hooks declared by /repo/.klaudia/config.toml",
-		Paths:    []string{"/repo/.klaudia/config.toml"},
-		Commands: []string{"PostToolUse(Edit|Write): gofmt -w .", "PreToolUse(Bash): ./scripts/guard.sh"},
+		RepoConfig: hostgate.RepoHooks,
+		Summary:    "run 2 hooks declared by /repo/.klaudia/config.toml",
+		Paths:      []string{"/repo/.klaudia/config.toml"},
+		Commands:   []string{"PostToolUse(Edit|Write): gofmt -w .", "PreToolUse(Bash): ./scripts/guard.sh"},
 	}), "\n")
 
 	for _, wrong := range []string{"caught on the way past", "for this session only", "This changes your machine"} {
@@ -76,7 +76,7 @@ func TestHooksCardDoesNotReadLikeAHostChange(t *testing.T) {
 			t.Errorf("card does not show %q:\n%s", cmd, card)
 		}
 	}
-	if got := hostPrompt(&hostgate.HostChange{Hooks: true}); strings.Contains(got, "something else") {
+	if got := hostPrompt(&hostgate.HostChange{RepoConfig: hostgate.RepoHooks}); strings.Contains(got, "something else") {
 		t.Errorf("prompt = %q; there is no task to redirect, only a yes or a no", got)
 	}
 }
@@ -85,8 +85,8 @@ func TestHooksCardDoesNotReadLikeAHostChange(t *testing.T) {
 // what a user skims instead of reading, and commas occur inside commands.
 func TestHooksCardListsOneCommandPerLine(t *testing.T) {
 	lines := hostCardLines(&hostgate.HostChange{
-		Hooks:    true,
-		Commands: []string{"PostToolUse: a, b", "PreToolUse: c"},
+		RepoConfig: hostgate.RepoHooks,
+		Commands:   []string{"PostToolUse: a, b", "PreToolUse: c"},
 	})
 	count := 0
 	for _, l := range lines {
@@ -96,5 +96,24 @@ func TestHooksCardListsOneCommandPerLine(t *testing.T) {
 	}
 	if count != 2 {
 		t.Errorf("found %d command lines, want one per command:\n%s", count, strings.Join(lines, "\n"))
+	}
+}
+
+// A project's MCP servers share the repository-config card, named as what
+// they are: "Run these hooks?" over a list of servers would be a wrong question.
+func TestMCPServersCardNamesServers(t *testing.T) {
+	hc := &hostgate.HostChange{
+		RepoConfig: hostgate.RepoMCP,
+		Summary:    "start 1 MCP server declared by /repo/.mcp.json",
+		Commands:   []string{"repo: ./run-me --stdio"},
+	}
+	card := strings.Join(hostCardLines(hc), "\n")
+	for _, want := range []string{"remembered until these MCP servers change", "repo: ./run-me --stdio"} {
+		if !strings.Contains(card, want) {
+			t.Errorf("card lacks %q:\n%s", want, card)
+		}
+	}
+	if got := hostPrompt(hc); got != "Start these MCP servers? (y)es / (n)o" {
+		t.Errorf("prompt = %q", got)
 	}
 }

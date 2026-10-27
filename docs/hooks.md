@@ -169,7 +169,27 @@ So:
   of defence behind it.
 
 In a headless run there is nobody to ask, so project hooks do not run and a
-notice says so. "Nobody objected" is not agreement.
+notice says so — unless the run passed `--allow-host-changes`, which approves
+the card as it would any other host change, and is remembered the same way.
+"Nobody objected" is not agreement.
+
+### Project MCP servers
+
+A server in a project's `.mcp.json` (or `.klaudia/.mcp.json`) is the same
+thing as a project hook — a command that arrived with the clone — and used to
+launch the moment Klaudia started. It now takes the same card, with the same
+rules: servers in `~/.klaudia/.mcp.json` are yours and start at once; a
+project's are held until you approve the set, which is asked at your first
+message (the first point every frontend has someone to ask) and started before
+that turn's request, so the turn can use them. The approval is recorded in
+`~/.klaudia/mcp-approvals.json` — separate from `hooks.json`, since agreeing to
+a repository's hooks says nothing about its servers — and the fingerprint
+covers each server's name, command, args, env, URL and headers, so an edit
+asks again; a project entry that redefines a global server is the project's.
+The card lists each command or URL and the *names* of its env variables, not
+their values. HTTP servers are held too: nothing is launched, but the model's
+tool calls, with whatever it has read, go to a URL the repository chose. A
+no lasts the session; a headless run behaves as for hooks.
 
 Hooks are not sandboxed, whatever `[sandbox]` says. That setting confines the
 *model's* commands; a hook is your own automation, and the things it exists to

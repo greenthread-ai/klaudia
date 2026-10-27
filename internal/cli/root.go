@@ -1174,7 +1174,15 @@ func run(cmd *cobra.Command, opts *options) error {
 	if attended {
 		elicitor = mcp.NewElicitor()
 	}
-	mcpMgr, mcpErrs := mcp.Connect(ctx, mcpCfg, elicitor)
+	// Servers from a project's .mcp.json wait for approval, asked at the first
+	// turn (admitMCP), when there is a frontend to ask; the global file's start
+	// now. mcpLatest is the whole config, held or not, for that question and
+	// for reloads.
+	mcpTrust := &mcp.ProjectTrust{Dir: cwd}
+	var mcpLatestMu sync.Mutex
+	mcpLatest := mcpCfg
+	mcpRun, _ := mcpTrust.Admit(mcpCfg)
+	mcpMgr, mcpErrs := mcp.Connect(ctx, mcpRun, elicitor)
 	defer mcpMgr.Close()
 	for _, e := range mcpErrs {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", e)
@@ -1307,6 +1315,38 @@ func run(cmd *cobra.Command, opts *options) error {
 		deferredTools = deferred
 		deferredMu.Unlock()
 	}
+	// admitMCP asks about held project servers at the start of a turn — the
+	// first point where a frontend's approver exists — and starts them on a
+	// yes, before the loop builds its request, so the turn can use them. It
+	// asks once per set per session; Decide returns at once after that.
+	admitMCP := func(ctx context.Context, turn agent.Turn) {
+		mcpLatestMu.Lock()
+		cfg := mcpLatest
+		mcpLatestMu.Unlock()
+		var confirm mcp.Confirm
+		if turn.Approver != nil {
+			confirm = func(ctx context.Context, lines, files []string) bool {
+				return hostgate.ConfirmMCP(ctx, turn.Approver, lines, files)
+			}
+		}
+		notify := func(msg string) {
+			if turn.Emit != nil {
+				turn.Emit(agent.Event{Type: agent.EventNotice, Content: "mcp: " + msg})
+			}
+		}
+		ok, notice := mcpTrust.Decide(ctx, cfg, confirm)
+		if notice != "" {
+			notify(notice)
+		}
+		if !ok {
+			return
+		}
+		run, _ := mcpTrust.Admit(cfg)
+		for _, e := range mcpMgr.Reload(ctx, run) {
+			notify(e.Error())
+		}
+		rebuildMCP()
+	}
 	mcpReloads := &mcpReloadNotifier{}
 	stopWatch, werr := mcp.Watch(cwd, func() {
 		cfg, lerr := mcp.LoadConfig(cwd)
@@ -1314,7 +1354,13 @@ func run(cmd *cobra.Command, opts *options) error {
 			mcpReloads.emit(mcp.ReloadEvent{ConfigErr: lerr.Error()})
 			return
 		}
-		errs := mcpMgr.Reload(ctx, cfg)
+		mcpLatestMu.Lock()
+		mcpLatest = cfg
+		mcpLatestMu.Unlock()
+		// An edited project server is a new set: Admit holds it again, and the
+		// next turn asks.
+		run, _ := mcpTrust.Admit(cfg)
+		errs := mcpMgr.Reload(ctx, run)
 		rebuildMCP()
 		if len(errs) > 0 {
 			msgs := make([]string, 0, len(errs))
@@ -1478,6 +1524,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			// model's own questions use, and the Asker that reaches it is
 			// handed over per turn. Point the elicitor at this turn's.
 			elicitor.SetAsker(turn.Asker)
+			admitMCP(ctx, turn)
 			return loop.Run(ctx, baseOptions(turn, turnSettings{
 				Model: api.ResolveModel(sess.Model), // resolved fresh each turn
 				// Permission is not set here: the mode comes with the Turn
@@ -1511,6 +1558,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 		runFn := func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
 			elicitor.SetAsker(turn.Asker)
+			admitMCP(ctx, turn)
 			return loop.Run(ctx, baseOptions(turn, turnSettings{
 				Model:           model,
 				Permission:      permCtx,
@@ -1533,6 +1581,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	if opts.inputFormat == "acp" {
 		runFn := func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
 			elicitor.SetAsker(turn.Asker)
+			admitMCP(ctx, turn)
 			return loop.Run(ctx, baseOptions(turn, turnSettings{
 				// Permission comes from the Turn: an ACP client keeps a mode
 				// per editor session, so one resolved here would be wrong for
@@ -1579,6 +1628,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	if opts.loop {
 		return runGoalLoop(ctx, cmd, loopRun{
 			run: func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
+				admitMCP(ctx, turn)
 				return loop.Run(ctx, baseOptions(turn, turnSettings{
 					Model:           model,
 					Permission:      permCtx,
@@ -1602,6 +1652,8 @@ func run(cmd *cobra.Command, opts *options) error {
 	// transcript; the simplified delta events are not used in that mode.
 	runRecorder := agent.Recorder(recorder)
 	notices := noticeWriter(cmd.ErrOrStderr())
+	// Before the init line, so its tool list includes servers approved here.
+	admitMCP(ctx, agent.Turn{Approver: approver, Emit: notices})
 	emit := func(ev agent.Event) {
 		notices(ev)
 		_ = r.Event(ev)
@@ -1646,11 +1698,11 @@ func run(cmd *cobra.Command, opts *options) error {
 	})
 	// Three fields the shared builder has no business knowing about: a headless
 	// run uses the envelope recorder rather than the plain transcript, it is the
-	// only mode that streams raw model events, and its deferred set is fixed at
-	// startup because there is no turn boundary for a reload to land on.
+	// only mode that streams raw model events, and its deferred set is fixed
+	// before the run because there is no turn boundary for a reload to land on.
 	headlessOpts.Recorder = runRecorder
 	headlessOpts.PartialMessages = partial
-	headlessOpts.DeferredTools = deferredTools
+	headlessOpts.DeferredTools = currentDeferred()
 	res, err := loop.Run(ctx, headlessOpts, emit)
 
 	out := ResultMessage{

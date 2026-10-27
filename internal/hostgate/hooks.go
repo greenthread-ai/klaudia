@@ -3,6 +3,7 @@ package hostgate
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/trust"
 	"github.com/greenthread-ai/klaudia/pkg/agent"
@@ -31,8 +32,8 @@ func ConfirmHooks(ctx context.Context, approver agent.Approver, commands []strin
 		Specifier:  file,
 		Suggestion: summary,
 		Detail: &HostChange{
-			Hooks:   true,
-			Summary: summary,
+			RepoConfig: RepoHooks,
+			Summary:    summary,
 			Reason: "Hooks are shell commands this repository wants run around your tool calls. " +
 				"They run unconfined, as you.",
 			// ZoneHost: this is a change to what runs on this machine, which
@@ -50,4 +51,31 @@ func plural(n int, word string) string {
 		return "1 " + word
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// RepoConfig values: what a repository's config is asking to run.
+const (
+	RepoHooks = "hooks"
+	RepoMCP   = "MCP servers"
+)
+
+// ConfirmMCP asks, as ConfirmHooks does, whether the MCP servers a
+// repository's .mcp.json declares may start. lines describe each server.
+func ConfirmMCP(ctx context.Context, approver agent.Approver, lines, files []string) bool {
+	summary := fmt.Sprintf("start %s declared by %s", plural(len(lines), "MCP server"), strings.Join(files, ", "))
+	d := approver.Approve(ctx, agent.ApprovalRequest{
+		ToolName:   "MCP",
+		Specifier:  strings.Join(files, ", "),
+		Suggestion: summary,
+		Detail: &HostChange{
+			RepoConfig: RepoMCP,
+			Summary:    summary,
+			Reason: "MCP servers are programs this repository wants launched, or services it wants Klaudia to connect to, " +
+				"whose tools the model can then call. A launched server runs unconfined, as you.",
+			Zone:     trust.ZoneHost,
+			Paths:    files,
+			Commands: lines,
+		},
+	})
+	return d.Behavior == permission.Allow
 }

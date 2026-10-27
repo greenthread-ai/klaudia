@@ -124,6 +124,15 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **Project MCP servers ask before they start.** A server in a project's
+  `.mcp.json` or `.klaudia/.mcp.json` launched as soon as Klaudia started in
+  the clone. It now waits for the same remembered approval project hooks get:
+  the first message shows each server's command or URL (and env names), the
+  answer is kept in `~/.klaudia/mcp-approvals.json` until the set changes, and
+  a no lasts the session. Servers in `~/.klaudia/.mcp.json` start as before.
+  Headless runs start project servers only with `--allow-host-changes`. The
+  approval card's `hooks` flag became `repo_config` (`"hooks"` or `"MCP
+  servers"`) on stream-json and ACP; `hooks: true` is still sent for hooks.
 - **Newline is Option+Return (Alt+Enter off the Mac), or end the line with
   `\`.** The help and intro named Ctrl+J, which nobody remembers; it still
   works but is no longer advertised. A trailing backslash then Return now

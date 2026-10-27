@@ -100,10 +100,13 @@ approval is a picker (run it / keep going / keep planning), and "keep going" or
 `/plan run` drives the goal loop over the approved plan — one loop, plan-specific
 prompts, no branch switch.
 
-Hooks are the one subsystem that executes a string from a config file, so
-`docs/hooks.md` is where the reasoning for the trust prompt lives. A hook runs
-*after* the host gate, never instead of it: anything that lets a config file
-grant permission is a bug, not a feature request.
+Two subsystems execute a string from a config file: hooks, and the MCP servers
+in a project's `.mcp.json`. Both take the same trust prompt — the global file
+is the user's own, a project's is confirmed once per set, remembered
+(`trust.Approvals`) until the set changes — and `docs/hooks.md` is where the
+reasoning lives. A hook runs *after* the host gate, never instead of it:
+anything that lets a config file grant permission is a bug, not a feature
+request.
 
 There are three frontends — TUI, stream-json, ACP — and one contract between
 them: `agent.Turn`, applied by `Turn.Apply`. A new capability is a **field on

@@ -123,8 +123,8 @@ func hostTitle(hc *hostgate.HostChange) string {
 	if s := oneline(hc.Summary); s != "" {
 		return s
 	}
-	if hc.Hooks {
-		return "Run this repository's hooks"
+	if hc.RepoConfig != "" {
+		return "Run this repository's " + hc.RepoConfig
 	}
 	return "Change this machine"
 }

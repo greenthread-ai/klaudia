@@ -719,6 +719,13 @@ still load:
 } }
 ```
 
+Servers from the project's files arrived with the clone, so — like project
+hooks — they **wait for your approval**: your first message shows each
+server's command or URL, and the answer is remembered in
+`~/.klaudia/mcp-approvals.json` until the set changes. The global file's
+servers start at once. A headless run starts project servers only with
+`--allow-host-changes` (see [docs/hooks.md](docs/hooks.md#project-mcp-servers)).
+
 Edits to any of those files apply **to the running session**: servers are
 added, dropped or restarted in place, and a server whose config didn't change
 keeps its session rather than being interrupted. Installing a server no longer

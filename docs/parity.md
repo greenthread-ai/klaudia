@@ -104,7 +104,7 @@ closed. `docs/trust.md` is the design record.
 
 | Feature | JS ref | Klaudia pkg | Status | Notes |
 | --- | --- | --- | --- | --- |
-| MCP stdio client | 07-app-features | `mcp/` | ✅ done | `.mcp.json` + `.klaudia/.mcp.json` override. |
+| MCP stdio client | 07-app-features | `mcp/` | ✅ done | Global `~/.klaudia/.mcp.json`, then `.mcp.json` + `.klaudia/.mcp.json` override. Project servers wait for a remembered approval, as Claude Code's project-scope servers do (see `docs/hooks.md`). |
 | MCP tools wrapped (`mcp__*`) | 07-app-features | `mcp/` + `cli/` | ✅ done | Auto-deferred behind ToolSearch. |
 | MCP reconnect/disconnect (`/mcp`) | — | `mcp.Manager` + `tui` | 🔀 divergent | Interactive `/mcp` picker; reconnect swaps the live session into the existing tool wrappers so a crashed server's tools resume, then rebuilds the registries so a server that failed at startup gets its tools at all. |
 | MCP self-healing | — | `mcp.Manager.revive` | 🔀 divergent | A call that fails on the wire probes the server and relaunches it if it has stopped answering. The probe decides, so a bad argument cannot restart a healthy server. Read-only tools are retried; anything else is reported with the ambiguity stated, since the call may have run before the server died. Serialised per server, one attempt per 15s. |

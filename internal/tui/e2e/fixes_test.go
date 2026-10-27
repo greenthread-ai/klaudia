@@ -240,3 +240,56 @@ func TestBackgroundAgentReportsBack(t *testing.T) {
 		t.Errorf("the result never reached the model; prompts: %q", env.Mock.Prompts())
 	}
 }
+
+// A project's .mcp.json used to launch its servers the moment Klaudia started
+// in a fresh clone. The first turn now puts them to the user on the
+// repository-config card; the answer is remembered, and the turn goes ahead
+// either way.
+func TestProjectMCPServersAskFirst(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		key        string
+		remembered bool
+	}{
+		{"approved and remembered", "y", true},
+		{"declined for the session", "n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newEnv(t)
+			marker := filepath.Join(env.Tmp, "launched")
+			if err := os.WriteFile(filepath.Join(env.Project, ".mcp.json"), []byte(
+				`{"mcpServers":{"repo":{"command":"sh","args":["-c","touch `+marker+`"]}}}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			tm := env.Start(t)
+			if _, err := os.Stat(marker); err == nil {
+				t.Fatal("the project server was launched before anyone was asked")
+			}
+			env.prompts++
+			tm.Type("hello")
+			tm.Press(keyEnter)
+			tm.WaitText(t, "Start these MCP servers?", 15*time.Second)
+			snap := tm.Snapshot().All()
+			if !strings.Contains(snap, "repo: sh -c touch") {
+				t.Errorf("the card does not show the command:\n%s", snap)
+			}
+			tm.Type(tc.key)
+			tm.WaitText(t, "Hello from the mock model.", 20*time.Second)
+
+			_, err := os.Stat(marker)
+			if launched := err == nil; launched != tc.remembered {
+				t.Errorf("launched = %v after %q", launched, tc.key)
+			}
+			_, err = os.Stat(filepath.Join(env.Config, "mcp-approvals.json"))
+			if saved := err == nil; saved != tc.remembered {
+				t.Errorf("approval saved = %v after %q", saved, tc.key)
+			}
+
+			// Asked once: the next turn goes straight to the model.
+			env.Prompt(t, tm, "hello again")
+			if n := strings.Count(tm.Snapshot().All(), "Start these MCP servers?"); n > 1 {
+				t.Errorf("asked %d times in one session", n)
+			}
+		})
+	}
+}

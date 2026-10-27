@@ -3,12 +3,11 @@ package hooks
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/greenthread-ai/klaudia/internal/session"
+	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
 // A hook from the project config is a command that arrived with the repository.
@@ -32,7 +31,8 @@ import (
 // feature useful and what makes the confirmation load-bearing. The prompt is the
 // security control; there is no second line of defence behind it.
 
-// Store records which project hook sets the user has approved.
+// Store records which project hook sets the user has approved, in a
+// trust.Approvals file of its own.
 //
 // The zero value reads and writes ~/.klaudia/hooks.json. Path is settable so
 // tests do not have to move HOME, and so a future per-machine state directory
@@ -41,89 +41,22 @@ type Store struct {
 	Path string
 }
 
-// storeFile is the on-disk shape: project directory to approved fingerprint.
-//
-// Keyed by project, not by fingerprint alone. The same `make fmt` hook in two
-// unrelated repositories is two decisions, because what is being trusted is the
-// repository — approving a command once should not pre-approve every other
-// checkout that happens to ship the same line.
-type storeFile struct {
-	Approved map[string]string `json:"approved"`
-}
-
-func (s Store) path() (string, error) {
+func (s Store) path() string {
 	if s.Path != "" {
-		return s.Path, nil
+		return s.Path
 	}
 	// The config root, like every other file Klaudia keeps: built from the
 	// home directory, it ignored KLAUDIA_CONFIG_DIR, so a sandboxed run shared
 	// the real user's hook approvals.
-	return filepath.Join(session.ConfigRoot(), "hooks.json"), nil
+	return filepath.Join(session.ConfigRoot(), "hooks.json")
 }
 
-func (s Store) read() storeFile {
-	var f storeFile
-	p, err := s.path()
-	if err != nil {
-		return f
-	}
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return f
-	}
-	// A corrupt file is treated as empty rather than fatal: the consequence is
-	// being asked again, and the alternative is a session that cannot start
-	// because of a truncated write in a cache.
-	_ = json.Unmarshal(data, &f)
-	return f
-}
-
-// approved reports whether this exact hook set has been approved for this
-// project. An empty fingerprint — no project hooks — is approved trivially; the
-// callers never reach it, but a Store that answered "no" to "may I run nothing"
-// would be a confusing thing to debug.
 func (s Store) approved(project, fingerprint string) bool {
-	if fingerprint == "" {
-		return true
-	}
-	key, err := filepath.Abs(project)
-	if err != nil {
-		return false
-	}
-	return s.read().Approved[key] == fingerprint
+	return trust.Approvals{Path: s.path()}.Approved(project, fingerprint)
 }
 
-// approve records the approval, replacing any earlier one for this project.
-//
-// Replacing rather than accumulating: the question answered was "may this set
-// run", and keeping the previous set's fingerprint would mean reverting a hook
-// to a formerly-approved value skips the prompt. That is precisely the move an
-// attacker makes after being approved once.
 func (s Store) approve(project, fingerprint string) error {
-	p, err := s.path()
-	if err != nil {
-		return err
-	}
-	key, err := filepath.Abs(project)
-	if err != nil {
-		return err
-	}
-	f := s.read()
-	if f.Approved == nil {
-		f.Approved = map[string]string{}
-	}
-	f.Approved[key] = fingerprint
-	data, err := json.MarshalIndent(f, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-		return err
-	}
-	// 0600: this file decides what runs on the machine. A hook set is approved
-	// by fingerprint, so anything that can write here can pre-approve a command
-	// of its choosing.
-	return os.WriteFile(p, data, 0o600)
+	return trust.Approvals{Path: s.path()}.Approve(project, fingerprint)
 }
 
 // fingerprint hashes a hook set: every field that affects what runs, in order.

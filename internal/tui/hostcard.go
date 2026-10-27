@@ -28,7 +28,7 @@ func hostCardLines(hc *hostgate.HostChange) []string {
 	var out []string
 	head := "This changes your machine"
 	switch {
-	case hc.Hooks:
+	case hc.RepoConfig != "":
 		head = "This repository wants to run its own commands"
 	case hc.Drift:
 		head = "This wasn't part of what you approved"
@@ -47,12 +47,12 @@ func hostCardLines(hc *hostgate.HostChange) []string {
 	}
 
 	switch {
-	case hc.Hooks:
+	case hc.RepoConfig != "":
 		// Not "for this session only", because it is not. Saying so about a
 		// decision that outlives the session would be a lie in the one place
 		// the user is deciding how far to trust a repository.
 		out = append(out, bannerStyle.Render(
-			"  remembered until these hooks change; editing any of them asks again"))
+			"  remembered until these "+hc.RepoConfig+" change; editing any of them asks again"))
 	case hc.Declared:
 		out = append(out, bannerStyle.Render(
 			"  approving covers every step inside that scope, for this session only"))
@@ -134,11 +134,13 @@ func hostBlockedLine(msg string) string {
 func hostPrompt(hc *hostgate.HostChange) string {
 	verb := "Change this machine?"
 	switch {
-	case hc != nil && hc.Hooks:
+	case hc != nil && hc.RepoConfig == hostgate.RepoMCP:
+		return "Start these MCP servers? (y)es / (n)o"
+	case hc != nil && hc.RepoConfig != "":
 		// No "something else" offered. That answer exists to redirect the model
 		// mid-task; there is no task here to redirect, only a yes or a no about
 		// a config file.
-		return "Run these hooks? (y)es / (n)o"
+		return "Run these " + hc.RepoConfig + "? (y)es / (n)o"
 	case hc != nil && hc.Drift:
 		verb = "Approve this too?"
 	}
@@ -150,6 +152,14 @@ func hostPrompt(hc *hostgate.HostChange) string {
 func hostAnswerLine(hc *hostgate.HostChange, allowed, redirect bool) string {
 	if redirect {
 		return "declined — say what you'd like instead, and it lands before Klaudia's next step"
+	}
+	if hc != nil && hc.RepoConfig != "" {
+		// A repository's config, not a step of the task: there is nothing to
+		// carry on without, and the yes is not session-scoped.
+		if allowed {
+			return "approved — remembered until these " + hc.RepoConfig + " change"
+		}
+		return "declined — these " + hc.RepoConfig + " will not run this session"
 	}
 	if !allowed {
 		return "declined — Klaudia will carry on without it"

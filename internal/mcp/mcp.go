@@ -63,6 +63,11 @@ type ServerConfig struct {
 // Config is the .mcp.json shape: a map of server name → launch config.
 type Config struct {
 	MCPServers map[string]ServerConfig `json:"mcpServers"`
+	// Project names the servers whose effective config came from a project
+	// file, mapped to that file. Those arrived with the repository, so they
+	// wait for the user's approval (see ProjectTrust); the global file's are
+	// the user's own. Set by LoadConfig, never read from JSON.
+	Project map[string]string `json:"-"`
 }
 
 // ConfigPaths returns the .mcp.json files that apply to a project at dir, in
@@ -105,9 +110,9 @@ func ConfigPaths(dir string) []string {
 // project rather than in one repo — installable once. Without it the only
 // answer was to copy the same file into every checkout.
 func LoadConfig(dir string) (Config, error) {
-	cfg := Config{MCPServers: map[string]ServerConfig{}}
+	cfg := Config{MCPServers: map[string]ServerConfig{}, Project: map[string]string{}}
 	var errs []error
-	for _, p := range ConfigPaths(dir) {
+	for i, p := range ConfigPaths(dir) {
 		data, err := os.ReadFile(p)
 		if err != nil {
 			if !os.IsNotExist(err) {
@@ -125,6 +130,14 @@ func LoadConfig(dir string) (Config, error) {
 		}
 		for name, sc := range c.MCPServers {
 			cfg.MCPServers[name] = sc
+			// The first path is the global file (ConfigPaths drops a project
+			// path that is the same file). A project entry overriding a
+			// global server is the project's: that is the config that runs.
+			if i == 0 {
+				delete(cfg.Project, name)
+			} else {
+				cfg.Project[name] = p
+			}
 		}
 	}
 	return cfg, errors.Join(errs...)
