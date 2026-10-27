@@ -163,3 +163,60 @@ and that is a property of `api.Provider`, not of owning the message structs.
 Sessions as append-only logs with fork (#5) are the prerequisite for durable
 execution (checkpoint, crash, resume elsewhere) — worth designing during stage
 2 even if built later, because it shapes `Recorder`.
+
+## TUI audit (2026-10-27)
+
+The real binary in a pty against a scripted OpenAI-compatible mock (no model
+spend), snapshotted through a small VT emulator at 100×30 and 60×20.
+
+**Bugs**
+
+1. **AskUserQuestion takes the next prompt as its answer.** Arrow keys and
+   Enter do nothing; only a digit or free text answers, so a user who types
+   their next message while a question is up answers the question with it.
+   `/model`'s picker already does ↑↓ + Enter + digits + filter — use the same
+   control for both.
+2. **Plain lines hard-wrap mid-word** ("Klaudi|a's", "selec|ted"): non-Markdown
+   lines reach `fitScrollback`'s hard wrap unwrapped. Word-wrap prose lines
+   (notices, `/context`, the intro hint) first; keep the hard wrap for code
+   and tool output. The intro hint is wider than 100 columns on its own.
+3. **Absolute paths everywhere in display**: Glob results, "Edited /…/main.go",
+   Read errors, `/context`'s cwd — each a two-row line. Show paths relative to
+   the working directory on screen; the model keeps absolute ones.
+4. **Interrupt notice prints above the text it interrupted** ("⊘ interrupting…"
+   then the partial reply).
+5. **`/context` lists files that do not exist** as Active / Recently inspected
+   (a failed Read counts as an inspection).
+6. **Plurals**: "1 file(s)", "1 replacement(s)", "1 turns", "(1 files)".
+7. **"turns" counts API round trips** — one prompt with five tool steps reads
+   "6 turns".
+8. **Quitting prints no resume command**, and leaves the input box drawn in
+   scrollback. Claude Code prints the `--resume` line.
+
+**Improvements**
+
+9. **One line per tool call.** Today: `⚙ Read main.go` then `✓ Read · 0ms:`
+   and the whole file. Collapse Read/Glob/Grep/TodoWrite to a summary
+   ("✓ Read main.go · 7 lines"), keep previews for Bash, drop sub-10ms timings.
+10. **Edit shows only the two strings.** Render a real hunk with line numbers
+    and a line of context.
+11. **Markdown spacing**: two or three blank lines between blocks, tables
+    stretched to the full width, Go code indented at 8 columns. Collapse blank
+    runs, size tables to content, expand tabs at 4 inside code blocks.
+12. **Startup card is ~10 lines on every start** (resume, working tree,
+    trust, "previous approvals were not restored"). Auto-resume is deliberate;
+    make the card one line ("continuing · 28 messages · 2h ago — /clear for a
+    fresh start") and leave the rest to `/status`.
+13. **`/help` is ~45 lines of scrollback.** Group it, or show it in the live
+    region and dismiss it.
+14. **Verification footer** says "nothing was run" when a command ran before
+    the edit — "nothing was run after the last edit".
+15. **Make the harness permanent**: the mock provider plus pty driver is an
+    end-to-end TUI test that needs no API key — worth porting to Go under
+    `internal/tui` or `scripts/` so these regressions are caught in CI.
+
+Worked well: slash menu filtering, `@` completion, paste chips, multi-line
+input, two-press Ctrl+C, Esc interrupt keeping the partial reply, long-output
+clamp with `/last`, ✗ on failed tools, the verification footer, the `/model`
+picker, and OSC 8 links on paths and URLs. Not observed: the live plan panel
+(the mock finished too fast).
