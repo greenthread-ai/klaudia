@@ -103,7 +103,7 @@ func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.
 		WithTypes(subagentTypes).
 		WithWorkingDir(workingDir).
 		WithHostGate(host).
-		WithWorktrees(worktrees)
+		WithIsolator(isolator(worktrees))
 
 	infos := make([]tools.AgentTypeInfo, 0)
 	for _, t := range subagent.Builtin() {

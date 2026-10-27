@@ -13,7 +13,6 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/tools"
-	"github.com/greenthread-ai/klaudia/internal/worktree"
 )
 
 // Spawner runs sub-agents. It implements tools.Spawner so the Agent tool can
@@ -38,7 +37,7 @@ type Spawner struct {
 	workingDir string
 	hostGate   *HostGate
 	hooks      *hooks.Runner
-	worktrees  bool
+	isolator   Isolator
 	effort     api.Effort
 	limits     api.ModelLimits
 	spill      tools.SpillStore
@@ -95,14 +94,44 @@ func (s *Spawner) WithHooks(h *hooks.Runner) *Spawner {
 	return s
 }
 
-// WithWorktrees decides whether a sub-agent that can write gets its own git
-// checkout to write in, rather than sharing the user's.
+// Isolator gives a sub-agent that can write a place of its own to work, so two
+// children running at once do not edit one tree. Klaudia's is a git worktree
+// (worktree.Isolator); nil — the default — shares the parent's directory.
+type Isolator interface {
+	// Isolate prepares a workspace for a child working on dir. A nil
+	// Workspace with a nil error means dir cannot be isolated (not a git
+	// repository, say) and the child shares it; an error is reported, and the
+	// child shares it too — isolation is an improvement, never a precondition.
+	Isolate(ctx context.Context, dir, label string) (Workspace, error)
+}
+
+// Workspace is one child's isolated copy of the working directory.
+type Workspace interface {
+	// Dir is where the child works.
+	Dir() string
+	// Rewrite turns paths in the workspace back into the paths the user has.
+	Rewrite(text string) string
+	// Adopt applies the child's changes to the real working directory.
+	Adopt(ctx context.Context) (AdoptResult, error)
+	// Remove deletes the workspace.
+	Remove(ctx context.Context) error
+}
+
+// AdoptResult is what landing a child's changes did.
+type AdoptResult struct {
+	Summary    string // for the user and the model, e.g. "applied a.go, b.go"
+	Conflicted bool   // some changes could not be applied; the workspace holds them
+	Empty      bool   // the child changed nothing
+}
+
+// WithIsolator decides whether a sub-agent that can write gets a workspace
+// of its own to write in, rather than sharing the user's directory.
 //
-// It applies to the writing types only. Explore and Plan hold Read, Glob and
-// Grep, so there is nothing to isolate them from — and their whole output is
-// paths, which an isolated checkout would make wrong.
-func (s *Spawner) WithWorktrees(on bool) *Spawner {
-	s.worktrees = on
+// It applies to children that can write only. Explore and Plan run in plan
+// mode, so there is nothing to isolate them from — and their whole output is
+// paths, which an isolated copy would make wrong.
+func (s *Spawner) WithIsolator(iso Isolator) *Spawner {
+	s.isolator = iso
 	return s
 }
 
@@ -237,14 +266,21 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 	// registry, and the registry now says "has Bash" for the two research
 	// agents, which would buy them a checkout to do nothing in.
 	dir := s.workingDir
-	var tree *worktree.Tree
-	if s.worktrees && !readOnly && writesFiles(childTools) && worktree.Supported(ctx, dir) {
-		if wt, err := worktree.New(ctx, dir, subagentType); err != nil {
+	var ws Workspace
+	if s.isolator != nil && !readOnly && writesFiles(childTools) {
+		switch w, err := s.isolator.Isolate(ctx, dir, subagentType); {
+		case err != nil:
 			reportf(progress, "  (sharing the working tree: %v)", err)
-		} else {
-			tree, dir = wt, wt.Dir
-			reportf(progress, "  ↳ isolated checkout %s", wt.Dir)
+		case w != nil:
+			ws, dir = w, w.Dir()
+			reportf(progress, "  ↳ isolated checkout %s", w.Dir())
 		}
+	}
+	rewrite := func(s string) string {
+		if ws == nil {
+			return s
+		}
+		return ws.Rewrite(s)
 	}
 
 	// Relay the child's activity upward. Without an emitter the child ran
@@ -256,7 +292,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 			if line := subagentProgressLine(ev); line != "" {
 				// Paths in the child's own checkout are paths the user cannot
 				// open; say where the file really is.
-				progress(tree.Rewrite(line))
+				progress(rewrite(line))
 			}
 		}
 	}
@@ -304,19 +340,19 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		// run left the checkout in a state nobody has inspected, and applying
 		// half a change to the user's tree is the one outcome isolation exists
 		// to prevent — so the error says where to look instead.
-		if tree != nil {
-			return "", fmt.Errorf("%w (the sub-agent's changes are left in %s)", err, tree.Dir)
+		if ws != nil {
+			return "", fmt.Errorf("%w (the sub-agent's changes are left in %s)", err, ws.Dir())
 		}
 		return "", err
 	}
 	text := res.Text
-	if tree != nil {
-		text = tree.Rewrite(text)
+	if ws != nil {
+		text = ws.Rewrite(text)
 		// Cleanup must still happen when the turn's context has just been
 		// cancelled, hence a context detached from it.
 		done, cancel := context.WithTimeout(context.WithoutCancel(ctx), worktreeCleanupTimeout)
 		defer cancel()
-		text = s.collect(done, tree, text, progress)
+		text = s.collect(done, ws, text, progress)
 	}
 	// Say so rather than passing back a truncated answer as if it were complete.
 	if res.StopReason == "max_turns" {
@@ -342,28 +378,28 @@ const worktreeCleanupTimeout = 2 * time.Minute
 // The model is told because it has to be: it asked a child to change files, and
 // "b.txt was not applied" changes what it should do next. A silent conflict
 // would have it carry on describing work that is not in the tree.
-func (s *Spawner) collect(ctx context.Context, tree *worktree.Tree, text string, progress func(string)) string {
-	rep, err := tree.Adopt(ctx)
+func (s *Spawner) collect(ctx context.Context, ws Workspace, text string, progress func(string)) string {
+	rep, err := ws.Adopt(ctx)
 	if err != nil {
 		reportf(progress, "  (could not apply the sub-agent's changes: %v)", err)
 		return text + fmt.Sprintf("\n\n[The sub-agent's file changes could not be applied to the "+
-			"working tree (%v). They are in %s.]", err, tree.Dir)
+			"working tree (%v). They are in %s.]", err, ws.Dir())
 	}
-	if len(rep.Conflicted) > 0 {
+	if rep.Conflicted {
 		// The conflicting version exists only in the checkout, so removing it
 		// would destroy the only copy of work the user may want.
-		reportf(progress, "  ↳ %s", rep.Summary())
+		reportf(progress, "  ↳ %s", rep.Summary)
 		return text + fmt.Sprintf("\n\n[Working tree: %s. The sub-agent's versions of those files "+
-			"are in %s.]", rep.Summary(), tree.Dir)
+			"are in %s.]", rep.Summary, ws.Dir())
 	}
-	if err := tree.Remove(ctx); err != nil {
-		reportf(progress, "  (left the sub-agent's checkout at %s: %v)", tree.Dir, err)
+	if err := ws.Remove(ctx); err != nil {
+		reportf(progress, "  (left the sub-agent's checkout at %s: %v)", ws.Dir(), err)
 	}
-	if rep.Empty() {
+	if rep.Empty {
 		return text
 	}
-	reportf(progress, "  ↳ %s", rep.Summary())
-	return text + fmt.Sprintf("\n\n[Working tree: %s.]", rep.Summary())
+	reportf(progress, "  ↳ %s", rep.Summary)
+	return text + fmt.Sprintf("\n\n[Working tree: %s.]", rep.Summary)
 }
 
 // writesFiles reports whether this toolset can change the working tree.

@@ -115,7 +115,7 @@ func TestWritingSubAgentWorksInItsOwnCheckoutAndTheWorkComesBack(t *testing.T) {
 	root := gitRepo(t)
 	w := &relWriteTool{rel: "made.txt", body: "the child's work\n"}
 
-	text, err := writingSpawner(t, w, root).WithWorktrees(true).
+	text, err := writingSpawner(t, w, root).WithIsolator(testIsolator(true)).
 		Spawn(context.Background(), "general-purpose", "write it", nil)
 	if err != nil {
 		t.Fatalf("Spawn: %v", err)
@@ -186,7 +186,7 @@ func TestSubAgentResultNamesPathsInTheUsersTree(t *testing.T) {
 	root := gitRepo(t)
 	w := &relWriteTool{rel: "made.txt", body: "x\n"}
 	s := newTestSpawner(&reportProvider{t: t, w: w}, tools.NewRegistry(w), "claude-opus-4-8",
-		bypassPerm(), nil, 3).WithWorkingDir(root).WithWorktrees(true)
+		bypassPerm(), nil, 3).WithWorkingDir(root).WithIsolator(testIsolator(true))
 
 	text, err := s.Spawn(context.Background(), "general-purpose", "write it", nil)
 	if err != nil {
@@ -238,7 +238,7 @@ func TestSubAgentSharesTheTreeWhenItShould(t *testing.T) {
 			s := newTestSpawner(&scriptedProvider{turns: []anthropic.BetaMessage{
 				toolUseTurn(t, "tu1", toolName, map[string]any{}),
 			}}, reg, "claude-opus-4-8", bypassPerm(), nil, 2).
-				WithWorkingDir(root).WithWorktrees(tt.worktrees)
+				WithWorkingDir(root).WithIsolator(testIsolator(tt.worktrees))
 
 			if _, err := s.Spawn(context.Background(), "general-purpose", "go", nil); err != nil {
 				t.Fatalf("Spawn: %v", err)
@@ -264,7 +264,7 @@ func TestFailedSubAgentKeepsItsCheckoutAndSaysWhere(t *testing.T) {
 	root := gitRepo(t)
 	w := &relWriteTool{rel: "made.txt", body: "half-finished\n"}
 	s := newTestSpawner(&errorProvider{}, tools.NewRegistry(w), "claude-opus-4-8",
-		bypassPerm(), nil, 2).WithWorkingDir(root).WithWorktrees(true)
+		bypassPerm(), nil, 2).WithWorkingDir(root).WithIsolator(testIsolator(true))
 
 	_, err := s.Spawn(context.Background(), "general-purpose", "go", nil)
 	if err == nil {
