@@ -26,10 +26,6 @@ func newTestSpawner(provider api.Provider, base *tools.Registry, model anthropic
 	return NewSpawner(provider, base, model, perm, approver, maxTurns).WithTypes(builtinTypes)
 }
 
-func newTestSpawnerWithDeferred(provider api.Provider, base *tools.Registry, model anthropic.Model, perm permission.Context, approver Approver, maxTurns int, deferred map[string]bool) *Spawner {
-	return NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).WithTypes(builtinTypes)
-}
-
 // testIsolator mirrors the CLI's gitIsolator (cli/isolator.go), which tests
 // here cannot import: a git worktree each, or none.
 func testIsolator(on bool) Isolator {
