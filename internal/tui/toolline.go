@@ -69,8 +69,12 @@ func (m *Model) showTool(p *pendingTool) {
 	p.shown = true
 	m.appendLine(toolStyle.Render("⚙ " + p.header()))
 	diff := toolDiff(p.name, p.input)
-	if p.name == "Edit" {
+	switch p.name {
+	case "Edit":
 		diff = m.editPreview(p.input, 0)
+	case "Write":
+		f := toolFields(p.input)
+		diff = m.writePreview(f["file_path"], f["content"])
 	}
 	if diff != "" {
 		m.appendLine(diff)
@@ -83,6 +87,34 @@ func (m *Model) showPendingTools() {
 	for _, p := range m.pendingTools {
 		m.showTool(p)
 	}
+}
+
+// toolShown reports whether a call of this tool has its line written and is
+// still waiting — the call an approval card is about.
+func (m *Model) toolShown(name string) bool {
+	for _, p := range m.pendingTools {
+		if p.shown && p.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// shownCallDetail is the approval detail when the call's line, with its hunk
+// or command, is already on screen above the card: only what that line does
+// not say. Repeating it printed every edit twice, the second time as an
+// unnumbered replace "old" → "new".
+func shownCallDetail(req agent.ApprovalRequest) string {
+	switch req.ToolName {
+	case "Edit", "Write", "NotebookEdit":
+		return ""
+	case "Bash":
+		if req.Suggestion != "" {
+			return "why: " + oneline(req.Suggestion, 220)
+		}
+		return ""
+	}
+	return permissionDetail(req)
 }
 
 // takeTool removes and returns the pending call with this id, or a stand-in

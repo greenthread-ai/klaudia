@@ -755,7 +755,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.waitForEvent()
 		}
 		m.appendLine(askStyle.Render("Permission required: " + m.permissionSummary(msg.req)))
-		if detail := permissionDetail(msg.req); detail != "" {
+		detail := permissionDetail(msg.req)
+		if m.toolShown(msg.req.ToolName) {
+			detail = shownCallDetail(msg.req)
+		}
+		if detail != "" {
 			m.appendLine(toolStyle.Render("  " + detail))
 		}
 		// The actionable prompt lives only in the persistent bottom view (see

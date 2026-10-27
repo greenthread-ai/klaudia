@@ -168,3 +168,119 @@ func clipLine(s string, n int) string {
 	}
 	return s
 }
+
+// writePreview is the hunk an approval card shows for a Write. A new file is
+// its first lines; an existing one is what changes in it, which is the whole
+// question when the file is ~/.zshrc. Read before the write runs: the card is
+// written while the call waits for the answer.
+func (m *Model) writePreview(path, content string) string {
+	if path != "" && !filepath.IsAbs(path) {
+		if root := m.rootDir(); root != "" {
+			path = filepath.Join(root, path)
+		}
+	}
+	old, err := os.ReadFile(path)
+	if err != nil || len(old) > 4<<20 {
+		return addedSummary(content)
+	}
+	if string(old) == content {
+		return "  " + hintStyle.Render("(no change)")
+	}
+	return lineDiff(string(old), content)
+}
+
+// maxDiffCells bounds lineDiff's table; beyond it the change is summarised.
+const maxDiffCells = 4_000_000
+
+// lineDiff renders the changed lines of old → new with a line of context and
+// line numbers (the new file's for context and additions, the old file's for
+// removals), capped at maxDiffRows, followed by the totals.
+func lineDiff(oldS, newS string) string {
+	a, b := strings.Split(oldS, "\n"), strings.Split(newS, "\n")
+	if len(a)*len(b) > maxDiffCells {
+		return "  " + hintStyle.Render(fmt.Sprintf("(replaces %s with %s)", countOf(len(a), "line"), countOf(len(b), "line")))
+	}
+	// lcs[i][j]: length of the longest common subsequence of a[i:], b[j:].
+	lcs := make([][]int32, len(a)+1)
+	for i := range lcs {
+		lcs[i] = make([]int32, len(b)+1)
+	}
+	for i := len(a) - 1; i >= 0; i-- {
+		for j := len(b) - 1; j >= 0; j-- {
+			if a[i] == b[j] {
+				lcs[i][j] = lcs[i+1][j+1] + 1
+			} else if lcs[i+1][j] >= lcs[i][j+1] {
+				lcs[i][j] = lcs[i+1][j]
+			} else {
+				lcs[i][j] = lcs[i][j+1]
+			}
+		}
+	}
+	type op struct {
+		mark string
+		n    int
+		text string
+	}
+	var ops []op
+	i, j := 0, 0
+	for i < len(a) || j < len(b) {
+		switch {
+		case i < len(a) && j < len(b) && a[i] == b[j]:
+			ops = append(ops, op{" ", j + 1, b[j]})
+			i, j = i+1, j+1
+		case j < len(b) && (i == len(a) || lcs[i][j+1] >= lcs[i+1][j]):
+			ops = append(ops, op{"+", j + 1, b[j]})
+			j++
+		default:
+			ops = append(ops, op{"-", i + 1, a[i]})
+			i++
+		}
+	}
+	// Keep changes and the line either side of each.
+	keep := make([]bool, len(ops))
+	added, removed := 0, 0
+	for k, o := range ops {
+		if o.mark == " " {
+			continue
+		}
+		if o.mark == "+" {
+			added++
+		} else {
+			removed++
+		}
+		for d := -1; d <= 1; d++ {
+			if k+d >= 0 && k+d < len(ops) {
+				keep[k+d] = true
+			}
+		}
+	}
+	width := len(fmt.Sprint(len(b)))
+	if w := len(fmt.Sprint(len(a))); w > width {
+		width = w
+	}
+	var out []string
+	last := -1
+	for k, o := range ops {
+		if !keep[k] {
+			continue
+		}
+		if len(out) >= maxDiffRows {
+			out = append(out, "  "+bannerStyle.Render("…"))
+			break
+		}
+		if last >= 0 && k > last+1 {
+			out = append(out, "  "+hintStyle.Render(strings.Repeat(" ", width)+" ⋮"))
+		}
+		last = k
+		st := hintStyle
+		switch o.mark {
+		case "-":
+			st = diffDelStyle
+		case "+":
+			st = diffAddStyle
+		}
+		out = append(out, "  "+st.Render(fmt.Sprintf("%*d %s %s", width, o.n, o.mark, clipLine(expandTabs(o.text, 4), maxDiffLine))))
+	}
+	out = append(out, "  "+hintStyle.Render(fmt.Sprintf("+%d -%d", added, removed)))
+	return strings.Join(out, "\n")
+}

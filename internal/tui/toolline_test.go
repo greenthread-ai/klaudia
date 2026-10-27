@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -54,9 +55,12 @@ func TestApprovalShowsTheCallFirst(t *testing.T) {
 	m := newTestModel()
 	in := map[string]any{"file_path": "a.go", "old_string": "x", "new_string": "y"}
 	m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: "1", ToolName: "Edit", Input: in})
-	m.update(permissionMsg{req: agent.ApprovalRequest{ToolName: "Edit"}, reply: make(chan permission.Decision, 1)})
+	raw, _ := json.Marshal(in)
+	m.update(permissionMsg{req: agent.ApprovalRequest{ToolName: "Edit", Input: raw}, reply: make(chan permission.Decision, 1)})
 	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "⚙ Edit a.go") {
 		t.Fatalf("the card came without its call:\n%s", out)
+	} else if strings.Contains(out, "replace \"") {
+		t.Errorf("the change was printed twice, once above the card and once in it:\n%s", out)
 	}
 	m.renderEvent(agent.Event{Type: "tool_result", ToolUseID: "1", ToolName: "Edit", Input: in, Content: "ok"})
 	out := stripANSI(m.transcript.String())

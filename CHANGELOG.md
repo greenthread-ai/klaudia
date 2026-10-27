@@ -158,6 +158,12 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **An approval shows the change once, and a Write shows what it changes.**
+  An Edit awaiting approval printed its numbered hunk above the card and then
+  again inside it as `replace "old" → "new"`; the card now adds only what the
+  line above does not say. A Write over an existing file (`~/.zshrc`, say)
+  previews the lines it changes, numbered with context and `+N -M`, instead
+  of the new file's first three lines.
 - **Context in the status bar only when it matters.** It is measured against
   the auto-compact point rather than the raw window: hidden under 50%, a
   quiet `ctx 62%` up to 80%, then amber `12% to auto-compact`, moved up the
