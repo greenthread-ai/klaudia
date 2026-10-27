@@ -23,7 +23,7 @@ vendor or the spec.
 4. **Traces.** OTel GenAI spans are what an embedder will plug in first, and
    Klaudia emits none.
 
-## Status and order (updated 2026-10-27)
+## Status and order (updated 2026-10-28)
 
 The four points above have landed: the core is in `pkg/` (stages 1–2),
 egress control exists (enforced under the macOS OS sandbox), sub-agents run in
@@ -32,13 +32,15 @@ below keeps each item's original reasoning with its status noted inline.
 
 What is left, in the order it will be taken:
 
-1. **Release.** Ship what has landed: vulnerability scan of the new
-   dependencies, the build matrix, a GoReleaser snapshot, the live model
-   checks, and the changelog read as release notes.
-2. **Small gaps worth closing first**: `/rewind`'s "summarise up to here".
+1. **Small gaps worth closing first**: `/rewind`'s "summarise up to here".
    (The effort cap landed: `maxEffort`.)
-3. **Session replay as regression tests** (eval mode's second half) — needs a
+2. **Session replay as regression tests** (eval mode's second half) — needs a
    decision on running recorded tool calls safely.
+
+Done since: v0.2.0 shipped (2026-10-27); resize got e2e coverage and Klaudia's
+own live-region renderer; the TUI moved to the Charm v2 libraries, which
+brought Shift+Return. Three workarounds wait on upstream fixes
+(lipgloss#774, bubbletea#1709, bubbletea#1867) and are marked in the code.
 
 Deprioritised by decision (2026-10-27), not scheduled: egress beyond the macOS
 sandbox (DNS, Linux enforcement, a socket bridge for containers), and ACP
