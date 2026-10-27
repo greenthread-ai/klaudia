@@ -292,3 +292,31 @@ func TestWrappingDoesNotAffectTheTranscript(t *testing.T) {
 		t.Error("the transcript stored the wrapped copy; /copy would return broken text")
 	}
 }
+
+// Seen in the TUI audit: a notice wrapped as "…them from Klaudi" / "a's." The
+// break falls between words, a token too long for a row still breaks hard, and
+// continuation rows keep the line's indent.
+func TestScrollbackWrapsAtWordsAndKeepsIndent(t *testing.T) {
+	m := newTestModel()
+	m.resize(41, 20)
+	got := strings.Split(m.fitScrollback("  1 file was already modified before this session: .gitignore"), "\n")
+	for i, row := range got {
+		if w := ansi.StringWidth(row); w >= 41 {
+			t.Errorf("row %d is %d wide: %q", i, w, row)
+		}
+		if i > 0 && !strings.HasPrefix(row, "  ") {
+			t.Errorf("continuation row %d lost the indent: %q", i, row)
+		}
+	}
+	joined := strings.Join(strings.Fields(strings.Join(got, " ")), " ")
+	if joined != "1 file was already modified before this session: .gitignore" {
+		t.Errorf("words were split or lost: %q", got)
+	}
+
+	long := strings.Repeat("p", 90)
+	for _, row := range strings.Split(m.fitScrollback(long), "\n") {
+		if w := ansi.StringWidth(row); w >= 41 {
+			t.Errorf("an unbreakable token still has to fit: row %d wide", w)
+		}
+	}
+}

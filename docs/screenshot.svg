@@ -2,7 +2,7 @@
 <rect width="100%" height="100%" rx="10" fill="#121212"/>
 <text x="22" y="37" textLength="360.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#91c7d9" font-weight="700">✦ Klaudia</tspan><tspan fill="#cccccc" opacity="0.62"> your overqualified rubber duck</tspan></text>
 <text x="22" y="57" textLength="279.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc" opacity="0.62">  model: claude-opus-5</tspan><tspan fill="#cccccc" opacity="0.62">   ⎇ main</tspan></text>
-<text x="22" y="77" textLength="1026.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#505050" font-style="italic" opacity="0.62">  Type a prompt and press Enter · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C twice to quit</tspan></text>
+<text x="22" y="77" textLength="666.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#505050" font-style="italic" opacity="0.62">  Enter sends · / commands · @ files · Esc interrupts · Ctrl+C twice quits</tspan></text>
 <text x="22" y="117" textLength="63.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#af875f" font-weight="700">› /help</tspan></text>
 <text x="22" y="137" textLength="171.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">Available commands:</tspan></text>
 <text x="22" y="157" textLength="297.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /help            Show this help</tspan></text>

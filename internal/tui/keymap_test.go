@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Every binding in the keymap is documented, and nothing is documented that is
@@ -78,8 +79,13 @@ func TestHelpFollowsTheConfiguredReturnMode(t *testing.T) {
 				t.Errorf("/help send row = %q, want it to name %q", line, tt.sends)
 			}
 			banner := intro("m", "", "t", nil, km.Submit)
-			if !strings.Contains(stripANSI(banner), "press "+tt.sends) {
+			if !strings.Contains(stripANSI(banner), tt.sends+" sends") {
 				t.Errorf("intro does not tell the user to press %q:\n%s", tt.sends, stripANSI(banner))
+			}
+			for _, ln := range strings.Split(stripANSI(banner), "\n") {
+				if w := ansi.StringWidth(ln); strings.Contains(ln, " sends ·") && w >= 80 {
+					t.Errorf("intro line is %d columns, want < 80 so it does not wrap: %q", w, ln)
+				}
 			}
 
 			// And the key actually does it.

@@ -61,8 +61,11 @@ func intro(model, branch, tagline string, skills []string, submit key.Binding) s
 	// The send chord comes from the binding, not from the word "Enter": with
 	// input.enter = "newline" Return inserts a newline and this line was telling
 	// every one of those users to press the key that does not send.
-	tip := hintStyle.Render("\n  Type a prompt and press " + chordCase(submit.Help().Key) +
-		" · / for commands · @ to reference a file · Esc to interrupt · Ctrl+C twice to quit")
+	//
+	// Kept under 80 columns: at 103 it wrapped on every terminal of ordinary
+	// width, and the whole of /help is one keystroke away.
+	tip := hintStyle.Render("\n  " + chordCase(submit.Help().Key) +
+		" sends · / commands · @ files · Esc interrupts · Ctrl+C twice quits")
 	return logo + tag + meta + tip + "\n"
 }
 

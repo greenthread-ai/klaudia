@@ -137,12 +137,30 @@ func (m *Model) fitScrollback(s string) string {
 			out = append(out, line)
 			continue
 		}
-		// Hardwrap rather than word-wrap: this is about physical rows, and a
-		// word-aware break would reflow code and diffs that were laid out
-		// deliberately.
-		out = append(out, strings.Split(ansi.Hardwrap(line, limit, true), "\n")...)
+		out = append(out, wrapRow(line, limit)...)
 	}
 	return strings.Join(out, "\n")
+}
+
+// wrapRow splits one over-wide line into rows narrower than limit.
+//
+// At word boundaries, not mid-word: this only ever touches a line the terminal
+// would have wrapped anyway, so it moves where the break falls, never the
+// layout of a line that fits — and a hard wrap was splitting prose mid-word
+// ("Klaudi|a's"). A token longer than a row (a path, a URL) still breaks hard.
+// Continuation rows take the line's leading indent, so a wrapped tool result
+// stays under its header instead of running back to column 0.
+func wrapRow(line string, limit int) []string {
+	plain := ansi.Strip(line)
+	indent := plain[:len(plain)-len(strings.TrimLeft(plain, " "))]
+	if len(indent) > limit/3 {
+		indent = "" // a deep indent would leave too little room to be worth keeping
+	}
+	rows := strings.Split(ansi.Wrap(line, limit-len(indent), ""), "\n")
+	for i := 1; i < len(rows); i++ {
+		rows[i] = indent + rows[i]
+	}
+	return rows
 }
 
 // tabStop is the column interval the overwhelming majority of terminals use,
