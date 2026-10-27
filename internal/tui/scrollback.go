@@ -25,6 +25,9 @@ import (
 type printQueue struct {
 	mu    sync.Mutex
 	lines []string
+	// sink receives drained output when Klaudia draws the terminal itself
+	// (inlineRenderer); nil sends it through tea.Println.
+	sink func(string)
 }
 
 // push enqueues an already-rendered block. Called from the Update goroutine.
@@ -63,6 +66,10 @@ func (q *printQueue) drainCmd() tea.Cmd {
 		body, ok := q.drainText()
 		if !ok {
 			return nil // a racing sibling drained first
+		}
+		if q.sink != nil {
+			q.sink(body)
+			return nil
 		}
 		return tea.Println(body)()
 	}

@@ -255,9 +255,9 @@ func trimBlankLines(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// truncateToWidth clips one line to w cells, preserving ANSI. The live region
-// must never soft-wrap: Bubble Tea's inline renderer tracks it by line count,
-// so a wrapped line desynchronises the cursor arithmetic and corrupts the frame.
+// truncateToWidth clips one line to w cells, preserving ANSI. A live-region
+// line wider than the terminal would be clipped by inlineRenderer anyway;
+// clipping here first lets it end cleanly rather than mid-escape.
 func truncateToWidth(s string, w int) string {
 	if w <= 0 {
 		return s

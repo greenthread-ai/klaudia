@@ -69,3 +69,73 @@ func TestScreenRecordsOSC8Links(t *testing.T) {
 		t.Fatalf("line 0 = %q", snap.Lines[0])
 	}
 }
+
+func TestScreenReflowJoinsSoftWrapsOnly(t *testing.T) {
+	s := newScreen(6, 4)
+	// "abcdefgh" soft-wraps; "xy" is its own line; the cursor ends after "z".
+	s.Feed([]byte("abcdefgh\r\nxy\r\nz"))
+	s.Resize(10, 4, true)
+	snap := s.Snapshot()
+	if want := []string{"abcdefgh", "xy", "z", ""}; !slices.Equal(snap.Lines, want) {
+		t.Fatalf("widened: lines = %q, want %q", snap.Lines, want)
+	}
+	if snap.CursorX != 1 || snap.CursorY != 2 {
+		t.Fatalf("widened: cursor = (%d,%d), want (1,2)", snap.CursorX, snap.CursorY)
+	}
+	s.Resize(3, 4, true)
+	snap = s.Snapshot()
+	// abc|def|gh|xy|z: five rows on a four-row screen, so one goes to scrollback.
+	if want := []string{"def", "gh", "xy", "z"}; !slices.Equal(snap.Lines, want) {
+		t.Fatalf("narrowed: lines = %q, want %q", snap.Lines, want)
+	}
+	if want := []string{"abc"}; !slices.Equal(snap.Scrollback, want) {
+		t.Fatalf("narrowed: scrollback = %q, want %q", snap.Scrollback, want)
+	}
+	if snap.CursorX != 1 || snap.CursorY != 3 {
+		t.Fatalf("narrowed: cursor = (%d,%d), want (1,3)", snap.CursorX, snap.CursorY)
+	}
+	// Growing again pulls the row back out of scrollback.
+	s.Resize(3, 5, true)
+	if snap = s.Snapshot(); snap.Lines[0] != "abc" || len(snap.Scrollback) != 0 {
+		t.Fatalf("grown: %s", snap)
+	}
+}
+
+func TestScreenReflowCursorAtLineStart(t *testing.T) {
+	// Bubble Tea leaves the cursor at column 0 of the frame's last line. When
+	// that line rewraps, the cursor stays on its first row.
+	s := newScreen(8, 4)
+	s.Feed([]byte("top\r\nabcdefg\r"))
+	s.Resize(4, 4, true)
+	snap := s.Snapshot()
+	if snap.CursorY != 1 || snap.CursorX != 0 || snap.Lines[1] != "abcd" || snap.Lines[2] != "efg" {
+		t.Fatalf("cursor (%d,%d)\n%s", snap.CursorX, snap.CursorY, snap)
+	}
+}
+
+func TestScreenClipDoesNotRewrap(t *testing.T) {
+	s := newScreen(6, 3)
+	s.Feed([]byte("abcdefgh\r\nxy"))
+	s.Resize(4, 3, false)
+	snap := s.Snapshot()
+	if want := []string{"abcd", "gh", "xy"}; !slices.Equal(snap.Lines, want) {
+		t.Fatalf("lines = %q, want %q", snap.Lines, want)
+	}
+}
+
+func TestScreenEraseEndsSoftWrap(t *testing.T) {
+	s := newScreen(4, 3)
+	s.Feed([]byte("abcdef\x1b[1;3H\x1b[K"))
+	s.Resize(8, 3, true)
+	if want := []string{"ab", "ef"}; !slices.Equal(s.Snapshot().Lines[:2], want) {
+		t.Fatalf("lines = %q, want %q", s.Snapshot().Lines, want)
+	}
+}
+
+func TestScreenAutowrapOffClips(t *testing.T) {
+	s := newScreen(4, 3)
+	s.Feed([]byte("\x1b[?7labcdef\x1b[?7h\r\nxyzwv"))
+	if want := []string{"abcf", "xyzw", "v"}; !slices.Equal(s.Snapshot().Lines, want) {
+		t.Fatalf("lines = %q, want %q", s.Snapshot().Lines, want)
+	}
+}

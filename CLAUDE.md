@@ -50,8 +50,9 @@ other products (see docs/roadmap.md, "The extraction"); it must not import
 - **doctor** - `/doctor` environment diagnostics
 - **streamjson** - Bidirectional stream-json frontend
 - **acp** - Agent Client Protocol v1 agent (editor-driven sessions)
-- **tui** - Terminal UI (Bubble Tea); `tui/e2e` drives the real binary in a pty
-  against a scripted mock provider (`KLAUDIA_E2E=1 go test ./internal/tui/e2e/...`)
+- **tui** - Terminal UI (Bubble Tea, with its own inline renderer in `inline.go`);
+  `tui/e2e` drives the real binary in a pty against a scripted mock provider,
+  including window resizes (`KLAUDIA_E2E=1 go test ./internal/tui/e2e/...`)
 - **prompt** - Prompt construction
 - **cli** - CLI entry point and wiring
 - **native** - Pure-Go search / bash-parsing / PDF
@@ -152,10 +153,12 @@ the session file instead of from what the user remembers choosing.
 
 - Pure Go: builds must stay `CGO_ENABLED=0`-clean (no cgo, no system libs).
 - Keep `charmbracelet/bubbles`, `bubbletea`, and `lipgloss` on the **v1** line.
-  The TUI depends on textarea/renderer internals that v2 changes (v2
-  `textarea.SetHeight` repositions the viewport; bubbletea v2 rewrites the inline
-  renderer), which would break the input-wrap and last-column workarounds. A v2
-  bump is a deliberate project, not a routine `go get -u` (see CHANGELOG).
+  The TUI depends on textarea internals that v2 changes (v2
+  `textarea.SetHeight` repositions the viewport), which would break the
+  input-wrap workarounds. A v2 bump is a deliberate project, not a routine
+  `go get -u` (see CHANGELOG). The live region is drawn by
+  `internal/tui/inline.go`, not Bubble Tea's renderer: read its header before
+  changing how frames reach the terminal.
 - The retired JavaScript reference lives on the `js-reference` branch; consult it
   with `git checkout js-reference` (not present on this branch).
 

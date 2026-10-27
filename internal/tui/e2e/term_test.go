@@ -28,6 +28,9 @@ type Term struct {
 	pty *os.File
 	cmd *exec.Cmd
 
+	slaveName string // reopened to resize: macOS refuses TIOCSWINSZ on the master
+	noReflow  bool   // resize like xterm, which does not rewrap
+
 	mu     sync.Mutex
 	screen *Screen
 
@@ -66,7 +69,7 @@ func startTerm(t *testing.T, bin, dir string, env, args []string, cols, rows int
 	}
 	slave.Close() // the child has its own; ours would keep reads from ever seeing EOF
 
-	tm := &Term{t: t, pty: master, cmd: cmd, screen: newScreen(cols, rows), exited: make(chan struct{})}
+	tm := &Term{t: t, pty: master, cmd: cmd, slaveName: slaveName, screen: newScreen(cols, rows), exited: make(chan struct{})}
 	go tm.read()
 	go func() {
 		tm.exitErr = cmd.Wait()

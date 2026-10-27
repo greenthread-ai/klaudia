@@ -224,16 +224,12 @@ func (m *Model) commit(b transcriptBlock) {
 // fitScrollback hard-wraps a block so no line reaches the terminal's last
 // column.
 //
-// Bubble Tea appends EraseLineRight to a queued scrollback line only when it is
-// *narrower* than the terminal (standard_renderer.go). A longer line gets none —
-// the terminal wraps it, and the short final row keeps whatever was on that row
-// before. Seen in a real session: a 160-character prompt echoed at 149 columns
-// left "0k tokens" from the status line hanging off the end of its second row,
-// and the tail of an earlier prompt off another.
-//
-// Wrapping it ourselves turns every physical row into its own logical line, so
-// each one gets erased. The terminal would have wrapped at the same points
-// anyway; the difference is that these rows are now ours to clean up. The
+// Wrapping here rather than leaving it to the terminal breaks at words, with
+// the continuation indented, where a terminal breaks mid-word at column 0
+// (e2e TestLongLinesWrapAtWords). It began as a fix for Bubble Tea's renderer,
+// which erased the rest of a queued line only when it was narrower than the
+// terminal, leaving status-line residue off the end of wrapped rows;
+// inlineRenderer erases below before printing, so that cannot recur. The
 // transcript keeps the unwrapped text, so /copy and /export are unaffected.
 func (m *Model) fitScrollback(s string) string {
 	// Tabs are expanded here and nowhere earlier. Two bugs need it. A literal

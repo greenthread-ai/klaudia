@@ -206,46 +206,20 @@ func (m *Model) View() string {
 	}
 
 	out := m.clampBottom(m.fitLiveRegion(m.bottomView()))
-	// Record what this frame measures, so the next resize can work out how far
-	// the terminal will have reflowed it.
-	m.noteFrame(out)
-	if m.pendingReflow != "" {
-		out, m.pendingReflow = m.pendingReflow+out, ""
-	}
 	if m.pendingOSC != "" {
 		out, m.pendingOSC = m.pendingOSC+out, ""
 	}
 	return out
 }
 
-// noteFrame records each line's visual width and the width it was drawn at.
-func (m *Model) noteFrame(frame string) {
-	lines := strings.Split(frame, "\n")
-	widths := make([]int, len(lines))
-	for i, ln := range lines {
-		widths[i] = ansi.StringWidth(ln)
-	}
-	m.lastFrame, m.lastFrameWidth = widths, m.width
-}
-
 // fitLiveRegion wraps the live region so no line reaches the terminal's last
 // column.
 //
-// This is the invariant the whole inline renderer rests on, and it has now been
-// broken twice by different components, so it is enforced in one place rather
-// than by each of them remembering.
-//
-// Why it matters: Bubble Tea returns to the top of the live region with
-// CursorUp(linesRendered-1), counting *logical* lines. A line that fills the
-// width is two physical rows, so the cursor lands inside the region; the next
-// tea.Println then writes over the middle of it and strands the rows above in
-// scrollback for good. That is the stray "› Ask Klaudia…" and status line seen
-// in a real session. The renderer also only appends EraseLineRight to lines
-// narrower than the terminal, so a full-width line never cleans up after
-// itself.
-//
-// Wrapping rather than truncating: a long path in an approval prompt is worth
-// reading, and the extra rows are handled by clampBottom, which runs after.
+// inlineRenderer counts on every frame line being one row, and clips any line
+// that would reach the last column to guarantee it (see inline.go). Clipping
+// is the backstop, not the presentation: a long path in an approval prompt is
+// worth reading, so lines are wrapped here first, and the extra rows are
+// handled by clampBottom, which runs after.
 func (m *Model) fitLiveRegion(s string) string {
 	limit := m.width - 1
 	if limit < 20 || s == "" {
@@ -262,11 +236,10 @@ func (m *Model) fitLiveRegion(s string) string {
 	return strings.Join(out, "\n")
 }
 
-// clampBottom keeps the live region strictly shorter than the terminal. Bubble
-// Tea's inline renderer drops lines off the TOP of an over-tall frame
-// (standard_renderer.go), which would silently eat the status bar and input, so
-// we trim from the top ourselves — sacrificing the streaming preview first and
-// always keeping the input and status bar visible.
+// clampBottom keeps the live region strictly shorter than the terminal, so
+// the renderer's move back to the frame's top cannot run off the screen. It
+// trims from the top — sacrificing the streaming preview first and always
+// keeping the input and status bar visible.
 func (m *Model) clampBottom(s string) string {
 	budget := m.height - 1
 	if budget < 1 {

@@ -79,7 +79,7 @@ func (m *Model) pageText(name, text string) (tea.Cmd, error) {
 		return nil, errNoPager
 	}
 	path := f.Name()
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+	return m.execProcess(cmd, func(err error) tea.Msg {
 		return pagerDoneMsg{path: path, err: err}
 	}), nil
 }
@@ -168,7 +168,7 @@ func (m *Model) openInEditor(args []string) tea.Cmd {
 	}
 	m.noteRecentPath(ref.Path)
 	m.appendLine(bannerStyle.Render("Opening " + ref.String() + "…"))
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+	return m.execProcess(cmd, func(err error) tea.Msg {
 		return pagerDoneMsg{err: err}
 	})
 }

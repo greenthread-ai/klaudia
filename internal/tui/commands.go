@@ -325,7 +325,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		// started, and in tmux it wipes the whole pane's history. Earlier output
 		// stays scrollable, which is the point of rendering inline.
 		m.appendLine(bannerStyle.Render("Cleared conversation. Earlier output remains in terminal scrollback."))
-		return m, tea.Sequence(tea.ClearScreen, m.out.drainCmd())
+		return m, tea.Sequence(m.clearScreen(), m.out.drainCmd())
 	case "/search":
 		return m, m.searchConversation(args)
 	case "/outline":

@@ -175,14 +175,22 @@ and exit codes.
 - **Manual terminal verification.** Drag-select, tmux copy mode, VS Code's
   terminal, and a light background. These need a human at a terminal.
 
-  Resize *is* confirmed: a live drag-resize was reported broken, fixed, and
-  re-tested by hand in Terminal.app. It took three attempts, and the two that
-  failed are the interesting part — the first treated a symptom, and the second
-  was verified against `View()` rather than against what the renderer emits.
-  `internal/tui/renderer_test.go` drives the real renderer and asserts on the
-  bytes, and `internal/tui/e2e` now runs the real binary in a pty against a
-  scripted mock provider (`KLAUDIA_E2E=1 go test ./internal/tui/e2e/...`, in
-  CI) — resize itself is still only covered by hand.
+  Resize is now under test, and the test found the earlier fix incomplete. A
+  live drag-resize was reported broken and fixed by predicting how far the
+  terminal would rewrap Bubble Tea's frame — confirmed by hand in Terminal.app
+  with slow drags. Once the e2e emulator learned to resize (rewrapping like
+  iTerm2, kitty or Ghostty, or clipping like xterm), it showed the prediction
+  failing: drags with resizes 10–40ms apart stranded input boxes (the frame
+  the prediction used was not the one on screen — the renderer draws on a
+  60fps tick), faster ones erased history rows, and on xterm every narrowing
+  erased the visible conversation. The live region is now drawn by Klaudia's
+  own renderer (`internal/tui/inline.go`), which parks the cursor at the
+  frame's *top*, where every terminal leaves it through a resize, and draws
+  with autowrap off so a frame drawn for the old width cannot wrap. Nothing is
+  predicted. `internal/tui/e2e/resize_scenario_test.go` drags both kinds of
+  terminal at 0, 5 and 20ms per step, changes the height, and resizes
+  mid-stream; the drag tests fail against the old renderer. What remains
+  manual is real terminals rather than the emulator's model of them.
 - **Subagents**: parallel dispatch restricted to read-only types, child
   observability, per-type models, user-defined `.klaudia/agents/*.md`, and the
   adversarial-review idea. Deliberately parked.

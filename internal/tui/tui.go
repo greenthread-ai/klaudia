@@ -19,7 +19,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
@@ -336,15 +335,9 @@ type Model struct {
 	// of what Klaudia has written since. It is what makes "your changes" and
 	// "Klaudia's changes" distinguishable at all.
 	base *baseline
-	// lastFrame is the visual width of each line of the previously rendered live
-	// region, and the terminal width it was rendered at. Both are needed to work
-	// out how many physical rows that frame occupies after the terminal reflows
-	// it — see reflowDeficit.
-	lastFrame      []int
-	lastFrameWidth int
-	// pendingReflow is cursor motion prefixed to the next frame to undo a
-	// resize's reflow desync.
-	pendingReflow string
+	// screen draws the live region when running in a terminal; nil under
+	// tests, which read View directly.
+	screen *inlineRenderer
 	// promptIsBang tracks whether the input marker is currently "$", so the
 	// prompt function is only rebuilt when the answer changes.
 	promptIsBang bool
@@ -748,11 +741,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		// Work out the reflow deficit against the *previous* frame before
-		// resize() overwrites the width it was drawn at.
-		if d := reflowDeficit(m.lastFrame, msg.Width); d > 0 {
-			m.pendingReflow = "\r" + ansi.CursorUp(d) + ansi.EraseScreenBelow
-		}
 		m.resize(msg.Width, msg.Height)
 		return m, nil
 
@@ -1025,8 +1013,16 @@ func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	// quit. Alt-screen would take all of those away (and would also make
 	// tea.Println a no-op), and mouse capture sets DECSET 1002, which is
 	// precisely what stops click-drag from selecting text.
-	p := tea.NewProgram(New(ctx, run, history, sess))
+	//
+	// Frames are drawn by inlineRenderer rather than Bubble Tea's own renderer,
+	// which could not survive a resize (see inline.go).
+	m := New(ctx, run, history, sess)
+	r := newInlineRenderer(os.Stdout)
+	m.screen, m.out.sink = r, r.print
+	p := tea.NewProgram(rendered{m: m, r: r}, tea.WithOutput(mutedTTY{os.Stdout}))
 	defer quietStandardLogger()()
+	r.start()
+	defer r.stop()
 	_, err := p.Run()
 	return err
 }

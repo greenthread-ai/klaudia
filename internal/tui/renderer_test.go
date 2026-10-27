@@ -2,165 +2,165 @@ package tui
 
 import (
 	"bytes"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
 
-// These tests drive the real Bubble Tea renderer against a buffer and read the
-// bytes it actually emits.
-//
-// Every rendering bug in this package so far has lived in the gap between what
-// View returns and what the renderer does with it — full-width lines that never
-// got an EraseLineRight, cursor arithmetic that assumed no reflow. Asserting on
-// View alone cannot see any of that, and two such bugs shipped past tests that
-// did exactly that. This is the only place the renderer itself is under test.
+// These read the bytes inlineRenderer writes. What reaches a real terminal —
+// resizes, drags, a terminal that does not rewrap — is covered end to end by
+// the e2e emulator (internal/tui/e2e/resize_scenario_test.go); these pin the
+// invariants that make those pass.
 
-var (
-	csiAny      = regexp.MustCompile("\x1b\\[[0-9;]*[A-Za-z]")
-	csiCursorUp = regexp.MustCompile("\x1b\\[([0-9]+)A")
-)
-
-// renderBytes runs the program through a scripted sequence and returns
-// everything written to the terminal.
-func renderBytes(t *testing.T, script func(p *tea.Program)) string {
-	t.Helper()
+func newTestRenderer(w, h int) (*inlineRenderer, *bytes.Buffer) {
 	var out bytes.Buffer
-	p := tea.NewProgram(newTestModel(),
-		tea.WithInput(strings.NewReader("")),
-		tea.WithOutput(&out),
-		tea.WithoutSignalHandler(),
-	)
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		script(p)
-		p.Quit()
-	}()
-	if _, err := p.Run(); err != nil {
-		t.Fatalf("program: %v", err)
-	}
-	<-done
+	r := newInlineRenderer(&out)
+	r.resize(w, h)
+	return r, &out
+}
+
+// flushed draws and returns what was written.
+func flushed(r *inlineRenderer, out *bytes.Buffer) string {
+	out.Reset()
+	r.flush()
 	return out.String()
 }
 
-// rowWidths measures how many cells each emitted row actually occupies.
-//
-// A bare \r is a carriage return, not a newline: it restarts the same row at
-// column 0, so what follows overwrites what came before rather than adding to
-// it. The first version of this helper concatenated across them and reported a
-// 119-cell border as 120 — a test that would have failed a correct renderer.
-// The width of a row is the widest of its carriage-return-separated runs.
-func rowWidths(raw string) []int {
-	var out []int
-	for _, chunk := range strings.Split(raw, "\r\n") {
-		for _, row := range strings.Split(chunk, "\n") {
-			widest := 0
-			for _, run := range strings.Split(row, "\r") {
-				if w := ansi.StringWidth(csiAny.ReplaceAllString(run, "")); w > widest {
-					widest = w
-				}
-			}
-			out = append(out, widest)
-		}
+// The invariant: every flush leaves the cursor at column 0 of the frame's
+// first line, so a resize finds the top of the old frame where the cursor is.
+func TestRendererReturnsToTheFrameTop(t *testing.T) {
+	r, out := newTestRenderer(80, 24)
+	r.setFrame("one\ntwo\nthree")
+	got := flushed(r, out)
+	if !strings.HasSuffix(got, "\r"+ansi.CursorUp(2)+wrapOn+syncEnd) {
+		t.Fatalf("a three-line frame should end by moving up two rows: %q", got)
 	}
-	return out
+	r.setFrame("one\nTWO\nthree")
+	if got := flushed(r, out); !strings.HasSuffix(got, "\r"+ansi.CursorUp(2)+wrapOn+syncEnd) {
+		t.Fatalf("an updated frame should end at the top too: %q", got)
+	}
 }
 
-// The invariant two separate bugs came down to. A line that fills the last
-// column gets no EraseLineRight from the renderer and counts as two physical
-// rows, which is what strands the live region in scrollback.
+// A line that reaches the last column leaves the cursor in the pending-wrap
+// state, and one wider than the terminal wraps into a row the move back up
+// does not count.
 func TestRendererNeverWritesToTheLastColumn(t *testing.T) {
-	for _, width := range []int{120, 100, 80, 60, 40} {
-		raw := renderBytes(t, func(p *tea.Program) {
-			time.Sleep(50 * time.Millisecond)
-			p.Send(tea.WindowSizeMsg{Width: width, Height: 30})
-			time.Sleep(50 * time.Millisecond)
-			p.Send(tea.Println(strings.Repeat("scrollback ", 30)))
-			time.Sleep(80 * time.Millisecond)
-		})
-		for i, w := range rowWidths(raw) {
-			if w >= width {
-				t.Errorf("terminal width %d: emitted row %d occupies %d cells", width, i, w)
+	for _, width := range []int{120, 80, 40, 10} {
+		r, out := newTestRenderer(width, 24)
+		r.setFrame(strings.Repeat("x", width+30) + "\n" + strings.Repeat("y", width))
+		got := ansi.Strip(flushed(r, out))
+		for _, row := range strings.Split(got, "\n") {
+			if w := ansi.StringWidth(strings.Trim(row, "\r")); w >= width {
+				t.Errorf("width %d: a row occupies %d cells", width, w)
 			}
 		}
 	}
 }
 
-// Shrinking reflows the rows already on screen, so the renderer's own
-// CursorUp(linesRendered-1) lands inside the old frame. The correction has to
-// reach the wire, not just the unit test for the arithmetic.
-func TestShrinkingEmitsTheReflowCorrection(t *testing.T) {
-	raw := renderBytes(t, func(p *tea.Program) {
-		time.Sleep(50 * time.Millisecond)
-		p.Send(tea.WindowSizeMsg{Width: 100, Height: 30})
-		time.Sleep(50 * time.Millisecond)
-		p.Send(tea.WindowSizeMsg{Width: 30, Height: 30})
-		time.Sleep(80 * time.Millisecond)
-	})
-	// The live region is a handful of lines, so the renderer's own move is
-	// small. A correction for a 100→30 reflow is necessarily much larger.
-	biggest := 0
-	for _, m := range csiCursorUp.FindAllStringSubmatch(raw, -1) {
-		if n, _ := strconv.Atoi(m[1]); n > biggest {
-			biggest = n
-		}
+// The frame never exceeds the screen: the move back up cannot go past the
+// top row.
+func TestRendererKeepsTheFrameShorterThanTheScreen(t *testing.T) {
+	r, out := newTestRenderer(80, 4)
+	r.setFrame("1\n2\n3\n4\n5\n6")
+	got := flushed(r, out)
+	if strings.Contains(got, "1\x1b") || strings.Contains(got, "2\x1b") || strings.Contains(got, "3\x1b") {
+		t.Fatalf("lines above the screen were drawn: %q", got)
 	}
-	if biggest < 6 {
-		t.Errorf("largest CursorUp was %d; a 100→30 reflow needs far more, so the "+
-			"correction never reached the terminal", biggest)
-	}
-	if !strings.Contains(raw, ansi.EraseScreenBelow) {
-		t.Error("no EraseScreenBelow: the orphaned rows would survive")
+	if !strings.HasSuffix(got, ansi.CursorUp(2)+wrapOn+syncEnd) {
+		t.Fatalf("want the last three lines and a move up of two: %q", got)
 	}
 }
 
-// Growing rewraps nothing, so a correction would scroll the conversation for no
-// reason.
-func TestGrowingEmitsNoReflowCorrection(t *testing.T) {
-	raw := renderBytes(t, func(p *tea.Program) {
-		time.Sleep(50 * time.Millisecond)
-		p.Send(tea.WindowSizeMsg{Width: 60, Height: 30})
-		time.Sleep(50 * time.Millisecond)
-		p.Send(tea.WindowSizeMsg{Width: 140, Height: 30})
-		time.Sleep(80 * time.Millisecond)
-	})
-	for _, m := range csiCursorUp.FindAllStringSubmatch(raw, -1) {
-		if n, _ := strconv.Atoi(m[1]); n > 6 {
-			t.Errorf("growing emitted CursorUp(%d); nothing rewrapped, so nothing "+
-				"needed correcting", n)
-		}
+// After a resize the old frame is everything from the cursor down, however
+// the terminal rewrapped it — so it is erased, not diffed.
+func TestRendererRedrawsFromTheTopAfterAResize(t *testing.T) {
+	r, out := newTestRenderer(80, 24)
+	r.setFrame("box\nstatus")
+	flushed(r, out)
+	r.resize(50, 24)
+	got := flushed(r, out)
+	if !strings.HasPrefix(got, syncBegin+"\r"+ansi.EraseScreenBelow) {
+		t.Fatalf("a resize should erase from the frame top: %q", got)
+	}
+	if !strings.Contains(got, "box") || !strings.Contains(got, "status") {
+		t.Fatalf("every line should be redrawn: %q", got)
 	}
 }
 
-// Scrollback printed while the live region is up must not leave residue: this
-// is the "› Ask Klaudia…" stranded mid-history.
-func TestScrollbackDoesNotStrandTheLiveRegion(t *testing.T) {
-	const width = 100
-	raw := renderBytes(t, func(p *tea.Program) {
-		time.Sleep(50 * time.Millisecond)
-		p.Send(tea.WindowSizeMsg{Width: width, Height: 30})
-		for i := 0; i < 3; i++ {
-			time.Sleep(40 * time.Millisecond)
-			p.Send(tea.Println(strings.Repeat("tool output ", 20)))
-		}
-		time.Sleep(80 * time.Millisecond)
-	})
-	widths := rowWidths(raw)
-	// Every row the renderer writes must be erasable, which is the same as
-	// being narrower than the terminal.
-	for i, w := range widths {
-		if w >= width {
-			t.Fatalf("row %d occupies %d cells, so it carries no EraseLineRight", i, w)
-		}
+// Scrollback goes above the frame, with autowrap on so long lines wrap and
+// the terminal can rewrap them later; the frame is drawn with it off.
+func TestRendererPrintsAboveTheFrame(t *testing.T) {
+	r, out := newTestRenderer(80, 24)
+	r.setFrame("box")
+	flushed(r, out)
+	r.print("history one\nhistory two")
+	got := flushed(r, out)
+	h, off, box := strings.Index(got, "history two"), strings.Index(got, wrapOff), strings.Index(got, "box")
+	if h < 0 || off < h || box < off {
+		t.Fatalf("want history, then autowrap off, then the frame: %q", got)
 	}
-	if n := strings.Count(raw, ansi.EraseLineRight); n < len(widths)/2 {
-		t.Errorf("only %d EraseLineRight for %d rows — most rows are not cleaning up",
-			n, len(widths))
+}
+
+// Without a resize or anything printed, only changed lines are written.
+func TestRendererRewritesOnlyChangedLines(t *testing.T) {
+	r, out := newTestRenderer(80, 24)
+	r.setFrame("same\nold\nsame too")
+	flushed(r, out)
+	r.setFrame("same\nnew\nsame too")
+	got := flushed(r, out)
+	if strings.Contains(got, "same") || !strings.Contains(got, "new") {
+		t.Fatalf("only the changed line should be written: %q", got)
+	}
+	if strings.Contains(got, ansi.EraseScreenBelow) {
+		t.Fatalf("nothing shrank, so nothing needs erasing: %q", got)
+	}
+}
+
+// A frame that shrinks erases the rows it no longer uses.
+func TestRendererErasesWhatAShorterFrameLeaves(t *testing.T) {
+	r, out := newTestRenderer(80, 24)
+	r.setFrame("a\nb\nc\nd")
+	flushed(r, out)
+	r.setFrame("a\nb")
+	got := flushed(r, out)
+	if !strings.Contains(got, ansi.EraseScreenBelow) {
+		t.Fatalf("the two rows left over were not erased: %q", got)
+	}
+	// Two lines, then one row down to erase: back up two.
+	if !strings.HasSuffix(got, "\r"+ansi.CursorUp(2)+wrapOn+syncEnd) {
+		t.Fatalf("want a move back up of two: %q", got)
+	}
+}
+
+// Quitting draws an empty frame, which erases the live region.
+func TestRendererEmptyFrameErases(t *testing.T) {
+	r, out := newTestRenderer(80, 24)
+	r.setFrame("box\nstatus")
+	flushed(r, out)
+	r.setFrame("")
+	got := flushed(r, out)
+	if !strings.Contains(got, ansi.EraseScreenBelow) || strings.Contains(got, ansi.CursorUp(1)) {
+		t.Fatalf("an empty frame should erase and stay put: %q", got)
+	}
+}
+
+// A pager gets a clean terminal and the frame comes back after.
+func TestRendererSuspendAndResume(t *testing.T) {
+	r, out := newTestRenderer(80, 24)
+	r.setFrame("box")
+	flushed(r, out)
+	out.Reset()
+	r.suspend()
+	if got := out.String(); !strings.Contains(got, ansi.EraseScreenBelow) || !strings.Contains(got, ansi.ShowCursor) {
+		t.Fatalf("suspend should erase the frame and show the cursor: %q", got)
+	}
+	r.setFrame("box2")
+	if got := flushed(r, out); got != "" {
+		t.Fatalf("nothing should be drawn while suspended: %q", got)
+	}
+	r.resume()
+	if got := flushed(r, out); !strings.Contains(got, "box2") {
+		t.Fatalf("resume should redraw: %q", got)
 	}
 }

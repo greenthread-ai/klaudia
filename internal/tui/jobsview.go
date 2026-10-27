@@ -119,7 +119,7 @@ func (m *Model) logsCommand(args []string) (tea.Model, tea.Cmd) {
 	// with F, and the user keeps whatever they configured.
 	if path != "" {
 		if cmd, ok := pagerCommand(os.Getenv, path); ok {
-			return m, tea.ExecProcess(cmd, func(error) tea.Msg { return pagerDoneMsg{} })
+			return m, m.execProcess(cmd, func(error) tea.Msg { return pagerDoneMsg{} })
 		}
 	}
 	cmd, err := m.pageText("logs-"+ref, text)

@@ -4,9 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
-
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
 )
 
@@ -228,73 +225,4 @@ func TestStatusCaptionKeepsEverythingAtUnknownWidth(t *testing.T) {
 	if got := visibleText(m.statusLine()); !strings.Contains(got, "tokens") {
 		t.Errorf("unknown width should not truncate: %q", got)
 	}
-}
-
-// The arithmetic the resize fix rests on: how many extra physical rows the
-// previous frame occupies once the terminal reflows it.
-func TestReflowDeficit(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		widths   []int
-		newWidth int
-		want     int
-	}{
-		{"no previous frame", nil, 90, 0},
-		{"unknown width", []int{119, 119}, 0, 0},
-		// Growing: every line already fitted, so nothing rewraps.
-		{"window grew", []int{89, 89, 89, 40}, 120, 0},
-		{"width unchanged", []int{89, 89, 89, 40}, 90, 0},
-		// 120 → 90: three 119-wide lines each become two rows.
-		{"shrank a little", []int{119, 119, 119, 60}, 90, 3},
-		// 120 → 40: 119 needs three rows each, 60 needs two.
-		{"shrank a lot", []int{119, 119, 119, 60}, 40, 7},
-		// Exactly the width is one row, not two.
-		{"exact fit", []int{90, 90}, 90, 0},
-		{"one over", []int{91, 91}, 90, 2},
-	} {
-		if got := reflowDeficit(tc.widths, tc.newWidth); got != tc.want {
-			t.Errorf("%s: reflowDeficit(%v, %d) = %d, want %d",
-				tc.name, tc.widths, tc.newWidth, got, tc.want)
-		}
-	}
-}
-
-// A resize must prefix the next frame with the cursor motion that undoes the
-// reflow, or the renderer paints below the old frame and orphans it.
-func TestResizeSteersTheCursorBack(t *testing.T) {
-	m := newTestModel()
-	m.resize(120, 40)
-	_ = m.View() // records the frame's geometry
-
-	m.update(tea.WindowSizeMsg{Width: 90, Height: 40})
-	out := m.View()
-
-	if !strings.Contains(out, ansi.EraseScreenBelow) {
-		t.Error("the resize frame does not erase the orphaned rows")
-	}
-	if !strings.Contains(out, ansi.CursorUp(3)) {
-		t.Errorf("expected CursorUp(3) for a 120→90 reflow of a 4-line region, got %q",
-			visibleEscapes(out))
-	}
-	// And only once: a second frame at the same size must not keep moving up.
-	if again := m.View(); strings.Contains(again, ansi.EraseScreenBelow) {
-		t.Error("the reflow prefix was emitted twice")
-	}
-}
-
-// Growing the window rewraps nothing, so no correction is needed — emitting one
-// would scroll the conversation for no reason.
-func TestGrowingNeedsNoCorrection(t *testing.T) {
-	m := newTestModel()
-	m.resize(90, 40)
-	_ = m.View()
-	m.update(tea.WindowSizeMsg{Width: 140, Height: 40})
-	if out := m.View(); strings.Contains(out, ansi.EraseScreenBelow) {
-		t.Errorf("growing emitted a reflow correction: %q", visibleEscapes(out))
-	}
-}
-
-// visibleEscapes renders the CSI sequences in a string readably.
-func visibleEscapes(s string) string {
-	return strings.ReplaceAll(s, "\x1b", "\\e")
 }

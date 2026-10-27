@@ -23,35 +23,39 @@ import (
 // first makes it give up and the late OSC 11 reply lands in the prompt.
 type Screen struct {
 	cols, rows int
-	grid       [][]string // one entry per cell; "" is the right half of a wide rune
-	scrollback []string
+	grid       []row
+	scrollback []row
 	x, y       int
 	savedX     int
 	savedY     int
+	noAutowrap bool   // DECAWM off: a rune past the last column overwrites it
 	pending    []byte // an escape sequence or UTF-8 rune split across reads
 	replies    []byte // answers to queries, in order, not yet written
 	links      []string
 }
 
+// row is one line of cells. wrapped marks a row the cursor left by wrapping
+// rather than by a newline: the next row continues the same logical line, and
+// a terminal that reflows on resize joins the two. Every terminal that
+// reflows tracks this; it is how a resize can tell a long line from two.
+type row struct {
+	cells   []string // one entry per cell; "" is the right half of a wide rune
+	wrapped bool
+}
+
 func newScreen(cols, rows int) *Screen {
 	s := &Screen{cols: cols, rows: rows}
-	s.grid = make([][]string, rows)
+	s.grid = make([]row, rows)
 	for i := range s.grid {
 		s.grid[i] = s.blankRow()
 	}
 	return s
 }
 
-func (s *Screen) blankRow() []string {
-	r := make([]string, s.cols)
-	for i := range r {
-		r[i] = " "
-	}
-	return r
-}
+func (s *Screen) blankRow() row { return newRow(s.cols) }
 
-func (s *Screen) rowText(r []string) string {
-	return strings.TrimRight(strings.Join(r, ""), " ")
+func (s *Screen) rowText(r row) string {
+	return strings.TrimRight(strings.Join(r.cells, ""), " ")
 }
 
 // lf moves down a line, scrolling the top row into scrollback at the bottom.
@@ -65,7 +69,7 @@ func (s *Screen) lf() {
 
 func (s *Screen) scrollUp(n int) {
 	for range min(n, s.rows) {
-		s.scrollback = append(s.scrollback, s.rowText(s.grid[0]))
+		s.scrollback = append(s.scrollback, s.grid[0])
 		copy(s.grid, s.grid[1:])
 		s.grid[s.rows-1] = s.blankRow()
 	}
@@ -76,19 +80,22 @@ func (s *Screen) put(r rune) {
 	if w == 0 {
 		// Combining mark or zero-width joiner: attach to the previous cell.
 		if s.x > 0 && s.x <= s.cols {
-			s.grid[s.y][s.x-1] += string(r)
+			s.grid[s.y].cells[s.x-1] += string(r)
 		}
 		return
 	}
 	// Deferred wrap: the cursor may sit one past the last column after
 	// writing there, and only the next printable rune wraps.
-	if s.x+w > s.cols {
+	if s.x+w > s.cols && s.noAutowrap {
+		s.x = s.cols - w
+	} else if s.x+w > s.cols {
+		s.grid[s.y].wrapped = true
 		s.x = 0
 		s.lf()
 	}
-	s.grid[s.y][s.x] = string(r)
+	s.grid[s.y].cells[s.x] = string(r)
 	if w == 2 && s.x+1 < s.cols {
-		s.grid[s.y][s.x+1] = ""
+		s.grid[s.y].cells[s.x+1] = ""
 	}
 	s.x += w
 }
@@ -96,15 +103,25 @@ func (s *Screen) put(r rune) {
 func (s *Screen) clampX(x int) int { return max(0, min(s.cols-1, x)) }
 func (s *Screen) clampY(y int) int { return max(0, min(s.rows-1, y)) }
 
+// eraseCells blanks [from, to) on row y. An erase that reaches the last
+// column also ends the soft wrap there, as real terminals do: the row no
+// longer continues onto the next.
 func (s *Screen) eraseCells(y, from, to int) {
 	for i := max(0, from); i < min(s.cols, to); i++ {
-		s.grid[y][i] = " "
+		s.grid[y].cells[i] = " "
+	}
+	if to >= s.cols {
+		s.grid[y].wrapped = false
 	}
 }
 
 func (s *Screen) csi(params string, final byte) {
+	if params == "?7" && (final == 'h' || final == 'l') {
+		s.noAutowrap = final == 'l'
+		return
+	}
 	if params != "" && strings.ContainsAny(params[:1], "?><=") {
-		return // private modes (cursor visibility, bracketed paste, …)
+		return // other private modes (cursor visibility, bracketed paste, …)
 	}
 	var nums []int
 	if params != "" {
@@ -320,8 +337,10 @@ func (s *Screen) takeReplies() []byte {
 func (s *Screen) Snapshot() Snapshot {
 	snap := Snapshot{
 		Cols: s.cols, Rows: s.rows, CursorX: s.x, CursorY: s.y,
-		Scrollback: append([]string(nil), s.scrollback...),
-		Links:      append([]string(nil), s.links...),
+		Links: append([]string(nil), s.links...),
+	}
+	for _, r := range s.scrollback {
+		snap.Scrollback = append(snap.Scrollback, s.rowText(r))
 	}
 	for _, r := range s.grid {
 		snap.Lines = append(snap.Lines, s.rowText(r))

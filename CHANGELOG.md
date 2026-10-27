@@ -5,6 +5,21 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+
+- **Resizing the window no longer strands input boxes or erases history.**
+  The previous fix predicted how far the terminal would rewrap Bubble Tea's
+  frame, and only held for slow resizes: once the e2e emulator could resize,
+  a drag with resizes 10–40ms apart (an ordinary drag) left stacked input
+  boxes, a faster one erased lines of conversation, and on a terminal that
+  does not rewrap (xterm) any narrowing erased everything visible. The live
+  region is now drawn by Klaudia's own renderer, which keeps the cursor at the
+  frame's top — where every terminal leaves it through a resize — and draws
+  with autowrap off, so no prediction is needed. Frames are also wrapped in
+  synchronized-output marks, which terminals that support them use to show
+  each frame whole. The e2e suite now drags rewrapping and non-rewrapping
+  terminals, changes the height and resizes mid-stream.
+
 ## v0.2.0 — 2026-10-27
 
 ### Highlights
