@@ -53,7 +53,7 @@ func (s *checkpointStack) push(cp checkpoint) {
 	// Successive edits within one turn extend that turn's checkpoint rather
 	// than stacking: "undo" means undoing the operation the user asked for, not
 	// the last individual file write inside it.
-	if n := len(s.items); n > 0 && s.items[n-1].Label == cp.Label {
+	if n := len(s.items); n > 0 && s.items[n-1].Turn == cp.Turn && s.items[n-1].Label == cp.Label {
 		s.items[n-1].Files = append(s.items[n-1].Files, cp.Files...)
 		return
 	}
@@ -89,11 +89,11 @@ func (s *checkpointStack) len() int {
 // alreadyHave reports whether this turn's checkpoint already covers a path, so
 // a file edited three times is snapshotted once — at its state before the
 // first edit, which is the one undo should restore.
-func (s *checkpointStack) alreadyHave(label, path string) bool {
+func (s *checkpointStack) alreadyHave(turn int, label, path string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	n := len(s.items)
-	if n == 0 || s.items[n-1].Label != label {
+	if n == 0 || s.items[n-1].Turn != turn || s.items[n-1].Label != label {
 		return false
 	}
 	for _, f := range s.items[n-1].Files {
@@ -107,6 +107,10 @@ func (s *checkpointStack) alreadyHave(label, path string) bool {
 // checkpoint is one undoable operation.
 type checkpoint struct {
 	Label string // what the turn was doing, for the confirm prompt
+	// Turn is the turn that made the change (Model.turnSeq), so /rewind can
+	// find every change from a turn on. Two turns with the same label (two
+	// "continue"s) used to merge into one checkpoint; now they do not.
+	Turn  int
 	At    time.Time
 	Files []checkpointFile
 }
@@ -134,10 +138,10 @@ func (m *Model) snapshotBefore(label string, paths []string) {
 	if m.sess == nil || m.sess.CWD == "" || len(paths) == 0 {
 		return
 	}
-	cp := checkpoint{Label: label, At: time.Now()}
+	cp := checkpoint{Label: label, Turn: m.turnSeq, At: time.Now()}
 	for _, p := range paths {
 		rel := m.relToRepo(p)
-		if m.checkpoints.alreadyHave(label, rel) {
+		if m.checkpoints.alreadyHave(cp.Turn, label, rel) {
 			continue // first state within the turn is the one to restore
 		}
 		full := filepath.Join(m.sess.CWD, rel)
@@ -249,8 +253,18 @@ func (p undoPlan) describe() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// applyUndo carries out a plan. Returns a human summary.
+// applyUndo carries out a plan and drops its checkpoint. Returns a human
+// summary.
 func (m *Model) applyUndo(p undoPlan) string {
+	out := m.restorePlan(p)
+	// Pop only after acting, so a failure leaves the checkpoint in place.
+	m.checkpoints.pop()
+	return out
+}
+
+// restorePlan writes a plan's files back and deletes the ones Klaudia
+// created. Shared by /undo (one turn) and /rewind (every turn from a point on).
+func (m *Model) restorePlan(p undoPlan) string {
 	restored, deleted := 0, 0
 	var failed []string
 	for _, f := range p.Restore {
@@ -275,8 +289,6 @@ func (m *Model) applyUndo(p undoPlan) string {
 		deleted++
 		delete(m.touched, f)
 	}
-	// Pop only after acting, so a failure leaves the checkpoint in place.
-	m.checkpoints.pop()
 
 	var parts []string
 	if restored > 0 {

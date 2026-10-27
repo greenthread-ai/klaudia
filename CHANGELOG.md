@@ -6,6 +6,13 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **`/rewind`.** Pick one of this session's earlier prompts: every file
+  Klaudia changed from that turn on goes back to how it was before it, the
+  conversation is cut back to before the prompt, and the prompt returns to
+  the input box. The plan is shown first, files you also edited are left
+  alone, and the cut is recorded in the transcript so `--resume` stays
+  rewound. Checkpoints now carry their turn, so two turns with the same
+  label no longer merge into one `/undo` step.
 - **Forked sub-agents.** The Agent tool takes `fork`: the child starts from a
   copy of the conversation so far (through the turn that made the call), so it
   knows what has been read and decided, and returns only its answer; the

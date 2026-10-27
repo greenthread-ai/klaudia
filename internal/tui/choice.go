@@ -136,7 +136,11 @@ func (m *Model) applyChoice(n int) {
 	}
 	item := m.choiceItems[m.choiceHits[n]]
 	m.closeChoice()
-	m.appendLine(bannerStyle.Render("  → " + item.apply()))
+	// An item that goes on to ask something (a rewind's confirmation) prints
+	// its own text and returns nothing.
+	if s := item.apply(); s != "" {
+		m.appendLine(bannerStyle.Render("  → " + s))
+	}
 }
 
 // closeChoice clears the picker and returns the keyboard to the prompt.

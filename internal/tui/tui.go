@@ -81,6 +81,9 @@ type Session struct {
 	// Suggest, if set, asks the model one question outside the conversation
 	// (no tools, nothing recorded). Backs /commit's drafted message.
 	Suggest func(ctx context.Context, prompt string) (string, error)
+	// OnRewind, if set, records that the conversation was cut back to its
+	// first keep messages, so a resumed session stays rewound.
+	OnRewind func(keep int)
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
 	Compact CompactFunc
@@ -459,6 +462,11 @@ type Model struct {
 	// idleSeq numbers idle spells, so an idle-compaction timer from one that
 	// a turn has since ended does nothing (idlecompact.go).
 	idleSeq int
+	// turnSeq numbers turns; checkpoints carry the one that made them.
+	// rewindPoints are the user's prompts this session, oldest first, for
+	// /rewind (rewind.go).
+	turnSeq      int
+	rewindPoints []rewindPoint
 	// results holds the full, untruncated content of recent tool results so
 	// /last can reach past the newest one. The event stream is not truncated
 	// upstream, so what's stored is exactly what the model saw.

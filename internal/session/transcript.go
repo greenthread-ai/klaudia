@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"strconv"
 
 	"github.com/google/uuid"
 )
@@ -78,6 +79,28 @@ func (t *Transcript) Record(role string, message json.RawMessage) error {
 		e.MaxTokensSource = t.meta.MaxTokensSource
 		e.ContextWindow = t.meta.ContextWindow
 		e.ContextWindowSource = t.meta.ContextWindowSource
+	}
+	t.lastUUID = &id
+	return t.w.Append(e)
+}
+
+// RecordRewind appends a rewind boundary: the conversation was cut back to
+// its first keep messages (the summary message counted, when there is one).
+// Later entries chain from it, so they follow the cut on resume.
+func (t *Transcript) RecordRewind(keep int) error {
+	id := uuid.NewString()
+	e := Entry{
+		Type:       "system",
+		Subtype:    SubtypeRewind,
+		Content:    strconv.Itoa(keep),
+		UUID:       id,
+		ParentUUID: t.lastUUID,
+		SessionID:  t.meta.SessionID,
+		Timestamp:  Now(),
+		CWD:        t.meta.CWD,
+		GitBranch:  t.meta.GitBranch,
+		UserType:   t.meta.UserType,
+		Version:    t.meta.Version,
 	}
 	t.lastUUID = &id
 	return t.w.Append(e)

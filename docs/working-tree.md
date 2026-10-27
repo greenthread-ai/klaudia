@@ -201,6 +201,21 @@ here · 14 messages · approvals start fresh · /clear to start over` — with a
 line each for a goal, uncommitted work and stopped jobs only when there are
 any, and a warning only when the host guardrail is off.
 
+## `/rewind`
+
+`/rewind` lists the prompts you have sent this session, newest first. Picking
+one shows the plan — every file Klaudia changed from that turn on, put back as
+it was before it (deleted if Klaudia created it), and the conversation cut
+back to before the prompt — and on `y` does it, putting the prompt back in the
+input box to edit or send again. The rules are `/undo`'s: a file you also
+changed is left alone and named. The cut is recorded in the transcript (a
+`rewind` boundary), so `--resume` comes back rewound.
+
+Only this process's prompts are offered: the checkpoints that make the file
+half possible are kept in memory, and offering a point whose files could not
+be restored would rewind the conversation and not the work. Outside a git
+repository there are no checkpoints at all, and the plan says so.
+
 ## What Klaudia has in context
 
 `/context` lists pinned files, what changed this session, the directories the

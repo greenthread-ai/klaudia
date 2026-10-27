@@ -31,6 +31,7 @@ var commandList = []cmdInfo{
 	{"/stop", "", "Ask Klaudia to finish the current step and stop, keeping what it has done"},
 	{"/changes", "", "Show the working tree split into your changes and Klaudia's"},
 	{"/undo", "", "Undo Klaudia's last change, leaving anything you also touched alone"},
+	{"/rewind", "", "Go back to before an earlier prompt: its files restored, the conversation cut, the prompt back to edit"},
 	{"/jobs", "", "List background jobs: what's running, on what port, and where"},
 	{"/logs", "[-f|--errors] <job>", "Page a job's log ($PAGER), tail it (-f), or pull just its errors into the conversation"},
 	{"/restart", "<job>", "Restart a background job in place, keeping its name and log"},
@@ -100,7 +101,7 @@ var commandGroups = []struct {
 	names []string
 }{
 	{"Session", []string{"/model", "/effort", "/mode", "/theme", "/status", "/stats", "/config", "/compact", "/clear", "/export", "/quit", "/help"}},
-	{"Work", []string{"/plan", "/goal", "/stop", "/changes", "/diff", "/undo", "/commit"}},
+	{"Work", []string{"/plan", "/goal", "/stop", "/changes", "/diff", "/undo", "/rewind", "/commit"}},
 	{"Context", []string{"/context", "/pin", "/unpin", "/forget", "/add-dir", "/memory"}},
 	{"Shell", []string{"!<command>", "/jobs", "/logs", "/restart", "/stopjob"}},
 	{"Find", []string{"/search", "/outline", "/show", "/errors", "/last", "/copy", "/open"}},
@@ -503,6 +504,8 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		m.changesCommand()
 	case "/undo":
 		m.undoCommand()
+	case "/rewind":
+		m.rewindCommand()
 	case "/jobs":
 		m.jobsCommand()
 	case "/logs":

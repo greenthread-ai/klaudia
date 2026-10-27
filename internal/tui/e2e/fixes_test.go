@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -340,4 +341,38 @@ func TestMCPListsGlobalAndHeldServers(t *testing.T) {
 	if strings.Contains(tm.Snapshot().All(), "Start these MCP servers?") {
 		t.Error("the first turn asked about servers already approved from /mcp")
 	}
+}
+
+// /rewind through the real binary: the tools scenario edits main.go; going
+// back to before that prompt puts main.go back and the prompt in the box.
+func TestRewindUndoesATurn(t *testing.T) {
+	env := newEnv(t)
+	// Checkpoints are git blobs: without a repository there is nothing to
+	// restore, for /undo as for /rewind.
+	for _, args := range [][]string{{"init", "-q"}, {"add", "."}, {"-c", "user.email=e@x", "-c", "user.name=e", "commit", "-q", "-m", "init"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = env.Project
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	tm := env.Start(t)
+	env.Prompt(t, tm, "use the tools")
+	tm.WaitText(t, "Changed the greeting", 30*time.Second)
+	if b, _ := os.ReadFile(filepath.Join(env.Project, "main.go")); !strings.Contains(string(b), "hello, e2e") {
+		t.Fatalf("precondition: the scenario did not edit main.go:\n%s", b)
+	}
+	tm.Type("/rewind")
+	tm.Press(keyEnter)
+	tm.WaitText(t, "Rewind to before which prompt?", 10*time.Second)
+	tm.Press(keyEnter) // the newest: "use the tools"
+	tm.WaitText(t, "restore  main.go", 10*time.Second)
+	tm.Type("y")
+	tm.WaitText(t, "Rewound to before that prompt", 10*time.Second)
+	if b, _ := os.ReadFile(filepath.Join(env.Project, "main.go")); string(b) != mainGo {
+		t.Errorf("main.go was not restored:\n%s", b)
+	}
+	tm.WaitFor(t, "the prompt back in the box", 5*time.Second, func(s Snapshot) bool {
+		return strings.Contains(s.All(), "› use the tools") && s.InputBox()
+	})
 }

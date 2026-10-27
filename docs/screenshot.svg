@@ -7,7 +7,7 @@
 <text x="22" y="137" textLength="585.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">Commands — /help &lt;command&gt; for one in full; type / to search them</tspan></text>
 <text x="22" y="157" textLength="693.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Session  /model /effort /mode /theme /status /stats /config /compact /clear</tspan></text>
 <text x="22" y="177" textLength="270.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">           /export /quit /help</tspan></text>
-<text x="22" y="197" textLength="513.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Work     /plan /goal /stop /changes /diff /undo /commit</tspan></text>
+<text x="22" y="197" textLength="585.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Work     /plan /goal /stop /changes /diff /undo /rewind /commit</tspan></text>
 <text x="22" y="217" textLength="504.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Context  /context /pin /unpin /forget /add-dir /memory</tspan></text>
 <text x="22" y="237" textLength="459.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Shell    !&lt;command&gt; /jobs /logs /restart /stopjob</tspan></text>
 <text x="22" y="257" textLength="531.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Find     /search /outline /show /errors /last /copy /open</tspan></text>

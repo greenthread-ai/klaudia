@@ -1591,6 +1591,11 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 		// 1024 is plenty for a subject and a few lines; Complete refuses a
 		// reply that hits it rather than committing half a message.
+		sess.OnRewind = func(keep int) {
+			if transcript != nil {
+				_ = transcript.RecordRewind(keep)
+			}
+		}
 		sess.Suggest = func(ctx context.Context, prompt string) (string, error) {
 			return loop.Complete(ctx, prompt, api.ResolveModel(sess.Model), 1024, sess.Effort)
 		}

@@ -33,7 +33,7 @@ func (p *convProbe) Execute(_ context.Context, tctx tools.Context, _ json.RawMes
 
 // A tool is handed the conversation including the turn that called it —
 // what a fork starts from.
-func TestToolsSeeTheConversationBeforeTheirTurn(t *testing.T) {
+func TestToolsSeeTheConversationThroughTheirTurn(t *testing.T) {
 	probe := &convProbe{}
 	p := &scriptedProvider{turns: []anthropic.BetaMessage{toolTurn(t, "p1", "Probe", "{}")}}
 	l := New(p, tools.NewRegistry(probe))

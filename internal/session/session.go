@@ -143,6 +143,11 @@ type Entry struct {
 // summary.
 const SubtypeCompactBoundary = "compact_boundary"
 
+// SubtypeRewind marks a /rewind: the conversation was cut back, and Content
+// is how many messages of it were kept (the summary message, if any,
+// included). Resume applies the cut, so a rewound session stays rewound.
+const SubtypeRewind = "rewind"
+
 // Now returns an RFC3339 millisecond UTC timestamp matching the JS format
 // (e.g. "2026-05-24T03:58:31.020Z").
 func Now() string {
@@ -276,6 +281,17 @@ func ReadForResume(path string) (ResumePoint, error) {
 		switch {
 		case e.Type == "system" && e.Subtype == SubtypeCompactBoundary && strings.TrimSpace(e.Content) != "":
 			rp.Summary, rp.After = e.Content, nil
+		case e.Type == "system" && e.Subtype == SubtypeRewind:
+			// Content counts messages as the live conversation held them: the
+			// summary message first when there is one, then the entries.
+			if keep, err := strconv.Atoi(strings.TrimSpace(e.Content)); err == nil {
+				if rp.Summary != "" {
+					keep--
+				}
+				if keep >= 0 && keep < len(rp.After) {
+					rp.After = rp.After[:keep]
+				}
+			}
 		case e.Type == "user" || e.Type == "assistant":
 			rp.After = append(rp.After, e)
 		}
