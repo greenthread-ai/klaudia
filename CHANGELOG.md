@@ -6,6 +6,12 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **System prompt guidance**: when to keep a TodoWrite list (three or more
+  steps — the user watches it), report failures with their output and never
+  claim something works that was not run, refer to code as `path:line` (which
+  the terminal now makes clickable), and run servers in the background after
+  checking Jobs. Plan mode's list of available commands is no longer Go-only,
+  and names only commands the classifier actually allows (pinned by a test).
 - **Plan runs.** Plan approval is now a picker: *Yes — run it* (`y`, as
   before), *Yes — and keep going until every step is done*, and *No — keep
   planning* (`n`), which asks what should change and sends it to the model —
@@ -21,6 +27,13 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **Sub-agents know the project.** A sub-agent's system prompt was its
+  one-paragraph role and nothing else — no working directory, date or
+  platform, no AGENTS.md / CLAUDE.md, no security clause, no host-change
+  rules. It now gets all of them, with the environment for its own directory
+  (an isolated checkout's, not the parent's).
+- **`/model` no longer leaves the old model named in the system prompt**,
+  which was built once at startup; the model line is now added per turn.
 - **OpenAI-compatible providers: steering and interrupted prompts.** A user
   message's text blocks were concatenated with no separator ("go slow" +
   "hello again" → "go slowhello again"); they are now separated by a blank

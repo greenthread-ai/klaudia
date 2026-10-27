@@ -20,6 +20,7 @@ import (
 // Spawner runs sub-agents. It implements tools.Spawner so the Agent tool can
 // launch a child loop with a filtered toolset and the type's system prompt.
 type Spawner struct {
+	context    func(dir string) string // shared context after each role prompt (WithContext)
 	provider   api.Provider
 	base       *tools.Registry
 	model      anthropic.Model
@@ -136,6 +137,17 @@ func (s *Spawner) WithLimits(l api.ModelLimits) *Spawner {
 // WithSpill gives sub-agents the parent's spill store, so a child's clamped
 // output and elided results stay recoverable from the same directory as the
 // parent's. Unset, a child clamps without writing (see tools.SpillStore).
+// WithContext sets what follows each child's role prompt: fn receives the
+// child's working directory (an isolated checkout's, when it has one) and
+// returns the shared context — environment, project instructions, the rules
+// that bind the parent. A function rather than a string because that directory
+// is only known at spawn time; and supplied by the host so this package does
+// not decide what a product's prompt says.
+func (s *Spawner) WithContext(fn func(dir string) string) *Spawner {
+	s.context = fn
+	return s
+}
+
 func (s *Spawner) WithSpill(store tools.SpillStore) *Spawner {
 	s.spill = store
 	return s
@@ -239,7 +251,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 	res, err := loop.Run(ctx, Options{
 		Prompt:          prompt,
 		Model:           s.model,
-		System:          t.SystemPrompt,
+		System:          t.SystemPrompt + s.contextFor(dir),
 		MaxTurns:        maxTurns,
 		Permission:      childPerm,
 		Host:            s.hostGate,
@@ -367,4 +379,11 @@ func filterDeferred(deferred map[string]bool, registry *tools.Registry) map[stri
 		return nil
 	}
 	return out
+}
+
+func (s *Spawner) contextFor(dir string) string {
+	if s.context == nil {
+		return ""
+	}
+	return s.context(dir)
 }

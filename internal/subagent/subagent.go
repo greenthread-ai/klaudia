@@ -88,7 +88,7 @@ func Builtin() []Type {
 			Mode:        permission.ModePlan,
 			SystemPrompt: "You are a software architect agent for Klaudia. Explore the codebase and produce a " +
 				"concrete, step-by-step implementation plan. You may run commands that only inspect — " +
-				"`git log`, `git diff`, `go doc`, `go list` — but anything that would change a file is " +
+				"`git log`, `git diff`, `ls`, `sed -n` — but anything that would change a file is " +
 				"refused, so note explicitly anything you could not verify. Identify the critical files and " +
 				"trade-offs. Return the plan as your final message.",
 		},

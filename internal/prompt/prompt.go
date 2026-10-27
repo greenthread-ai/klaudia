@@ -39,12 +39,23 @@ Be concise and direct. Output text to communicate with the user; all text you em
 - After making code changes, run the project's build/tests via Bash when available to verify your work.
 - Follow existing conventions in the codebase. Do not add comments that merely restate the code.
 - Only do what was asked; nothing more, nothing less. Do not commit changes unless the user asks.
+- For work with three or more distinct steps, keep the step list in TodoWrite and update it as you go: the user watches that list live. Skip it for a single step.
+
+# Reporting
+- Report outcomes as they are. If a build or test fails, say so and show the relevant output; never say something works that you did not run. If you skipped a check, say that.
+- Refer to code as ` + "`path:line`" + `, relative to the working directory — the user's terminal makes those clickable.
 
 # Tool use
 - When a task needs multiple independent searches or reads, batch them.
 - Never guess or fabricate file contents, APIs, or URLs — verify by reading.
+- Run long-lived processes (dev servers, watchers) with Bash run_in_background, and check Jobs before starting one — it is often already running.
 
-# Autonomy and the user's machine
+` + autonomy
+
+// autonomy is where the agent may act on its own and where it must ask. Shared
+// with sub-agents (SubagentContext): a child that writes files is bound by the
+// same line as its parent.
+const autonomy = `# Autonomy and the user's machine
 Finish the job. Inside the project you work on your own: read, edit, build, test, run dev servers, use git, install project dependencies, fetch things, and do the destructive parts too — deleting build output and resetting the working tree are ordinary. Work on a remote host or in a container that the task calls for is equally yours to do. Do not stop to ask permission for any of that.
 
 The machine you are running on is different. Changing it — writing outside the project (/etc, /usr, /opt, /Library, shell rc files), installing or removing system packages, controlling services, users, firewall, mounts or kernel parameters — needs the user's agreement first. Use RequestHostChange to describe the whole operation before you start it, in the terms the user cares about and with the reason it is needed. One declaration covers every step inside the scope you describe, so declare the operation, not the first command of it.
@@ -57,7 +68,7 @@ func System(cwd, model string) string {
 	var b strings.Builder
 	b.WriteString(base)
 	if model != "" {
-		fmt.Fprintf(&b, "\n\nYou are powered by the model %s.", model)
+		b.WriteString(ModelLine(model))
 	}
 	b.WriteString("\n\n")
 	b.WriteString(envBlock(cwd))
@@ -74,6 +85,31 @@ func System(cwd, model string) string {
 		b.WriteString("\n\n# Project knowledge\n")
 		b.WriteString("Curated, durable lessons about this project (from .klaudia/KNOWLEDGE.md). Treat these as established facts.\n\n")
 		b.WriteString(kn)
+	}
+	return b.String()
+}
+
+// ModelLine names the model the turn runs on. Callers that switch models
+// mid-session (/model) add it per turn rather than baking it into System, which
+// is built once: the prompt kept naming the model the session started with.
+func ModelLine(model string) string {
+	return fmt.Sprintf("\n\nYou are powered by the model %s.", model)
+}
+
+// SubagentContext is what every sub-agent's own instructions are followed by:
+// the security clause, the autonomy rules, the environment for dir — its own
+// working directory, which for an isolated checkout is not the parent's — and
+// the project's instruction files, read from projectDir.
+//
+// Sub-agents used to get their one-paragraph role and nothing else: no working
+// directory or date, and none of AGENTS.md / CLAUDE.md, so a child editing the
+// project did not know its conventions.
+func SubagentContext(dir, projectDir string) string {
+	var b strings.Builder
+	b.WriteString("\n\n" + securityClause + "\n\n" + autonomy + "\n\n" + envBlock(dir))
+	if instr, sources := loadProjectInstructions(projectDir); instr != "" {
+		fmt.Fprintf(&b, "\n\n# Project instructions (from %s)\n", strings.Join(sources, ", "))
+		b.WriteString(instr)
 	}
 	return b.String()
 }

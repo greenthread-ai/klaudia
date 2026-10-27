@@ -232,3 +232,44 @@ func write(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+// Sub-agents get the environment for their own directory — an isolated
+// checkout's, not the parent's — plus the project's instructions and the
+// rules that bind the parent.
+func TestSubagentContext(t *testing.T) {
+	project, child := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, "AGENTS.md"), []byte("Build with CGO_ENABLED=0."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := SubagentContext(child, project)
+	for _, want := range []string{
+		"Working directory: " + child,
+		"Build with CGO_ENABLED=0.",
+		"authorized security testing",
+		"RequestHostChange",
+	} {
+		if !strings.Contains(c, want) {
+			t.Errorf("sub-agent context missing %q", want)
+		}
+	}
+	if strings.Contains(c, "Working directory: "+project) {
+		t.Error("a child in its own checkout was told the parent's directory")
+	}
+}
+
+// The base prompt carries the reporting and linking guidance, and System
+// without a model leaves the model line to the caller.
+func TestBasePromptReportingAndModelLine(t *testing.T) {
+	p := System(t.TempDir(), "")
+	for _, want := range []string{"`path:line`", "never say something works that you did not run", "TodoWrite", "run_in_background"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("base prompt missing %q", want)
+		}
+	}
+	if strings.Contains(p, "You are powered by") {
+		t.Error("System with no model should not name one")
+	}
+	if got := ModelLine("m-1"); !strings.Contains(got, "m-1") {
+		t.Errorf("ModelLine = %q", got)
+	}
+}

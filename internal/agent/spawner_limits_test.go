@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -81,5 +82,33 @@ func TestSpawnedChildInheritsResolvedLimits(t *testing.T) {
 				t.Errorf("child requested max_tokens=%d, want %d", provider.got.MaxTokens, tt.want)
 			}
 		})
+	}
+}
+
+// A child's system prompt is its role followed by the host's shared context,
+// built for the child's own working directory.
+func TestSpawnedChildGetsSharedContext(t *testing.T) {
+	provider := &paramProvider{}
+	read, err := tools.NewRead()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	var gotDir string
+	s := NewSpawner(provider, tools.NewRegistry(read), "unlisted-test-model", bypassPerm(), nil, 1).
+		WithWorkingDir(dir).
+		WithContext(func(d string) string { gotDir = d; return "\n\nSHARED CONTEXT" })
+	if _, err := s.Spawn(context.Background(), "Explore", "look around", nil); err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+	var system string
+	for _, b := range provider.got.System {
+		system += b.Text
+	}
+	if !strings.HasPrefix(system, "You are a read-only exploration agent") || !strings.Contains(system, "SHARED CONTEXT") {
+		t.Errorf("child system prompt = %q, want the role then the shared context", system)
+	}
+	if gotDir != dir {
+		t.Errorf("context built for %q, want the child's dir %q", gotDir, dir)
 	}
 }

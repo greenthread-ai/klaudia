@@ -1101,7 +1101,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	_ = memory.New(filepath.Join(cwd, ".klaudia")).SyncLinks()
 	// Assemble the full system prompt (base instructions + env context +
 	// AGENTS.md/CLAUDE.md) once for this run.
-	sysPrompt := prompt.System(cwd, string(model))
+	// The model line is added per turn (baseOptions), not here: /model
+	// switches it, and this string is built once.
+	sysPrompt := prompt.System(cwd, "")
 
 	// Build the tool registry. Sub-agents draw from the base tools (incl. any
 	// MCP tools); the top-level registry adds the Agent tool.
@@ -1260,8 +1262,10 @@ func run(cmd *cobra.Command, opts *options) error {
 	// provider-reported cap or a maxTokens override is lost on exactly the
 	// workload (a sub-agent writing a file) where it matters.
 	wiring.spawner.WithLimits(limits)
-	// Children spill where the parent does.
+	// Children spill where the parent does, and know what the parent knows
+	// about the environment and the project.
 	wiring.spawner.WithSpill(spill)
+	wiring.spawner.WithContext(func(dir string) string { return prompt.SubagentContext(dir, cwd) })
 
 	// MCP config hot reload. An edit to any .mcp.json that applies here takes
 	// effect in this session instead of at the next start — installing a server
@@ -1359,7 +1363,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		opts := agent.Options{
 			WorkingDir:      cwd,
 			Model:           s.Model,
-			System:          withExtraDirs(sysPrompt, s.ExtraDirs),
+			System:          withExtraDirs(sysPrompt, s.ExtraDirs) + prompt.ModelLine(string(s.Model)),
 			MaxTurns:        opts.maxTurns,
 			ContextWindow:   s.ContextWindow,
 			MaxTokens:       int64(s.MaxTokens),
