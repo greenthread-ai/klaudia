@@ -97,5 +97,5 @@ func announceMode(mode permission.Mode, emit Emitter, t *modeTracker) {
 	if !t.changed(mode) || emit == nil {
 		return
 	}
-	emit(Event{Type: "permission_mode", Content: string(mode)})
+	emit(Event{Type: EventPermissionMode, Content: string(mode)})
 }

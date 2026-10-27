@@ -296,6 +296,17 @@ matching `request_id`. A peer that has not implemented a subtype should answer
 with an error: that reads as "cancelled" and leaves the model where it was,
 rather than an answer the user never gave being attributed to them.
 
+The first line is `{"type":"system","subtype":"init","schema_version":1,…}`
+with the session id, model, working directory, permission mode and tools. The
+events that follow are `agent.Event` serialised as is — `type` is one of
+`assistant`, `tool_use`, `tool_progress`, `tool_result`, `usage`,
+`compaction`, `notice`, `permission_mode`, `plan` or `steer`, and each turn
+ends with a `result` line. `schema_version` is `agent.EventSchemaVersion`:
+new event types and optional fields keep it (ignore what you do not know);
+renaming or removing a field, or changing what one means, bumps it. One-shot
+`-p --output-format stream-json` writes Claude Code's envelopes instead, and
+opens with the same kind of `system/init` line Claude Code does.
+
 ### Editors (ACP)
 
 ```bash

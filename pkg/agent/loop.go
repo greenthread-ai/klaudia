@@ -30,9 +30,31 @@ import (
 // assistant text, tool_use, and tool_result events as they occur. May be nil.
 type Emitter func(event Event)
 
+// EventSchemaVersion versions Event as a wire format: the stream-json
+// frontend writes Events verbatim, so their field names and Type values are a
+// contract with every peer. Adding a Type or an optional field is compatible
+// and keeps the version; renaming or removing either, or changing a field's
+// meaning, bumps it. TestEventWireShape pins the current shape.
+const EventSchemaVersion = 1
+
+// The Event types. A frontend should ignore a Type it does not know, so
+// adding one is not a breaking change.
+const (
+	EventAssistant      = "assistant"       // a delta of the model's text
+	EventToolUse        = "tool_use"        // a tool call, before it runs
+	EventToolProgress   = "tool_progress"   // a line of a long tool's (or sub-agent's) progress
+	EventToolResult     = "tool_result"     // a tool call's result
+	EventUsage          = "usage"           // token deltas for one model call
+	EventCompaction     = "compaction"      // compaction started (no Content) or finished (Content)
+	EventNotice         = "notice"          // something the user should know; never sent to the model
+	EventPermissionMode = "permission_mode" // the permission mode changed
+	EventPlan           = "plan"            // the plan changed; Plan is the full snapshot
+	EventSteer          = "steer"           // a message the user sent mid-turn reached the model
+)
+
 // Event is a streaming event emitted during a run (stream-json mode).
 type Event struct {
-	Type      string `json:"type"`                  // "assistant" | "tool_use" | "tool_progress" | "tool_result" | "usage" | "compaction" | "notice" | "permission_mode" | "plan"
+	Type      string `json:"type"`                  // one of the Event* constants
 	Text      string `json:"text,omitempty"`        // assistant text
 	ToolName  string `json:"tool_name,omitempty"`   // tool_use / tool_result
 	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use / tool_result
@@ -285,7 +307,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 					reason = "a UserPromptSubmit hook refused it without giving a reason"
 				}
 				if emit != nil {
-					emit(Event{Type: "notice", Content: "prompt not sent — " + reason})
+					emit(Event{Type: EventNotice, Content: "prompt not sent — " + reason})
 				}
 				return Result{StopReason: "blocked_by_hook", Text: reason, Messages: messages}, nil
 			}
@@ -327,7 +349,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 				messages = append(messages, msg)
 				record(opts.Recorder, "user", msg)
 				if emit != nil {
-					emit(Event{Type: "steer", Content: in.Text})
+					emit(Event{Type: EventSteer, Content: in.Text})
 				}
 			}
 			halted = halted || in.Halt
@@ -392,7 +414,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			thinkingRecovered = true
 			messages = DropLastAssistantTurn(messages)
 			if emit != nil {
-				emit(Event{Type: "notice", Content: "the previous reply could not be re-sent (its thinking blocks were repaired) — retaking that turn"})
+				emit(Event{Type: EventNotice, Content: "the previous reply could not be re-sent (its thinking blocks were repaired) — retaking that turn"})
 			}
 			continue
 		}
@@ -411,7 +433,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			// one reword away from containing "maximum context".
 			maxTokensLowered = true
 			if emit != nil {
-				emit(Event{Type: "notice", Content: fmt.Sprintf(
+				emit(Event{Type: EventNotice, Content: fmt.Sprintf(
 					"the model's output limit is %d tokens, not the %d requested — retrying this turn at %d%s",
 					limit, maxTokens, limit, maxTokensAdvice(opts.Hints))})
 			}
@@ -424,11 +446,11 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			// a second overflow is a real failure and is reported.
 			overflowRecovered = true
 			if emit != nil {
-				emit(Event{Type: "compaction"})
+				emit(Event{Type: EventCompaction})
 			}
 			messages = l.compact(ctx, messages, opts, maxTokens, emit, &calib, true)
 			if emit != nil {
-				emit(Event{Type: "compaction", Content: "context overflowed the model's window — summarised and retried"})
+				emit(Event{Type: EventCompaction, Content: "context overflowed the model's window — summarised and retried"})
 			}
 			continue
 		}
@@ -451,7 +473,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// being incremented at the top of this loop iteration.
 		if emit != nil {
 			emit(Event{
-				Type:        "usage",
+				Type:        EventUsage,
 				InputDelta:  assistant.Usage.InputTokens,
 				OutputDelta: assistant.Usage.OutputTokens,
 				TurnDelta:   1,
@@ -545,7 +567,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 				messages = append(messages, msg)
 				record(opts.Recorder, "user", msg)
 				if emit != nil {
-					emit(Event{Type: "steer", Content: in.Text})
+					emit(Event{Type: EventSteer, Content: in.Text})
 				}
 			}
 			halted = halted || in.Halt
@@ -584,7 +606,7 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 		if out, res := compaction.Microcompact(messages, elisionSpiller(opts.Spill)); res.Compacted {
 			messages = out
 			if emit != nil {
-				emit(Event{Type: "compaction", Content: fmt.Sprintf("microcompact: elided %d old tool results (~%d tokens saved)", res.ElidedCount, res.TokensSaved)})
+				emit(Event{Type: EventCompaction, Content: fmt.Sprintf("microcompact: elided %d old tool results (~%d tokens saved)", res.ElidedCount, res.TokensSaved)})
 			}
 		}
 	}
@@ -601,20 +623,20 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 		// "compacting…" for the duration. Microcompact above is instant and
 		// skips this: it only drops the done banner below.
 		if emit != nil {
-			emit(Event{Type: "compaction"})
+			emit(Event{Type: EventCompaction})
 		}
 		out, err := l.autocompact(ctx, messages, opts, maxTokens)
 		switch {
 		case err == nil:
 			messages = out
 			if emit != nil {
-				emit(Event{Type: "compaction", Content: "autocompact: summarized prior conversation"})
+				emit(Event{Type: EventCompaction, Content: "autocompact: summarized prior conversation"})
 			}
 		case errors.Is(err, errSummaryTruncated) && emit != nil:
 			// Said out loud because keeping the full history is the visible
 			// half of this failure: the user sees no compaction and a context
 			// that keeps growing, and otherwise has no way to know why.
-			emit(Event{Type: "notice", Content: err.Error() + " — kept the full history instead of a partial summary"})
+			emit(Event{Type: EventNotice, Content: err.Error() + " — kept the full history instead of a partial summary"})
 		}
 	}
 	return messages
@@ -693,7 +715,7 @@ func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewPa
 	sink := api.StreamSink{
 		OnText: func(delta string) {
 			if emit != nil {
-				emit(Event{Type: "assistant", Text: delta})
+				emit(Event{Type: EventAssistant, Text: delta})
 			}
 		},
 		OnRawEvent: rawSink,
@@ -986,7 +1008,7 @@ func truncatedToolNote(maxTokens int64, source string, hints api.Hints) string {
 
 func shortCircuit(emit Emitter, tu anthropic.BetaToolUseBlock, msg string) anthropic.BetaContentBlockParamUnion {
 	if emit != nil {
-		emit(Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
+		emit(Event{Type: EventToolResult, ToolName: tu.Name, ToolUseID: tu.ID, Content: msg, IsError: true})
 	}
 	return anthropic.NewBetaToolResultBlock(tu.ID, msg, true)
 }
@@ -1006,7 +1028,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		}
 	}
 	if emit != nil {
-		emit(Event{Type: "tool_use", ToolName: tu.Name, ToolUseID: tu.ID, Input: tu.Input})
+		emit(Event{Type: EventToolUse, ToolName: tu.Name, ToolUseID: tu.ID, Input: tu.Input})
 	}
 
 	key := tu.Name + "\x00" + string(raw)
@@ -1034,7 +1056,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		}
 		if emit != nil {
 			emit(Event{
-				Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID,
+				Type: EventToolResult, ToolName: tu.Name, ToolUseID: tu.ID,
 				Content: msg, IsError: true, HostBlocked: kind == failureHostGate,
 			})
 		}
@@ -1188,7 +1210,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	if emit != nil {
 		progress = func(line string) {
 			emit(Event{
-				Type:      "tool_progress",
+				Type:      EventToolProgress,
 				ToolName:  tu.Name,
 				ToolUseID: tu.ID,
 				Text:      line,
@@ -1279,7 +1301,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		fs.clear(key, tu.Name)
 	}
 	if emit != nil {
-		ev := Event{Type: "tool_result", ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr}
+		ev := Event{Type: EventToolResult, ToolName: tu.Name, ToolUseID: tu.ID, Content: content, IsError: isErr}
 		if clamped {
 			ev.FullContent = full
 		}

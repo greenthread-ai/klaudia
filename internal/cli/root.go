@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -1483,6 +1484,10 @@ func run(cmd *cobra.Command, opts *options) error {
 	// by the peer.
 	if opts.inputFormat == "stream-json" {
 		driver := streamjson.NewDriver(cmd.OutOrStdout())
+		driver.Init = map[string]any{
+			"session_id": sessionID, "cwd": cwd, "model": string(model),
+			"permissionMode": string(mode), "tools": registry.Names(),
+		}
 		runFn := func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
 			elicitor.SetAsker(turn.Asker)
 			return loop.Run(ctx, baseOptions(turn, turnSettings{
@@ -1586,6 +1591,16 @@ func run(cmd *cobra.Command, opts *options) error {
 		var writeMu sync.Mutex
 		out := cmd.OutOrStdout()
 		runRecorder = multiRecorder{recorder, newEnvelopeRecorder(out, sessionID)}
+		// Claude Code opens its stream-json output with a system/init line,
+		// and consumers written against it read the session's model, tools
+		// and mode from there before the first message.
+		if line, err := json.Marshal(map[string]any{
+			"type": "system", "subtype": "init", "session_id": sessionID, "cwd": cwd,
+			"model": string(model), "permissionMode": string(mode), "tools": registry.Names(),
+			"uuid": uuid.NewString(),
+		}); err == nil {
+			fmt.Fprintln(out, string(line))
+		}
 		// The envelope recorder emits the conversation, so the renderer is not
 		// asked to; notices still go to stderr, where they do not collide with
 		// the JSON stream.

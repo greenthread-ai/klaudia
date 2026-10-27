@@ -6,6 +6,12 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **Stream-json opens with a `system/init` line**, as Claude Code's does:
+  session id, model, cwd, permission mode, tools — and, on the bidirectional
+  driver, `schema_version`, which versions `agent.Event` as a wire format
+  (`agent.EventSchemaVersion`, with named `agent.Event*` type constants; new
+  types and optional fields keep the version, renames and removals bump it,
+  and a golden test pins the field names).
 - **Background sub-agents.** The Agent tool takes `run_in_background`: the
   sub-agent starts, the tool returns its id at once, and the model carries on.
   In the TUI the agent is listed under the prompt with its latest step and

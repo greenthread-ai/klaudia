@@ -82,7 +82,7 @@ func fireHooks(ctx context.Context, opts Options, emit Emitter, in HookInput) Ho
 	res := opts.Hooks.Run(ctx, in, opts.Approver)
 	for _, n := range res.Notices {
 		if emit != nil {
-			emit(Event{Type: "notice", Content: "hook: " + n})
+			emit(Event{Type: EventNotice, Content: "hook: " + n})
 		}
 	}
 	return res

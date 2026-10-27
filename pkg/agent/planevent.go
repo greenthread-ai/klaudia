@@ -34,5 +34,5 @@ func announcePlan(store *plan.Store, emit Emitter, t *planTracker) {
 		return
 	}
 	t.sent = snap.Rev
-	emit(Event{Type: "plan", Plan: &snap})
+	emit(Event{Type: EventPlan, Plan: &snap})
 }

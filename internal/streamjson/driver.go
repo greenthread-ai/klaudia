@@ -94,6 +94,9 @@ type planAnswer struct {
 
 // Driver runs the stream-json protocol over a reader/writer pair.
 type Driver struct {
+	// Init is added to the system/init line Run writes first (session id,
+	// model, cwd — whatever the host knows).
+	Init    map[string]any
 	out     io.Writer
 	mu      sync.Mutex // serializes writes to out
 	pending sync.Map   // request_id -> chan *controlResp
@@ -109,6 +112,10 @@ func NewDriver(w io.Writer) *Driver {
 // and plan approvals are emitted as control_request lines and block until the
 // peer sends the matching control_response.
 func (d *Driver) Run(ctx context.Context, r io.Reader, history []anthropic.BetaMessageParam, run RunFunc) error {
+	// The first line says what follows: a peer checks schema_version before
+	// it parses an event, and an unknown version is its cue to stop rather
+	// than misread renamed fields (agent.EventSchemaVersion).
+	d.write(initLine(d.Init))
 	lines := make(chan inMessage, 8)
 
 	// Reader goroutine: route control responses to waiters, user messages to
@@ -381,6 +388,18 @@ func resultEvent(res agent.Result, err error) map[string]any {
 			m["subtype"] = res.StopReason
 			m["is_error"] = true
 			m["result"] = note
+		}
+	}
+	return m
+}
+
+// initLine is the system/init line that opens a stream-json session, as
+// Claude Code's does, carrying the Event schema version.
+func initLine(extra map[string]any) map[string]any {
+	m := map[string]any{"type": "system", "subtype": "init", "schema_version": agent.EventSchemaVersion}
+	for k, v := range extra {
+		if _, taken := m[k]; !taken {
+			m[k] = v
 		}
 	}
 	return m
