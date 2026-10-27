@@ -63,7 +63,8 @@ type step struct {
 	kept     int
 	maxWin   int // the context window the recording ran with, when stamped
 	newTurn  bool
-	toolUses []toolUse // assistant: the calls it made
+	toolUses []toolUse           // assistant: the calls it made
+	steer    *agent.Interjection // user: a message sent mid-turn, not a prompt
 }
 
 type toolUse struct {
@@ -102,6 +103,15 @@ func Load(path string) (Recording, error) {
 				return nil, fmt.Errorf("%s: %w", e.UUID, err)
 			}
 			s := step{msg: &m, role: e.Type, maxWin: e.ContextWindow}
+			// A message the user sent mid-turn is user text after tool
+			// results, like a new prompt; its framing tells them apart.
+			if e.Type == "user" && len(m.Content) == 1 && m.Content[0].OfText != nil {
+				if in, ok := agent.ParseInterjection(m.Content[0].OfText.Text); ok {
+					s.steer = &in
+					steps = append(steps, s)
+					continue
+				}
+			}
 			for _, b := range m.Content {
 				switch {
 				case b.OfToolUse != nil:
@@ -156,8 +166,15 @@ func Run(ctx context.Context, steps Recording, opts Options) (Result, error) {
 				lastReply = j
 			}
 		}
+		type pending struct {
+			after int // replies served before it arrived
+			in    agent.Interjection
+		}
+		var steers []pending
 		for k := i + 1; k < j; k++ {
 			switch {
+			case steps[k].steer != nil:
+				steers = append(steers, pending{len(p.replies), *steps[k].steer})
 			case steps[k].role == "assistant":
 				p.replies = append(p.replies, *steps[k].msg)
 				if steps[k].maxWin > 0 {
@@ -186,6 +203,18 @@ func Run(ctx context.Context, steps Recording, opts Options) (Result, error) {
 			ContextWindow:   p.window,
 			Permission:      permission.Context{Mode: permission.StaticMode(permission.ModeBypassPermissions)},
 			InitialMessages: append(append([]anthropic.BetaMessageParam(nil), hist...), *s.msg),
+			// What the user sent mid-turn arrives after the same reply it
+			// followed live: the loop polls before each request and after
+			// each tool batch, and both fall between that reply's results
+			// and the next request.
+			Interject: func() agent.Interjection {
+				if len(steers) == 0 || steers[0].after > p.next {
+					return agent.Interjection{}
+				}
+				in := steers[0].in
+				steers = steers[1:]
+				return in
+			},
 		}, nil)
 		if err != nil {
 			p.findings = append(p.findings, Finding{Turn: res.Turns, Kind: "loop-error", Detail: err.Error()})

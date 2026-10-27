@@ -22,6 +22,8 @@ port mirrors (see `internal/version`).
   e2e suite runs in CI with golden snapshots of what the model is sent, so a
   change to how the conversation is assembled shows up as a reviewable diff;
   `KLAUDIA_REPLAY_DIR` sweeps a local session directory the same way.
+  Messages typed while the model worked are replayed where they arrived,
+  not mistaken for new prompts.
 
 ### Fixed
 

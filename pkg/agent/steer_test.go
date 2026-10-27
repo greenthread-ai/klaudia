@@ -256,3 +256,26 @@ func marshalMessages(t *testing.T, msgs []anthropic.BetaMessageParam) string {
 	}
 	return string(b)
 }
+
+// Every message steerMessage writes reads back as the interjection it came
+// from, and a prompt that merely looks similar does not.
+func TestParseInterjectionRoundTrips(t *testing.T) {
+	for _, in := range []Interjection{
+		{Text: "don't touch the API"},
+		{Text: "<background-job id=\"bash_1\">exit 0</background-job>"},
+		{Halt: true},
+		{Text: "stop after the tests", Halt: true},
+	} {
+		msg, ok := steerMessage(in)
+		if !ok {
+			t.Fatalf("steerMessage(%+v) wrote nothing", in)
+		}
+		got, ok := ParseInterjection(msg.Content[0].OfText.Text)
+		if !ok || got != in {
+			t.Errorf("ParseInterjection(steerMessage(%+v)) = %+v, %v", in, got, ok)
+		}
+	}
+	if _, ok := ParseInterjection("The user interrupted earlier, so please continue"); ok {
+		t.Error("an ordinary prompt was read as an interjection")
+	}
+}

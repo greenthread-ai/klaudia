@@ -44,22 +44,28 @@ func (i Interjection) Empty() bool { return strings.TrimSpace(i.Text) == "" && !
 const haltInstruction = "The user asked you to stop after the current step. Do not start anything new. " +
 	"Summarise what you completed, what you were part-way through, and what remains."
 
+// The framings steerMessage puts round an interjection's text.
+const (
+	// A report from work the model started (a job exiting, a background agent
+	// finishing), not something the user said. Framed as an interruption it
+	// read as a new order; it is news to act on.
+	backgroundFrame = "Background work you started has reported back. Take it into account " +
+		"for what you do next:\n\n"
+	// So the model treats it as a live instruction rather than as
+	// conversational filler arriving mid-task. Without the framing, an
+	// interjection reads like an aside and gets acknowledged instead of
+	// obeyed.
+	userFrame = "The user interrupted with a new instruction. It applies from now on, " +
+		"including to anything you were about to do:\n\n"
+)
+
 // steerMessage renders an interjection as a user message.
 func steerMessage(in Interjection) (anthropic.BetaMessageParam, bool) {
 	var parts []string
 	if t := strings.TrimSpace(in.Text); t != "" && strings.HasPrefix(t, "<background-") {
-		// A report from work the model started (a job exiting, a background
-		// agent finishing), not something the user said. Framed as an
-		// interruption it read as a new order; it is news to act on.
-		parts = append(parts, "Background work you started has reported back. Take it into account "+
-			"for what you do next:\n\n"+t)
+		parts = append(parts, backgroundFrame+t)
 	} else if t != "" {
-		// Framed so the model treats it as a live instruction rather than as
-		// conversational filler arriving mid-task. Without the framing, an
-		// interjection reads like an aside and gets acknowledged instead of
-		// obeyed.
-		parts = append(parts, "The user interrupted with a new instruction. It applies from now on, "+
-			"including to anything you were about to do:\n\n"+t)
+		parts = append(parts, userFrame+t)
 	}
 	if in.Halt {
 		parts = append(parts, haltInstruction)
@@ -68,6 +74,28 @@ func steerMessage(in Interjection) (anthropic.BetaMessageParam, bool) {
 		return anthropic.BetaMessageParam{}, false
 	}
 	return anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(strings.Join(parts, "\n\n"))), true
+}
+
+// ParseInterjection recovers the interjection steerMessage rendered as text.
+// It is for a reader of a transcript — session replay — which has to tell a
+// message the user sent mid-turn from a new prompt: both are user text after
+// tool results. ok is false for text steerMessage did not write.
+func ParseInterjection(text string) (in Interjection, ok bool) {
+	if text == haltInstruction {
+		return Interjection{Halt: true}, true
+	}
+	if rest, found := strings.CutSuffix(text, "\n\n"+haltInstruction); found {
+		text, in.Halt = rest, true
+	}
+	switch {
+	case strings.HasPrefix(text, userFrame):
+		in.Text = strings.TrimPrefix(text, userFrame)
+	case strings.HasPrefix(text, backgroundFrame):
+		in.Text = strings.TrimPrefix(text, backgroundFrame)
+	default:
+		return Interjection{}, false
+	}
+	return in, true
 }
 
 // Inbox queues reports for a running turn — a background job's exit, say —
