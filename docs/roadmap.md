@@ -262,6 +262,9 @@ panel of its own.
 Keep the two front halves: exploring read-only and writing a spec are
 different jobs.
 
+**Status:** 1–4 landed (f9cba47), as D5 in docs/plan-mode.md. The running-
+jobs panel below landed too; background sub-agents join it with #4.
+
 **Running work below the prompt.** The status line counts running jobs;
 nothing lists them. A panel in the same live-region slot — each job's name,
 elapsed time and last output line, and later each background sub-agent

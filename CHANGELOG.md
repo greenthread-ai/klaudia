@@ -15,6 +15,10 @@ port mirrors (see `internal/version`).
   run ends with one completion block. `/plan stop` (or `/goal stop`, or Esc)
   halts it. During `/goal run` the live panel shows the spec's checklist and
   the iteration, instead of whatever plan was last on screen.
+- **Running jobs are listed under the prompt**: name, age, port, and the
+  command, oldest first, up to three (then "+N more · /jobs"). The status line
+  only counted them. It ticks once a second while a job runs and not at all
+  otherwise.
 
 ### Fixed
 - **OpenAI-compatible providers: steering and interrupted prompts.** A user

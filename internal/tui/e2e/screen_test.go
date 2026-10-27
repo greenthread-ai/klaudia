@@ -364,16 +364,19 @@ func (s Snapshot) MatchLines(re *regexp.Regexp) []string {
 	return out
 }
 
-// StatusLine is the first non-blank row below the input box's bottom border.
+// StatusLine is the last non-blank row below the input box's bottom border.
 func (s Snapshot) StatusLine() string {
 	for i := len(s.Lines) - 1; i >= 0; i-- {
 		if strings.HasPrefix(strings.TrimSpace(s.Lines[i]), "╰") {
+			// The last non-blank line below the box: panels (running jobs)
+			// can sit between the two, the status bar is always last.
+			status := ""
 			for _, l := range s.Lines[i+1:] {
 				if strings.TrimSpace(l) != "" {
-					return l
+					status = l
 				}
 			}
-			return ""
+			return status
 		}
 	}
 	return ""

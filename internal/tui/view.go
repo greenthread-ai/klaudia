@@ -346,6 +346,13 @@ func (m *Model) bottomView() string {
 		m.input.SetHeight(m.inputHeight())
 		bottom = withPanel(m.promptBox() + m.inputAffordanceView())
 	}
+	// Running work sits under the prompt, while idle and while running: in a
+	// question's states it would read as one of the answers.
+	if m.state == stateIdle || m.state == stateRunning {
+		if jobs := m.jobsPanel(); jobs != "" {
+			bottom += "\n" + jobs
+		}
+	}
 	// Persistent status bar at the very bottom, in every state.
 	return bottom + "\n" + caption(m.statusLine())
 }

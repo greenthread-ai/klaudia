@@ -458,6 +458,8 @@ type Model struct {
 	// checklist, for the panel.
 	loopPlan bool
 	goalList plan.Snapshot
+	// jobsTicking is set while a jobsTickMsg is scheduled (see jobsTick).
+	jobsTicking bool
 	// Pending ExitPlanMode approval.
 	planReply chan bool
 	// Pending /commit-style confirmation: run on "y", returns a result line.
@@ -658,11 +660,15 @@ func (m *Model) waitForEvent() tea.Cmd {
 // (many of them in helpers that return a string or nothing) means a forgotten
 // return can never silently swallow output.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	model, cmd := m.update(msg)
-	if out := m.out.drainCmd(); out != nil {
-		return model, tea.Batch(cmd, out)
+	if _, ok := msg.(jobsTickMsg); ok {
+		m.jobsTicking = false // this tick fired; jobsTick below re-arms it if still needed
 	}
-	return model, cmd
+	model, cmd := m.update(msg)
+	cmds := []tea.Cmd{cmd, m.jobsTick()}
+	if out := m.out.drainCmd(); out != nil {
+		cmds = append(cmds, out)
+	}
+	return model, tea.Batch(cmds...)
 }
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {

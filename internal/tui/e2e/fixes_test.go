@@ -197,3 +197,23 @@ func TestPlanKeepPlanningReachesTheModel(t *testing.T) {
 		t.Errorf("the feedback never reached the model; prompts: %q", env.Mock.Prompts())
 	}
 }
+
+// A background job is listed under the prompt while idle, and its elapsed time
+// moves without any input — the panel ticks while something runs.
+func TestRunningJobsPanel(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	env.Prompt(t, tm, "bgjob")
+	jobLine := regexp.MustCompile(`⏵ .* · (\d+)s`)
+	first := tm.WaitFor(t, "the job under the prompt", 20*time.Second, func(s Snapshot) bool {
+		return s.HasLine(doneLine) && s.HasLine(jobLine)
+	})
+	before := jobLine.FindStringSubmatch(strings.Join(first.MatchLines(jobLine), "\n"))[1]
+	tm.WaitFor(t, "the elapsed time to move while idle", 5*time.Second, func(s Snapshot) bool {
+		m := jobLine.FindStringSubmatch(strings.Join(s.MatchLines(jobLine), "\n"))
+		return m != nil && m[1] != before
+	})
+	if !strings.Contains(first.StatusLine(), "job") {
+		t.Errorf("status line should still count the job: %q", first.StatusLine())
+	}
+}
