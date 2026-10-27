@@ -18,8 +18,11 @@ func (m *Model) interruptTurn() {
 	m.turnCancel()
 	m.turnCancel = nil
 	m.loopRemaining, m.loopWrapUp, m.loopStubFixing, m.loopVerifying = 0, false, false, false // also halts a goal loop
+	// Nothing is written to scrollback here. The partial reply is still in
+	// the stream buffer, so a line now landed above the text it interrupted;
+	// the live view says "cancelling… (Ctrl+C to force quit)" meanwhile, and
+	// doneMsg writes "⊘ interrupted after …" below the flushed text.
 	m.cancelling = true
-	m.appendLine(toolStyle.Render("  ⊘ interrupting… (Ctrl+C again to force quit)"))
 }
 
 // onCtrlC implements two-press Ctrl+C. A terminal user's reflex is that Ctrl+C
@@ -297,6 +300,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.turnCancel()
 					m.turnCancel = nil
 					m.cancelling = true // bottom view swaps to "cancelling…" so user sees the cancel registered
+					m.flushAssistant()  // the notice belongs below the text it interrupts
 					m.appendLine(toolStyle.Render("  ⊘ interrupting to send your queued message…"))
 				}
 			}

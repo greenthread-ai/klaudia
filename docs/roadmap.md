@@ -195,7 +195,7 @@ spend), snapshotted through a small VT emulator at 100×30 and 60×20.
 
 Status 2026-10-27: 1–3 and 15 are done (6bc7909, ce5b5fc + cda401c, 469e853,
 ec7625a), each with an e2e scenario that fails on the code before the fix;
-6 and 7 in 7062b4d, 8 in 51afd62, and 5 with unit tests.
+6 and 7 in 7062b4d, 8 in 51afd62, and 4 and 5 with unit tests.
 
 1. **AskUserQuestion takes the next prompt as its answer.** Arrow keys and
    Enter do nothing; only a digit or free text answers, so a user who types

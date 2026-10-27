@@ -1,12 +1,15 @@
 package tui
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // isQuit reports whether cmd resolves to tea.Quit — directly, or as the last
@@ -204,5 +207,27 @@ func TestQuitLeavesAResumeLineAndAnEmptyFrame(t *testing.T) {
 	}
 	if v := m.View(); v != "" {
 		t.Errorf("final frame should be empty, got %q", v)
+	}
+}
+
+// The interrupt notice used to be written the moment Esc was pressed, above
+// the partial reply still in the stream buffer. The transcript should read
+// the partial text, then the interruption.
+func TestInterruptNoticeFollowsThePartialReply(t *testing.T) {
+	m := newTestModel()
+	m.resize(100, 30)
+	m.setState(stateRunning)
+	m.turnCancel = func() {}
+	m.renderEvent(agent.Event{Type: "assistant", Text: "Half of an answer"})
+	m.interruptTurn()
+	m.update(doneMsg{err: context.Canceled})
+
+	out := stripANSI(m.transcript.String())
+	text, notice := strings.Index(out, "Half of an answer"), strings.Index(out, "⊘ interrupted")
+	if text < 0 || notice < 0 || notice < text {
+		t.Errorf("want the partial reply, then the interruption:\n%s", out)
+	}
+	if strings.Count(out, "⊘ interrupt") != 1 {
+		t.Errorf("want one interruption line:\n%s", out)
 	}
 }

@@ -42,6 +42,10 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **The interrupt notice follows the text it interrupted.** Esc wrote
+  "⊘ interrupting…" to scrollback at once, above the partial reply still
+  being streamed. The live view says "cancelling…" until the turn stops, and
+  the transcript gets the partial reply and then one "⊘ interrupted after …".
 - **`/context` lists only files that exist.** A path was noted when a tool
   call started, so a Read of a file that does not exist showed up under
   Recently inspected and Active. Paths are now noted only when the call
