@@ -1,0 +1,63 @@
+[
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "question"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "question"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_0_0",
+      "name": "AskUserQuestion",
+      "input": {
+       "options": [
+        {
+         "description": "The classic",
+         "label": "hello, world"
+        },
+        {
+         "description": "Short",
+         "label": "hi"
+        }
+       ],
+       "question": "Which greeting should main.go print?"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_0_0",
+      "result": "The user answered: hi"
+     }
+    ]
+   }
+  ]
+ }
+]

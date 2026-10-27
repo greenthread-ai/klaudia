@@ -30,8 +30,11 @@
 //     so one prompt can play out a multi-step tool turn.
 //   - pty_*_test.go: opening a pty with the stdlib only.
 //   - screen_test.go: a minimal VT emulator (cursor movement, erase, scrolling
-//     into scrollback, wide runes, OSC 8 links) that also answers the
-//     terminal queries it sees, in the order it sees them.
+//     into scrollback, wide runes, OSC 8 links, autowrap) that also answers
+//     the terminal queries it sees, in the order it sees them.
+//   - resize_test.go: resizing it the way a terminal does, rewrapping
+//     (iTerm2, kitty, Ghostty, tmux) or clipping (xterm), then telling the
+//     binary through the pty; resize_scenario_test.go drags it.
 //   - term_test.go: Term, the running binary — Type, Press, WaitFor,
 //     Snapshot, WaitExit.
 //   - scenarios_test.go: the tests.
@@ -52,6 +55,11 @@
 //		})
 //		...
 //	}
+//
+// KLAUDIA_E2E_KEEP=<dir> copies each test's session transcript there, paths
+// made machine-independent. That is how internal/replay's corpus is made:
+// pick the transcripts that exercise something new into its testdata/corpus
+// and regenerate the goldens (go test ./internal/replay -run Corpus -update).
 //
 // Wait on screen conditions with WaitFor rather than sleeping; on timeout it
 // fails with the screen and scrollback dumped. Assert on behaviour that is

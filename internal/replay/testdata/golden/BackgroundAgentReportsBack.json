@@ -1,0 +1,116 @@
+[
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "bgagent"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "bgagent"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_0_0",
+      "name": "Agent",
+      "input": {
+       "description": "survey",
+       "prompt": "childtask: survey the project",
+       "run_in_background": true,
+       "subagent_type": "Explore"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_0_0",
+      "result": "Input validation error: unknown subagent_type \"Explore\" — Agent accepts: description (required), fork, prompt (required), run_in_background, subagent_type (required).",
+      "is_error": true
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 2,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "bgagent"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_0_0",
+      "name": "Agent",
+      "input": {
+       "description": "survey",
+       "prompt": "childtask: survey the project",
+       "run_in_background": true,
+       "subagent_type": "Explore"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_0_0",
+      "result": "Input validation error: unknown subagent_type \"Explore\" — Agent accepts: description (required), fork, prompt (required), run_in_background, subagent_type (required).",
+      "is_error": true
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "Started it; carrying on."
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "\u003cbackground-agent id=\"agent_1\" status=\"completed\"\u003e\nBackground sub-agent agent_1 (Explore: survey) completed after 2s.\n\nChild finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. Child finished: three findings. \n\u003c/background-agent\u003e"
+     }
+    ]
+   }
+  ]
+ }
+]

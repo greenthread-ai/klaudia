@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -99,6 +100,9 @@ func newEnv(t *testing.T) *Env {
 		}
 	}
 	t.Cleanup(func() {
+		if dir := os.Getenv("KLAUDIA_E2E_KEEP"); dir != "" {
+			keepTranscripts(t, e.Config, root, dir)
+		}
 		if t.Failed() {
 			t.Logf("mock answered %d request(s), for prompts %q", e.Mock.Requests(), e.Mock.Prompts())
 		}
@@ -148,5 +152,27 @@ func (e *Env) Prompt(t *testing.T, tm *Term, text string) {
 			t.Fatalf("isolation: the mock received no request for %q within 15s\n%s", text, tm.Snapshot())
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// keepTranscripts copies the session transcripts a test produced into dir,
+// named after the test, with its temporary root replaced by "/e2e" so the
+// copies do not depend on the machine. KLAUDIA_E2E_KEEP=dir turns it on; it is
+// how internal/replay's checked-in corpus is regenerated.
+func keepTranscripts(t *testing.T, config, root, dir string) {
+	paths, _ := filepath.Glob(filepath.Join(config, "sessions", "*", "*.jsonl"))
+	for i, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		name := strings.ReplaceAll(t.Name(), "/", "_")
+		if i > 0 {
+			name += fmt.Sprintf("_%d", i)
+		}
+		out := strings.ReplaceAll(string(b), root, "/e2e")
+		if err := os.MkdirAll(dir, 0o755); err == nil {
+			_ = os.WriteFile(filepath.Join(dir, name+".jsonl"), []byte(out), 0o644)
+		}
 	}
 }

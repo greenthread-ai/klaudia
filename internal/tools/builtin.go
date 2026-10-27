@@ -17,17 +17,28 @@ import (
 // resource tools live in package mcp, which imports this one; see
 // mcp.ResourceToolSchemas.
 func BuiltinSchemas() (map[string]json.RawMessage, error) {
+	ts, err := BuiltinTools()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]json.RawMessage, len(ts))
+	for _, t := range ts {
+		out[t.Name()] = t.InputSchema()
+	}
+	return out, nil
+}
+
+// BuiltinTools returns one of every tool this package defines, for reading
+// their names, schemas and validation — BuiltinSchemas, and session replay,
+// which checks recorded calls against today's tools. They are built with nil
+// dependencies: every constructor here touches its dependency at Execute, not
+// at New, so none of them can be run.
+func BuiltinTools() ([]Tool, error) {
 	reg, err := DefaultRegistry(nil)
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]json.RawMessage{}
-	for _, name := range reg.Names() {
-		t, _ := reg.Lookup(name)
-		out[name] = t.InputSchema()
-	}
-	// Built with nil dependencies: only the schema is read, and every one of
-	// these constructors touches its dependency at Execute, not at New.
+	out := reg.All()
 	extra := []func() (Tool, error){
 		func() (Tool, error) { return NewDiagnostics(nil) },
 		func() (Tool, error) { return NewDefinition(nil) },
@@ -45,7 +56,7 @@ func BuiltinSchemas() (map[string]json.RawMessage, error) {
 		if t == nil {
 			return nil, fmt.Errorf("a builtin constructor returned no tool")
 		}
-		out[t.Name()] = t.InputSchema()
+		out = append(out, t)
 	}
 	return out, nil
 }

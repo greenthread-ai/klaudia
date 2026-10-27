@@ -1,0 +1,55 @@
+[
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "make it fail"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "make it fail"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_0_0",
+      "name": "Bash",
+      "input": {
+       "command": "ls ./no-such-dir-e2e",
+       "description": "List a missing directory"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_0_0",
+      "result": "ls: ./no-such-dir-e2e: No such file or directory\n\n[exit code 1]",
+      "is_error": true
+     }
+    ]
+   }
+  ]
+ }
+]

@@ -1,0 +1,576 @@
+[
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "use the tools"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "use the tools"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "Let me look.\n"
+     },
+     {
+      "type": "tool_use",
+      "id": "call_0_0",
+      "name": "TodoWrite",
+      "input": {
+       "todos": [
+        {
+         "activeForm": "Reading the project",
+         "content": "Read the project",
+         "status": "in_progress"
+        },
+        {
+         "activeForm": "Fixing the greeting",
+         "content": "Fix the greeting",
+         "status": "pending"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_0_0",
+      "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "use the tools"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "Let me look.\n"
+     },
+     {
+      "type": "tool_use",
+      "id": "call_0_0",
+      "name": "TodoWrite",
+      "input": {
+       "todos": [
+        {
+         "activeForm": "Reading the project",
+         "content": "Read the project",
+         "status": "in_progress"
+        },
+        {
+         "activeForm": "Fixing the greeting",
+         "content": "Fix the greeting",
+         "status": "pending"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_0_0",
+      "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_1_0",
+      "name": "Read",
+      "input": {
+       "file_path": "main.go"
+      }
+     },
+     {
+      "type": "tool_use",
+      "id": "call_1_1",
+      "name": "Glob",
+      "input": {
+       "pattern": "**/*.go"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_1_0",
+      "result": "     1\tpackage main\n     2\t\n     3\timport \"fmt\"\n     4\t\n     5\tfunc main() {\n     6\t\tfmt.Println(\"hello\")\n     7\t}\n"
+     },
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_1_1",
+      "result": "/e2e/project/main.go"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "use the tools"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "Let me look.\n"
+     },
+     {
+      "type": "tool_use",
+      "id": "call_0_0",
+      "name": "TodoWrite",
+      "input": {
+       "todos": [
+        {
+         "activeForm": "Reading the project",
+         "content": "Read the project",
+         "status": "in_progress"
+        },
+        {
+         "activeForm": "Fixing the greeting",
+         "content": "Fix the greeting",
+         "status": "pending"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_0_0",
+      "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_1_0",
+      "name": "Read",
+      "input": {
+       "file_path": "main.go"
+      }
+     },
+     {
+      "type": "tool_use",
+      "id": "call_1_1",
+      "name": "Glob",
+      "input": {
+       "pattern": "**/*.go"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_1_0",
+      "result": "     1\tpackage main\n     2\t\n     3\timport \"fmt\"\n     4\t\n     5\tfunc main() {\n     6\t\tfmt.Println(\"hello\")\n     7\t}\n"
+     },
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_1_1",
+      "result": "/e2e/project/main.go"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_2_0",
+      "name": "Bash",
+      "input": {
+       "command": "echo built-ok",
+       "description": "Pretend to build"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_2_0",
+      "result": "built-ok\n"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "use the tools"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "Let me look.\n"
+     },
+     {
+      "type": "tool_use",
+      "id": "call_0_0",
+      "name": "TodoWrite",
+      "input": {
+       "todos": [
+        {
+         "activeForm": "Reading the project",
+         "content": "Read the project",
+         "status": "in_progress"
+        },
+        {
+         "activeForm": "Fixing the greeting",
+         "content": "Fix the greeting",
+         "status": "pending"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_0_0",
+      "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_1_0",
+      "name": "Read",
+      "input": {
+       "file_path": "main.go"
+      }
+     },
+     {
+      "type": "tool_use",
+      "id": "call_1_1",
+      "name": "Glob",
+      "input": {
+       "pattern": "**/*.go"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_1_0",
+      "result": "     1\tpackage main\n     2\t\n     3\timport \"fmt\"\n     4\t\n     5\tfunc main() {\n     6\t\tfmt.Println(\"hello\")\n     7\t}\n"
+     },
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_1_1",
+      "result": "/e2e/project/main.go"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_2_0",
+      "name": "Bash",
+      "input": {
+       "command": "echo built-ok",
+       "description": "Pretend to build"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_2_0",
+      "result": "built-ok\n"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_3_0",
+      "name": "Edit",
+      "input": {
+       "file_path": "main.go",
+       "new_string": "\"hello, e2e\"",
+       "old_string": "\"hello\""
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_3_0",
+      "result": "Edited /e2e/project/main.go (1 replacement)"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "use the tools"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "Let me look.\n"
+     },
+     {
+      "type": "tool_use",
+      "id": "call_0_0",
+      "name": "TodoWrite",
+      "input": {
+       "todos": [
+        {
+         "activeForm": "Reading the project",
+         "content": "Read the project",
+         "status": "in_progress"
+        },
+        {
+         "activeForm": "Fixing the greeting",
+         "content": "Fix the greeting",
+         "status": "pending"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_0_0",
+      "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_1_0",
+      "name": "Read",
+      "input": {
+       "file_path": "main.go"
+      }
+     },
+     {
+      "type": "tool_use",
+      "id": "call_1_1",
+      "name": "Glob",
+      "input": {
+       "pattern": "**/*.go"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_1_0",
+      "result": "     1\tpackage main\n     2\t\n     3\timport \"fmt\"\n     4\t\n     5\tfunc main() {\n     6\t\tfmt.Println(\"hello\")\n     7\t}\n"
+     },
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_1_1",
+      "result": "/e2e/project/main.go"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_2_0",
+      "name": "Bash",
+      "input": {
+       "command": "echo built-ok",
+       "description": "Pretend to build"
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_2_0",
+      "result": "built-ok\n"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_3_0",
+      "name": "Edit",
+      "input": {
+       "file_path": "main.go",
+       "new_string": "\"hello, e2e\"",
+       "old_string": "\"hello\""
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_3_0",
+      "result": "Edited /e2e/project/main.go (1 replacement)"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "tool_use",
+      "id": "call_4_0",
+      "name": "TodoWrite",
+      "input": {
+       "todos": [
+        {
+         "activeForm": "Reading the project",
+         "content": "Read the project",
+         "status": "completed"
+        },
+        {
+         "activeForm": "Fixing the greeting",
+         "content": "Fix the greeting",
+         "status": "completed"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "tool_result",
+      "tool_use_id": "call_4_0",
+      "result": "Todos updated:\n[x] Read the project\n[x] Fix the greeting"
+     }
+    ]
+   }
+  ]
+ }
+]

@@ -1,0 +1,84 @@
+[
+ {
+  "turn": 1,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "hello there"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 2,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "hello there"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "Hello from the mock model."
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "hello again, second prompt"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "turn": 3,
+  "messages": [
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "[Conversation compacted to save context. Summary of the prior conversation follows.]\n\nSUMMARY: the user said hello and was greeted.\n\n[End of summary. The conversation continues below.]"
+     },
+     {
+      "type": "text",
+      "text": "hello again, second prompt"
+     }
+    ]
+   },
+   {
+    "role": "assistant",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "Hello from the mock model."
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "blocks": [
+     {
+      "type": "text",
+      "text": "hello, third"
+     }
+    ]
+   }
+  ]
+ }
+]

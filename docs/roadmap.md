@@ -30,10 +30,10 @@ egress control exists (enforced under the macOS OS sandbox), sub-agents run in
 the background and fork, and the loop emits OTel GenAI spans. The ranked table
 below keeps each item's original reasoning with its status noted inline.
 
-What is left, in the order it will be taken:
-
-1. **Session replay as regression tests** (eval mode's second half) — needs a
-   decision on running recorded tool calls safely.
+What is left, in the order it will be taken: nothing scheduled. Session
+replay landed (2026-10-28) as recorded-results replay rather than re-running
+tools in a scratch copy: the transcript does not capture the starting tree,
+and re-run Bash output is mostly noise.
 
 Done since: v0.2.0 shipped (2026-10-27); resize got e2e coverage and Klaudia's
 own live-region renderer; the TUI moved to the Charm v2 libraries, which
@@ -114,7 +114,7 @@ Size is a guess: S ≈ a day, M ≈ a week, L ≈ several.
 | 8 | **Job events into the conversation** (Monitor-style) — *landed 2026-10-27: exits and `watch` matches reach the model in every frontend but ACP*: a background job's output lines matching a pattern wake the loop | Klaudia's jobs are richer than most; this is the missing half that makes "start the server, watch for errors" work | S–M |
 | 9 | **Fallback model chain** and an effort cap in config — *chain landed 2026-10-27 (`fallbackModels`, `--fallback-model`; main loop only, not sub-agents); effort cap landed (`maxEffort`)* | Small, and the 5.5-sizing incident showed provider-side surprises are real | S |
 | 10 | **Idle compaction** above a threshold, before the cache expires — *landed 2026-10-27 (TUI; `idleCompact`)* | Cheaper than compacting under pressure mid-turn | S |
-| 11 | **Eval mode**: `--restricted` (no user config, no memory, no hooks) plus replaying saved sessions as regression tests — *`--restricted` landed 2026-10-27; replay not done: it needs a decision on running recorded tool calls safely (a scratch copy of the tree, or schema-only checks)* | The transcript already records sizing per line; turning sessions into tests catches loop regressions before users do | M |
+| 11 | **Eval mode**: `--restricted` (no user config, no memory, no hooks) plus replaying saved sessions as regression tests — *`--restricted` landed 2026-10-27; replay landed 2026-10-28 (`internal/replay`: recorded replies and results, request checks, schema drift, golden snapshots of an e2e-generated corpus)* | The transcript already records sizing per line; turning sessions into tests catches loop regressions before users do | M |
 | 12 | **TUI**: links on the live region and in `/doctor`'s output, a hyperlink row in `/doctor` — *landed 2026-10-27: the `/doctor` row (on/off and why); its output was already linked like all scrollback. The live region stays unlinked by decision: it is transient, what matters reaches scrollback (linked), and the inline renderer's line arithmetic is where the resize bugs lived* | Small follow-ups to the OSC 8 work | S |
 
 Not recommended: plugin bundles (skills + agents + hooks + MCP in one

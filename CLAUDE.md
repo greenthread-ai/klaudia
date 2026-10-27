@@ -54,6 +54,11 @@ other products (see docs/roadmap.md, "The extraction"); it must not import
   `tui/e2e` drives the real binary in a pty against a scripted mock provider,
   including window resizes (`KLAUDIA_E2E=1 go test ./internal/tui/e2e/...`)
 - **prompt** - Prompt construction
+- **replay** - Replays recorded sessions through today's loop (recorded model
+  replies and tool results, nothing executed): request checks, schema drift,
+  and golden snapshots of a corpus the e2e suite generates (`KLAUDIA_E2E_KEEP`).
+  `KLAUDIA_REPLAY_DIR=~/.klaudia/sessions go test ./internal/replay -run Local`
+  sweeps your own sessions
 - **cli** - CLI entry point and wiring
 - **native** - Pure-Go search / bash-parsing / PDF
 - **sandbox** - Local / OS-confined / container Bash execution
