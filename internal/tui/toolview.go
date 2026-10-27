@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -66,6 +67,9 @@ func toolSummary(name string, input any) string { return toolSummaryWith(name, i
 // no longer starts with the prefix that would have shortened it.
 func toolSummaryWith(name string, input any, short func(string) string) string {
 	f := toolFields(input)
+	if name == "Bash" && short != nil {
+		f["command"] = dropCdIntoCwd(f["command"], short)
+	}
 	if short != nil {
 		for k, v := range f {
 			f[k] = short(v)
@@ -87,6 +91,26 @@ func toolSummaryWith(name string, input any, short func(string) string) string {
 		}
 	}
 	return ""
+}
+
+// cdPrefix matches a leading `cd DIR &&`.
+var cdPrefix = regexp.MustCompile(`^\s*cd\s+(\S+)\s*&&\s*`)
+
+// dropCdIntoCwd removes a leading `cd <working directory> &&` from a command
+// for display. Models prefix it to commands that already run there, and with
+// an absolute path it filled the whole line, so "⚙ Bash cd /…/project && go
+// te…" never showed what ran. short maps the working directory (with its
+// trailing slash) to "", which is how this knows the directory is that one.
+func dropCdIntoCwd(cmd string, short func(string) string) string {
+	m := cdPrefix.FindStringSubmatch(cmd)
+	if m == nil {
+		return cmd
+	}
+	dir := strings.Trim(m[1], `"'`)
+	if short(strings.TrimSuffix(dir, "/")+"/") != "" {
+		return cmd
+	}
+	return cmd[len(m[0]):]
 }
 
 // oneline collapses whitespace/newlines and truncates to n runes.

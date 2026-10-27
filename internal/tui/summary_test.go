@@ -248,6 +248,12 @@ func TestVerifyScope(t *testing.T) {
 		"npm test":                 "",
 		"pytest":                   "",
 		"go test -v ./...":         "",
+		// What a model actually writes: a cd prefix, a pipe, a redirection.
+		// The cd path was read as the subset, so a full run said "only
+		// /abs/project was run".
+		"cd /abs/project && gofmt -l . ; go vet ./... && go test ./... 2>&1 | tail -20": "",
+		"cd /abs/project && go test ./internal/auth 2>&1 | tail":                        "./internal/auth",
+		"go test ./... > out.txt": "",
 	} {
 		got, scoped := verifyScope(cmd)
 		if got != want || scoped != (want != "") {

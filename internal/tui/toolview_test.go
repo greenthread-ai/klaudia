@@ -221,3 +221,19 @@ func TestStatusLineWithoutAJobStore(t *testing.T) {
 		t.Errorf("a session with no job store reported jobs: %q", got)
 	}
 }
+
+// "⚙ Bash cd /abs/project && go te…" never showed what ran.
+func TestBashLineDropsCdIntoTheWorkingDirectory(t *testing.T) {
+	m := newTestModel()
+	m.sess.CWD = "/abs/project"
+	for cmd, want := range map[string]string{
+		"cd /abs/project && go test ./...":     " go test ./...",
+		`cd "/abs/project/" && make`:           " make",
+		"cd /abs/project/sub && go test ./...": " cd sub && go test ./...",
+		"cd /elsewhere && ls":                  " cd /elsewhere && ls",
+	} {
+		if got := toolSummaryWith("Bash", map[string]any{"command": cmd}, m.displayPaths); got != want {
+			t.Errorf("%q → %q, want %q", cmd, got, want)
+		}
+	}
+}

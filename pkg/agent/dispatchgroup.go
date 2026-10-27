@@ -181,11 +181,19 @@ func (o *orderedEmitter) done(i int) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.finished[i] = true
-	for o.next < len(o.bufs) && o.finished[o.next] {
+	// Flush every call that is now at the head, including one still running:
+	// it becomes the live head, so its later events go straight through, and
+	// whatever it buffered before (its tool_use) has to go out first. Stopping
+	// at "finished" left that buffer behind, and the call's result printed
+	// above its own tool line.
+	for o.next < len(o.bufs) {
 		for _, ev := range o.bufs[o.next] {
 			o.base(ev)
 		}
 		o.bufs[o.next] = nil
+		if !o.finished[o.next] {
+			break
+		}
 		o.next++
 	}
 }

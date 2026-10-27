@@ -42,6 +42,14 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **Parallel tool calls print in order.** When the first call of a parallel
+  batch finished while the second was still running, the second's result
+  printed above its own `⚙` line (its buffered tool_use was left behind).
+- **The turn summary reads compound commands.** `cd /abs/project && go test
+  ./... 2>&1 | tail` was reported as a run scoped to `/abs/project`, with a
+  "Not verified — the full tests" note under a full run. The check's own
+  segment is read now, and redirections are not targets. The Bash line also
+  drops a leading `cd <working directory> &&`, which hid the command.
 - **The turn summary counts only checks run after the last edit.** A test
   run before the change was reported as verifying it, and with no check at
   all the footer said "nothing was run" even when commands had run. It now

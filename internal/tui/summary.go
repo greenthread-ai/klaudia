@@ -349,9 +349,14 @@ var flagsTakingValues = map[string]bool{
 //
 // A run with no operands is the whole thing: `go test`, `npm test`, `pytest`
 // all mean everything by default. An operand that is not a flag, not a flag's
-// value, and not one of the "all" spellings narrows it.
+// value, not a redirection, and not one of the "all" spellings narrows it.
+//
+// Only the shell segment that ran the check is read. Models routinely write
+// `cd /abs/project && go test ./... 2>&1 | tail`, and reading the whole line
+// took the cd path for the subset — a full run reported as "only
+// /abs/project was run".
 func verifyScope(command string) (target string, scoped bool) {
-	fields := strings.Fields(command)
+	fields := strings.Fields(verifySegment(command))
 	if len(fields) == 0 {
 		return "", false
 	}
@@ -360,6 +365,12 @@ func verifyScope(command string) (target string, scoped bool) {
 		if strings.HasPrefix(f, "-") {
 			if flagsTakingValues[f] {
 				i++ // skip its value
+			}
+			continue
+		}
+		if strings.ContainsAny(f, "<>") {
+			if strings.HasSuffix(f, ">") || strings.HasSuffix(f, "<") {
+				i++ // `> out.txt`: the file is not a target either
 			}
 			continue
 		}
@@ -376,6 +387,24 @@ func verifyScope(command string) (target string, scoped bool) {
 		return f, true
 	}
 	return "", false
+}
+
+// shellSeparators split a command line into the commands it runs.
+var shellSeparators = regexp.MustCompile(`&&|\|\||[;|\n]`)
+
+// verifySegment returns the part of a compound command that is the check:
+// the segment verifyLabel matches best. A plain command is its own segment.
+func verifySegment(command string) string {
+	best, bestLen := command, -1
+	for _, seg := range shellSeparators.Split(command, -1) {
+		c := strings.ToLower(strings.Join(strings.Fields(seg), " "))
+		for _, k := range verifyKinds {
+			if strings.Contains(c, k.match) && len(k.match) > bestLen {
+				best, bestLen = seg, len(k.match)
+			}
+		}
+	}
+	return best
 }
 
 // testCountRe pulls a pass/total out of the usual runner formats.
