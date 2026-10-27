@@ -153,7 +153,7 @@ func (m *Model) renderContext() string {
 		}
 	}
 
-	if areas := activeAreas(m.recentPaths); len(areas) > 0 {
+	if areas := activeAreas(m.presentRecent()); len(areas) > 0 {
 		b.WriteString("\nActive\n")
 		for _, a := range areas {
 			b.WriteString("  " + a + "\n")
@@ -177,7 +177,7 @@ func (m *Model) renderContext() string {
 // and bounded — this is orientation, not an audit log.
 func (m *Model) recentlyInspected() []string {
 	var out []string
-	for _, p := range m.recentPaths {
+	for _, p := range m.presentRecent() {
 		if m.touched[p] {
 			continue
 		}
@@ -196,14 +196,14 @@ func (m *Model) recentlyInspected() []string {
 // this list is what it looked at rather than what the task needed — which is
 // the claim a user would otherwise infer.
 func (m *Model) contextCaveat() string {
-	n := len(m.recentPaths)
+	n := len(m.presentRecent())
 	switch {
 	case n == 0:
 		return "Klaudia has not read any files yet — anything it says about this code is a guess."
 	default:
 		return fmt.Sprintf(
-			"This is what Klaudia has read (%d files), not what the task needs. "+
-				"If something matters and is not here, /pin it.", n)
+			"This is what Klaudia has read (%s), not what the task needs. "+
+				"If something matters and is not here, /pin it.", countOf(n, "file"))
 	}
 }
 
@@ -226,6 +226,25 @@ func (m *Model) forget(path string) (string, bool) {
 		found = true
 	}
 	return rel, found
+}
+
+// presentRecent is recentPaths without the files that no longer exist — one
+// deleted since, or a path a tool was pointed at and that was never there.
+// /context describes what is in the project now; @-completion keeps the full
+// list, where a stale entry costs nothing.
+func (m *Model) presentRecent() []string {
+	root := m.rootDir()
+	out := make([]string, 0, len(m.recentPaths))
+	for _, p := range m.recentPaths {
+		full := p
+		if root != "" && !filepath.IsAbs(p) {
+			full = filepath.Join(root, p)
+		}
+		if _, err := os.Stat(full); err == nil {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func sortedKeys(m map[string]bool) []string {

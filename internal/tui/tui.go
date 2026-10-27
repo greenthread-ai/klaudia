@@ -354,6 +354,9 @@ type Model struct {
 	// pendingPaths maps an in-flight tool_use id to the file it will write, so
 	// ownership is claimed after the write rather than before it.
 	pendingPaths map[string]string
+	// pendingRecent maps an in-flight tool_use id to the files it names, noted
+	// as recent only if the call succeeds.
+	pendingRecent map[string][]string
 	// pendingCommands maps an in-flight tool_use id to its Bash command line,
 	// so a result can be attributed to the command that produced it.
 	pendingCommands map[string]string

@@ -131,15 +131,21 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.flushAssistant() // the assistant message before a tool call is complete
 		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
 		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + toolSummaryWith(ev.ToolName, ev.Input, m.displayPaths)))
-		// Remember files Klaudia touches so @-completion can rank them first.
-		// Ownership is NOT recorded here: this event is emitted before the tool
-		// runs, so stamping the file now would capture its pre-write state and
-		// every edit Klaudia made would then look like an edit made by the user.
-		// The path is parked until tool_result, when the write has happened —
-		// which also means a failed Write never claims the file.
+		// Remember files Klaudia touches so @-completion can rank them first
+		// and /context can list them. Neither is recorded here: this event is
+		// emitted before the tool runs. Stamping ownership now would capture
+		// the pre-write state, so every edit Klaudia made would look like the
+		// user's; and noting the path now listed a Read of a file that does not
+		// exist as "recently inspected". Both are parked until tool_result and
+		// kept only if the call succeeded.
 		for _, key := range []string{"file_path", "notebook_path"} {
 			p := toolFields(ev.Input)[key]
-			m.noteRecentPath(p)
+			if p != "" {
+				if m.pendingRecent == nil {
+					m.pendingRecent = map[string][]string{}
+				}
+				m.pendingRecent[ev.ToolUseID] = append(m.pendingRecent[ev.ToolUseID], p)
+			}
 			switch ev.ToolName {
 			case "Write", "Edit", "NotebookEdit":
 				if p != "" {
@@ -188,6 +194,12 @@ func (m *Model) renderEvent(ev agent.Event) {
 			at:      time.Now(), content: stored, clamped: ev.FullContent != "",
 		})
 		delete(m.pendingCommands, ev.ToolUseID)
+		if !ev.IsError {
+			for _, p := range m.pendingRecent[ev.ToolUseID] {
+				m.noteRecentPath(p)
+			}
+		}
+		delete(m.pendingRecent, ev.ToolUseID)
 		// Claim the file now the write has actually happened.
 		if p := m.pendingPaths[ev.ToolUseID]; p != "" {
 			if !ev.IsError {

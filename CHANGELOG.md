@@ -42,6 +42,10 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **`/context` lists only files that exist.** A path was noted when a tool
+  call started, so a Read of a file that does not exist showed up under
+  Recently inspected and Active. Paths are now noted only when the call
+  succeeds, and a file deleted since drops out. The count reads "1 file".
 - **MCP fixes** (from an audit; no behaviour changes beyond the bugs):
   tool names that break the API's `[A-Za-z0-9_-]{1,64}` (dots, long names)
   are rewritten to fit instead of failing every request once revealed;

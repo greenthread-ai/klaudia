@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 func ctxModel(t *testing.T) *Model {
@@ -14,6 +17,18 @@ func ctxModel(t *testing.T) *Model {
 		touched: map[string]bool{},
 		base:    newBaseline(),
 	}
+}
+
+// seen records paths as inspected, creating them: /context lists only files
+// that exist.
+func seen(t *testing.T, m *Model, paths ...string) {
+	t.Helper()
+	for _, p := range paths {
+		full := filepath.Join(m.sess.CWD, p)
+		os.MkdirAll(filepath.Dir(full), 0o755)
+		os.WriteFile(full, []byte("x"), 0o644)
+	}
+	m.recentPaths = append(m.recentPaths, paths...)
 }
 
 // A pinned file is re-stated every turn. Mentioned once forty turns ago is,
@@ -107,7 +122,7 @@ func TestContextAdmitsWhatItHasNotRead(t *testing.T) {
 		t.Errorf("a fresh session does not admit it has read nothing:\n%s", out)
 	}
 
-	m.recentPaths = []string{"a.go", "b.go"}
+	seen(t, m, "a.go", "b.go")
 	out = stripANSI(m.renderContext())
 	if !strings.Contains(out, "not what the task needs") {
 		t.Errorf("/context implies its listing is sufficient:\n%s", out)
@@ -120,7 +135,7 @@ func TestContextAdmitsWhatItHasNotRead(t *testing.T) {
 // Files Klaudia changed are listed separately from files it merely read.
 func TestChangedAndInspectedAreSeparate(t *testing.T) {
 	m := ctxModel(t)
-	m.recentPaths = []string{"src/a.go", "src/b.go"}
+	seen(t, m, "src/a.go", "src/b.go")
 	m.touched["src/a.go"] = true
 
 	out := stripANSI(m.renderContext())
@@ -154,7 +169,7 @@ func TestContextKeepsWhereYouAre(t *testing.T) {
 // /forget cannot unsee what the model has read, and must not pretend it can.
 func TestForgetIsHonestAboutItsLimits(t *testing.T) {
 	m := ctxModel(t)
-	m.recentPaths = []string{"noise.go"}
+	seen(t, m, "noise.go")
 	m.forgetCommand([]string{"noise.go"})
 	out := stripANSI(m.transcript.String())
 	if !strings.Contains(out, "stays in the conversation") {
@@ -173,5 +188,36 @@ func TestForgetAlsoUnpins(t *testing.T) {
 	}
 	if len(m.pinned) != 0 {
 		t.Errorf("forget left the file pinned: %v", m.pinned)
+	}
+}
+
+// A Read of a file that does not exist used to be listed as recently
+// inspected: the path was noted when the call started. Now only a call that
+// succeeded counts, and a file deleted since drops out.
+func TestContextListsOnlyFilesThatExist(t *testing.T) {
+	m := newTestModel()
+	m.sess.CWD = t.TempDir()
+	os.WriteFile(filepath.Join(m.sess.CWD, "real.go"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(m.sess.CWD, "gone.go"), []byte("x"), 0o644)
+	read := func(id, path string, failed bool) {
+		m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: id, ToolName: "Read",
+			Input: json.RawMessage(`{"file_path":"` + filepath.Join(m.sess.CWD, path) + `"}`)})
+		m.renderEvent(agent.Event{Type: "tool_result", ToolUseID: id, ToolName: "Read", IsError: failed, Content: "x"})
+	}
+	read("1", "real.go", false)
+	read("2", "ghost.go", true)
+	read("3", "gone.go", false)
+
+	out := stripANSI(m.renderContext())
+	if strings.Contains(out, "ghost.go") {
+		t.Errorf("a failed Read is listed as inspected:\n%s", out)
+	}
+	if !strings.Contains(out, "gone.go") {
+		t.Fatalf("precondition: a successful Read of an existing-at-the-time file is listed:\n%s", out)
+	}
+	os.Remove(filepath.Join(m.sess.CWD, "gone.go"))
+	out = stripANSI(m.renderContext())
+	if strings.Contains(out, "gone.go") || !strings.Contains(out, "real.go") || !strings.Contains(out, "(1 file)") {
+		t.Errorf("want only real.go, counted once:\n%s", out)
 	}
 }
