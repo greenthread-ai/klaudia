@@ -5,6 +5,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/hooks"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 )
 
 // loopHooks adapts Klaudia's hook runner to the loop's agent.Hooks. The loop
@@ -25,15 +26,18 @@ func hooksFor(r *hooks.Runner) agent.Hooks {
 func (h loopHooks) Has(ev agent.HookEvent) bool { return h.r.Has(hooks.Event(ev)) }
 func (h loopHooks) ClaimSessionStart() bool     { return h.r.ClaimSessionStart() }
 
-func (h loopHooks) Run(ctx context.Context, in agent.HookInput, confirm agent.HookConfirm) agent.HookResult {
+func (h loopHooks) Run(ctx context.Context, in agent.HookInput, approver agent.Approver) agent.HookResult {
+	// Deliberately nil rather than a deny-all when there is no approver: the
+	// runner distinguishes "the user said no" from "there was no one to ask",
+	// and says so in its notice.
 	var c hooks.Confirm
-	if confirm != nil {
+	if approver != nil {
 		c = func(ctx context.Context, hs []hooks.Hook, file string) bool {
 			lines := make([]string, len(hs))
 			for i, hk := range hs {
 				lines[i] = hk.String()
 			}
-			return confirm(ctx, lines, file)
+			return hostgate.ConfirmHooks(ctx, approver, lines, file)
 		}
 	}
 	res := h.r.Run(ctx, hooks.Input{

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/trust"
 )
@@ -22,7 +22,7 @@ import (
 // its approvals, without the TUI owning the gate.
 type TrustController interface {
 	Grants() []*trust.Grant
-	Reports() []agent.HostReport
+	Reports() []hostgate.HostReport
 	// Covers reports whether live grants already authorise these effects. The
 	// completion block uses it to avoid calling a change "not done" when the
 	// model declared it properly a moment later and the user said yes.
@@ -32,19 +32,19 @@ type TrustController interface {
 }
 
 // gateController adapts a HostGate to TrustController.
-type gateController struct{ gate *agent.HostGate }
+type gateController struct{ gate *hostgate.HostGate }
 
 // NewTrustController wraps a host gate for the TUI. Returns nil when there is
 // no gate, which /trust reports rather than hiding.
-func NewTrustController(g *agent.HostGate) TrustController {
+func NewTrustController(g *hostgate.HostGate) TrustController {
 	if g == nil {
 		return nil
 	}
 	return gateController{gate: g}
 }
 
-func (c gateController) Grants() []*trust.Grant      { return c.gate.Grants() }
-func (c gateController) Reports() []agent.HostReport { return c.gate.Reports() }
+func (c gateController) Grants() []*trust.Grant         { return c.gate.Grants() }
+func (c gateController) Reports() []hostgate.HostReport { return c.gate.Reports() }
 func (c gateController) Covers(e []trust.Effect) bool {
 	if c.gate == nil || c.gate.Ledger == nil || len(e) == 0 {
 		return false
@@ -114,7 +114,7 @@ const trustHonesty = "Klaudia asks before host changes it can detect, by reading
 // trustReportSummary collapses the findings into one line per distinct summary,
 // newest last, with a count. A long session produces the same finding many
 // times and a scrolling list of duplicates is unreadable.
-func trustReportSummary(reports []agent.HostReport) []string {
+func trustReportSummary(reports []hostgate.HostReport) []string {
 	type entry struct {
 		line  string
 		count int

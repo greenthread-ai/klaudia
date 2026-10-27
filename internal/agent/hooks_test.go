@@ -61,15 +61,13 @@ type testHooks struct{ r *hooks.Runner }
 func (h testHooks) Has(ev HookEvent) bool   { return h.r.Has(hooks.Event(ev)) }
 func (h testHooks) ClaimSessionStart() bool { return h.r.ClaimSessionStart() }
 
-func (h testHooks) Run(ctx context.Context, in HookInput, confirm HookConfirm) HookResult {
+// The trust prompt's card is hostgate's (cli/hooks.go); these tests use user
+// hooks, which are never put to the user, so a plain request stands in for it.
+func (h testHooks) Run(ctx context.Context, in HookInput, approver Approver) HookResult {
 	var c hooks.Confirm
-	if confirm != nil {
-		c = func(ctx context.Context, hs []hooks.Hook, file string) bool {
-			lines := make([]string, len(hs))
-			for i, hk := range hs {
-				lines[i] = hk.String()
-			}
-			return confirm(ctx, lines, file)
+	if approver != nil {
+		c = func(ctx context.Context, _ []hooks.Hook, file string) bool {
+			return approver.Approve(ctx, ApprovalRequest{ToolName: "Hooks", Specifier: file}).Behavior == permission.Allow
 		}
 	}
 	res := h.r.Run(ctx, hooks.Input{

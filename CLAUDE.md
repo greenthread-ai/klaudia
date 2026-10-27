@@ -29,6 +29,7 @@ reason `-buildvcs=false` must never appear in the build flags.
 - **browser** - Lazy headless-Chrome engine + web search
 - **permission** - The three permission modes (a leaf package)
 - **trust** - Zones, command/tool classification, session-scoped grants
+- **hostgate** - Klaudia's `agent.Gate`: the host gate, its approval card (`CardOf`), headless approver
 - **session** - Transcripts, resume, persisted compaction summaries
 - **compaction** - Context/history compression (micro + auto)
 - **mcp** - Model Context Protocol client (2026-07-28) + form elicitation

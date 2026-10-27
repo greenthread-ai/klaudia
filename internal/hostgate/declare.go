@@ -1,10 +1,11 @@
-package agent
+package hostgate
 
 import (
 	"context"
 	"errors"
 	"strings"
 
+	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/trust"
@@ -18,17 +19,7 @@ import (
 // this decides what the answer buys.
 type hostChangeApprover struct {
 	gate     *HostGate
-	approver Approver
-}
-
-// hostChangeFor returns the approver for a run, or nil when there is nothing to
-// approve against. Nil is meaningful: the tool tells the model there is no one
-// to ask, rather than reporting a failure it cannot act on.
-func hostChangeFor(opts Options) tools.HostApprover {
-	if opts.Host == nil || opts.Host.Ledger == nil {
-		return nil
-	}
-	return hostChangeApprover{gate: opts.Host, approver: opts.Approver}
+	approver agent.Approver
 }
 
 func (h hostChangeApprover) RequestHostChange(ctx context.Context, req tools.HostChangeRequest) (tools.HostChangeOutcome, error) {
@@ -37,7 +28,7 @@ func (h hostChangeApprover) RequestHostChange(ctx context.Context, req tools.Hos
 	}
 	approver := h.approver
 	if approver == nil {
-		approver = DenyAll
+		approver = agent.DenyAll
 	}
 
 	// Validate the scope before showing it. A request naming /etc as a whole is
@@ -58,10 +49,10 @@ func (h hostChangeApprover) RequestHostChange(ctx context.Context, req tools.Hos
 	// different question from the first one.
 	drift := len(h.gate.Ledger.List()) > 0
 
-	ad := approver.Approve(ctx, ApprovalRequest{
+	ad := approver.Approve(ctx, agent.ApprovalRequest{
 		ToolName:   "RequestHostChange",
 		Suggestion: req.Summary,
-		HostChange: &HostChange{
+		Detail: &HostChange{
 			Summary:  req.Summary,
 			Reason:   req.Reason,
 			Paths:    req.Paths,

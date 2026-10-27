@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
@@ -275,7 +275,7 @@ func TestFailureOutranksALaterPass(t *testing.T) {
 // operation properly, user agrees, work proceeds — must not be reported as "not
 // done", or the block lies about the most common successful outcome.
 func TestBlockedHostChangesIgnoresWhatWasLaterApproved(t *testing.T) {
-	reports := []agent.HostReport{
+	reports := []hostgate.HostReport{
 		{Enforced: true, Summary: "installs nginx", Effects: []trust.Effect{{Kind: trust.KindPackageInstall}}},
 	}
 	if got := blockedHostChanges(reports, func([]trust.Effect) bool { return true }); len(got) != 0 {
@@ -289,7 +289,7 @@ func TestBlockedHostChangesIgnoresWhatWasLaterApproved(t *testing.T) {
 // Observe-mode reports are recorded but nothing was stopped, so nothing was
 // left undone.
 func TestBlockedHostChangesOnlyCountsEnforcedStops(t *testing.T) {
-	reports := []agent.HostReport{
+	reports := []hostgate.HostReport{
 		{Enforced: false, Summary: "would have installed nginx"},
 		{Enforced: true, Summary: "writes /etc/hosts"},
 		{Enforced: true, Summary: "writes /etc/hosts"}, // same thing twice, said once

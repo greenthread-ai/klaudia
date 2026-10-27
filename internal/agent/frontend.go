@@ -3,10 +3,8 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
 // The agent core is UI-agnostic. A frontend (headless CLI, Bubble Tea TUI, an
@@ -25,105 +23,13 @@ type ApprovalRequest struct {
 	Specifier string
 	// Suggestion is the message from the intrinsic check (may be empty).
 	Suggestion string
-	// HostChange, when set, means this approval is about a change to the
-	// machine Klaudia is running on rather than about a tool's ordinary
-	// permission. Frontends should render it as the host-change card — what
-	// changes and why — because "allow Bash?" is the wrong question to put to
+	// Detail, when set, is the gate's own description of what it is asking
+	// about, for frontends that know how to render it. The loop never reads
+	// it. Klaudia's gate puts a *hostgate.HostChange here — a change to the
+	// machine rather than a tool's ordinary permission, rendered as the
+	// host-change card, because "allow Bash?" is the wrong question to put to
 	// someone about `systemctl restart nginx`.
-	HostChange *HostChange
-}
-
-// HostChange describes a change to this machine for the approval UI.
-type HostChange struct {
-	// Summary is the human phrasing of what changes: the model's own words when
-	// it declared the operation, the classifier's when it was caught.
-	Summary string
-	// Reason is why the task needs it. Only set for a declared change — the
-	// classifier can say what a command does but not what it is for.
-	Reason string
-	Zone   trust.Zone
-	// Effects is what the classifier found. Empty for a declared change, which
-	// has not happened yet.
-	Effects []trust.Effect
-	// Paths, Services and Packages are the scope the model declared.
-	Paths    []string
-	Services []string
-	Packages []string
-	// Commands are command lines the approval would permit, listed verbatim.
-	// Unlike the three scopes above these are not summarised or joined: the
-	// whole value of showing a command is that the user can read it.
-	Commands []string
-	// Hooks marks the one question on this card that is not about reconfiguring
-	// the machine: whether the shell commands a repository declared may run
-	// around Klaudia's tool calls. It shares the card because the decision has
-	// the same shape — unconfined execution the user has to agree to — but three
-	// of the framing sentences differ. A hook set is not "caught on the way
-	// past" (the model had nothing to do with it), and the answer is remembered
-	// rather than session-scoped.
-	Hooks bool
-	// Declared distinguishes "the model asked first" from "this was caught on
-	// the way past". The first is the flow working; the second is the fallback.
-	Declared bool
-	// Drift is true when the user has already approved something and this falls
-	// outside it. Worth saying plainly: "this wasn't part of what you approved"
-	// is a different question from the first one.
-	Drift bool
-}
-
-// Fields renders a host change as the flat map an out-of-process frontend puts
-// on the wire: stream-json's host_change payload and ACP's _meta both use it.
-//
-// It lives on the type rather than in either frontend because the omissions are
-// the interesting part and they have to agree. Only populated fields are
-// included: a declared change has a Reason and no Effects, a caught one the
-// reverse, and a peer should be able to tell which it has. An empty scope is
-// absent rather than an empty array, so "no services" and "services it did not
-// say" stay distinguishable. Effects are rendered with Effect.Describe — the
-// same phrasing the TUI's host card shows — so a peer displays what a terminal
-// user would read rather than a struct dump.
-func (hc *HostChange) Fields() map[string]any {
-	if hc == nil {
-		return nil
-	}
-	m := map[string]any{
-		"summary":  hc.Summary,
-		"zone":     hc.Zone.String(),
-		"declared": hc.Declared,
-	}
-	if hc.Reason != "" {
-		m["reason"] = hc.Reason
-	}
-	if len(hc.Effects) > 0 {
-		seen := map[string]bool{}
-		var found []string
-		for _, e := range hc.Effects {
-			d := e.Describe()
-			if !seen[d] {
-				seen[d] = true
-				found = append(found, d)
-			}
-		}
-		m["effects"] = found
-	}
-	if len(hc.Paths) > 0 {
-		m["paths"] = hc.Paths
-	}
-	if len(hc.Services) > 0 {
-		m["services"] = hc.Services
-	}
-	if len(hc.Packages) > 0 {
-		m["packages"] = hc.Packages
-	}
-	if len(hc.Commands) > 0 {
-		m["commands"] = hc.Commands
-	}
-	if hc.Hooks {
-		m["hooks"] = true
-	}
-	if hc.Drift {
-		m["drift"] = true
-	}
-	return m
+	Detail any
 }
 
 // Approver resolves a permission "ask" for a tool invocation. It returns a
@@ -154,45 +60,3 @@ var DenyAll Approver = ApproverFunc(func(_ context.Context, req ApprovalRequest)
 	}
 	return permission.Decision{Behavior: permission.Deny, Message: msg}
 })
-
-// HeadlessApprover is the Approver for runs with no human present.
-//
-// The old behaviour was DenyAll for everything, which is wrong in two
-// directions at once. Ordinary work in a CI job is exactly what an agent should
-// be doing unattended, and denying it makes automation useless; host changes in
-// a CI job are exactly what should not happen by accident, and denying them in
-// silence teaches nobody why.
-//
-// So this splits the two. Non-host asks are refused as before — a headless run
-// resolves those with --permission-mode and allow rules, not by asking. Host
-// changes are refused with a message naming the flag that would permit them, so
-// the run's output says what to do rather than just what failed.
-//
-// allowHost inverts the host half: --allow-host-changes on a machine the
-// operator is willing to have reconfigured (a disposable CI image, a
-// provisioning run). It is a deliberate, per-invocation opt-in and is never
-// implied by any other flag.
-func HeadlessApprover(allowHost bool) Approver {
-	return ApproverFunc(func(_ context.Context, req ApprovalRequest) permission.Decision {
-		if req.HostChange == nil {
-			msg := req.Suggestion
-			if msg == "" {
-				msg = "Tool " + req.ToolName + " requires approval, but no interactive approver is available."
-			}
-			return permission.Decision{Behavior: permission.Deny, Message: msg}
-		}
-		if allowHost {
-			return permission.Decision{Behavior: permission.Allow}
-		}
-		what := strings.TrimSpace(req.HostChange.Summary)
-		if what == "" {
-			what = "this change"
-		}
-		return permission.Decision{
-			Behavior: permission.Deny,
-			Message: "no one is here to approve changes to this machine (" + what + "). " +
-				"Re-run with --allow-host-changes if this machine is meant to be reconfigured. " +
-				"For now, continue with the rest of the task without it and say what you could not do.",
-		}
-	})
-}

@@ -77,9 +77,9 @@ func (l *Loop) dispatchAll(
 // Deciding that here, before anything starts, is what keeps approval strictly
 // serial without dispatch needing to know it is in a group.
 //
-// Both checks are pure — trust.ClassifyToolCall derives from the input, and
-// Ledger.Cover only reads — so running them here and again inside dispatch
-// costs a classification and changes nothing.
+// Both checks are side-effect free — Gate.WouldAsk decides without asking or
+// recording — so running them here and again inside dispatch costs a
+// classification and changes nothing.
 func (l *Loop) groupable(tu anthropic.BetaToolUseBlock, opts Options, preempt func(anthropic.BetaToolUseBlock) (string, bool)) bool {
 	if _, ok := preempt(tu); ok {
 		return false
@@ -89,8 +89,8 @@ func (l *Loop) groupable(tu anthropic.BetaToolUseBlock, opts Options, preempt fu
 		return false
 	}
 	raw, _ := json.Marshal(tu.Input)
-	if permission.CurrentMode(opts.Permission) != permission.ModeBypassPermissions {
-		if len(opts.Host.Check(tu.Name, raw, opts.WorkingDir).Ask) > 0 {
+	if opts.Gate != nil && permission.CurrentMode(opts.Permission) != permission.ModeBypassPermissions {
+		if opts.Gate.WouldAsk(tu.Name, raw, opts.WorkingDir) {
 			return false
 		}
 	}

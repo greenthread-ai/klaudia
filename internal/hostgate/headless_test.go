@@ -1,37 +1,35 @@
-package agent
+package hostgate
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // Unattended runs should do the work. Denying ordinary project work because no
-// human is watching makes automation useless, which is what DenyAll did for
+// human is watching makes automation useless, which is what agent.DenyAll did for
 // everything.
 func TestHeadlessRunsProjectWork(t *testing.T) {
 	g, proj := gateFixture(t)
 	g.DeclareTool = "RequestHostChange"
 	reg, bash := testRegistry(t)
-	l := New(nil, reg)
+	l := newLoop(reg)
 
-	opts := Options{
+	opts := agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
 		Approver:   HeadlessApprover(false),
 	}
 	for _, cmd := range []string{"go build ./...", "rm -rf ./dist", "git commit -m wip"} {
 		raw, _ := json.Marshal(map[string]string{"command": cmd})
-		l.dispatch(context.Background(),
-			anthropic.BetaToolUseBlock{ID: "t", Name: "Bash", Input: json.RawMessage(raw)},
-			opts, nil, nil, newFailureState())
+		dispatch(t, l, anthropic.BetaToolUseBlock{ID: "t", Name: "Bash", Input: json.RawMessage(raw)}, opts, nil)
 	}
 	if len(bash.ran) != 3 {
 		t.Fatalf("headless refused ordinary work: ran %v", bash.ran)
@@ -49,11 +47,11 @@ func TestHeadlessRefusesHostChangesAndNamesTheFlag(t *testing.T) {
 	}
 	g.DeclareTool = "RequestHostChange"
 	reg, bash := testRegistry(t, declare)
-	l := New(nil, reg)
+	l := newLoop(reg)
 
-	opts := Options{
+	opts := agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
 		Approver:   HeadlessApprover(false),
 	}
@@ -61,9 +59,7 @@ func TestHeadlessRefusesHostChangesAndNamesTheFlag(t *testing.T) {
 		"summary": "Install nginx", "reason": "the app runs behind a proxy",
 		"packages": []string{"nginx"},
 	})
-	body := resultText(l.dispatch(context.Background(),
-		anthropic.BetaToolUseBlock{ID: "t", Name: "RequestHostChange", Input: json.RawMessage(raw)},
-		opts, nil, nil, newFailureState()))
+	body := resultText(dispatch(t, l, anthropic.BetaToolUseBlock{ID: "t", Name: "RequestHostChange", Input: json.RawMessage(raw)}, opts, nil))
 
 	if !strings.Contains(body, "--allow-host-changes") {
 		t.Errorf("the refusal does not name the flag that would permit it: %s", body)
@@ -74,9 +70,7 @@ func TestHeadlessRefusesHostChangesAndNamesTheFlag(t *testing.T) {
 
 	// And the change itself still cannot happen.
 	cmdRaw, _ := json.Marshal(map[string]string{"command": "sudo apt-get install -y nginx"})
-	l.dispatch(context.Background(),
-		anthropic.BetaToolUseBlock{ID: "t2", Name: "Bash", Input: json.RawMessage(cmdRaw)},
-		opts, nil, nil, newFailureState())
+	dispatch(t, l, anthropic.BetaToolUseBlock{ID: "t2", Name: "Bash", Input: json.RawMessage(cmdRaw)}, opts, nil)
 	if len(bash.ran) != 0 {
 		t.Fatalf("the host change ran anyway: %v", bash.ran)
 	}
@@ -89,11 +83,11 @@ func TestAllowHostChangesPermitsThem(t *testing.T) {
 	declare, _ := tools.NewRequestHostChange()
 	g.DeclareTool = "RequestHostChange"
 	reg, bash := testRegistry(t, declare)
-	l := New(nil, reg)
+	l := newLoop(reg)
 
-	opts := Options{
+	opts := agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
 		Approver:   HeadlessApprover(true),
 	}
@@ -101,17 +95,13 @@ func TestAllowHostChangesPermitsThem(t *testing.T) {
 		"summary": "Install nginx", "reason": "the app runs behind a proxy",
 		"packages": []string{"nginx"},
 	})
-	body := resultText(l.dispatch(context.Background(),
-		anthropic.BetaToolUseBlock{ID: "t", Name: "RequestHostChange", Input: json.RawMessage(raw)},
-		opts, nil, nil, newFailureState()))
+	body := resultText(dispatch(t, l, anthropic.BetaToolUseBlock{ID: "t", Name: "RequestHostChange", Input: json.RawMessage(raw)}, opts, nil))
 	if !strings.Contains(body, "Approved") {
 		t.Fatalf("--allow-host-changes did not approve: %s", body)
 	}
 
 	cmdRaw, _ := json.Marshal(map[string]string{"command": "sudo apt-get install -y nginx"})
-	l.dispatch(context.Background(),
-		anthropic.BetaToolUseBlock{ID: "t2", Name: "Bash", Input: json.RawMessage(cmdRaw)},
-		opts, nil, nil, newFailureState())
+	dispatch(t, l, anthropic.BetaToolUseBlock{ID: "t2", Name: "Bash", Input: json.RawMessage(cmdRaw)}, opts, nil)
 	if len(bash.ran) != 1 {
 		t.Fatalf("the approved install did not run: %v", bash.ran)
 	}
@@ -124,25 +114,21 @@ func TestAllowHostChangesStillScopesToTheDeclaration(t *testing.T) {
 	declare, _ := tools.NewRequestHostChange()
 	g.DeclareTool = "RequestHostChange"
 	reg, bash := testRegistry(t, declare)
-	l := New(nil, reg)
+	l := newLoop(reg)
 
-	opts := Options{
+	opts := agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
 		Approver:   HeadlessApprover(true),
 	}
 	raw, _ := json.Marshal(map[string]any{
 		"summary": "Install nginx", "reason": "proxy", "packages": []string{"nginx"},
 	})
-	l.dispatch(context.Background(),
-		anthropic.BetaToolUseBlock{ID: "t", Name: "RequestHostChange", Input: json.RawMessage(raw)},
-		opts, nil, nil, newFailureState())
+	dispatch(t, l, anthropic.BetaToolUseBlock{ID: "t", Name: "RequestHostChange", Input: json.RawMessage(raw)}, opts, nil)
 
 	cmdRaw, _ := json.Marshal(map[string]string{"command": "sudo reboot"})
-	body := resultText(l.dispatch(context.Background(),
-		anthropic.BetaToolUseBlock{ID: "t2", Name: "Bash", Input: json.RawMessage(cmdRaw)},
-		opts, nil, nil, newFailureState()))
+	body := resultText(dispatch(t, l, anthropic.BetaToolUseBlock{ID: "t2", Name: "Bash", Input: json.RawMessage(cmdRaw)}, opts, nil))
 	if !strings.Contains(body, "RequestHostChange") {
 		t.Errorf("an undeclared reboot was not stopped: %s", body)
 	}

@@ -4,20 +4,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
 type fakeTrust struct {
 	grants  []*trust.Grant
-	reports []agent.HostReport
+	reports []hostgate.HostReport
 	revoked []string
 	covers  bool
 }
 
-func (f *fakeTrust) Grants() []*trust.Grant      { return f.grants }
-func (f *fakeTrust) Reports() []agent.HostReport { return f.reports }
+func (f *fakeTrust) Grants() []*trust.Grant         { return f.grants }
+func (f *fakeTrust) Reports() []hostgate.HostReport { return f.reports }
 
 // covers is what the fake ledger authorises; nil means nothing is covered.
 func (f *fakeTrust) Covers(e []trust.Effect) bool { return f.covers && len(e) > 0 }
@@ -68,7 +68,7 @@ func TestTrustShowsGrantsAndFindings(t *testing.T) {
 		t.Fatal(err)
 	}
 	ft.grants = []*trust.Grant{g}
-	ft.reports = []agent.HostReport{
+	ft.reports = []hostgate.HostReport{
 		{Tool: "Bash", Summary: "controls service nginx", Covered: true},
 		{Tool: "Bash", Summary: "controls service nginx", Covered: true},
 		{Tool: "Bash", Summary: "writes /etc/hosts", Enforced: true},

@@ -1,4 +1,13 @@
-package agent
+// Package hostgate is Klaudia's agent.Gate: the trust zones applied to the
+// agent loop, stopping changes to the machine Klaudia runs on that the user
+// has not agreed to.
+//
+// It is the harness's policy, not the loop's. Klaudia runs on a person's own
+// host — and drives remote ones — so it needs a boundary there; a product
+// embedding the loop in a sandbox has nothing to protect that way and passes
+// no gate. Everything here was internal/agent's until the loop was made
+// embeddable, and behaves as it did.
+package hostgate
 
 import (
 	"context"
@@ -6,9 +15,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/anthropics/anthropic-sdk-go"
-
+	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/permission"
+	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
@@ -149,8 +158,34 @@ type HostDecision struct {
 	Assessment trust.Assessment
 }
 
-// Check classifies a tool call and decides whether it may proceed.
-func (g *HostGate) Check(tool string, input []byte, cwd string) HostDecision {
+// Check classifies a tool call and decides whether it may proceed, asking the
+// user through call.Approver when no declaration tool is registered to route
+// the question through (agent.Gate).
+func (g *HostGate) Check(ctx context.Context, call agent.GateCall) agent.GateVerdict {
+	hd := g.decide(call.Tool, call.Input, call.WorkingDir, true)
+	switch {
+	case hd.Refuse != "":
+		return agent.GateVerdict{Refuse: hd.Refuse}
+	case len(hd.Ask) > 0:
+		if !g.approve(ctx, call, hd) {
+			return agent.GateVerdict{Refuse: hostDeclinedMsg(hd)}
+		}
+		return agent.GateVerdict{Allow: true, Approved: true}
+	}
+	return agent.GateVerdict{Allow: true}
+}
+
+// WouldAsk reports whether Check would put this call to the user. It neither
+// asks nor records: the loop calls it while forming a parallel batch, and then
+// calls Check on the same call — counting it twice made /trust report one
+// credential read as two.
+func (g *HostGate) WouldAsk(tool string, input []byte, cwd string) bool {
+	return len(g.decide(tool, input, cwd, false).Ask) > 0
+}
+
+// decide classifies a tool call against the session's grants. record says
+// whether the result goes into the session's reports.
+func (g *HostGate) decide(tool string, input []byte, cwd string, record bool) HostDecision {
 	if g == nil {
 		return HostDecision{Allow: true}
 	}
@@ -181,12 +216,16 @@ func (g *HostGate) Check(tool string, input []byte, cwd string) HostDecision {
 	}
 
 	if len(drift) == 0 {
-		g.record(report)
+		if record {
+			g.record(report)
+		}
 		return HostDecision{Allow: true, Assessment: as}
 	}
 
 	report.Enforced = true
-	g.record(report)
+	if record {
+		g.record(report)
+	}
 
 	if g.DeclareTool == "" {
 		return HostDecision{Ask: drift, Assessment: as}
@@ -245,24 +284,24 @@ func describeAll(effects []trust.Effect) string {
 	return strings.Join(parts, ", ")
 }
 
-// approveHostChange puts a host change straight to the user, for frontends with
-// no declaration tool wired up. Approval mints a grant so the rest of the
+// approve puts a host change straight to the user, for frontends with no
+// declaration tool wired up. Approval mints a grant so the rest of the
 // operation proceeds — otherwise the second command of an approved change would
 // stop again, which is the fatigue this design exists to remove.
-func (l *Loop) approveHostChange(ctx context.Context, tu anthropic.BetaToolUseBlock, raw []byte, opts Options, hd HostDecision) bool {
-	approver := opts.Approver
+func (g *HostGate) approve(ctx context.Context, call agent.GateCall, hd HostDecision) bool {
+	approver := call.Approver
 	if approver == nil {
-		approver = DenyAll
+		approver = agent.DenyAll
 	}
 	summary := hd.Assessment.Summary()
-	hadGrants := opts.Host != nil && opts.Host.Ledger != nil && len(opts.Host.Ledger.List()) > 0
+	hadGrants := g.Ledger != nil && len(g.Ledger.List()) > 0
 
-	ad := approver.Approve(ctx, ApprovalRequest{
-		ToolName:   tu.Name,
-		ToolUseID:  tu.ID,
-		Input:      raw,
+	ad := approver.Approve(ctx, agent.ApprovalRequest{
+		ToolName:   call.Tool,
+		ToolUseID:  call.ToolUseID,
+		Input:      call.Input,
 		Suggestion: summary,
-		HostChange: &HostChange{
+		Detail: &HostChange{
 			Summary: summary,
 			Zone:    hd.Assessment.Zone(),
 			Effects: hd.Ask,
@@ -272,12 +311,21 @@ func (l *Loop) approveHostChange(ctx context.Context, tu anthropic.BetaToolUseBl
 	if ad.Behavior != permission.Allow {
 		return false
 	}
-	if opts.Host != nil && opts.Host.Ledger != nil {
+	if g.Ledger != nil {
 		// Best effort: an effect with no scope vocabulary (a reboot, a firewall
 		// rule) records nothing and will be asked about again, which is right.
-		_, _ = opts.Host.Ledger.MintFromEffects(summary, "approved when it was attempted", hd.Ask)
+		_, _ = g.Ledger.MintFromEffects(summary, "approved when it was attempted", hd.Ask)
 	}
 	return true
+}
+
+// HostChanges backs the RequestHostChange tool for a run, or returns nil when
+// there is no ledger to mint grants in (agent.Gate).
+func (g *HostGate) HostChanges(approver agent.Approver) tools.HostApprover {
+	if g == nil || g.Ledger == nil {
+		return nil
+	}
+	return hostChangeApprover{gate: g, approver: approver}
 }
 
 // hostDeclinedMsg tells the model a host change was refused by the user.

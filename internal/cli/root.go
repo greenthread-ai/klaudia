@@ -25,6 +25,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/doctor"
 	"github.com/greenthread-ai/klaudia/internal/hooks"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/lsp"
 	"github.com/greenthread-ai/klaudia/internal/mcp"
 	"github.com/greenthread-ai/klaudia/internal/memory"
@@ -98,11 +99,11 @@ type agentWiring struct {
 
 // withAgentTool returns a registry that is the base tools plus the Agent tool,
 // wired to a sub-agent spawner that draws from the base tools.
-func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *agent.HostGate, worktrees bool) (*agentWiring, error) {
+func withAgentTool(base *tools.Registry, provider api.Provider, model anthropic.Model, perm permission.Context, approver agent.Approver, maxTurns int, deferred map[string]bool, workingDir string, host *hostgate.HostGate, worktrees bool) (*agentWiring, error) {
 	spawner := agent.NewSpawnerWithDeferred(provider, base, model, perm, approver, maxTurns, deferred).
 		WithTypes(subagentTypes).
 		WithWorkingDir(workingDir).
-		WithHostGate(host).
+		WithGate(gateFor(host)).
 		WithIsolator(isolator(worktrees))
 
 	infos := make([]tools.AgentTypeInfo, 0)
@@ -1075,7 +1076,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 
 	var extraDirs func() []string
-	hostGate := &agent.HostGate{
+	hostGate := &hostgate.HostGate{
 		Roots: func() trust.Roots {
 			home, _ := os.UserHomeDir()
 			roots := []string{cwd}
@@ -1229,7 +1230,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Headless has no one to ask. Ordinary work still runs; host changes are
 	// refused with the flag that would permit them, so the output says what to
 	// do rather than only what failed.
-	approver := agent.HeadlessApprover(opts.allowHostChanges)
+	approver := hostgate.HeadlessApprover(opts.allowHostChanges)
 	wiring, err := withAgentTool(base, provider, model, permCtx, approver, opts.maxTurns, deferredTools, cwd, hostGate, cfg.SubagentWorktrees())
 	if err != nil {
 		return err
@@ -1366,7 +1367,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			MaxTokensSource: s.MaxTokensSource,
 			Effort:          s.Effort,
 			Permission:      s.Permission,
-			Host:            hostGate,
+			Gate:            gateFor(hostGate),
 			DeferredTools:   currentDeferred(),
 			Recorder:        recorder,
 			WebTools:        true,
@@ -1684,7 +1685,7 @@ var errRendered = fmt.Errorf("run failed")
 
 // Execute runs the root command, returning the process exit code.
 // hostChangeWasBlocked reports whether the guardrail stopped anything this run.
-func hostChangeWasBlocked(g *agent.HostGate) bool {
+func hostChangeWasBlocked(g *hostgate.HostGate) bool {
 	for _, r := range g.Reports() {
 		if r.Enforced {
 			return true
@@ -1719,4 +1720,13 @@ func subagentTypes(name string) (agent.SubagentType, bool) {
 		return agent.SubagentType{}, false
 	}
 	return agent.SubagentType{SystemPrompt: t.SystemPrompt, Mode: t.Mode, Tools: t.Filter}, true
+}
+
+// gateFor is Klaudia's host gate as the loop's agent.Gate: nil for a nil gate,
+// never an interface holding a nil pointer.
+func gateFor(g *hostgate.HostGate) agent.Gate {
+	if g == nil {
+		return nil
+	}
+	return g
 }

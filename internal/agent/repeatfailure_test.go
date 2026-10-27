@@ -72,15 +72,15 @@ func TestDispatchBreaksRetryLoop(t *testing.T) {
 // wedged". A refusal is a decision about one command, not evidence the tool is
 // broken, and must not count.
 func TestHostRefusalDoesNotLatchTheTool(t *testing.T) {
-	g, proj := gateFixture(t)
-	g.DeclareTool = "RequestHostChange"
 	reg, bash := testRegistry(t)
 	l := New(nil, reg)
 
 	fs := newFailureState()
 	opts := Options{
-		WorkingDir: proj,
-		Host:       g,
+		WorkingDir: t.TempDir(),
+		// The real gate refuses with the same text whatever the command was;
+		// this one does exactly that, which is the shape that latched.
+		Gate:       refusingGate{match: "sudo", msg: "Changes this machine. Take another route if one exists."},
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
 	}
 

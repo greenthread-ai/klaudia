@@ -1,4 +1,4 @@
-package agent
+package hostgate
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/trust"
@@ -24,25 +25,24 @@ func TestDeclareOnceThenSilence(t *testing.T) {
 		t.Fatal(err)
 	}
 	reg, bash := testRegistry(t, declare)
-	l := New(nil, reg)
+	l := newLoop(reg)
 
 	asked := 0
 	var card *HostChange
-	opts := Options{
+	opts := agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
-		Approver: ApproverFunc(func(ctx context.Context, req ApprovalRequest) permission.Decision {
+		Approver: agent.ApproverFunc(func(ctx context.Context, req agent.ApprovalRequest) permission.Decision {
 			asked++
-			card = req.HostChange
+			card = CardOf(req)
 			return permission.Decision{Behavior: permission.Allow}
 		}),
 	}
 	run := func(name string, input any) string {
 		raw, _ := json.Marshal(input)
 		tu := anthropic.BetaToolUseBlock{ID: "t", Name: name, Input: json.RawMessage(raw)}
-		return resultText(l.dispatch(context.Background(), tu, opts, nil, nil,
-			newFailureState()))
+		return resultText(dispatch(t, l, tu, opts, nil))
 	}
 
 	out := run("RequestHostChange", map[string]any{
@@ -91,23 +91,22 @@ func TestDriftAsksAgainAndSaysSo(t *testing.T) {
 	g.DeclareTool = "RequestHostChange"
 	declare, _ := tools.NewRequestHostChange()
 	reg, _ := testRegistry(t, declare)
-	l := New(nil, reg)
+	l := newLoop(reg)
 
 	var cards []*HostChange
-	opts := Options{
+	opts := agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
-		Approver: ApproverFunc(func(ctx context.Context, req ApprovalRequest) permission.Decision {
-			cards = append(cards, req.HostChange)
+		Approver: agent.ApproverFunc(func(ctx context.Context, req agent.ApprovalRequest) permission.Decision {
+			cards = append(cards, CardOf(req))
 			return permission.Decision{Behavior: permission.Allow}
 		}),
 	}
 	run := func(name string, input any) string {
 		raw, _ := json.Marshal(input)
 		tu := anthropic.BetaToolUseBlock{ID: "t", Name: name, Input: json.RawMessage(raw)}
-		return resultText(l.dispatch(context.Background(), tu, opts, nil, nil,
-			newFailureState()))
+		return resultText(dispatch(t, l, tu, opts, nil))
 	}
 
 	run("RequestHostChange", map[string]any{
@@ -138,22 +137,20 @@ func TestDeclinedDeclarationDoesNotMintAGrant(t *testing.T) {
 	g.DeclareTool = "RequestHostChange"
 	declare, _ := tools.NewRequestHostChange()
 	reg, _ := testRegistry(t, declare)
-	l := New(nil, reg)
+	l := newLoop(reg)
 
-	opts := Options{
+	opts := agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
-		Approver: ApproverFunc(func(ctx context.Context, req ApprovalRequest) permission.Decision {
+		Approver: agent.ApproverFunc(func(ctx context.Context, req agent.ApprovalRequest) permission.Decision {
 			return permission.Decision{Behavior: permission.Deny}
 		}),
 	}
 	raw, _ := json.Marshal(map[string]any{
 		"summary": "Install nginx", "reason": "proxy", "packages": []string{"nginx"},
 	})
-	body := resultText(l.dispatch(context.Background(),
-		anthropic.BetaToolUseBlock{ID: "t", Name: "RequestHostChange", Input: json.RawMessage(raw)},
-		opts, nil, nil, newFailureState()))
+	body := resultText(dispatch(t, l, anthropic.BetaToolUseBlock{ID: "t", Name: "RequestHostChange", Input: json.RawMessage(raw)}, opts, nil))
 
 	if !strings.Contains(body, "declined") {
 		t.Fatalf("result did not report the decline: %s", body)
@@ -173,7 +170,7 @@ func TestOverBroadDeclarationNeverReachesTheUser(t *testing.T) {
 	asked := 0
 	h := hostChangeApprover{
 		gate: g,
-		approver: ApproverFunc(func(ctx context.Context, req ApprovalRequest) permission.Decision {
+		approver: agent.ApproverFunc(func(ctx context.Context, req agent.ApprovalRequest) permission.Decision {
 			asked++
 			return permission.Decision{Behavior: permission.Allow}
 		}),
@@ -276,7 +273,7 @@ func TestDeclinedDeclarationIsRecorded(t *testing.T) {
 	g, _ := gateFixture(t)
 	h := hostChangeApprover{
 		gate: g,
-		approver: ApproverFunc(func(context.Context, ApprovalRequest) permission.Decision {
+		approver: agent.ApproverFunc(func(context.Context, agent.ApprovalRequest) permission.Decision {
 			return permission.Decision{Behavior: permission.Deny}
 		}),
 	}
@@ -302,7 +299,7 @@ func TestApprovedDeclarationIsNotRecordedAsBlocked(t *testing.T) {
 	g, _ := gateFixture(t)
 	h := hostChangeApprover{
 		gate: g,
-		approver: ApproverFunc(func(context.Context, ApprovalRequest) permission.Decision {
+		approver: agent.ApproverFunc(func(context.Context, agent.ApprovalRequest) permission.Decision {
 			return permission.Decision{Behavior: permission.Allow}
 		}),
 	}

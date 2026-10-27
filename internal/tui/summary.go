@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
@@ -154,7 +154,7 @@ func buildSummary(touched map[string]bool, results []toolResult, gitStat func() 
 // declares the operation properly, the user says yes, and the work proceeds.
 // Reporting that as "not done" would be false — so a report is only listed if
 // nothing in the session's grants covers it by the time the turn ends.
-func blockedHostChanges(reports []agent.HostReport, covered func([]trust.Effect) bool) []string {
+func blockedHostChanges(reports []hostgate.HostReport, covered func([]trust.Effect) bool) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, r := range reports {

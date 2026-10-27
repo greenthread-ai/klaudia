@@ -94,10 +94,10 @@ type Options struct {
 	// prints the number alone.
 	MaxTokensSource string
 	Permission      permission.Context
-	// Host is the trust gate: it classifies each tool call and refuses changes
-	// to this machine that the user has not agreed to. Nil disables the whole
-	// feature, which is what every caller that has not been wired up yet gets.
-	Host *HostGate
+	// Gate is checked before every tool call, ahead of the permission check
+	// (see Gate). Nil is no gate — right for a loop running in a sandbox;
+	// Klaudia's is internal/hostgate.
+	Gate Gate
 	// WorkingDir is the project root every tool operates relative to — the
 	// directory Bash runs in and the default root for Grep/Glob. Empty means
 	// the process cwd, which is only correct for callers that already chdir'd.
@@ -1090,15 +1090,14 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	//
 	// bypassPermissions skips it, because that mode's entire contract is "no
 	// checks" and honouring half of it would be worse than honouring none.
-	if permission.CurrentMode(opts.Permission) != permission.ModeBypassPermissions {
-		hd := opts.Host.Check(tu.Name, raw, opts.WorkingDir)
-		switch {
-		case hd.Refuse != "":
-			return errResultKind(hd.Refuse, failureHostGate)
-		case len(hd.Ask) > 0:
-			if !l.approveHostChange(ctx, tu, raw, opts, hd) {
-				return errResultKind(hostDeclinedMsg(hd), failureHostGate)
-			}
+	if opts.Gate != nil && permission.CurrentMode(opts.Permission) != permission.ModeBypassPermissions {
+		v := opts.Gate.Check(ctx, GateCall{
+			Tool: tu.Name, ToolUseID: tu.ID, Input: raw, WorkingDir: opts.WorkingDir, Approver: opts.Approver,
+		})
+		if !v.Allow {
+			return errResultKind(v.Refuse, failureHostGate)
+		}
+		if v.Approved {
 			// Approval is new information about the tool's prospects. Anything
 			// it was carrying from earlier refusals — this call's own count and
 			// the tool's shape streak — is now stale, and leaving it in place
@@ -1463,4 +1462,15 @@ func finalAssistantText(m anthropic.BetaMessage) string {
 		}
 	}
 	return s
+}
+
+// hostChangeFor returns the declaration tool's approver for a run, or nil when
+// there is no gate to declare against. Nil is meaningful: the tool tells the
+// model there is no one to ask, rather than reporting a failure it cannot act
+// on.
+func hostChangeFor(opts Options) tools.HostApprover {
+	if opts.Gate == nil {
+		return nil
+	}
+	return opts.Gate.HostChanges(opts.Approver)
 }

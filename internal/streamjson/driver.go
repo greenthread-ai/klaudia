@@ -45,6 +45,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/api"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
@@ -233,10 +234,10 @@ func (a *controlApprover) Approve(ctx context.Context, req agent.ApprovalRequest
 	if req.Suggestion != "" {
 		payload["suggestion"] = req.Suggestion
 	}
-	if req.HostChange != nil {
-		// Fields lives on agent.HostChange because ACP needs the same
+	if hostgate.CardOf(req) != nil {
+		// Fields lives on hostgate.HostChange because ACP needs the same
 		// rendering, and two copies of "which fields to omit" would drift.
-		payload["host_change"] = req.HostChange.Fields()
+		payload["host_change"] = hostgate.CardOf(req).Fields()
 	}
 
 	resp, err := a.driver.request(ctx, payload)

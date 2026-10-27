@@ -11,6 +11,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/goal"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
@@ -73,7 +74,7 @@ func (m *Model) permissionSummary(req agent.ApprovalRequest) string {
 }
 
 func (m *Model) permissionPrompt() string {
-	if hc := m.pendingReq.HostChange; hc != nil {
+	if hc := hostgate.CardOf(m.pendingReq); hc != nil {
 		return hostPrompt(hc)
 	}
 	// No "always". Standing rules are gone: one in a config demoted the next
@@ -162,7 +163,7 @@ func (m *Model) answer(d permission.Decision) {
 	}
 	// For a host change, say what the answer reached rather than just that one
 	// was given. "allowed" tells the user nothing about how far it went.
-	if hc := m.pendingReq.HostChange; hc != nil {
+	if hc := hostgate.CardOf(m.pendingReq); hc != nil {
 		verb = hostAnswerLine(hc, d.Behavior == permission.Allow, m.hostRedirect)
 	}
 	m.hostRedirect = false

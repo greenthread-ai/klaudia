@@ -12,6 +12,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/trust"
 )
@@ -230,7 +231,7 @@ func TestCanUseToolCarriesTheHostChange(t *testing.T) {
 			Specifier:  "brew install ripgrep",
 			Suggestion: "this installs a package",
 			Input:      json.RawMessage(`{"summary":"install ripgrep"}`),
-			HostChange: &agent.HostChange{
+			Detail: &hostgate.HostChange{
 				Summary:  "Install ripgrep",
 				Reason:   "the project's search needs it",
 				Zone:     trust.ZoneHost,

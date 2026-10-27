@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 )
 
 func TestInputIsFramed(t *testing.T) {
@@ -63,7 +63,7 @@ func TestLiveRegionNeverFillsTheLastColumn(t *testing.T) {
 		"awaiting a host change": func(m *Model) {
 			m.setState(stateAwaitingPermission)
 			m.pendingReq.ToolName = "RequestHostChange"
-			m.pendingReq.HostChange = &agent.HostChange{
+			m.pendingReq.Detail = &hostgate.HostChange{
 				Summary: strings.Repeat("install and configure something ", 8),
 				Reason:  strings.Repeat("because the task needs it ", 8),
 			}

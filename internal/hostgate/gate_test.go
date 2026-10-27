@@ -1,4 +1,4 @@
-package agent
+package hostgate
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/trust"
@@ -46,7 +47,7 @@ func TestGateAllowsProjectWork(t *testing.T) {
 		"cat /etc/os-release",
 		"ssh staging sudo systemctl restart nginx",
 	} {
-		d := g.Check("Bash", bashInput(cmd), proj)
+		d := g.decide("Bash", bashInput(cmd), proj, true)
 		if !d.Allow {
 			t.Errorf("%q was gated: refuse=%q ask=%v", cmd, d.Refuse, d.Ask)
 		}
@@ -56,7 +57,7 @@ func TestGateAllowsProjectWork(t *testing.T) {
 func TestGateStopsHostChanges(t *testing.T) {
 	g, proj := gateFixture(t)
 	g.DeclareTool = "RequestHostChange"
-	d := g.Check("Bash", bashInput("sudo systemctl restart nginx"), proj)
+	d := g.decide("Bash", bashInput("sudo systemctl restart nginx"), proj, true)
 	if d.Allow {
 		t.Fatal("a service restart was allowed")
 	}
@@ -73,7 +74,7 @@ func TestGateStopsHostChanges(t *testing.T) {
 // forever with instructions it cannot follow.
 func TestGateFallsBackToAskingWhenNoDeclarationTool(t *testing.T) {
 	g, proj := gateFixture(t)
-	d := g.Check("Bash", bashInput("sudo systemctl restart nginx"), proj)
+	d := g.decide("Bash", bashInput("sudo systemctl restart nginx"), proj, true)
 	if d.Allow || d.Refuse != "" || len(d.Ask) == 0 {
 		t.Fatalf("expected an ask, got allow=%v refuse=%q ask=%v", d.Allow, d.Refuse, d.Ask)
 	}
@@ -88,11 +89,11 @@ func TestGateCoversDeclaredWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cmd := range []string{"sudo apt-get install -y nginx", "sudo systemctl restart nginx"} {
-		if d := g.Check("Bash", bashInput(cmd), proj); !d.Allow {
+		if d := g.decide("Bash", bashInput(cmd), proj, true); !d.Allow {
 			t.Errorf("%q was refused despite a grant: %q", cmd, d.Refuse)
 		}
 	}
-	if d := g.Check("Bash", bashInput("sudo systemctl restart postgresql"), proj); d.Allow {
+	if d := g.decide("Bash", bashInput("sudo systemctl restart postgresql"), proj, true); d.Allow {
 		t.Error("an undeclared service restart was allowed")
 	}
 }
@@ -104,21 +105,21 @@ func TestGateCoversFileTools(t *testing.T) {
 	home := g.Roots().Home
 
 	write, _ := json.Marshal(map[string]string{"file_path": "/etc/nginx/nginx.conf"})
-	if d := g.Check("Write", write, proj); d.Allow {
+	if d := g.decide("Write", write, proj, true); d.Allow {
 		t.Error("Write to /etc was allowed")
 	}
 	inProject, _ := json.Marshal(map[string]string{"file_path": filepath.Join(proj, "main.go")})
-	if d := g.Check("Write", inProject, proj); !d.Allow {
+	if d := g.decide("Write", inProject, proj, true); !d.Allow {
 		t.Error("Write inside the project was gated")
 	}
 
 	key, _ := json.Marshal(map[string]string{"file_path": filepath.Join(home, ".ssh", "id_rsa")})
-	if d := g.Check("Read", key, proj); d.Allow {
+	if d := g.decide("Read", key, proj, true); d.Allow {
 		t.Error("Read of a private key was allowed")
 	}
 	// Reading the operating system is ordinary debugging.
 	osFile, _ := json.Marshal(map[string]string{"file_path": "/etc/hosts"})
-	if d := g.Check("Read", osFile, proj); !d.Allow {
+	if d := g.decide("Read", osFile, proj, true); !d.Allow {
 		t.Error("Read of /etc/hosts was gated")
 	}
 }
@@ -129,7 +130,7 @@ func TestGateCoversFileTools(t *testing.T) {
 func TestNilGateIsInert(t *testing.T) {
 	_, proj := gateFixture(t)
 	var nilGate *HostGate
-	if d := nilGate.Check("Bash", bashInput("sudo rm -rf /etc"), proj); !d.Allow {
+	if d := nilGate.decide("Bash", bashInput("sudo rm -rf /etc"), proj, true); !d.Allow {
 		t.Error("a nil gate gated a call")
 	}
 }
@@ -140,7 +141,7 @@ func TestNilGateIsInert(t *testing.T) {
 // checks nothing.
 func TestZeroPostureGateStillEnforces(t *testing.T) {
 	g, proj := gateFixture(t)
-	if d := g.Check("Bash", bashInput("sudo systemctl restart nginx"), proj); d.Allow {
+	if d := g.decide("Bash", bashInput("sudo systemctl restart nginx"), proj, true); d.Allow {
 		t.Error("a gate with no posture set allowed a host change")
 	}
 }
@@ -153,16 +154,16 @@ func TestGateRunsBeforeThePermissionCheck(t *testing.T) {
 	g, proj := gateFixture(t)
 	g.DeclareTool = "RequestHostChange"
 	reg, bash := testRegistry(t)
-	l := New(nil, reg)
+	l := newLoop(reg)
 
 	tu := anthropic.BetaToolUseBlock{
 		ID: "t1", Name: "Bash", Input: json.RawMessage(bashInput("sudo systemctl restart nginx")),
 	}
-	res := l.dispatch(context.Background(), tu, Options{
+	res := dispatch(t, l, tu, agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
-	}, nil, nil, newFailureState())
+	}, nil)
 
 	body := resultText(res)
 	if !strings.Contains(body, "RequestHostChange") {
@@ -179,15 +180,15 @@ func TestBypassSkipsTheGate(t *testing.T) {
 	g, proj := gateFixture(t)
 	g.DeclareTool = "RequestHostChange"
 	reg, bash := testRegistry(t)
-	l := New(nil, reg)
+	l := newLoop(reg)
 	tu := anthropic.BetaToolUseBlock{
 		ID: "t1", Name: "Bash", Input: json.RawMessage(bashInput("sudo systemctl restart nginx")),
 	}
-	l.dispatch(context.Background(), tu, Options{
+	dispatch(t, l, tu, agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeBypassPermissions)},
-	}, nil, nil, newFailureState())
+	}, nil)
 	if len(bash.ran) != 1 {
 		t.Fatalf("bypassPermissions did not run the command: %v", bash.ran)
 	}
@@ -199,15 +200,15 @@ func TestBypassSkipsTheGate(t *testing.T) {
 func TestApprovalMintsAGrant(t *testing.T) {
 	g, proj := gateFixture(t)
 	reg, bash := testRegistry(t)
-	l := New(nil, reg)
+	l := newLoop(reg)
 	asked := 0
-	opts := Options{
+	opts := agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
-		Approver: ApproverFunc(func(ctx context.Context, req ApprovalRequest) permission.Decision {
+		Approver: agent.ApproverFunc(func(ctx context.Context, req agent.ApprovalRequest) permission.Decision {
 			asked++
-			if req.HostChange == nil {
+			if CardOf(req) == nil {
 				t.Error("approval request carried no HostChange card")
 			}
 			return permission.Decision{Behavior: permission.Allow}
@@ -215,7 +216,7 @@ func TestApprovalMintsAGrant(t *testing.T) {
 	}
 	run := func(cmd string) {
 		tu := anthropic.BetaToolUseBlock{ID: "t", Name: "Bash", Input: json.RawMessage(bashInput(cmd))}
-		l.dispatch(context.Background(), tu, opts, nil, nil, newFailureState())
+		dispatch(t, l, tu, opts, nil)
 	}
 	run("sudo systemctl restart nginx")
 	run("sudo systemctl stop nginx")
@@ -230,18 +231,18 @@ func TestApprovalMintsAGrant(t *testing.T) {
 func TestDeclinedHostChangeFailsOnlyThatCall(t *testing.T) {
 	g, proj := gateFixture(t)
 	reg, bash := testRegistry(t)
-	l := New(nil, reg)
+	l := newLoop(reg)
 	tu := anthropic.BetaToolUseBlock{
 		ID: "t1", Name: "Bash", Input: json.RawMessage(bashInput("sudo reboot")),
 	}
-	res := l.dispatch(context.Background(), tu, Options{
+	res := dispatch(t, l, tu, agent.Options{
 		WorkingDir: proj,
-		Host:       g,
+		Gate:       g,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
-		Approver: ApproverFunc(func(ctx context.Context, req ApprovalRequest) permission.Decision {
+		Approver: agent.ApproverFunc(func(ctx context.Context, req agent.ApprovalRequest) permission.Decision {
 			return permission.Decision{Behavior: permission.Deny}
 		}),
-	}, nil, nil, newFailureState())
+	}, nil)
 
 	body := resultText(res)
 	if !strings.Contains(body, "declined") {

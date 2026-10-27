@@ -23,7 +23,7 @@ func TestShapeStreakDoesNotLatchTheTool(t *testing.T) {
 	opts := Options{
 		WorkingDir: proj,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
-		Approver:   HeadlessApprover(false),
+		Approver:   DenyAll,
 	}
 	fs := newFailureState()
 
@@ -68,7 +68,7 @@ func TestShapeStreakRefiresAfterMoreFailures(t *testing.T) {
 	opts := Options{
 		WorkingDir: proj,
 		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeAutonomous)},
-		Approver:   HeadlessApprover(false),
+		Approver:   DenyAll,
 	}
 	fs := newFailureState()
 	run := func(cmd string) string {

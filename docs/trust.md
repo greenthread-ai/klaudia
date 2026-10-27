@@ -82,7 +82,7 @@ Some consequences worth being explicit about:
 MCP tools are called without asking in every mode except plan, where only tools
 marked read-only (the server's `readOnlyHint`, or `readOnly` in `.mcp.json`)
 are allowed. There is no enforcing/observing posture any more — the gate is
-always on (`internal/agent/hostgate.go`).
+always on (`internal/hostgate`).
 
 This is the one place where the zone model is trusted without being able to see
 what it is trusting. The classifier reads command lines and tool inputs; it has
@@ -266,9 +266,12 @@ not everything: a run that asked to install nginx has not asked to reboot.
 
 - `internal/trust` — zones, classification, grants. A pure package with no
   wiring, judged by a corpus of command lines in `classify_test.go`.
-- `internal/agent/hostgate.go` — the gate, which runs in `dispatch` **before**
-  `permission.Check`. That ordering matters: an allow rule says a command prefix
-  is fine, not that anything sharing that prefix may change the machine.
+- `internal/hostgate` — the gate, Klaudia's `agent.Gate`, plus the host-change
+  card frontends render, the `RequestHostChange` approver, the headless
+  approver and the hooks trust prompt. The loop calls it in `dispatch`
+  **before** `permission.Check` (`internal/agent/gate.go` says why); the loop
+  itself knows nothing of zones, so a host embedding it in a sandbox passes no
+  gate.
 - `internal/tools/hostchange.go` — the `RequestHostChange` tool.
 - `internal/tui/trustview.go` — `/trust`.
 - `internal/sandbox` — the real boundary, off by default.

@@ -34,7 +34,7 @@ type Spawner struct {
 	deferredTools map[string]bool
 
 	workingDir string
-	hostGate   *HostGate
+	gate       Gate
 	hooks      Hooks
 	isolator   Isolator
 	effort     api.Effort
@@ -70,15 +70,15 @@ func (s *Spawner) WithWorkingDir(dir string) *Spawner {
 	return s
 }
 
-// WithHostGate gives sub-agents the parent's trust gate.
+// WithGate gives sub-agents the parent's gate.
 //
 // Sharing the gate — and therefore the ledger — is the point: a sub-agent must
 // not be a way around the boundary, and an approval the user gave the parent
 // should cover the child doing the work. Without this a sub-agent's Bash calls
 // would be unclassified, which is the easiest hole to leave and the hardest to
 // notice.
-func (s *Spawner) WithHostGate(g *HostGate) *Spawner {
-	s.hostGate = g
+func (s *Spawner) WithGate(g Gate) *Spawner {
+	s.gate = g
 	return s
 }
 
@@ -317,7 +317,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		System:          t.SystemPrompt + s.contextFor(dir),
 		MaxTurns:        maxTurns,
 		Permission:      childPerm,
-		Host:            s.hostGate,
+		Gate:            s.gate,
 		WorkingDir:      dir,
 		Approver:        s.approver,
 		ContextWindow:   ctxWindow,

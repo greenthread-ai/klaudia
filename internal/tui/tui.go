@@ -24,6 +24,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/agent"
 	"github.com/greenthread-ai/klaudia/internal/api"
 	"github.com/greenthread-ai/klaudia/internal/compaction"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/mcp"
 	"github.com/greenthread-ai/klaudia/internal/memory"
 	"github.com/greenthread-ai/klaudia/internal/permission"
@@ -719,8 +720,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setState(stateAwaitingPermission)
 		m.pending = msg.reply
 		m.pendingReq = msg.req
-		if msg.req.HostChange != nil {
-			for _, line := range hostCardLines(msg.req.HostChange) {
+		if hostgate.CardOf(msg.req) != nil {
+			for _, line := range hostCardLines(hostgate.CardOf(msg.req)) {
 				m.appendLine(line)
 			}
 			return m, m.waitForEvent()

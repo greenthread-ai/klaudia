@@ -7,9 +7,6 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-
-	"github.com/greenthread-ai/klaudia/internal/permission"
-	"github.com/greenthread-ai/klaudia/internal/trust"
 )
 
 // Hooks are wired in at four points and nowhere else. This file holds the three
@@ -34,9 +31,10 @@ type Hooks interface {
 	// ClaimSessionStart reports, once per session, that SessionStart should
 	// fire now.
 	ClaimSessionStart() bool
-	// Run runs ev's hooks. confirm asks the user before running hooks that
-	// need their agreement; nil means there is no one to ask.
-	Run(ctx context.Context, in HookInput, confirm HookConfirm) HookResult
+	// Run runs ev's hooks. Hooks that need the user's agreement first are put
+	// to them through approver; nil means there is no one to ask, which the
+	// source should distinguish from a refusal.
+	Run(ctx context.Context, in HookInput, approver Approver) HookResult
 }
 
 // HookEvent names a lifecycle point.
@@ -69,10 +67,6 @@ type HookResult struct {
 	Notices []string // for the user, never the model
 }
 
-// HookConfirm asks the user whether the hooks declared in file — shown as
-// their command lines — may run.
-type HookConfirm func(ctx context.Context, commands []string, file string) bool
-
 // fireHooks runs the hooks attached to an event and surfaces anything the user
 // needs to know about them.
 //
@@ -85,7 +79,7 @@ func fireHooks(ctx context.Context, opts Options, emit Emitter, in HookInput) Ho
 		return HookResult{}
 	}
 	in.CWD = opts.WorkingDir
-	res := opts.Hooks.Run(ctx, in, hookConfirm(opts))
+	res := opts.Hooks.Run(ctx, in, opts.Approver)
 	for _, n := range res.Notices {
 		if emit != nil {
 			emit(Event{Type: "notice", Content: "hook: " + n})
@@ -94,62 +88,12 @@ func fireHooks(ctx context.Context, opts Options, emit Emitter, in HookInput) Ho
 	return res
 }
 
-// hookConfirm routes the project-hooks question to the frontend's Approver.
-//
-// Reusing the approval path rather than inventing a second one: there is exactly
-// one place a question can be put to the user, every frontend already implements
-// it, and a headless run already has the right answer for "nobody is here" built
-// in. The request is marked as a host change because that is what it is — the
-// user is being asked whether commands from a repository may run on their
-// machine — and it is the rendering that explains the scope rather than asking
-// "allow Bash?".
-//
-// bypassPermissions is not special-cased here. That mode turns off checks on the
-// model's actions; it is not a statement that any repo Klaudia is pointed at may
-// execute code. Someone who wants that can approve the hooks once.
-func hookConfirm(opts Options) HookConfirm {
-	approver := opts.Approver
-	if approver == nil {
-		// Deliberately nil rather than DenyAll: a Hooks source distinguishes "the
-		// user said no" from "there was no one to ask", and says so in its
-		// notice. Collapsing them would report a refusal nobody made.
-		return nil
-	}
-	return func(ctx context.Context, lines []string, file string) bool {
-		summary := fmt.Sprintf("run %s declared by %s", plural(len(lines), "hook"), file)
-		d := approver.Approve(ctx, ApprovalRequest{
-			ToolName:   "Hooks",
-			Specifier:  file,
-			Suggestion: summary,
-			HostChange: &HostChange{
-				Hooks:   true,
-				Summary: summary,
-				Reason: "Hooks are shell commands this repository wants run around your tool calls. " +
-					"They run unconfined, as you.",
-				// ZoneHost: this is a change to what runs on this machine,
-				// which is the one zone that is never autonomous.
-				Zone:     trust.ZoneHost,
-				Paths:    []string{file},
-				Commands: lines,
-			},
-		})
-		return d.Behavior == permission.Allow
-	}
-}
-
 // hookEnabled reports whether it is worth building an Input for this event. The
 // two tool events fire on every single tool call, so the common case — no hooks
 // configured, or none for this event — must not cost a marshal and a result
 // collapse per call.
 func hookEnabled(opts Options, ev HookEvent) bool {
 	return opts.Hooks != nil && opts.Hooks.Has(ev)
-}
-
-func plural(n int, word string) string {
-	if n == 1 {
-		return "1 " + word
-	}
-	return fmt.Sprintf("%d %ss", n, word)
 }
 
 // hookBlockedMsg is what the model is told when a hook refuses a tool call.

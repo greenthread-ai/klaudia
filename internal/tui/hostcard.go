@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 )
 
 // The host-change card.
@@ -21,7 +21,7 @@ import (
 // says plainly that the approval lasts for this session only.
 
 // hostCardLines renders the approval card as scrollback lines.
-func hostCardLines(hc *agent.HostChange) []string {
+func hostCardLines(hc *hostgate.HostChange) []string {
 	if hc == nil {
 		return nil
 	}
@@ -68,7 +68,7 @@ func hostCardLines(hc *agent.HostChange) []string {
 }
 
 // hostScopeLines lists what the approval reaches, one category per line.
-func hostScopeLines(hc *agent.HostChange) []string {
+func hostScopeLines(hc *hostgate.HostChange) []string {
 	var out []string
 	add := func(label string, items []string) {
 		if len(items) > 0 {
@@ -131,7 +131,7 @@ func hostBlockedLine(msg string) string {
 // attempt; "something else" keeps the turn alive and lets the user redirect —
 // which is usually what someone means when they decline a host change. They
 // rarely want the task abandoned, they want it done differently.
-func hostPrompt(hc *agent.HostChange) string {
+func hostPrompt(hc *hostgate.HostChange) string {
 	verb := "Change this machine?"
 	switch {
 	case hc != nil && hc.Hooks:
@@ -147,7 +147,7 @@ func hostPrompt(hc *agent.HostChange) string {
 
 // hostAnswerLine echoes the decision with its reach, so the scrollback records
 // what was agreed to and not merely that something was.
-func hostAnswerLine(hc *agent.HostChange, allowed, redirect bool) string {
+func hostAnswerLine(hc *hostgate.HostChange, allowed, redirect bool) string {
 	if redirect {
 		return "declined — say what you'd like instead, and it lands before Klaudia's next step"
 	}
@@ -162,7 +162,7 @@ func hostAnswerLine(hc *agent.HostChange, allowed, redirect bool) string {
 }
 
 // hostReportLine renders one classifier finding for observe mode and /trust.
-func hostReportLine(r agent.HostReport) string {
+func hostReportLine(r hostgate.HostReport) string {
 	state := "would ask"
 	switch {
 	case r.Enforced:

@@ -2,7 +2,7 @@
 // tool calls.
 //
 // Almost everything this package used to decide is now decided by zone, before
-// it is consulted: agent.HostGate classifies each tool call and stops changes
+// it is consulted: hostgate.HostGate classifies each tool call and stops changes
 // to the machine Klaudia is running on. What is left is the stance itself —
 // get on with it, look but do not touch, or check nothing.
 //

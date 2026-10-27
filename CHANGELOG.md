@@ -76,6 +76,17 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed (breaking)
+- **The agent loop no longer knows about Klaudia's product packages.**
+  `internal/agent` now imports only `api`, `compaction`, `permission`,
+  `plan`, `schema` and `tools` (it also imported `trust`, `hooks`,
+  `subagent`, `worktree` and `session`). The seams are interfaces with
+  Klaudia's implementations in the wiring: `agent.Gate` (the host gate moved
+  wholesale to `internal/hostgate`, and `ApprovalRequest.HostChange` became
+  `Detail`, read with `hostgate.CardOf`), `agent.Hooks`, `Spawner.WithTypes`,
+  `Spawner.WithIsolator`, and `session.Messages` in place of
+  `agent.MessagesFromEntries`. Behaviour is unchanged, except that `/trust`
+  no longer counts a parallel-batched read-only call (a credential read, say)
+  twice.
 - **`--dangerously-skip-permissions` is removed.** It was a shorthand for
   `--permission-mode bypassPermissions`, and the docs and the `--loop` error
   still pointed unattended runs at it long after autonomous mode (the

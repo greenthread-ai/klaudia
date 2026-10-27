@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
@@ -65,7 +66,7 @@ func (a *approver) Approve(ctx context.Context, r agent.ApprovalRequest) permiss
 	// summary becomes the title, the reason and the scope become readable
 	// content, and the structured form goes in _meta for a client that can do
 	// better than a one-line dialog.
-	if hc := r.HostChange; hc != nil {
+	if hc := hostgate.CardOf(r); hc != nil {
 		call.Title = hostTitle(hc)
 		call.ToolKind = kindOther
 		if body := hostBody(hc); body != "" {
@@ -112,13 +113,13 @@ func (a *approver) Approve(ctx context.Context, r agent.ApprovalRequest) permiss
 }
 
 func approveLabel(r agent.ApprovalRequest) string {
-	if r.HostChange != nil {
+	if hostgate.CardOf(r) != nil {
 		return "Allow this change to my machine"
 	}
 	return "Allow"
 }
 
-func hostTitle(hc *agent.HostChange) string {
+func hostTitle(hc *hostgate.HostChange) string {
 	if s := oneline(hc.Summary); s != "" {
 		return s
 	}
@@ -130,7 +131,7 @@ func hostTitle(hc *agent.HostChange) string {
 
 // hostBody is the prose Klaudia's own host card shows, flattened for a dialog
 // that only has room for text: why, what was detected, and what it covers.
-func hostBody(hc *agent.HostChange) string {
+func hostBody(hc *hostgate.HostChange) string {
 	var b strings.Builder
 	line := func(label, s string) {
 		if s == "" {

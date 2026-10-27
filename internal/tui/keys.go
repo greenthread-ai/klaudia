@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 )
 
@@ -388,7 +389,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingPermission {
-		host := m.pendingReq.HostChange != nil
+		host := hostgate.CardOf(m.pendingReq) != nil
 		switch strings.ToLower(msg.String()) {
 		case "y":
 			m.answer(permission.Decision{Behavior: permission.Allow})

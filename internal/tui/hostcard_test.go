@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 )
 
 // A gate block that Klaudia routes around is not a failure, and the line the
@@ -36,8 +36,8 @@ func TestHostBlockedLineHandlesNoDetail(t *testing.T) {
 // "Something else" is a redirect, not a refusal: the echoed line has to invite
 // the instruction rather than announce that Klaudia is moving on without it.
 func TestHostAnswerLineDistinguishesRedirectFromRefusal(t *testing.T) {
-	refused := hostAnswerLine(&agent.HostChange{Summary: "install nginx"}, false, false)
-	redirect := hostAnswerLine(&agent.HostChange{Summary: "install nginx"}, false, true)
+	refused := hostAnswerLine(&hostgate.HostChange{Summary: "install nginx"}, false, false)
+	redirect := hostAnswerLine(&hostgate.HostChange{Summary: "install nginx"}, false, true)
 	if refused == redirect {
 		t.Fatal("a redirect reads the same as a flat refusal")
 	}
@@ -54,7 +54,7 @@ func TestHostAnswerLineDistinguishesRedirectFromRefusal(t *testing.T) {
 // model for a config file it never saw, and "for this session only" describes a
 // decision that is in fact remembered.
 func TestHooksCardDoesNotReadLikeAHostChange(t *testing.T) {
-	card := strings.Join(hostCardLines(&agent.HostChange{
+	card := strings.Join(hostCardLines(&hostgate.HostChange{
 		Hooks:    true,
 		Summary:  "run 2 hooks declared by /repo/.klaudia/config.toml",
 		Paths:    []string{"/repo/.klaudia/config.toml"},
@@ -76,7 +76,7 @@ func TestHooksCardDoesNotReadLikeAHostChange(t *testing.T) {
 			t.Errorf("card does not show %q:\n%s", cmd, card)
 		}
 	}
-	if got := hostPrompt(&agent.HostChange{Hooks: true}); strings.Contains(got, "something else") {
+	if got := hostPrompt(&hostgate.HostChange{Hooks: true}); strings.Contains(got, "something else") {
 		t.Errorf("prompt = %q; there is no task to redirect, only a yes or a no", got)
 	}
 }
@@ -84,7 +84,7 @@ func TestHooksCardDoesNotReadLikeAHostChange(t *testing.T) {
 // Each command on its own line. A list of command lines joined with commas is
 // what a user skims instead of reading, and commas occur inside commands.
 func TestHooksCardListsOneCommandPerLine(t *testing.T) {
-	lines := hostCardLines(&agent.HostChange{
+	lines := hostCardLines(&hostgate.HostChange{
 		Hooks:    true,
 		Commands: []string{"PostToolUse: a, b", "PreToolUse: c"},
 	})

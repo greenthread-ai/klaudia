@@ -128,9 +128,10 @@ a frontend, and `Loop`/`Options`/`Event`/`Turn`/`api.Provider`/`tools.Tool`/
   `KLAUDIA_CONFIG_DIR`.
 - Model-facing error strings name `.klaudia/config.toml`
   (`agent/loop.go`, `api/errors.go`).
-- `agent` imports `trust` concretely (`hooks`, `subagent`, `worktree` and
-  `session` are done — see stage 1); `hooks` imports `config` (the one upward
-  edge).
+- ~~`agent` imports `trust`, `hooks`, `subagent`, `worktree` and `session`
+  concretely~~ — done (stage 1): `agent` imports only `api`, `compaction`,
+  `permission`, `plan`, `schema` and `tools`. `hooks` still imports `config`
+  (the one upward edge).
 
 **Stage 0 — internal plumbing.** Env reads become `Options` /
 provider-constructor fields (done for the loop and providers). Inject the
@@ -139,8 +140,13 @@ Move `MessagesFromEntries` from `agent` to `session` (done: `session.Messages`).
 Cut `hooks → config`.
 Product strings behind an injectable hint function.
 
-**Stage 1 — interfaces at the seams.** `HostGate` becomes a pre-dispatch gate
-interface with trust as Klaudia's implementation; `hooks.Runner` a hooks
+**Stage 1 — interfaces at the seams. Done.** `HostGate` becomes a pre-dispatch gate
+interface with trust as Klaudia's implementation (done: `agent.Gate`, with the
+whole host gate — card, approvers, hooks prompt — in `internal/hostgate`;
+`ApprovalRequest.Detail` carries the card, so the core has no trust
+vocabulary. Rationale from the maintainer: trust protects a harness running
+on a person's own host; a sandboxed embedder has nothing to protect that way
+and passes no gate); `hooks.Runner` a hooks
 interface (done: `agent.Hooks`, adapted in `cli/hooks.go`); the spawner takes a sub-agent-type resolver and an optional
 `Isolator` (worktrees) — done: `Spawner.WithTypes` and `WithIsolator`, with
 Klaudia's implementations in `cli` (`subagentTypes`, `gitIsolator`) so neither

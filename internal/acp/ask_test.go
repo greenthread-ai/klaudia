@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/greenthread-ai/klaudia/internal/agent"
+	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/internal/trust"
@@ -154,7 +155,7 @@ func TestApproverRendersAHostChange(t *testing.T) {
 	a.Approve(context.Background(), agent.ApprovalRequest{
 		ToolName:  "RequestHostChange",
 		ToolUseID: "tu_9",
-		HostChange: &agent.HostChange{
+		Detail: &hostgate.HostChange{
 			Summary:  "Install nginx and configure it as a development proxy",
 			Reason:   "the task needs a reverse proxy in front of the dev server",
 			Zone:     trust.ZoneHost,
@@ -194,7 +195,7 @@ func TestApproverRendersAHostChange(t *testing.T) {
 }
 
 func TestHostBodyNamesDrift(t *testing.T) {
-	body := hostBody(&agent.HostChange{
+	body := hostBody(&hostgate.HostChange{
 		Summary: "also write /etc/hosts",
 		Zone:    trust.ZoneHost,
 		Drift:   true,
