@@ -158,6 +158,10 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **Context in the status bar only when it matters.** It is measured against
+  the auto-compact point rather than the raw window: hidden under 50%, a
+  quiet `ctx 62%` up to 80%, then amber `12% to auto-compact`, moved up the
+  line so a narrow terminal keeps it.
 - **A batch of reads is one line**: `✓ Read 3 files · main.go, main_test.go,
   go.mod`. Consecutive successful Reads are held until the next thing is
   written (shown in the live region meanwhile); a lone Read keeps its line

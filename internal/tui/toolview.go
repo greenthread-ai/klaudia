@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/greenthread-ai/klaudia/pkg/compaction"
 	"regexp"
 	"strconv"
 	"strings"
@@ -238,6 +239,12 @@ func (m *Model) statusLine() string {
 		}
 	}
 	segments := []string{hintStyle.Render(model)}
+	// Near auto-compact, context outranks everything after the model: it is
+	// about to change what the model remembers.
+	ctx, urgent := m.contextSegment()
+	if urgent {
+		segments = append(segments, ctx)
+	}
 	if mode := deviatingMode(m.currentMode()); mode != "" {
 		segments = append(segments, modeSegmentStyle(m.currentMode()).Render(mode))
 	}
@@ -273,13 +280,8 @@ func (m *Model) statusLine() string {
 	// is model calls, so one prompt that used five tools read "6 turns" — a
 	// number that looked like one thing and was another. /stats has it, named
 	// for what it is.
-	if m.sess != nil && m.sess.ContextWindow > 0 && m.residentTokens > 0 {
-		pct := float64(m.residentTokens) / float64(m.sess.ContextWindow) * 100
-		label := fmt.Sprintf("ctx %.0f%%", pct)
-		if pct < 1 {
-			label = "ctx <1%" // "0%" read as empty, on a 1M window with 20k in it
-		}
-		segments = append(segments, hintStyle.Render(label))
+	if ctx != "" && !urgent {
+		segments = append(segments, ctx)
 	}
 	segments = append(segments, hintStyle.Render(fmt.Sprintf("%s tokens", humanTokens(m.statIn+m.statOut))))
 
@@ -319,4 +321,33 @@ func fitSegments(segments []string, width int, sep string) string {
 		}
 	}
 	return segments[0]
+}
+
+// contextSegment is the status line's context reading, measured against the
+// point where auto-compact runs rather than the raw window, since that is
+// where something happens. Under half way it is not shown: "ctx 2%" on every
+// frame of a 1M-window session was a number to read and nothing to do. From
+// half way it is a quiet "ctx 62%"; from 80% it turns amber and says how much
+// is left ("10% to auto-compact"), the way Claude Code does, and urgent moves it up the line.
+func (m *Model) contextSegment() (seg string, urgent bool) {
+	if m.sess == nil || m.sess.ContextWindow <= 0 || m.residentTokens <= 0 {
+		return "", false
+	}
+	limit := compaction.ComputeThresholds(m.sess.ContextWindow).CompactThreshold
+	if limit <= 0 {
+		return "", false
+	}
+	pct := float64(m.residentTokens) / float64(limit) * 100
+	switch {
+	case pct < 50:
+		return "", false
+	case pct < 80:
+		return hintStyle.Render(fmt.Sprintf("ctx %.0f%%", pct)), false
+	default:
+		left := 100 - pct
+		if left < 0 {
+			left = 0
+		}
+		return noticeStyle.Render(fmt.Sprintf("%.0f%% to auto-compact", left)), true
+	}
 }

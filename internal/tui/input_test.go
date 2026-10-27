@@ -561,27 +561,36 @@ func TestPhaseLabelDefaults(t *testing.T) {
 	}
 }
 
+// Context is shown against the auto-compact point, and only once it matters:
+// hidden under half, quiet to 80%, then amber with what is left, ahead of the
+// counters. Never a fake number when the window or the size is unknown.
 func TestStatusLineShowsContextUsage(t *testing.T) {
-	// When ContextWindow and residentTokens are both known, the status bar
-	// surfaces `· ctx N%` so the user sees context pressure rising without
-	// having to type /stats. Skipped when either is unknown (no fake number).
 	m := newTestModel()
-	m.sess.ContextWindow = 200_000
-	m.residentTokens = 50_000
-	if got := m.statusLine(); !strings.Contains(got, "ctx 25%") {
-		t.Errorf("expected `ctx 25%%` (50K/200K); got %q", got)
+	m.sess.ContextWindow = 200_000 // compacts above 167k
+	for _, tc := range []struct {
+		resident int
+		want     string
+	}{
+		{50_000, ""},
+		{100_000, "ctx 60%"},
+		{150_000, "10% to auto-compact"},
+	} {
+		m.residentTokens = tc.resident
+		got := visibleText(m.statusLineAt(200))
+		if tc.want == "" && strings.Contains(got, "ctx") {
+			t.Errorf("%d: shown under half way: %q", tc.resident, got)
+		}
+		if tc.want != "" && !strings.Contains(got, tc.want) {
+			t.Errorf("%d: got %q, want %q", tc.resident, got, tc.want)
+		}
 	}
-	// Unknown window: no indicator.
+	m.residentTokens = 150_000
+	if got := visibleText(m.statusLineAt(40)); !strings.Contains(got, "to auto-compact") {
+		t.Errorf("an urgent reading was dropped for space: %q", got)
+	}
 	m.sess.ContextWindow = 0
-	if got := m.statusLine(); strings.Contains(got, "ctx ") {
-		t.Errorf("unknown window must not show ctx indicator; got %q", got)
-	}
-	// Known window but no resident estimate (fresh session pre-first-turn):
-	// also no indicator — "ctx 0%" would be misleading.
-	m.sess.ContextWindow = 200_000
-	m.residentTokens = 0
-	if got := m.statusLine(); strings.Contains(got, "ctx ") {
-		t.Errorf("zero resident estimate must not show indicator; got %q", got)
+	if got := m.statusLine(); strings.Contains(got, "ctx") || strings.Contains(got, "auto-compact") {
+		t.Errorf("unknown window must not show context; got %q", got)
 	}
 }
 
@@ -906,12 +915,7 @@ func TestStatusUsesTheMeasuredContext(t *testing.T) {
 	if m.statIn != 20_000 || m.residentTokens != 20_400 {
 		t.Errorf("statIn=%d resident=%d, want 20000 and 20400", m.statIn, m.residentTokens)
 	}
-	got := visibleText(m.statusLineAt(200))
-	if !strings.Contains(got, "ctx 2%") || !strings.Contains(got, "20.4k tokens") {
+	if got := visibleText(m.statusLineAt(200)); !strings.Contains(got, "20.4k tokens") {
 		t.Errorf("status = %q", got)
-	}
-	m.residentTokens = 5_000
-	if got := visibleText(m.statusLineAt(200)); !strings.Contains(got, "ctx <1%") {
-		t.Errorf("status = %q, want ctx <1%%", got)
 	}
 }
