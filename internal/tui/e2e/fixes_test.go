@@ -72,8 +72,10 @@ func TestPathsAreShownRelative(t *testing.T) {
 	if strings.Contains(snap.All(), env.Project+"/") {
 		t.Errorf("an absolute project path reached the screen\n%s", snap.All())
 	}
-	if !strings.Contains(snap.All(), "Edited main.go") {
-		t.Errorf("Edit result not shown relative\n%s", snap.All())
+	for _, want := range []string{"✓ Read main.go", "✓ Edit main.go"} {
+		if !strings.Contains(snap.All(), want) {
+			t.Errorf("%q not shown relative\n%s", want, snap.All())
+		}
 	}
 }
 

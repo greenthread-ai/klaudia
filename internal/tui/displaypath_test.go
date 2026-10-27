@@ -37,8 +37,8 @@ func TestToolResultShowsRelativePaths(t *testing.T) {
 	m.resize(100, 30)
 	m.sess.CWD = dir
 	abs := filepath.Join(dir, "main.go")
-	m.renderEvent(mkResult("Edit", "Edited "+abs+" (1 replacement)", false))
-	if out := stripANSI(m.transcript.String()); strings.Contains(out, dir) || !strings.Contains(out, "Edited main.go") {
+	m.renderEvent(mkResult("Bash", "wrote "+abs, false))
+	if out := stripANSI(m.transcript.String()); strings.Contains(out, dir) || !strings.Contains(out, "wrote main.go") {
 		t.Errorf("screen shows the absolute path:\n%s", out)
 	}
 	if last := m.results.items[len(m.results.items)-1].content; !strings.Contains(last, abs) {
@@ -54,8 +54,9 @@ func TestToolHeaderShortensBeforeTruncating(t *testing.T) {
 	m := newTestModel()
 	m.resize(100, 30)
 	m.sess.CWD = dir
-	m.renderEvent(agent.Event{Type: "tool_use", ToolName: "Edit", Input: map[string]any{"file_path": dir + "/.klaudia/GOAL.md"}})
-	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "⚙ Edit .klaudia/GOAL.md") {
+	m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: "e", ToolName: "Edit", Input: map[string]any{"file_path": dir + "/.klaudia/GOAL.md"}})
+	m.renderEvent(agent.Event{Type: "tool_result", ToolUseID: "e", ToolName: "Edit", Content: "ok"})
+	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "✓ Edit .klaudia/GOAL.md") {
 		t.Errorf("header = %q, want the relative path", out)
 	}
 }

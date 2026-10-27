@@ -357,6 +357,8 @@ type Model struct {
 	// pendingRecent maps an in-flight tool_use id to the files it names, noted
 	// as recent only if the call succeeds.
 	pendingRecent map[string][]string
+	// pendingTools are calls whose line waits for their result, in call order.
+	pendingTools []*pendingTool
 	// pendingCommands maps an in-flight tool_use id to its Bash command line,
 	// so a result can be attributed to the command that produced it.
 	pendingCommands map[string]string
@@ -731,6 +733,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.onBangResult(msg)
 
 	case permissionMsg:
+		// The card is about a call whose line is not written yet; write it
+		// (and its diff) first, so the question has its context above it.
+		m.flushAssistant()
+		m.showPendingTools()
 		m.setState(stateAwaitingPermission)
 		m.pending = msg.reply
 		m.pendingReq = msg.req
@@ -781,6 +787,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.turnCancel = nil
 		m.cancelling = false // the goroutine returned; we're past the cancel window
 		m.flushAssistant()   // prettify the final answer through glamour
+		m.abandonPendingTools()
 		switch {
 		case errors.Is(msg.err, context.Canceled):
 			m.appendLine(toolStyle.Render(fmt.Sprintf("  ⊘ interrupted after %s", fmtDuration(elapsed))))

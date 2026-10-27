@@ -481,37 +481,25 @@ func TestUsageDoesNotClobberRunningPhase(t *testing.T) {
 	}
 }
 
-func TestToolLatencySuffixInResult(t *testing.T) {
-	// tool_result should suffix the tool name with the wall-clock duration
-	// of the matched tool_use, so users see fast vs slow tools without
-	// reading timestamps. The suffix lives on the scrollback line itself
-	// (not the prior tool_use line) so we don't reflow the viewport.
+// A call's line carries its duration when it was slow enough to matter, timed
+// from its own tool_use by id: matching on the tool's name suffixed the wrong
+// call whenever two of a kind ran together.
+func TestToolDurationShownOnlyWhenSlow(t *testing.T) {
 	m := newTestModel()
-	m.activeToolName = "Bash"
-	m.activeToolStart = time.Now().Add(-250 * time.Millisecond)
-	m.renderEvent(agent.Event{Type: "tool_result", ToolName: "Bash", Content: "done"})
-	out := m.transcript.String()
-	if !strings.Contains(out, "Bash · ") {
-		t.Errorf("expected tool-name-then-duration suffix in result; got %q", out)
+	m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: "slow", ToolName: "Bash", Input: map[string]any{"command": "make"}})
+	m.renderEvent(agent.Event{Type: "tool_use", ToolUseID: "fast", ToolName: "Bash", Input: map[string]any{"command": "ls"}})
+	m.pendingTools[0].start = time.Now().Add(-2 * time.Second)
+	m.renderEvent(agent.Event{Type: "tool_result", ToolUseID: "fast", ToolName: "Bash", Content: "a"})
+	m.renderEvent(agent.Event{Type: "tool_result", ToolUseID: "slow", ToolName: "Bash", Content: "b"})
+	out := stripANSI(m.transcript.String())
+	if !strings.Contains(out, "✓ Bash make · 2") {
+		t.Errorf("the slow call has no duration:\n%s", out)
 	}
-	// Activity tracking must clear after the result so a following turn
-	// doesn't accidentally suffix a stale tool name onto an unrelated event.
+	if strings.Contains(out, "ls ·") {
+		t.Errorf("a sub-second call got a duration:\n%s", out)
+	}
 	if m.activeToolName != "" {
 		t.Errorf("activeToolName should be cleared after tool_result; got %q", m.activeToolName)
-	}
-}
-
-func TestToolLatencyMismatchedNameLeavesResultClean(t *testing.T) {
-	// If a tool_result arrives for a different tool than the one we last
-	// dispatched (event reordering, sub-agent interleaving), don't apply
-	// the duration — it'd be wrong. The result line should render cleanly.
-	m := newTestModel()
-	m.activeToolName = "Bash"
-	m.activeToolStart = time.Now().Add(-1 * time.Second)
-	m.renderEvent(agent.Event{Type: "tool_result", ToolName: "Read", Content: "ok"})
-	out := m.transcript.String()
-	if strings.Contains(out, "Read · ") {
-		t.Errorf("mismatched tool_result must not get duration suffix; got %q", out)
 	}
 }
 

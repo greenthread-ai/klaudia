@@ -229,8 +229,10 @@ OSC 52, which works over SSH and inside tmux.
 `Ctrl+C` does the smallest useful thing first — interrupt a running turn, cancel
 a prompt, or clear the line — and only quits when pressed twice in a row.
 
-Tool calls show their key input (e.g. `⚙ Bash go test ./...`) and a `-`/`+`
-preview for edits; a status bar tracks model · mode · turns · tokens. Long
+Each tool call is one line, written when it finishes and saying what happened
+(`✓ Read main.go · 35 lines`, `✓ Bash go test ./... · 7.2s`), with an edit's
+`-`/`+` hunk or a command's output under it; while it runs, the status line
+names it. The status bar tracks model · mode · context · tokens. Long
 output is kept in full: the preview tells you its number and `/last <n>` opens
 it in `$PAGER`, where searching and copying are your pager's job. While the
 model works through a plan its step list sits above the prompt — `Ctrl+T`

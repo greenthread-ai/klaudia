@@ -129,8 +129,7 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.phase = "streaming"
 	case "tool_use":
 		m.flushAssistant() // the assistant message before a tool call is complete
-		// Echo the salient input (#1) and, for mutating tools, a change preview (#2).
-		m.appendLine(toolStyle.Render("⚙ " + ev.ToolName + toolSummaryWith(ev.ToolName, ev.Input, m.displayPaths)))
+		m.startTool(ev)    // its line is written with the result (toolline.go)
 		// Remember files Klaudia touches so @-completion can rank them first
 		// and /context can list them. Neither is recorded here: this event is
 		// emitted before the tool runs. Stamping ownership now would capture
@@ -162,12 +161,7 @@ func (m *Model) renderEvent(ev agent.Event) {
 			}
 			m.pendingCommands[ev.ToolUseID] = toolFields(ev.Input)["command"]
 		}
-		if diff := toolDiff(ev.ToolName, ev.Input); diff != "" {
-			m.appendLine(diff)
-		}
 		m.phase = "running " + ev.ToolName
-		m.activeToolName = ev.ToolName
-		m.activeToolStart = time.Now()
 	case "tool_progress":
 		// A long-running tool reporting what it is doing — in practice the Agent
 		// tool relaying its sub-agent's calls. Indented under the tool line it
@@ -207,54 +201,8 @@ func (m *Model) renderEvent(ev agent.Event) {
 			}
 			delete(m.pendingPaths, ev.ToolUseID)
 		}
+		m.renderToolResult(ev, m.takeTool(ev), seq)
 		s := m.displayPaths(strings.TrimSpace(ev.Content))
-		if s == "" {
-			s = "completed"
-		}
-		style := toolStyle
-		prefix := "✓ " + ev.ToolName
-		switch {
-		case ev.HostBlocked:
-			// Not a failure. The call was not allowed and the model will take
-			// another route, which is the intended behaviour for the common
-			// case — an incidental 2>/dev/null, a scratch file in /tmp. Drawing
-			// that in red with a paragraph of policy made Klaudia look broken
-			// while it was working exactly as designed.
-			style = hintStyle
-			prefix = "⊘ " + ev.ToolName
-			s = hostBlockedLine(s)
-		case ev.IsError:
-			style = errStyle
-			prefix = "✗ " + ev.ToolName
-		case ev.ToolName == "TodoWrite":
-			s = todoResultLine(s)
-		case ev.ToolName == "ExitPlanMode":
-			s = exitPlanResultLine(s)
-		}
-		// Append the tool's wall-clock duration to its result line so users
-		// can see whether a tool was fast or slow without reading timestamps.
-		// Matched on ToolName so a misordered event can't suffix the wrong tool.
-		if m.activeToolName != "" && m.activeToolName == ev.ToolName {
-			prefix += " · " + fmtDuration(time.Since(m.activeToolStart))
-		}
-		prefix += ": "
-		// Syntax-highlight fenced code in results (#5), else truncated plain text.
-		// Skip the Markdown path for cat -n line-numbered output (Read previews):
-		// glamour treats it as prose and reflows every line into one run-on block,
-		// inlining the line numbers — show such results verbatim instead.
-		if !ev.IsError && strings.Contains(s, "```") && len(s) <= 4000 && !looksLineNumbered(s) {
-			m.appendLine(toolStyle.Render("  " + prefix))
-			m.appendLine(m.markdown(s))
-		} else {
-			clipped, dropped := clipPreview(s, maxPreviewLines, maxPreviewRunes)
-			if dropped > 0 {
-				// Name the sequence number, so someone scrolling back through
-				// the session can see exactly which one to ask for.
-				clipped += fmt.Sprintf("\n…  %s", hintStyle.Render(
-					fmt.Sprintf("(%d more lines · /last %d for full output)", dropped, seq)))
-			}
-			m.appendLine(style.Render("  " + prefix + strings.ReplaceAll(clipped, "\n", "\n  ")))
-		}
 		kind := navCommand
 		if ev.IsError && !ev.HostBlocked {
 			kind = navError

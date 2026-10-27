@@ -144,6 +144,17 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **One line per tool call.** A call's line used to be written when it started
+  (`⚙ Read main.go`) and its result under it (`✓ Read · 0ms:` and eight
+  lines of the file). It is now written once, when the result is in:
+  `✓ Read main.go · 35 lines`, `✓ Glob **/* · 3 files`, `✓ Write main.go ·
+  103 lines`, `✓ Edit main.go` over its hunk, `✓ Bash go test ./... · 7.2s`
+  over its output. Durations appear from one second up, timed per call
+  rather than matched by tool name. The live status line names the running
+  call. The Agent tool still writes its line first, so its steps have
+  something to sit under, and a call that stops for approval writes its
+  line and diff before the card. Calls still running when a turn stops
+  are listed as stopped.
 - **Project MCP servers ask before they start.** A server in a project's
   `.mcp.json` or `.klaudia/.mcp.json` launched as soon as Klaudia started in
   the clone. It now waits for the same remembered approval project hooks get:

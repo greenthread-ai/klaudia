@@ -54,9 +54,9 @@ func TestPermissionSummaryAndDetail(t *testing.T) {
 
 func TestRenderToolResultIncludesStatusAndToolName(t *testing.T) {
 	m := newTestModel()
-	m.renderEvent(agent.Event{Type: "tool_result", ToolName: "Edit", Content: "Edited /tmp/example.go (1 replacement(s))"})
+	m.renderEvent(agent.Event{Type: "tool_result", ToolName: "Bash", Content: "Edited /tmp/example.go"})
 	got := stripANSI(m.transcript.String())
-	if !strings.Contains(got, "✓ Edit: Edited /tmp/example.go") {
+	if !strings.Contains(got, "✓ Bash\n    Edited /tmp/example.go") {
 		t.Errorf("tool result missing explicit success: %q", got)
 	}
 }
