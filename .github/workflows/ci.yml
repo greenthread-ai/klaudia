@@ -37,3 +37,9 @@ jobs:
 
       - name: Test
         run: go test ./internal/... -count=1
+
+      # The real binary in a pty against a scripted mock provider on
+      # 127.0.0.1: no API key, no network. Skipped by the step above, which
+      # leaves KLAUDIA_E2E unset. See internal/tui/e2e/doc.go.
+      - name: TUI end-to-end
+        run: KLAUDIA_E2E=1 go test ./internal/tui/e2e/... -count=1 -v
