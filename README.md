@@ -449,7 +449,10 @@ committed, in the style of the repository's recent subjects — shown first,
 and committing still needs a `y`. `/undo`
 restores its last change, never touching a file you also edited, and
 `/rewind` goes back to before any earlier prompt this session — files and
-conversation together, with the prompt returned to edit.
+conversation together, with the prompt returned to edit — or, as its second
+option, summarises everything before that prompt and keeps it and what
+followed word for word, which frees the context the early conversation was
+using without touching a file.
 
 Undo stores prior contents as git blobs (`git hash-object -w`). It does not
 touch your index, does not create a stash, and shows the exact `git cat-file`

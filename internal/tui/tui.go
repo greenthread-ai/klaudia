@@ -87,6 +87,11 @@ type Session struct {
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
 	Compact CompactFunc
+	// SummariseBefore, if set, summarises head (the conversation before a
+	// chosen prompt), records that the summary replaced everything but the
+	// last kept messages, and returns head's replacement. Backs /rewind's
+	// "summarise up to here".
+	SummariseBefore func(ctx context.Context, head []anthropic.BetaMessageParam, kept int) (newHead []anthropic.BetaMessageParam, summary string, err error)
 	// Doctor, if set, returns a rendered environment diagnostic. Backs /doctor.
 	Doctor func() string
 	// ListModels, if set, enumerates the models the configured provider serves,
@@ -215,6 +220,15 @@ type modelsMsg struct {
 type compactDoneMsg struct {
 	history []anthropic.BetaMessageParam
 	summary string
+	err     error
+}
+
+// summariseDoneMsg ends a "summarise up to here": head replaces the history
+// before index at.
+type summariseDoneMsg struct {
+	head    []anthropic.BetaMessageParam
+	summary string
+	at      int
 	err     error
 }
 type askMsg struct {
@@ -479,6 +493,9 @@ type Model struct {
 	// /rewind (rewind.go).
 	turnSeq      int
 	rewindPoints []rewindPoint
+	// rewindCompacted is set once a compaction dropped recorded prompts, so
+	// an empty /rewind can say why.
+	rewindCompacted bool
 	// results holds the full, untruncated content of recent tool results so
 	// /last can reach past the newest one. The event stream is not truncated
 	// upstream, so what's stored is exactly what the model saw.
@@ -1003,11 +1020,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.appendLine(hintStyle.Render("  not right? n, then /commit <your message>"))
 		return m, tea.Batch(textarea.Blink, m.waitForEvent())
 
+	case summariseDoneMsg:
+		m.onSummariseDone(msg)
+		m.setState(stateIdle)
+		m.input.Focus()
+		return m, tea.Batch(textarea.Blink, m.waitForEvent())
+
 	case compactDoneMsg:
 		if msg.err != nil {
 			m.appendLine(errStyle.Render("compact: " + config.Hints.FriendlyError(msg.err)))
 		} else {
 			m.history = msg.history
+			m.forgetRewindPoints()
 			// The measured size was the pre-compaction prompt; until the next
 			// call reports a new one, the estimate of what is left stands.
 			m.residentTokens, m.contextMeasured = compaction.EstimateTokens(m.history), false

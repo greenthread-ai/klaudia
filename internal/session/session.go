@@ -143,11 +143,22 @@ type Entry struct {
 	// one; ReadForResume is the reader that does.
 	Subtype string `json:"subtype,omitempty"`
 	Content string `json:"content,omitempty"`
+	// Kept is how many messages before a partial compaction stayed as they
+	// were ("partial_compact" only).
+	Kept int `json:"kept,omitempty"`
 }
 
 // SubtypeCompactBoundary marks the point where history was replaced by a
 // summary.
 const SubtypeCompactBoundary = "compact_boundary"
+
+// SubtypePartialCompact marks a "summarise up to here": Content is a summary
+// that replaced every entry above the last Kept ones, which stay verbatim.
+// A subtype of its own rather than compact_boundary with an extra field: a
+// reader that predates it would take a compact_boundary as "everything above
+// is gone" and drop the kept messages, where an unknown subtype is skipped
+// and the session resumes in full.
+const SubtypePartialCompact = "partial_compact"
 
 // SubtypeRewind marks a /rewind: the conversation was cut back, and Content
 // is how many messages of it were kept (the summary message, if any,
@@ -287,6 +298,10 @@ func ReadForResume(path string) (ResumePoint, error) {
 		switch {
 		case e.Type == "system" && e.Subtype == SubtypeCompactBoundary && strings.TrimSpace(e.Content) != "":
 			rp.Summary, rp.After = e.Content, nil
+		case e.Type == "system" && e.Subtype == SubtypePartialCompact && strings.TrimSpace(e.Content) != "":
+			if e.Kept >= 0 && e.Kept <= len(rp.After) {
+				rp.Summary, rp.After = e.Content, append([]Entry(nil), rp.After[len(rp.After)-e.Kept:]...)
+			}
 		case e.Type == "system" && e.Subtype == SubtypeRewind:
 			// Content counts messages as the live conversation held them: the
 			// summary message first when there is one, then the entries.

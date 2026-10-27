@@ -317,6 +317,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		m.transcript.Reset()
 		m.history = nil
+		m.forgetRewindPoints()
 		m.pastes.reset()
 		m.results.reset()
 		m.nav = nil

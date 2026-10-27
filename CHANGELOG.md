@@ -5,6 +5,28 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+
+- **`/rewind` can summarise up to a prompt** instead of going back to before
+  it: everything earlier becomes a summary, and that prompt and what followed
+  stay word for word. Files are not touched. It is recorded so a resumed
+  session comes back the same way.
+
+### Fixed
+
+- **Release binaries are published again.** v0.2.0 and v0.3.0 were tagged
+  but their release runs stopped at the test step, so neither has prebuilt
+  binaries (`go install …@v0.3.0` was unaffected). Two tests passed on macOS
+  and failed on the Linux runners: one committed without a git identity,
+  which a runner does not have, and the screenshot check compared an image
+  whose key labels depend on the OS it was generated on. Both now pin what
+  they depend on, and the suite was run on Linux before this release.
+- **`/rewind` after a compaction no longer cuts the conversation in the wrong
+  place.** Its recorded prompts were positions in a history that `/compact`,
+  autocompact and `/clear` replace; it now forgets them when that happens and
+  says why, and "summarise up to here" moves the later ones to where they
+  now are.
+
 ## v0.3.0 — 2026-10-27
 
 ### Added

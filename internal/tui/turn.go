@@ -234,6 +234,12 @@ func (m *Model) renderEvent(ev agent.Event) {
 			// wait on the (post-compaction, still large) request's first token.
 			m.appendLine(bannerStyle.Render("· " + ev.Content))
 			m.phase = "thinking"
+			// The loop's autocompact replaced the history with a summary, so
+			// every recorded prompt's index is meaningless now. Microcompact
+			// keeps the message count and says so in its own words.
+			if strings.HasPrefix(ev.Content, "autocompact") {
+				m.forgetRewindPoints()
+			}
 		}
 	case "notice":
 		// A system notice the user must actually see — something the model was

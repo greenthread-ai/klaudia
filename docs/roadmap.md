@@ -32,14 +32,13 @@ below keeps each item's original reasoning with its status noted inline.
 
 What is left, in the order it will be taken:
 
-1. **Small gaps worth closing first**: `/rewind`'s "summarise up to here".
-   (The effort cap landed: `maxEffort`.)
-2. **Session replay as regression tests** (eval mode's second half) — needs a
+1. **Session replay as regression tests** (eval mode's second half) — needs a
    decision on running recorded tool calls safely.
 
 Done since: v0.2.0 shipped (2026-10-27); resize got e2e coverage and Klaudia's
 own live-region renderer; the TUI moved to the Charm v2 libraries, which
-brought Shift+Return. Three workarounds wait on upstream fixes
+brought Shift+Return; v0.3.0 shipped (2026-10-28); `/rewind` gained
+"summarise up to here". Three workarounds wait on upstream fixes
 (lipgloss#774, bubbletea#1709, bubbletea#1867) and are marked in the code.
 
 Deprioritised by decision (2026-10-27), not scheduled: egress beyond the macOS
@@ -110,7 +109,7 @@ Size is a guess: S ≈ a day, M ≈ a week, L ≈ several.
 | 3 | **Egress control**: an in-process HTTP(S)/DNS proxy for the OS and container sandboxes, allowlist from config, decisions surfaced as trust events — *landed 2026-10-27: HTTP(S) proxy and `[sandbox] egress`, enforced under the macOS OS sandbox, advisory in local/bwrap; refusals reach the model as a 403 and /doctor, not yet as trust events. Not done: DNS, a socket bridge for containers and bwrap's `--unshare-net`, Linux enforcement (Landlock's TCP connect rules)* | The consensus security boundary. Trust zones decide what may change; nothing yet decides where data may go — the prompt-injection exfiltration path | L |
 | 4 | **Background + nested sub-agents** — *background landed in the TUI, headless and stream-json (2026-10-27); ACP not yet. Nesting declined (2026-10-27): Claude Code does not let sub-agents start sub-agents, and each level multiplies cost and hides a runaway* : the Agent tool returns immediately and notifies on completion; depth cap; a background child's permission ask is routed to the parent frontend, never auto-denied | Parallelism is where agent throughput comes from now. The `Approver` plumbing already exists | M |
 | 5 | **Fork sub-agents** (inherit the parent conversation) and `session/fork` — *fork landed 2026-10-27 (`fork` on the Agent tool); ACP `session/fork` not done (ACP deferred)* | Cheap once sessions are append-only logs; the default in Claude and Codex | S–M |
-| 6 | **Conversation rewind**: rewind to a turn, restoring files via the existing checkpoint stack, optionally "summarise up to here" — *landed 2026-10-27 (`/rewind`, this process's turns; "summarise up to here" not done)* | `/undo` already does the hard file half | M |
+| 6 | **Conversation rewind**: rewind to a turn, restoring files via the existing checkpoint stack, optionally "summarise up to here" — *landed 2026-10-27 (`/rewind`, this process's turns); "summarise up to here" landed 2026-10-28* | `/undo` already does the hard file half | M |
 | 7 | **MCP serve mode**: `klaudia mcp serve` exposing "run an agent task" as a tool, long runs as Tasks | Makes Klaudia callable by every MCP host, which is most of them | M |
 | 8 | **Job events into the conversation** (Monitor-style) — *landed 2026-10-27: exits and `watch` matches reach the model in every frontend but ACP*: a background job's output lines matching a pattern wake the loop | Klaudia's jobs are richer than most; this is the missing half that makes "start the server, watch for errors" work | S–M |
 | 9 | **Fallback model chain** and an effort cap in config — *chain landed 2026-10-27 (`fallbackModels`, `--fallback-model`; main loop only, not sub-agents); effort cap landed (`maxEffort`)* | Small, and the 5.5-sizing incident showed provider-side surprises are real | S |

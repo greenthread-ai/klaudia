@@ -1655,6 +1655,15 @@ func run(cmd *cobra.Command, opts *options) error {
 				}
 			})
 		}
+		sess.SummariseBefore = func(ctx context.Context, head []anthropic.BetaMessageParam, kept int) ([]anthropic.BetaMessageParam, string, error) {
+			newHead, summary, err := loop.Compact(ctx, head, api.ResolveModel(sess.Model), int64(sess.MaxTokens), sess.Effort)
+			// Not onSummary: the .summary.md file is the resume fallback for a
+			// summary of the whole conversation, which this is not.
+			if err == nil && transcript != nil {
+				_ = transcript.RecordPartialCompaction(summary, kept)
+			}
+			return newHead, summary, err
+		}
 		extraDirs = func() []string { return sess.ExtraDirs }
 		runFn := func(ctx context.Context, turn agent.Turn) (agent.Result, error) {
 			// An MCP server's elicitation has to reach the same prompt the

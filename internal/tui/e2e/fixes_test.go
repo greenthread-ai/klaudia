@@ -393,3 +393,34 @@ func TestRestrictedLeavesNoState(t *testing.T) {
 		t.Errorf("a restricted run wrote %d session dir(s) under the config root", len(entries))
 	}
 }
+
+// /rewind's "summarise up to here": the conversation before the chosen prompt
+// becomes a summary and the prompt stays, so the next request carries the
+// summary and the kept prompt but not what was summarised.
+func TestRewindSummarisesUpToHere(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	env.Prompt(t, tm, "hello there")
+	tm.WaitFor(t, "the first reply", 20*time.Second, func(s Snapshot) bool { return len(s.MatchLines(doneLine)) == 1 })
+	env.Prompt(t, tm, "hello again, second prompt")
+	tm.WaitFor(t, "the second reply", 20*time.Second, func(s Snapshot) bool { return len(s.MatchLines(doneLine)) == 2 })
+
+	tm.Type("/rewind")
+	tm.Press(keyEnter)
+	tm.WaitText(t, "Rewind to before which prompt?", 10*time.Second)
+	tm.Press(keyEnter) // the newest: the second prompt
+	tm.WaitText(t, "Summarise everything before it", 10*time.Second)
+	tm.Press(keyDown)
+	tm.Press(keyEnter)
+	tm.WaitText(t, "Summarised the conversation before that prompt", 20*time.Second)
+
+	env.Prompt(t, tm, "hello, third")
+	tm.WaitFor(t, "the third reply", 20*time.Second, func(s Snapshot) bool { return len(s.MatchLines(doneLine)) == 3 })
+	body := env.Mock.LastRequestBody()
+	if !strings.Contains(body, "SUMMARY: the user said hello") || !strings.Contains(body, "hello again, second prompt") {
+		t.Errorf("the next request lacks the summary or the kept prompt:\n%s", body)
+	}
+	if strings.Contains(body, "hello there") {
+		t.Errorf("the summarised prompt was still sent:\n%s", body)
+	}
+}

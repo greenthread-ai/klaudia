@@ -178,3 +178,13 @@ seeded summary also ends with an explicit closing line: the next prompt merges
 into the same user message, and a summary ending `**Goal m` once reached the
 model as `**Goal malright…`. See `internal/session/summary.go` and
 `session.ReadForResume`.
+
+`/rewind`'s "summarise up to here" is a partial compaction: the summary
+replaces the conversation before a chosen prompt and the prompt and everything
+after it stay verbatim. It is recorded as its own line,
+`{"type":"system","subtype":"partial_compact","content":<summary>,"kept":N}`,
+and resume keeps the last `N` entries before it. Not a `compact_boundary` with
+an extra field: a build that predates it would read that as "everything above
+is gone" and drop the kept messages, where an unknown subtype is skipped and
+the session resumes in full. It writes no `.summary.md`, which is the fallback
+for a summary of the whole conversation.

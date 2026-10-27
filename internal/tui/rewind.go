@@ -3,6 +3,10 @@ package tui
 import (
 	"fmt"
 	"os"
+
+	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/greenthread-ai/klaudia/internal/config"
+	"github.com/greenthread-ai/klaudia/pkg/compaction"
 	"path/filepath"
 	"strings"
 	"time"
@@ -48,6 +52,10 @@ func (m *Model) rewindCommand() {
 		return
 	}
 	if len(m.rewindPoints) == 0 {
+		if m.rewindCompacted {
+			m.appendLine(bannerStyle.Render("Nothing to rewind to: the conversation was compacted since your earlier prompts. /undo still restores files a turn at a time."))
+			return
+		}
 		m.appendLine(bannerStyle.Render("Nothing to rewind to yet — /rewind lists the prompts you have sent this session."))
 		return
 	}
@@ -56,11 +64,83 @@ func (m *Model) rewindCommand() {
 		p := m.rewindPoints[i]
 		label := fmt.Sprintf("%s · %s ago", oneline(p.prompt, 60), elapsed(time.Since(p.at).Truncate(time.Second)))
 		items = append(items, choiceItem{label: label, apply: func() string {
-			m.confirmRewind(p)
+			m.chooseRewind(p)
 			return ""
 		}})
 	}
 	m.startChoice("Rewind to before which prompt? (Esc to leave as-is)", items)
+}
+
+// chooseRewind asks what to do at p: go back to before it, or keep it and
+// summarise everything before it. The second is Claude Code's "summarise up
+// to here": it frees the context the early conversation was using without
+// losing the recent work verbatim, and touches no files. Offered only when
+// there is something before p to summarise.
+func (m *Model) chooseRewind(p rewindPoint) {
+	if m.sess == nil || m.sess.SummariseBefore == nil || p.hist < 2 || p.hist >= len(m.history) {
+		m.confirmRewind(p)
+		return
+	}
+	m.startChoice(fmt.Sprintf("At %q:", oneline(p.prompt, 50)), []choiceItem{
+		{label: "Rewind to before it: files and conversation", apply: func() string {
+			m.confirmRewind(p)
+			return ""
+		}},
+		{label: "Summarise everything before it, keeping it and what followed (files untouched)", apply: func() string {
+			return m.summariseBefore(p)
+		}},
+	})
+}
+
+// summariseBefore replaces the conversation before p with a model-written
+// summary, keeping p's prompt and everything after it as they are.
+func (m *Model) summariseBefore(p rewindPoint) string {
+	if m.busyGuard("/rewind") {
+		return ""
+	}
+	head := append([]anthropic.BetaMessageParam(nil), m.history[:p.hist]...)
+	kept := len(m.history) - p.hist
+	m.appendLine(bannerStyle.Render("Summarising the conversation before that prompt…"))
+	m.setState(stateRunning)
+	go func() {
+		newHead, summary, err := m.sess.SummariseBefore(m.ctx, head, kept)
+		m.events <- summariseDoneMsg{head: newHead, summary: summary, at: p.hist, err: err}
+	}()
+	return ""
+}
+
+// onSummariseDone splices the summary in and moves the remaining rewind
+// points to their new indices; points inside the summarised part are gone.
+func (m *Model) onSummariseDone(msg summariseDoneMsg) {
+	if msg.err != nil {
+		m.appendLine(errStyle.Render("summarise: " + config.Hints.FriendlyError(msg.err)))
+		return
+	}
+	if msg.at > len(m.history) {
+		return // the history changed under it; nothing safe to splice
+	}
+	shift := len(msg.head) - msg.at
+	m.history = append(append([]anthropic.BetaMessageParam(nil), msg.head...), m.history[msg.at:]...)
+	kept := m.rewindPoints[:0]
+	for _, rp := range m.rewindPoints {
+		if rp.hist >= msg.at {
+			rp.hist += shift
+			kept = append(kept, rp)
+		}
+	}
+	m.rewindPoints = kept
+	m.residentTokens, m.contextMeasured = compaction.EstimateTokens(m.history), false
+	m.appendLine(bannerStyle.Render("Summarised the conversation before that prompt; it and what followed are unchanged. Summary:\n" + strings.TrimSpace(msg.summary)))
+}
+
+// forgetRewindPoints drops every recorded prompt: the history they index was
+// replaced (a compaction, /clear), so cutting it at their old positions would
+// cut it somewhere meaningless. /undo still restores files a turn at a time.
+func (m *Model) forgetRewindPoints() {
+	if len(m.rewindPoints) > 0 {
+		m.rewindCompacted = true
+	}
+	m.rewindPoints = nil
 }
 
 // confirmRewind shows what rewinding to p would do and asks.

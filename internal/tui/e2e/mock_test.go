@@ -5,6 +5,7 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -47,6 +48,7 @@ type Mock struct {
 	completes int      // POST /chat/completions received
 	prompts   []string // the prompt each completion request was answered for
 	aborted   int      // streams the client hung up on
+	lastBody  string   // the most recent completion request, raw
 }
 
 func newMock(t *testing.T, script Script) *Mock {
@@ -74,6 +76,14 @@ func (m *Mock) Prompts() []string {
 }
 
 // Requests is the number of completion requests received so far.
+// LastRequestBody is the raw body of the most recent completion request: the
+// whole conversation as the model was sent it.
+func (m *Mock) LastRequestBody() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.lastBody
+}
+
 func (m *Mock) Requests() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -142,13 +152,19 @@ func contentText(raw json.RawMessage) string {
 }
 
 func (m *Mock) complete(w http.ResponseWriter, r *http.Request) {
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	var req chatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(raw, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	prompt, step := req.promptAndStep()
 	m.mu.Lock()
+	m.lastBody = string(raw)
 	m.completes++
 	m.prompts = append(m.prompts, prompt)
 	m.mu.Unlock()
@@ -262,6 +278,11 @@ func defaultScript(prompt string, step int) Reply {
 	// working through its checkboxes (goalStep) rather than by keyword.
 	if strings.Contains(prompt, "autonomously iterating") || strings.Contains(prompt, "final independent review") {
 		return goalStep(prompt, step)
+	}
+	// A compaction's summary request (/compact, autocompact, or /rewind's
+	// "summarise up to here").
+	if strings.Contains(prompt, "Produce a detailed summary of the conversation") {
+		return Reply{Text: "SUMMARY: the user said hello and was greeted."}
 	}
 	// A background sub-agent's result arriving as its own turn.
 	if strings.Contains(prompt, "<background-agent") {

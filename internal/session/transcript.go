@@ -88,22 +88,7 @@ func (t *Transcript) Record(role string, message json.RawMessage) error {
 // its first keep messages (the summary message counted, when there is one).
 // Later entries chain from it, so they follow the cut on resume.
 func (t *Transcript) RecordRewind(keep int) error {
-	id := uuid.NewString()
-	e := Entry{
-		Type:       "system",
-		Subtype:    SubtypeRewind,
-		Content:    strconv.Itoa(keep),
-		UUID:       id,
-		ParentUUID: t.lastUUID,
-		SessionID:  t.meta.SessionID,
-		Timestamp:  Now(),
-		CWD:        t.meta.CWD,
-		GitBranch:  t.meta.GitBranch,
-		UserType:   t.meta.UserType,
-		Version:    t.meta.Version,
-	}
-	t.lastUUID = &id
-	return t.w.Append(e)
+	return t.recordSystem(Entry{Subtype: SubtypeRewind, Content: strconv.Itoa(keep)})
 }
 
 // RecordCompaction appends a compaction boundary carrying summary: the point
@@ -115,20 +100,21 @@ func (t *Transcript) RecordRewind(keep int) error {
 // the same reason this is per transcript at all: the summary file is keyed by
 // the process's session id, and an ACP process records many sessions.
 func (t *Transcript) RecordCompaction(summary string) error {
+	return t.recordSystem(Entry{Subtype: SubtypeCompactBoundary, Content: summary})
+}
+
+// RecordPartialCompaction appends a "summarise up to here": summary replaced
+// everything before the last kept messages, which stay as they were.
+func (t *Transcript) RecordPartialCompaction(summary string, kept int) error {
+	return t.recordSystem(Entry{Subtype: SubtypePartialCompact, Content: summary, Kept: kept})
+}
+
+// recordSystem appends a system line, chained like any other.
+func (t *Transcript) recordSystem(e Entry) error {
 	id := uuid.NewString()
-	e := Entry{
-		Type:       "system",
-		Subtype:    SubtypeCompactBoundary,
-		Content:    summary,
-		UUID:       id,
-		ParentUUID: t.lastUUID,
-		SessionID:  t.meta.SessionID,
-		Timestamp:  Now(),
-		CWD:        t.meta.CWD,
-		GitBranch:  t.meta.GitBranch,
-		UserType:   t.meta.UserType,
-		Version:    t.meta.Version,
-	}
+	e.Type, e.UUID, e.ParentUUID = "system", id, t.lastUUID
+	e.SessionID, e.Timestamp, e.CWD = t.meta.SessionID, Now(), t.meta.CWD
+	e.GitBranch, e.UserType, e.Version = t.meta.GitBranch, t.meta.UserType, t.meta.Version
 	t.lastUUID = &id
 	return t.w.Append(e)
 }
