@@ -9,7 +9,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread-ai/klaudia/internal/api"
-	"github.com/greenthread-ai/klaudia/internal/hooks"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/tools"
@@ -36,7 +35,7 @@ type Spawner struct {
 
 	workingDir string
 	hostGate   *HostGate
-	hooks      *hooks.Runner
+	hooks      Hooks
 	isolator   Isolator
 	effort     api.Effort
 	limits     api.ModelLimits
@@ -89,7 +88,7 @@ func (s *Spawner) WithHostGate(g *HostGate) *Spawner {
 // the user set. A PostToolUse formatter that does not run on a child's writes is
 // a formatter with an exception nobody can see from the config file. Only the
 // tool events fire for a child — see Options.SubAgent.
-func (s *Spawner) WithHooks(h *hooks.Runner) *Spawner {
+func (s *Spawner) WithHooks(h Hooks) *Spawner {
 	s.hooks = h
 	return s
 }

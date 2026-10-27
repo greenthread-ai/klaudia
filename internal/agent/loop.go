@@ -20,7 +20,6 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/api"
 	"github.com/greenthread-ai/klaudia/internal/compaction"
-	"github.com/greenthread-ai/klaudia/internal/hooks"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/plan"
 	"github.com/greenthread-ai/klaudia/internal/schema"
@@ -163,7 +162,7 @@ type Options struct {
 	OnSummary func(summary string)
 	// Hooks, if set, runs the user's configured shell commands at the four
 	// lifecycle points. Nil — the common case — costs nothing: see hooks.go.
-	Hooks *hooks.Runner
+	Hooks Hooks
 	// SubAgent marks a child run spawned by the Agent tool.
 	//
 	// Its only effect is on hooks, and only on UserPromptSubmit: a sub-agent's
@@ -268,10 +267,10 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	var injected []string
 	if opts.Hooks != nil {
 		if opts.Hooks.ClaimSessionStart() {
-			injected = appendHookContext(injected, fireHooks(ctx, opts, emit, hooks.Input{Event: hooks.SessionStart}))
+			injected = appendHookContext(injected, fireHooks(ctx, opts, emit, HookInput{Event: HookSessionStart}))
 		}
 		if opts.Prompt != "" && !opts.SubAgent {
-			hr := fireHooks(ctx, opts, emit, hooks.Input{Event: hooks.UserPromptSubmit, Prompt: opts.Prompt})
+			hr := fireHooks(ctx, opts, emit, HookInput{Event: HookUserPromptSubmit, Prompt: opts.Prompt})
 			if hr.Blocked {
 				// The prompt is not sent. This is the one refusal the model is
 				// never told about, because there is nothing to tell: no request
@@ -1164,9 +1163,9 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	// gate's own is: the text is identical every time the hook fires, so feeding
 	// it to the same-shape streak would make two unrelated blocked calls look
 	// like a wedged environment and latch the tool.
-	if hookEnabled(opts, hooks.PreToolUse) {
-		hr := fireHooks(ctx, opts, emit, hooks.Input{
-			Event:     hooks.PreToolUse,
+	if hookEnabled(opts, HookPreToolUse) {
+		hr := fireHooks(ctx, opts, emit, HookInput{
+			Event:     HookPreToolUse,
 			ToolName:  tu.Name,
 			ToolInput: toolInputFor(raw),
 		})
@@ -1248,9 +1247,9 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	// already run. What it buys is the result arriving as an error with the
 	// reason attached, which is the difference between the model believing its
 	// write succeeded and knowing the linter rejected it.
-	if hookEnabled(opts, hooks.PostToolUse) {
-		hr := fireHooks(ctx, opts, emit, hooks.Input{
-			Event:      hooks.PostToolUse,
+	if hookEnabled(opts, HookPostToolUse) {
+		hr := fireHooks(ctx, opts, emit, HookInput{
+			Event:      HookPostToolUse,
 			ToolName:   tu.Name,
 			ToolInput:  toolInputFor(raw),
 			ToolResult: content,

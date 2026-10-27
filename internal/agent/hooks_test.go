@@ -47,11 +47,37 @@ func (r *hookProbeTool) Execute(context.Context, tools.Context, json.RawMessage)
 
 // userHooks builds a Runner with the hooks in the user's own config, so these
 // tests exercise the loop's four call sites rather than the trust prompt.
-func userHooks(t *testing.T, entries ...config.Hook) *hooks.Runner {
+func userHooks(t *testing.T, entries ...config.Hook) Hooks {
 	t.Helper()
 	r := hooks.New(t.TempDir(), "sess", entries, nil)
 	r.Store = hooks.Store{Path: filepath.Join(t.TempDir(), "hooks.json")}
-	return r
+	return testHooks{r}
+}
+
+// testHooks mirrors the CLI's loopHooks (cli/hooks.go), which tests here
+// cannot import.
+type testHooks struct{ r *hooks.Runner }
+
+func (h testHooks) Has(ev HookEvent) bool   { return h.r.Has(hooks.Event(ev)) }
+func (h testHooks) ClaimSessionStart() bool { return h.r.ClaimSessionStart() }
+
+func (h testHooks) Run(ctx context.Context, in HookInput, confirm HookConfirm) HookResult {
+	var c hooks.Confirm
+	if confirm != nil {
+		c = func(ctx context.Context, hs []hooks.Hook, file string) bool {
+			lines := make([]string, len(hs))
+			for i, hk := range hs {
+				lines[i] = hk.String()
+			}
+			return confirm(ctx, lines, file)
+		}
+	}
+	res := h.r.Run(ctx, hooks.Input{
+		Event: hooks.Event(in.Event), CWD: in.CWD,
+		ToolName: in.ToolName, ToolInput: in.ToolInput, ToolResult: in.ToolResult, ToolError: in.ToolError,
+		Prompt: in.Prompt,
+	}, c)
+	return HookResult{Blocked: res.Blocked, Reason: res.Reason, Context: res.Context, Notices: res.Notices}
 }
 
 func dispatchProbe(t *testing.T, probe *hookProbeTool, opts Options, emit Emitter) anthropic.BetaContentBlockParamUnion {

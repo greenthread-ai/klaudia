@@ -128,7 +128,7 @@ a frontend, and `Loop`/`Options`/`Event`/`Turn`/`api.Provider`/`tools.Tool`/
   `KLAUDIA_CONFIG_DIR`.
 - Model-facing error strings name `.klaudia/config.toml`
   (`agent/loop.go`, `api/errors.go`).
-- `agent` imports `trust` and `hooks` concretely (`subagent`, `worktree` and
+- `agent` imports `trust` concretely (`hooks`, `subagent`, `worktree` and
   `session` are done — see stage 1); `hooks` imports `config` (the one upward
   edge).
 
@@ -140,8 +140,8 @@ Cut `hooks → config`.
 Product strings behind an injectable hint function.
 
 **Stage 1 — interfaces at the seams.** `HostGate` becomes a pre-dispatch gate
-interface with trust as Klaudia's implementation; `hooks.Runner` a `ToolHooks`
-interface; the spawner takes a sub-agent-type resolver and an optional
+interface with trust as Klaudia's implementation; `hooks.Runner` a hooks
+interface (done: `agent.Hooks`, adapted in `cli/hooks.go`); the spawner takes a sub-agent-type resolver and an optional
 `Isolator` (worktrees) — done: `Spawner.WithTypes` and `WithIsolator`, with
 Klaudia's implementations in `cli` (`subagentTypes`, `gitIsolator`) so neither
 `subagent` nor `worktree` imports `agent`. Both gates are already nil-safe, so

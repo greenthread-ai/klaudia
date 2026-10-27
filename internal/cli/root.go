@@ -1237,7 +1237,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	registry := wiring.registry
 	// Sub-agents inherit the hooks for the same reason they inherit the host
 	// gate: a child must not be the way around a rule the user set.
-	wiring.spawner.WithHooks(hookRunner)
+	wiring.spawner.WithHooks(hooksFor(hookRunner))
 	// Effort is inherited unless [subagents] effort says otherwise. Like the
 	// sub-agent model, this is a snapshot taken at startup: a later /effort
 	// changes the main loop, not children already wired.
@@ -1371,7 +1371,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Recorder:        recorder,
 			WebTools:        true,
 			OnSummary:       onSummary,
-			Hooks:           hookRunner,
+			Hooks:           hooksFor(hookRunner),
 			Plan:            planStore,
 			Spill:           spill,
 		}

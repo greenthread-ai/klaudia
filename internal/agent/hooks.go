@@ -8,7 +8,6 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
-	"github.com/greenthread-ai/klaudia/internal/hooks"
 	"github.com/greenthread-ai/klaudia/internal/permission"
 	"github.com/greenthread-ai/klaudia/internal/trust"
 )
@@ -24,6 +23,56 @@ import (
 // would be a way to disable the gate by writing a file, and a project config
 // is a file that arrives with a clone.
 
+// Hooks is a source of lifecycle hooks: shell commands a user or project wants
+// run at fixed points of a turn. Klaudia's is hooks.Runner, adapted in the CLI
+// (cli/hooks.go) so the loop does not depend on how hooks are configured or
+// trusted. Nil — the common case — costs nothing.
+type Hooks interface {
+	// Has reports whether any hook is attached to ev, so the two per-call
+	// events cost nothing when none are.
+	Has(ev HookEvent) bool
+	// ClaimSessionStart reports, once per session, that SessionStart should
+	// fire now.
+	ClaimSessionStart() bool
+	// Run runs ev's hooks. confirm asks the user before running hooks that
+	// need their agreement; nil means there is no one to ask.
+	Run(ctx context.Context, in HookInput, confirm HookConfirm) HookResult
+}
+
+// HookEvent names a lifecycle point.
+type HookEvent string
+
+// The four points the loop fires hooks at.
+const (
+	HookSessionStart     HookEvent = "SessionStart"
+	HookUserPromptSubmit HookEvent = "UserPromptSubmit"
+	HookPreToolUse       HookEvent = "PreToolUse"
+	HookPostToolUse      HookEvent = "PostToolUse"
+)
+
+// HookInput is what a hook is told about the moment it runs at.
+type HookInput struct {
+	Event      HookEvent
+	CWD        string
+	ToolName   string
+	ToolInput  json.RawMessage
+	ToolResult string
+	ToolError  bool
+	Prompt     string
+}
+
+// HookResult is what the hooks for one event decided and said.
+type HookResult struct {
+	Blocked bool     // a PreToolUse hook refused the call
+	Reason  string   // why, for the model
+	Context string   // text to inject (SessionStart, UserPromptSubmit) or feedback (PostToolUse)
+	Notices []string // for the user, never the model
+}
+
+// HookConfirm asks the user whether the hooks declared in file — shown as
+// their command lines — may run.
+type HookConfirm func(ctx context.Context, commands []string, file string) bool
+
 // fireHooks runs the hooks attached to an event and surfaces anything the user
 // needs to know about them.
 //
@@ -31,9 +80,9 @@ import (
 // failed to start, a typo in the config, output too big to inject: these are the
 // operator's to fix, and telling the model its environment is misconfigured only
 // invites it to work around the misconfiguration.
-func fireHooks(ctx context.Context, opts Options, emit Emitter, in hooks.Input) hooks.Result {
+func fireHooks(ctx context.Context, opts Options, emit Emitter, in HookInput) HookResult {
 	if opts.Hooks == nil {
-		return hooks.Result{}
+		return HookResult{}
 	}
 	in.CWD = opts.WorkingDir
 	res := opts.Hooks.Run(ctx, in, hookConfirm(opts))
@@ -58,20 +107,16 @@ func fireHooks(ctx context.Context, opts Options, emit Emitter, in hooks.Input) 
 // bypassPermissions is not special-cased here. That mode turns off checks on the
 // model's actions; it is not a statement that any repo Klaudia is pointed at may
 // execute code. Someone who wants that can approve the hooks once.
-func hookConfirm(opts Options) hooks.Confirm {
+func hookConfirm(opts Options) HookConfirm {
 	approver := opts.Approver
 	if approver == nil {
-		// Deliberately nil rather than DenyAll: hooks.Runner distinguishes "the
+		// Deliberately nil rather than DenyAll: a Hooks source distinguishes "the
 		// user said no" from "there was no one to ask", and says so in its
 		// notice. Collapsing them would report a refusal nobody made.
 		return nil
 	}
-	return func(ctx context.Context, hs []hooks.Hook, file string) bool {
-		lines := make([]string, len(hs))
-		for i, h := range hs {
-			lines[i] = h.String()
-		}
-		summary := fmt.Sprintf("run %s declared by %s", plural(len(hs), "hook"), file)
+	return func(ctx context.Context, lines []string, file string) bool {
+		summary := fmt.Sprintf("run %s declared by %s", plural(len(lines), "hook"), file)
 		d := approver.Approve(ctx, ApprovalRequest{
 			ToolName:   "Hooks",
 			Specifier:  file,
@@ -96,7 +141,7 @@ func hookConfirm(opts Options) hooks.Confirm {
 // two tool events fire on every single tool call, so the common case — no hooks
 // configured, or none for this event — must not cost a marshal and a result
 // collapse per call.
-func hookEnabled(opts Options, ev hooks.Event) bool {
+func hookEnabled(opts Options, ev HookEvent) bool {
 	return opts.Hooks != nil && opts.Hooks.Has(ev)
 }
 
@@ -139,7 +184,7 @@ func hookFeedback(content, feedback string) string {
 }
 
 // appendHookContext collects a hook result's context, dropping the empty case.
-func appendHookContext(into []string, res hooks.Result) []string {
+func appendHookContext(into []string, res HookResult) []string {
 	if c := strings.TrimSpace(res.Context); c != "" {
 		return append(into, c)
 	}
