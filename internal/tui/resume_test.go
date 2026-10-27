@@ -9,65 +9,59 @@ import (
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
-// A resumed session must not silently inherit yesterday's approvals. That is
-// exactly the "flaky remembered command permissions" the trust model replaced.
-func TestResumeDoesNotRestoreApprovals(t *testing.T) {
-	st := resumeState{HasGuardrail: true, Mode: permission.ModeAutonomous}
-	out := st.render()
-	if !strings.Contains(out, "not restored") {
-		t.Fatalf("resume does not say approvals were dropped:\n%s", out)
+// A resumed session must not silently inherit yesterday's approvals, and must
+// say so; and it must say it resumed at all — with a clean tree the card used
+// to be skipped, and nothing showed the model was carrying on from history.
+func TestResumeAlwaysSaysSoInOneLine(t *testing.T) {
+	out := resumeState{HasGuardrail: true, Mode: permission.ModeAutonomous, Messages: 14}.render()
+	if strings.Count(out, "\n") != 0 {
+		t.Errorf("a clean resume should be one line:\n%s", out)
 	}
-	if !strings.Contains(out, "will ask again") {
-		t.Errorf("resume does not say what happens instead:\n%s", out)
+	for _, want := range []string{"continuing", "14 messages", "approvals start fresh", "/clear"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q: %s", want, out)
+		}
 	}
 }
 
 // A job that is gone matters more than one that is running: the conversation
 // the user is about to continue implies the server is still up.
 func TestResumeSaysJobsAreGone(t *testing.T) {
-	st := resumeState{
-		DeadJobs: []string{"dev", "api"},
-		Mode:     permission.ModeAutonomous,
-	}
-	out := st.render()
-	for _, want := range []string{"dev", "api", "stopped when the previous session ended"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("resume banner missing %q:\n%s", want, out)
-		}
+	out := resumeState{HasGuardrail: true, DeadJobs: []string{"dev", "api"}, Mode: permission.ModeAutonomous}.render()
+	if !strings.Contains(out, "stopped when the previous session ended: dev, api") {
+		t.Errorf("resume banner:\n%s", out)
 	}
 }
 
 func TestResumeShowsGoalAndTree(t *testing.T) {
-	st := resumeState{
-		Goal:        "Move session persistence to Postgres",
-		Branch:      "auth-refactor",
-		KlaudiaWork: []string{"src/db/store.go", "src/db/store_test.go"},
-		UserWork:    []string{"notes.md"},
-		Mode:        permission.ModeAutonomous,
-	}
-	out := st.render()
+	out := resumeState{
+		HasGuardrail: true,
+		Goal:         "Move session persistence to Postgres",
+		Branch:       "auth-refactor",
+		KlaudiaWork:  []string{"src/db/store.go", "src/db/store_test.go"},
+		UserWork:     []string{"notes.md"},
+		Mode:         permission.ModeAutonomous,
+	}.render()
 	for _, want := range []string{
-		"Move session persistence to Postgres",
-		"2 changes by Klaudia", "src/db/store.go",
-		"1 change of yours", "/changes",
-		"auth-refactor",
+		"goal: Move session persistence to Postgres",
+		"uncommitted on auth-refactor: 2 files by Klaudia (src/db/store.go, src/db/store_test.go) · 1 file of yours — /changes",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("resume banner missing %q:\n%s", want, out)
 		}
 	}
+	if strings.Count(out, "\n") != 2 {
+		t.Errorf("want three lines:\n%s", out)
+	}
 }
 
-// A fresh session with nothing to reconcile gets the ordinary banner.
-func TestEmptyResumeHasNoContent(t *testing.T) {
-	if (resumeState{Mode: permission.ModeAutonomous}).hasContent() {
-		t.Error("an empty state claimed to have something to say")
+// The mode is in the status bar; the card names trust only when it is off.
+func TestResumeWarnsOnlyWhenTheGuardrailIsOff(t *testing.T) {
+	if out := (resumeState{HasGuardrail: true, Mode: permission.ModeBypassPermissions}).render(); !strings.Contains(out, "guardrail is off") {
+		t.Errorf("bypass not flagged:\n%s", out)
 	}
-	if !(resumeState{Goal: "x"}).hasContent() {
-		t.Error("a goal is worth reporting")
-	}
-	if !(resumeState{DeadJobs: []string{"dev"}}).hasContent() {
-		t.Error("a stopped job is worth reporting")
+	if out := (resumeState{HasGuardrail: true, Mode: permission.ModeAutonomous}).render(); strings.Contains(out, "⚠") {
+		t.Errorf("an ordinary mode was flagged:\n%s", out)
 	}
 }
 

@@ -602,8 +602,8 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	m.appendLine(m.introText())
 	// A resumed session gets the operational picture instead of the
 	// dirty-tree note: it subsumes it, and adds what did not survive.
-	if st := m.buildResumeState(); len(history) > 0 && st.hasContent() {
-		m.appendLine(bannerStyle.Render(st.render()))
+	if len(history) > 0 {
+		m.appendLine(bannerStyle.Render(m.buildResumeState().render()))
 	} else {
 		m.warnIfDirtyAtStart()
 	}

@@ -144,6 +144,12 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **Resuming says so, in one line.** A resumed session with a clean working
+  tree showed nothing, so the model carried on from history the user could
+  not see. With anything to reconcile, the card was ten lines restating the
+  mode. Every resume now opens with `↻ continuing the last session here · N
+  messages · approvals start fresh · /clear to start over`, plus one line
+  each for a goal, uncommitted work and stopped jobs when there are any.
 - **One line per tool call.** A call's line used to be written when it started
   (`⚙ Read main.go`) and its result under it (`✓ Read · 0ms:` and eight
   lines of the file). It is now written once, when the result is in:

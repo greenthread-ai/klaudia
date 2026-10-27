@@ -40,12 +40,6 @@ type resumeState struct {
 	Messages     int
 }
 
-// hasContent reports whether there is anything worth showing. A fresh session
-// with an empty tree gets the ordinary banner instead.
-func (st resumeState) hasContent() bool {
-	return st.Goal != "" || len(st.KlaudiaWork) > 0 || len(st.UserWork) > 0 || len(st.DeadJobs) > 0
-}
-
 // buildResumeState assembles the picture from the world and the transcript.
 func (m *Model) buildResumeState() resumeState {
 	st := resumeState{Messages: len(m.history), Mode: m.currentMode()}
@@ -80,52 +74,55 @@ func (m *Model) buildResumeState() resumeState {
 // render is the banner.
 func (st resumeState) render() string {
 	var b strings.Builder
-	b.WriteString("Resuming\n")
+	// One line always, because the conversation is back even when nothing
+	// else is: a resumed session with a clean tree used to show no sign of
+	// it, while the model carried on from history the user could not see.
+	// Approvals are named here because they are the one thing that does not
+	// come back — session-scoped by design, so a permission granted yesterday
+	// never silently applies today.
+	fmt.Fprintf(&b, "↻ continuing the last session here · %s · approvals start fresh · /clear to start over",
+		countOf(st.Messages, "message"))
 
+	// The rest only when there is something to say, one line each. The card
+	// was ten lines on every start, most of them restating the mode.
 	if st.Goal != "" {
-		b.WriteString("\nGoal\n  " + st.Goal + "\n")
+		b.WriteString("\n  goal: " + oneline(st.Goal, 100))
 	}
-
 	if len(st.KlaudiaWork) > 0 || len(st.UserWork) > 0 {
-		b.WriteString("\nWorking tree\n")
+		b.WriteString("\n  uncommitted")
+		if st.Branch != "" {
+			b.WriteString(" on " + st.Branch)
+		}
+		b.WriteString(":")
+		var parts []string
 		if n := len(st.KlaudiaWork); n > 0 {
-			fmt.Fprintf(&b, "  %s by Klaudia\n", countOf(n, "change"))
-			for _, f := range st.KlaudiaWork {
-				b.WriteString("    " + f + "\n")
-			}
+			parts = append(parts, fmt.Sprintf("%s by Klaudia (%s)", countOf(n, "file"), shortList(st.KlaudiaWork, 3)))
 		}
 		if n := len(st.UserWork); n > 0 {
-			fmt.Fprintf(&b, "  %s of yours — /changes to see the split\n", countOf(n, "change"))
+			parts = append(parts, countOf(n, "file")+" of yours")
 		}
-		if st.Branch != "" {
-			b.WriteString("  on " + st.Branch + "\n")
-		}
+		b.WriteString(" " + strings.Join(parts, " · ") + " — /changes")
 	}
-
 	if len(st.DeadJobs) > 0 {
-		b.WriteString("\nJobs\n")
-		for _, j := range st.DeadJobs {
-			b.WriteString("  " + j + "  stopped when the previous session ended\n")
-		}
+		// Named as stopped, never running: they were children of a process
+		// that exited, and the conversation implies they are still up.
+		b.WriteString("\n  stopped when the previous session ended: " + strings.Join(st.DeadJobs, ", "))
 	}
-
-	b.WriteString("\nTrust\n")
 	switch {
 	case !st.HasGuardrail:
-		b.WriteString("  not configured\n")
+		b.WriteString("\n  ⚠ no host guardrail is configured")
 	case st.Mode == permission.ModeBypassPermissions:
-		b.WriteString("  guardrail bypassed by the mode\n")
-	default:
-		b.WriteString("  host changes need your agreement\n")
+		b.WriteString("\n  ⚠ bypassPermissions: the host guardrail is off")
 	}
-	fmt.Fprintf(&b, "  %s mode\n", st.Mode)
-	// The one thing that must NOT come back. Approvals are session-scoped by
-	// design; resurrecting them would mean a permission granted yesterday
-	// silently applying today — exactly the "flaky remembered command
-	// permissions" the trust model replaced.
-	b.WriteString("  previous approvals were not restored — Klaudia will ask again\n")
+	return b.String()
+}
 
-	return strings.TrimRight(b.String(), "\n")
+// shortList joins up to n names, then "+N more".
+func shortList(names []string, n int) string {
+	if len(names) <= n {
+		return strings.Join(names, ", ")
+	}
+	return strings.Join(names[:n], ", ") + fmt.Sprintf(", +%d more", len(names)-n)
 }
 
 // seedOwnershipFromHistory re-attributes files Klaudia wrote in a past session.

@@ -190,6 +190,11 @@ Approvals are deliberately **not** restored. They are session-scoped, and
 resurrecting them would mean a permission you granted yesterday silently
 applying today.
 
+On screen that is one line on every resume — `↻ continuing the last session
+here · 14 messages · approvals start fresh · /clear to start over` — with a
+line each for a goal, uncommitted work and stopped jobs only when there are
+any, and a warning only when the host guardrail is off.
+
 ## What Klaudia has in context
 
 `/context` lists pinned files, what changed this session, the directories the
