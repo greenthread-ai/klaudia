@@ -247,6 +247,29 @@ clamp with `/last`, ✗ on failed tools, the verification footer, the `/model`
 picker, and OSC 8 links on paths and URLs. Not observed: the live plan panel
 (the mock finished too fast).
 
+## Backlog: long-running background work (requested 2026-10-27)
+
+Some tasks sit for a long time on purpose: provisioning a Proxmox VM, waiting
+on a Kubernetes rollout, a cloud bootstrap. Verify, end to end, that
+background jobs (`run_in_background` Bash) and background agents hold up over
+that span, and fix what does not:
+
+- **Completion reaches the model.** A job or agent that finishes while the
+  session is idle starts a turn; one that finishes mid-turn is delivered as a
+  steering message. Check both for jobs as well as agents, over hours rather
+  than seconds.
+- **Hangs are noticed.** A job with no output and no exit for a long time is
+  reported (to the user, and to the model when it next looks) rather than
+  sitting silently. Distinguish "quiet but alive" (a provisioning poll) from
+  "wedged". Decide whether the model can ask to be woken after a delay.
+- **Cleanup.** `/stopjob`, Esc, `/quit` and a crash: what happens to the
+  process group, the log, and the agent's worktree in each. Nothing leaks
+  across sessions; resume reports what died (it already says jobs stopped).
+- **Limits.** Timeouts, output caps and log growth for a job that runs for
+  hours; the context cost of a long-running agent's progress lines.
+- **Frontends.** The same guarantees over stream-json and headless `-p`, where
+  background agents currently run in the foreground.
+
 ## Plan mode and goal runs: one work loop
 
 Driven end to end against the mock (`TestPlanApprovalRuns`,
