@@ -45,6 +45,12 @@ it would be the same mistake as `git add -A` in the other direction.
 Shared files are deliberately excluded. Sweeping your edit into a commit
 describing Klaudia's work is precisely the bug this replaced.
 
+`/commit <message>` uses your message. A bare `/commit` has the model draft
+one from the diff of exactly what will be committed, the repository's recent
+subjects (so it follows house style) and your last request. That is a single
+call outside the conversation, so it adds nothing to the history. The draft
+is shown and still needs your y; `n` and `/commit <message>` writes your own.
+
 ## `/undo`
 
 **The one guarantee: undo cannot destroy work you did.** Everything else — how

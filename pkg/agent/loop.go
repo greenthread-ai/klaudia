@@ -668,6 +668,35 @@ func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessagePara
 	return compaction.ReplaceWithSummary(summary), summary, nil
 }
 
+// Complete asks the model one question outside any conversation: no tools,
+// no history, nothing recorded. It is for the frontend's small jobs — a commit
+// message drafted from a diff — that should not become a turn in the session
+// the user is having. Effort is capped as a summary's is (SummaryEffort):
+// these are extraction, not reasoning. A reply cut off at maxTokens is an
+// error, not a shorter answer.
+func (l *Loop) Complete(ctx context.Context, prompt string, model anthropic.Model, maxTokens int64, effort api.Effort) (string, error) {
+	params := anthropic.BetaMessageNewParams{
+		Model:     model,
+		MaxTokens: maxTokens,
+		Messages:  []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock(prompt))},
+		Betas:     api.DefaultBetas,
+	}
+	if lvl := compaction.SummaryEffort(effort); lvl != api.EffortUnset {
+		params.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(lvl)
+	}
+	assistant, text, err := l.streamTurn(ctx, params, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	if assistant.StopReason == "max_tokens" {
+		return "", fmt.Errorf("the reply was cut off at %d tokens", maxTokens)
+	}
+	if strings.TrimSpace(text) == "" {
+		return "", fmt.Errorf("the model returned nothing")
+	}
+	return text, nil
+}
+
 // autocompact summarizes the conversation via the model and replaces history
 // with the summary. On error the caller keeps messages unchanged.
 func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64) ([]anthropic.BetaMessageParam, error) {

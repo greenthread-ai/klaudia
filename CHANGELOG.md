@@ -6,6 +6,11 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Added
+- **`/commit` drafts the message.** A bare `/commit` asks the model, in one
+  call outside the conversation (`agent.Loop.Complete`), for a message
+  describing exactly what will be committed, in the style of the
+  repository's recent subjects. It is shown, and committing still needs a y.
+  `/commit <message>` works as before.
 - **Stream-json opens with a `system/init` line**, as Claude Code's does:
   session id, model, cwd, permission mode, tools — and, on the bidirectional
   driver, `schema_version`, which versions `agent.Event` as a wire format

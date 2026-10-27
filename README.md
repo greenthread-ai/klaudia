@@ -404,8 +404,8 @@ Details, including what deliberately does not work: [docs/jobs.md](docs/jobs.md)
 ## Your changes and Klaudia's
 
 Klaudia knows which working-tree changes are yours, which are its own, and which
-are both. `/changes` shows the split, `/commit` stages only its own work and
-lists what it left out, and `/undo` restores its last change — never touching a
+are both. `/changes` shows the split, `/commit` stages only its own work,
+lists what it left out, and drafts the message if you don't give one, and `/undo` restores its last change — never touching a
 file you also edited.
 
 Undo stores prior contents as git blobs (`git hash-object -w`). It does not

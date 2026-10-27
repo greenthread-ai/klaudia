@@ -1542,6 +1542,11 @@ func run(cmd *cobra.Command, opts *options) error {
 			live.ContextWindow, live.ContextSource = sess.ContextWindow, sess.ContextWindowSource
 			return doctor.Format(doctor.Run(buildDoctorInput(cfg, api.ResolveModel(sess.Model), live, sess.Effort, cwd, mcpCfg, hookRunner)))
 		}
+		// 1024 is plenty for a subject and a few lines; Complete refuses a
+		// reply that hits it rather than committing half a message.
+		sess.Suggest = func(ctx context.Context, prompt string) (string, error) {
+			return loop.Complete(ctx, prompt, api.ResolveModel(sess.Model), 1024, sess.Effort)
+		}
 		sess.Compact = func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 			return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 				return loop.Compact(ctx, history, api.ResolveModel(sess.Model), int64(sess.MaxTokens), sess.Effort)

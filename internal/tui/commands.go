@@ -52,7 +52,7 @@ var commandList = []cmdInfo{
 	{"/plan", "[run|off]", "Read-only plan mode · run [N]: work the approved plan to done · stop: halt"},
 	{"/doctor", "", "Run environment diagnostics"},
 	{"/diff", "[args]", "Show git diff of the working tree"},
-	{"/commit", "<msg>", "Commit the files Klaudia changed — or what you staged, if anything (asks first)"},
+	{"/commit", "[msg]", "Commit the files Klaudia changed — or what you staged — with your message or one Klaudia drafts (asks first)"},
 	{"/export", "", "Export the conversation to a Markdown file"},
 	{"/last", "[n|list]", "Show a tool output in full (no arg = latest; list = index)"},
 	{"/copy", "[target]", "Copy to the clipboard: answer (default) | code [N] | out | all"},
@@ -603,56 +603,28 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		if m.busyGuard("/commit") {
 			break
 		}
-		if len(args) == 0 {
+		plan, ok := m.prepareCommit()
+		if !ok {
+			break
+		}
+		if len(args) > 0 {
+			m.confirmCommit(plan, strings.Join(args, " "))
+			break
+		}
+		if m.sess.Suggest == nil {
 			m.appendLine(errStyle.Render("usage: /commit <message>"))
 			break
 		}
-		message := strings.Join(args, " ")
-		status, err := gitOutput(m.sess.CWD, "status", "--short")
-		if err != nil {
-			m.appendLine(errStyle.Render("git: " + err.Error()))
-			break
-		}
-		if strings.TrimSpace(status) == "" {
-			m.appendLine(bannerStyle.Render("Nothing to commit (working tree clean)."))
-			break
-		}
-		cwd := m.sess.CWD
-		// Only Klaudia's own files are stageable. A file it wrote that the user
-		// then edited by hand is deliberately left out: the two changes cannot
-		// be separated without hunk-level surgery, and sweeping the user's edit
-		// into a commit describing Klaudia's work is the bug /commit already
-		// stopped doing once. It is listed rather than silently dropped.
-		safe := map[string]bool{}
-		for _, f := range m.classify(status) {
-			if f.Owner == ownerKlaudia {
-				safe[f.Path] = true
-			}
-		}
-		plan := planCommit(status, safe)
-		if plan.empty() {
-			m.appendLine(bannerStyle.Render(plan.describe() +
-				"\nStage the changes you want with git add, then run /commit again."))
-			break
-		}
-		m.confirmAction = func() string {
-			// A user's own `git add` is a statement about what belongs in the
-			// commit; adding to it would be the same mistake as `git add -A`.
-			if !plan.Staged {
-				args := append([]string{"add", "--"}, plan.Add...)
-				if _, err := gitOutput(cwd, args...); err != nil {
-					return "git add failed: " + err.Error()
-				}
-			}
-			if out, err := gitOutput(cwd, "commit", "-m", message); err != nil {
-				return "git commit failed: " + strings.TrimSpace(out) + " " + err.Error()
-			}
-			return "Committed."
-		}
-		m.setState(stateAwaitingConfirm)
-		// The y/n lives in the persistent bottom view (stateAwaitingConfirm);
-		// scrollback just records the question and what is being committed.
-		m.appendLine(askStyle.Render(plan.describe()))
+		// No message: Klaudia drafts one from the diff it is about to commit,
+		// and the user still says yes or no to it.
+		m.appendLine(bannerStyle.Render("Drafting a commit message…"))
+		m.setState(stateRunning)
+		prompt := commitPrompt(m.sess.CWD, plan, m.turnLabel)
+		go func() {
+			msg, err := m.sess.Suggest(m.ctx, prompt)
+			m.events <- commitDraftMsg{plan: plan, message: cleanCommitMessage(msg), err: err}
+		}()
+		return m, m.spin.Tick
 	default:
 		// A /<skill> matching a user-defined skill renders its body and submits it
 		// as the turn prompt. Built-in commands above always win (a skill that

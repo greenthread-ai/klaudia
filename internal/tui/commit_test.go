@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -98,5 +101,55 @@ func TestRelToRepo(t *testing.T) {
 		if got := m.relToRepo(in); got != want {
 			t.Errorf("relToRepo(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// A bare /commit drafts the message from the diff and still asks y/n; the
+// draft names what it was given and what models wrap it in is stripped.
+func TestCommitDraftsAMessage(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		if out, err := gitOutput(dir, args...); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "tui: an earlier subject")
+	os.WriteFile(filepath.Join(dir, "a.go"), []byte("package a\n"), 0o644)
+
+	m := newTestModel()
+	m.sess.CWD = dir
+	m.base = newBaseline()
+	m.touched = map[string]bool{"a.go": true}
+	m.sess.Suggest = func(context.Context, string) (string, error) {
+		return "```\na: add the package\n```", nil
+	}
+	plan, ok := m.prepareCommit()
+	if !ok {
+		t.Fatal("nothing to commit")
+	}
+	prompt := commitPrompt(dir, plan, "make a package")
+	for _, want := range []string{"tui: an earlier subject", "new file: a.go", "make a package"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt lacks %q", want)
+		}
+	}
+	msg, _ := m.sess.Suggest(context.Background(), prompt)
+	if got := cleanCommitMessage(msg); got != "a: add the package" {
+		t.Errorf("cleaned = %q", got)
+	}
+	m.update(commitDraftMsg{plan: plan, message: "a: add the package"})
+	if m.state != stateAwaitingConfirm || m.confirmAction == nil {
+		t.Fatal("the draft did not lead to a y/n")
+	}
+	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "a: add the package") {
+		t.Errorf("the draft was not shown:\n%s", out)
+	}
+	if got := m.confirmAction(); got != "Committed." {
+		t.Fatalf("commit: %s", got)
+	}
+	if subj, _ := gitOutput(dir, "log", "-1", "--format=%s"); strings.TrimSpace(subj) != "a: add the package" {
+		t.Errorf("committed subject = %q", subj)
 	}
 }

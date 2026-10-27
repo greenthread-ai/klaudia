@@ -175,3 +175,112 @@ func (p commitPlan) describe() string {
 
 // empty reports whether there is nothing this command can commit.
 func (p commitPlan) empty() bool { return !p.Staged && len(p.Add) == 0 }
+
+// commitDraftMsg carries a drafted commit message back to the UI.
+type commitDraftMsg struct {
+	plan    commitPlan
+	message string
+	err     error
+}
+
+// prepareCommit works out what /commit would commit, reporting why when the
+// answer is nothing.
+func (m *Model) prepareCommit() (commitPlan, bool) {
+	status, err := gitOutput(m.sess.CWD, "status", "--short")
+	if err != nil {
+		m.appendLine(errStyle.Render("git: " + err.Error()))
+		return commitPlan{}, false
+	}
+	if strings.TrimSpace(status) == "" {
+		m.appendLine(bannerStyle.Render("Nothing to commit (working tree clean)."))
+		return commitPlan{}, false
+	}
+	// Only Klaudia's own files are stageable. A file it wrote that the user
+	// then edited by hand is deliberately left out: the two changes cannot
+	// be separated without hunk-level surgery, and sweeping the user's edit
+	// into a commit describing Klaudia's work is the bug /commit already
+	// stopped doing once. It is listed rather than silently dropped.
+	safe := map[string]bool{}
+	for _, f := range m.classify(status) {
+		if f.Owner == ownerKlaudia {
+			safe[f.Path] = true
+		}
+	}
+	plan := planCommit(status, safe)
+	if plan.empty() {
+		m.appendLine(bannerStyle.Render(plan.describe() +
+			"\nStage the changes you want with git add, then run /commit again."))
+		return plan, false
+	}
+	return plan, true
+}
+
+// confirmCommit asks y/n to commit plan with message.
+func (m *Model) confirmCommit(plan commitPlan, message string) {
+	cwd := m.sess.CWD
+	m.confirmAction = func() string {
+		// A user's own `git add` is a statement about what belongs in the
+		// commit; adding to it would be the same mistake as `git add -A`.
+		if !plan.Staged {
+			args := append([]string{"add", "--"}, plan.Add...)
+			if _, err := gitOutput(cwd, args...); err != nil {
+				return "git add failed: " + err.Error()
+			}
+		}
+		if out, err := gitOutput(cwd, "commit", "-m", message); err != nil {
+			return "git commit failed: " + strings.TrimSpace(out) + " " + err.Error()
+		}
+		return "Committed."
+	}
+	m.setState(stateAwaitingConfirm)
+	// The y/n lives in the persistent bottom view (stateAwaitingConfirm);
+	// scrollback just records the question and what is being committed.
+	m.appendLine(askStyle.Render(plan.describe()))
+}
+
+// commitPrompt asks for a message describing exactly what plan commits, in
+// the repository's own style (its recent subjects), with the user's last
+// request as the why.
+func commitPrompt(cwd string, plan commitPlan, request string) string {
+	args := []string{"diff"}
+	if plan.Staged {
+		args = append(args, "--cached")
+	} else {
+		args = append(append(args, "--"), plan.Add...)
+	}
+	diff, _ := gitOutput(cwd, args...)
+	if !plan.Staged {
+		// New files have no diff against HEAD; name them at least.
+		for _, f := range plan.Add {
+			if !strings.Contains(diff, " b/"+f) {
+				diff += "\nnew file: " + f
+			}
+		}
+	}
+	const maxDiff = 12000
+	if len(diff) > maxDiff {
+		diff = diff[:maxDiff] + "\n… (diff truncated)"
+	}
+	recent, _ := gitOutput(cwd, "log", "-8", "--format=%s")
+	var b strings.Builder
+	b.WriteString("Write a git commit message for the change below.\n\n")
+	b.WriteString("Follow the style of this repository's recent commit subjects:\n" + strings.TrimSpace(recent) + "\n\n")
+	b.WriteString("Rules: a subject line of at most 72 characters; then, only if the why is not obvious from the subject, a blank line and at most three short lines explaining why. Describe what the diff does, not what was asked. Reply with the message only — no quotes, no code fences, no preamble.\n\n")
+	if strings.TrimSpace(request) != "" {
+		b.WriteString("The user's request that led to it: " + request + "\n\n")
+	}
+	b.WriteString("Diff:\n" + diff)
+	return b.String()
+}
+
+// cleanCommitMessage strips what models wrap a message in despite being asked
+// not to: a code fence, surrounding quotes, trailing blank lines.
+func cleanCommitMessage(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "```") {
+		s = s[strings.Index(s, "\n")+1:]
+		s = strings.TrimSuffix(strings.TrimSpace(s), "```")
+	}
+	s = strings.Trim(strings.TrimSpace(s), "\"'`")
+	return strings.TrimSpace(s)
+}

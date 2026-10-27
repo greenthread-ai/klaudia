@@ -77,6 +77,9 @@ type Session struct {
 	MaxTokens       int
 	MaxTokensSource string
 
+	// Suggest, if set, asks the model one question outside the conversation
+	// (no tools, nothing recorded). Backs /commit's drafted message.
+	Suggest func(ctx context.Context, prompt string) (string, error)
 	// Compact, if set, runs a model-based compaction of the given history and
 	// returns the replacement history plus the summary. Backs /compact.
 	Compact CompactFunc
@@ -922,6 +925,22 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendLine(errStyle.Render("pager: " + msg.err.Error()))
 		}
 		return m, nil
+
+	case commitDraftMsg:
+		m.setState(stateIdle)
+		m.input.Focus()
+		if msg.err != nil || msg.message == "" {
+			why := "the model returned nothing"
+			if msg.err != nil {
+				why = config.Hints.FriendlyError(msg.err)
+			}
+			m.appendLine(errStyle.Render("Could not draft a message (" + why + "). /commit <message> to write your own."))
+			return m, tea.Batch(textarea.Blink, m.waitForEvent())
+		}
+		m.appendLine(bannerStyle.Render("Message:\n  " + strings.ReplaceAll(msg.message, "\n", "\n  ")))
+		m.confirmCommit(msg.plan, msg.message)
+		m.appendLine(hintStyle.Render("  not right? n, then /commit <your message>"))
+		return m, tea.Batch(textarea.Blink, m.waitForEvent())
 
 	case compactDoneMsg:
 		if msg.err != nil {
