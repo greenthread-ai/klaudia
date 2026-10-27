@@ -91,8 +91,8 @@ func TestReadRunIsOneLine(t *testing.T) {
 	for i, f := range []string{"main.go", "main_test.go", "go.mod"} {
 		call(m, string(rune('a'+i)), "Read", map[string]any{"file_path": "/proj/" + f}, "1\tx", false)
 	}
-	if !strings.Contains(stripANSI(m.View()), "✓ Read 3 files · main.go, main_test.go, go.mod") {
-		t.Errorf("held reads not shown live:\n%s", stripANSI(m.View()))
+	if !strings.Contains(stripANSI(m.frame()), "✓ Read 3 files · main.go, main_test.go, go.mod") {
+		t.Errorf("held reads not shown live:\n%s", stripANSI(m.frame()))
 	}
 	call(m, "d", "Bash", map[string]any{"command": "go test ./..."}, "ok", false)
 	out := stripANSI(m.transcript.String())

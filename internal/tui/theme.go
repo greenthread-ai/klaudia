@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/glamour/ansi"
-	"github.com/charmbracelet/glamour/styles"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/ansi"
+	"charm.land/glamour/v2/styles"
 )
 
 type renderTheme struct {
@@ -209,7 +207,7 @@ func (m *Model) themeChoices() []choiceItem {
 func (m *Model) glamourThemeOption() glamour.TermRendererOption {
 	var style ansi.StyleConfig
 	switch {
-	case lipgloss.ColorProfile() == termenv.Ascii:
+	case noColor():
 		// NO_COLOR, or a terminal without colour. glamour defaults to a
 		// TrueColor profile and ignores NO_COLOR entirely, so the style itself
 		// has to be the plain one.
@@ -228,7 +226,7 @@ func (m *Model) glamourThemeOption() glamour.TermRendererOption {
 	// tint either, and glamour's plain style printed code as bare words, so
 	// it gets its backticks back, which also paste as Markdown.
 	style.Code.Prefix, style.Code.Suffix = "", ""
-	if lipgloss.ColorProfile() == termenv.Ascii {
+	if noColor() {
 		style.Code.Prefix, style.Code.Suffix = "`", "`"
 	}
 	return glamour.WithStyles(style)

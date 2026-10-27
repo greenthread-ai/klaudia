@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // pickerView renders the live region the picker occupies, with the styling
@@ -65,11 +65,11 @@ func TestPickerRendersLiveNotIntoScrollback(t *testing.T) {
 func TestPickerArrowsAndEnterSelect(t *testing.T) {
 	m, picked := choiceModel(t, "alpha", "beta", "gamma")
 
-	m.onKey(tea.KeyMsg{Type: tea.KeyDown})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyDown})
 	if !strings.Contains(pickerView(m), "❯ 2) beta") {
 		t.Errorf("down should move the selection:\n%s", pickerView(m))
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if *picked != "beta" {
 		t.Errorf("enter applied %q, want beta", *picked)
@@ -85,8 +85,8 @@ func TestPickerArrowsAndEnterSelect(t *testing.T) {
 // Wrapping, so Up from the top reaches the last entry without a long hold.
 func TestPickerSelectionWraps(t *testing.T) {
 	m, picked := choiceModel(t, "alpha", "beta", "gamma")
-	m.onKey(tea.KeyMsg{Type: tea.KeyUp})
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyUp})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if *picked != "gamma" {
 		t.Errorf("up from the first entry applied %q, want gamma", *picked)
 	}
@@ -107,7 +107,7 @@ func TestPickerFiltersAsYouType(t *testing.T) {
 		t.Errorf("the filter must be visible, or there is no way to know why the list shrank:\n%s", view)
 	}
 
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if *picked != "Claude Sonnet 5" {
 		t.Errorf("enter applied %q, want the filtered entry", *picked)
 	}
@@ -125,7 +125,7 @@ func TestPickerBackspaceWidensTheFilter(t *testing.T) {
 	if !strings.Contains(pickerView(m), "no match") {
 		t.Errorf("an empty list must say why it is empty:\n%s", pickerView(m))
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyBackspace})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	if m.choiceFilter != "al" || len(m.choiceHits) != 1 {
 		t.Errorf("filter = %q with %d hits, want \"al\" and alpha", m.choiceFilter, len(m.choiceHits))
 	}
@@ -140,7 +140,7 @@ func TestPickerBackspaceWidensTheFilter(t *testing.T) {
 // visible exactly when it is live.
 func TestDigitsPickUntilAFilterTakesThem(t *testing.T) {
 	m, picked := choiceModel(t, "alpha", "beta", "gamma")
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
+	m.onKey(textKey("3"))
 	if *picked != "gamma" {
 		t.Errorf("a digit on an unfiltered list applied %q, want gamma", *picked)
 	}
@@ -150,14 +150,14 @@ func TestDigitsPickUntilAFilterTakesThem(t *testing.T) {
 	if !strings.Contains(pickerView(m), "gpt-5") || strings.Contains(pickerView(m), "1) gpt-5") {
 		t.Errorf("a filtered list must drop the digit column:\n%s", pickerView(m))
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
+	m.onKey(textKey("4"))
 	if *picked != "" {
 		t.Fatalf("a digit typed into a filter picked %q", *picked)
 	}
 	if m.choiceFilter != "gpt4" {
 		t.Errorf("filter = %q, want the digit appended", m.choiceFilter)
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if *picked != "gpt-4" {
 		t.Errorf("applied %q, want gpt-4", *picked)
 	}
@@ -180,7 +180,7 @@ func TestPickerWindowsALongListWithACounter(t *testing.T) {
 	}
 
 	for i := 0; i < 12; i++ {
-		m.onKey(tea.KeyMsg{Type: tea.KeyDown})
+		m.onKey(tea.KeyPressMsg{Code: tea.KeyDown})
 	}
 	view := pickerView(m)
 	if !strings.Contains(view, "❯ model-12") {
@@ -189,7 +189,7 @@ func TestPickerWindowsALongListWithACounter(t *testing.T) {
 	if !strings.Contains(view, "13/30") {
 		t.Errorf("counter should track the selection:\n%s", view)
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if *picked != "model-12" {
 		t.Errorf("applied %q, want model-12", *picked)
 	}
@@ -217,7 +217,7 @@ func TestPickerShrinksOnAShortTerminal(t *testing.T) {
 func TestPickerEscCancelsWithoutApplying(t *testing.T) {
 	m, picked := choiceModel(t, "alpha", "beta")
 	typeInto(m, "bet")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 
 	if *picked != "" {
 		t.Errorf("esc applied %q", *picked)

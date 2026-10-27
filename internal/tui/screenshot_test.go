@@ -11,8 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 )
 
 // The README screenshot used to be a photograph of somebody's terminal, and it
@@ -67,7 +66,7 @@ func TestScreenshotIsCurrent(t *testing.T) {
 // produced by the functions the program itself calls. Nothing here is a copy of
 // the UI's text, which is the entire point.
 func screenshotFrame() string {
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	termProfile = colorprofile.TrueColor
 	applyChromeTheme(defaultChromePalette)
 	defer applyChromeTheme(defaultChromePalette)
 

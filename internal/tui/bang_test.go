@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestIsBang(t *testing.T) {
@@ -140,7 +140,7 @@ func TestEnterOnBangLineRuns(t *testing.T) {
 	m.setState(stateIdle)
 	m.input.SetValue("!echo hello")
 
-	_, cmd := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("Enter on a ! line produced no command to run")
 	}

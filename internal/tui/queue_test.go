@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/pkg/agent"
@@ -19,7 +19,7 @@ func TestQueueWhileRunning(t *testing.T) {
 
 	// Type a follow-up and press Enter → it's queued, input cleared.
 	m.input.SetValue("also add tests")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if peekSteer(m) != "also add tests" {
 		t.Fatalf("queued = %q, want the typed text", peekSteer(m))
 	}
@@ -28,7 +28,7 @@ func TestQueueWhileRunning(t *testing.T) {
 	}
 
 	// Enter again on an empty input → interrupt the running turn.
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !cancelled {
 		t.Error("a second Enter (empty) should interrupt the turn to send the queued message")
 	}
@@ -45,8 +45,8 @@ func TestQueueWhileRunning(t *testing.T) {
 
 	// ↑ recalls the queued message into the input for editing (and clears the queue).
 	m.input.SetValue("v2")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter}) // re-queue "v2"
-	m.onKey(tea.KeyMsg{Type: tea.KeyUp})    // recall to edit
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter}) // re-queue "v2"
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyUp})    // recall to edit
 	if peekSteer(m) != "" {
 		t.Errorf("queue should clear when recalled for editing, still %q", peekSteer(m))
 	}
@@ -59,7 +59,7 @@ func TestQueueEnterWithoutTextOrQueueIsNoop(t *testing.T) {
 	m := newTestModel()
 	m.state = stateRunning
 	// Empty input, nothing queued → Enter does nothing (no panic, no queue).
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if peekSteer(m) != "" {
 		t.Errorf("nothing should be queued, got %q", peekSteer(m))
 	}
@@ -76,8 +76,8 @@ func TestInterruptCapturesMessageBeforeAgentCanDrainIt(t *testing.T) {
 	m.turnCancel = func() {}
 
 	m.input.SetValue("actually, do this instead")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter}) // queue
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter}) // interrupt-to-send
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter}) // queue
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter}) // interrupt-to-send
 
 	// Simulate the race: the agent's poll fires after the cancel and drains the
 	// box. With the fix the box is already empty, so it gets nothing.
@@ -152,7 +152,7 @@ func TestQueuingWritesNothingToScrollback(t *testing.T) {
 	m.turnCancel = func() {}
 
 	m.input.SetValue("a follow-up")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if got := stripANSI(m.transcript.String()); strings.TrimSpace(got) != "" {
 		t.Errorf("queuing left a line in scrollback: %q", got)

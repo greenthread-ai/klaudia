@@ -156,3 +156,25 @@ func TestOSC8LinksExistingFile(t *testing.T) {
 			snap.Links, filepath.Join(env.Project, "main.go"), snap)
 	}
 }
+
+// Shift+Enter inserts a newline on terminals that can tell it from Enter:
+// Bubble Tea v2 parses both encodings in use, the Kitty keyboard protocol's
+// (CSI 13;2u) and xterm modifyOtherKeys' (CSI 27;2;13~).
+func TestShiftEnterInsertsANewline(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	tm.Type("first")
+	tm.Press("\x1b[13;2u")
+	tm.Type("second")
+	tm.Press("\x1b[27;2;13~")
+	tm.Type("hello")
+	tm.WaitText(t, "hello", 5*time.Second)
+	if n := env.Mock.Requests(); n != 0 {
+		t.Fatalf("Shift+Enter sent the prompt (%d requests)\n%s", n, tm.Snapshot())
+	}
+	tm.Press(keyEnter)
+	tm.WaitFor(t, "the reply", 20*time.Second, func(s Snapshot) bool { return s.HasLine(doneLine) })
+	if got := env.Mock.Prompts(); len(got) == 0 || !strings.Contains(got[0], "first\nsecond\nhello") {
+		t.Fatalf("the model was sent %q, want the three lines", got)
+	}
+}

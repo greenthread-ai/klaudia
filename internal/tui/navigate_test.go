@@ -1,8 +1,8 @@
 package tui
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
 	"os"
 
 	"github.com/greenthread-ai/klaudia/pkg/agent"
@@ -374,7 +374,7 @@ func TestEnterAcceptsTheHighlightedPath(t *testing.T) {
 				t.Fatal("the @ menu did not open")
 			}
 
-			m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+			m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 			if m.state != stateIdle {
 				t.Errorf("Enter on the menu sent the prompt (state %v)", m.state)

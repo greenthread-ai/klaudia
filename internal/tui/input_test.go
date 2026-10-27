@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
+	"charm.land/bubbles/v2/spinner"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/anthropics/anthropic-sdk-go"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/greenthread-ai/klaudia/internal/memory"
 	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
@@ -59,7 +59,7 @@ func TestCtrlJInsertsNewline(t *testing.T) {
 	m := newTestModel()
 	m.input.SetValue("first")
 
-	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyCtrlJ})
+	_, _ = m.onKey(tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl})
 	m.input.InsertString("second")
 
 	if got := m.input.Value(); got != "first\nsecond" {
@@ -78,7 +78,7 @@ func TestEnterSubmitsMultilinePrompt(t *testing.T) {
 	}
 	m.input.SetValue("first\nsecond")
 
-	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	_, _ = m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	select {
 	case got := <-promptCh:
@@ -98,7 +98,7 @@ func TestHistoryArrowsInMultilineInputMoveCursor(t *testing.T) {
 	m.pushHistory("history")
 	m.input.SetValue("first\nsecond")
 
-	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyUp})
+	_, _ = m.onKey(tea.KeyPressMsg{Code: tea.KeyUp})
 
 	if got := m.input.Value(); got != "first\nsecond" {
 		t.Fatalf("up in multiline input changed value to %q", got)
@@ -240,7 +240,7 @@ func TestSlashCommandsDuringProcessing(t *testing.T) {
 
 	// A display command runs while the model works and leaves state running.
 	m.input.SetValue("/help")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.state != stateRunning {
 		t.Fatalf("state = %v after /help, want stateRunning", m.state)
 	}
@@ -251,7 +251,7 @@ func TestSlashCommandsDuringProcessing(t *testing.T) {
 	// A history-mutating command is refused (not executed) while a turn runs.
 	m.history = []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("hi"))}
 	m.input.SetValue("/clear")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if len(m.history) == 0 {
 		t.Error("/clear must not wipe history while a turn is in flight")
 	}
@@ -261,7 +261,7 @@ func TestSlashCommandsDuringProcessing(t *testing.T) {
 
 	// Plain (non-slash) text still queues as a follow-up rather than dispatching.
 	m.input.SetValue("do the thing")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if peekSteer(m) != "do the thing" {
 		t.Fatalf("queued = %q, want the plain text queued", peekSteer(m))
 	}

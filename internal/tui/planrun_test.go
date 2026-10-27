@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/greenthread-ai/klaudia/internal/goal"
 	"github.com/greenthread-ai/klaudia/pkg/agent"
@@ -40,7 +40,7 @@ func TestPlanApprovalIsAPicker(t *testing.T) {
 // "y" still approves outright, as it always has.
 func TestPlanYApprovesWithoutARun(t *testing.T) {
 	m, reply := awaitPlan(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	m.onKey(textKey("y"))
 	if !<-reply || m.loopPlan || m.loopRemaining != 0 {
 		t.Errorf("y: approved and no run expected (loopPlan=%v remaining=%d)", m.loopPlan, m.loopRemaining)
 	}
@@ -50,8 +50,8 @@ func TestPlanYApprovesWithoutARun(t *testing.T) {
 // already running.
 func TestPlanKeepGoingStartsAPlanRun(t *testing.T) {
 	m, reply := awaitPlan(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyDown})
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyDown})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !<-reply {
 		t.Fatal("not approved")
 	}
@@ -66,17 +66,17 @@ func TestPlanKeepGoingStartsAPlanRun(t *testing.T) {
 // "Keep planning" sends the user's reasons; the old "n" could only refuse.
 func TestPlanKeepPlanningSendsFeedback(t *testing.T) {
 	m, reply := awaitPlan(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	m.onKey(textKey("n"))
 	if m.state != stateAnsweringOther || !strings.Contains(stripANSI(m.bottomView()), "What should change?") {
 		t.Fatalf("n should open the feedback box (state %v)", m.state)
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if m.state != stateAwaitingPlan {
 		t.Fatalf("Esc should return to the approval picker, state %v", m.state)
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	m.onKey(textKey("3"))
 	typeRunes(m, "split step two")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if <-reply {
 		t.Fatal("feedback approved the plan")
 	}

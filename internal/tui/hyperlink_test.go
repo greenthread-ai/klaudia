@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/glamour"
+	"charm.land/glamour/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -45,7 +45,7 @@ func render(t *testing.T, md string, width int) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return trimRenderedPadding(out)
+	return trimRenderedPadding(stripOSC8(out)) // as markdown() does
 }
 
 // The bug this exists for: glamour wraps a long URL across rows, and the

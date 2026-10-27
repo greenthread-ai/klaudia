@@ -4,14 +4,14 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // typeRunes feeds each rune as its own key press, the way real typing arrives —
 // the bug only shows up on incremental growth, not a single bulk insertion.
 func typeRunes(m *Model, s string) {
 	for _, r := range s {
-		m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m.onKey(textKey(string(r)))
 		// Render between keystrokes as the real frame loop does: textarea.View
 		// populates the (pointer-shared) viewport's line buffer, which
 		// repositionView needs on the next key to scroll at all.
@@ -64,4 +64,13 @@ func TestInputOverflowFollowsCursor(t *testing.T) {
 	if got := strings.Count(view, "\n") + 1; got > m.input.MaxHeight {
 		t.Errorf("box rendered %d rows, want ≤ MaxHeight %d", got, m.input.MaxHeight)
 	}
+}
+
+// textKey is a keypress that types s, as Bubble Tea v2 delivers one.
+func textKey(s string) tea.KeyPressMsg {
+	k := tea.KeyPressMsg{Text: s, Code: tea.KeyExtended}
+	if r := []rune(s); len(r) == 1 {
+		k.Code = r[0]
+	}
+	return k
 }

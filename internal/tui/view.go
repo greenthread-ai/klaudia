@@ -1,12 +1,13 @@
 package tui
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
+	"charm.land/bubbles/v2/key"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
@@ -196,9 +197,15 @@ func (m *Model) introText() string {
 	return intro(m.introModel, m.introBranch, m.introTagline, skillNames(m.sess), m.keymap().Submit)
 }
 
-// View draws only the live region. Everything finished has already been printed
+// View is what Bubble Tea draws: the live region. Key disambiguation (so
+// Shift+Enter is not plain Enter) is requested by default in v2.
+func (m *Model) View() tea.View {
+	return tea.NewView(m.frame())
+}
+
+// frame draws only the live region. Everything finished has already been printed
 // into the terminal's scrollback by the print queue.
-func (m *Model) View() string {
+func (m *Model) frame() string {
 	if !m.ready || m.quitting {
 		// Quitting draws nothing, so the final frame erases the live region:
 		// the input box and status line used to stay behind in scrollback.
@@ -287,7 +294,6 @@ func (m *Model) bottomView() string {
 				work += hintStyle.Render(fmt.Sprintf("  · quiet for %s", fmtDuration(q)))
 			}
 		}
-		m.input.SetHeight(m.inputHeight())
 		bottom = withPanel(caption(work) + "\n" + m.promptBox() + m.inputAffordanceView())
 		// Above the panel, so clampBottom — which trims from the top — gives
 		// up the streaming preview before any of the plan.
@@ -311,7 +317,6 @@ func (m *Model) bottomView() string {
 	case stateAwaitingAnswer:
 		bottom = m.askView()
 	case stateAnsweringOther:
-		m.input.SetHeight(m.inputHeight())
 		title := "Your answer"
 		if m.otherFor == otherPlan {
 			title = "What should change?"
@@ -325,7 +330,6 @@ func (m *Model) bottomView() string {
 	case stateAwaitingChoice:
 		bottom = m.choiceView()
 	default:
-		m.input.SetHeight(m.inputHeight())
 		bottom = withPanel(m.promptBox() + m.inputAffordanceView())
 	}
 	// Running work sits under the prompt, while idle and while running: in a

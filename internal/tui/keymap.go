@@ -5,9 +5,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/lipgloss/v2"
 )
 
 // keymap is every chord the prompt handles itself, with the help text that
@@ -36,13 +36,20 @@ type keymap struct {
 // chords are what they are — in particular why alt+Return rather than
 // Ctrl+Return is the internal contract.
 func newKeymap(enterInserts bool) keymap {
-	alt := altReturnLabel()
+	// Shift+Enter and Ctrl+Enter are bound everywhere: a terminal that cannot
+	// tell them from Enter never sends them. They are only *named* once the
+	// terminal has said it can (keysDisambiguated), so the help never offers
+	// a chord that would send the prompt instead.
+	newlineLabel, sendLabel := altReturnLabel(), altReturnLabel()
+	if keysDisambiguated {
+		newlineLabel, sendLabel = "Shift+"+returnKey(), "Ctrl+"+returnKey()
+	}
 	submit := key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "Send the prompt"))
-	newline := key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"),
-		key.WithHelp(alt, "Newline without sending (or end the line with \\)"))
+	newline := key.NewBinding(key.WithKeys("shift+enter", "ctrl+j", "alt+enter"),
+		key.WithHelp(newlineLabel, "Newline without sending (or end the line with \\)"))
 	if enterInserts {
-		submit = key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"), key.WithHelp(alt, "Send the prompt"))
-		newline = key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "Newline without sending"))
+		submit = key.NewBinding(key.WithKeys("ctrl+enter", "ctrl+j", "alt+enter"), key.WithHelp(sendLabel, "Send the prompt"))
+		newline = key.NewBinding(key.WithKeys("enter", "shift+enter"), key.WithHelp("Enter", "Newline without sending"))
 	}
 	// Prev and Next share a description on purpose: keyHelp merges bindings
 	// that mean the same thing into one row, so this renders as "↑ / ↓".
@@ -158,6 +165,11 @@ func (m *Model) keyHints() string {
 	return keyHelp(m.keymap(), m.input.KeyMap)
 }
 
+// keysDisambiguated is set when the terminal reports key disambiguation (the
+// Kitty keyboard protocol), so Shift+Enter arrives as itself. Bubble Tea v2
+// parses it; Klaudia's renderer asks for it (inline.go).
+var keysDisambiguated bool
+
 // goos is runtime.GOOS, indirected so tests can render either platform's help.
 var goos = runtime.GOOS
 
@@ -168,4 +180,12 @@ func altReturnLabel() string {
 		return "Option+Return"
 	}
 	return "Alt+Enter"
+}
+
+// returnKey is what the keyboard calls the key: Return on a Mac.
+func returnKey() string {
+	if goos == "darwin" {
+		return "Return"
+	}
+	return "Enter"
 }

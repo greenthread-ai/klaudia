@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
 // editHunk renders an Edit as a hunk with line numbers and a line of context
@@ -114,7 +112,7 @@ func (m *Model) editHunk(path, oldS, newS string, line int) string {
 			}
 			n += " "
 		}
-		var st lipgloss.Style
+		var st chrome
 		switch r.mark {
 		case "-":
 			st = diffDelStyle

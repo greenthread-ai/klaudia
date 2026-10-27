@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"charm.land/lipgloss/v2"
 	"fmt"
+	"image/color"
 	"strings"
 	"testing"
 )
@@ -66,15 +68,26 @@ func TestApplyChromeThemeRecolours(t *testing.T) {
 
 	// The configured accent matches the theme palette (profile-independent).
 	applyChromeTheme(themePalette{accent: "#88c0d0", accent2: "#81a1c1", muted: "#4c566a"})
-	if got := fmt.Sprint(logoStyle.GetForeground()); !strings.Contains(got, "88c0d0") {
-		t.Errorf("logo foreground = %q, want the themed accent #88c0d0", got)
+	if got := logoStyle.GetForeground(); !sameColor(got, lipgloss.Color("#88c0d0")) {
+		t.Errorf("logo foreground = %v, want the themed accent #88c0d0", got)
 	}
-	if got := fmt.Sprint(suggestStyle.GetForeground()); !strings.Contains(got, "81a1c1") {
-		t.Errorf("suggest foreground = %q, want accent2 #81a1c1", got)
+	if got := suggestStyle.GetForeground(); !sameColor(got, lipgloss.Color("#81a1c1")) {
+		t.Errorf("suggest foreground = %v, want accent2 #81a1c1", got)
 	}
 
 	// Errors stay red (ANSI 9) regardless of theme (clarity).
 	if got := fmt.Sprint(errStyle.GetForeground()); got != "9" {
 		t.Errorf("errStyle foreground = %q, want 9 (red)", got)
 	}
+}
+
+// sameColor compares colours by value: Lip Gloss v2 colours are image/color
+// values, which print as RGBA tuples rather than the hex they were made from.
+func sameColor(a, b color.Color) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	ar, ag, ab, aa := a.RGBA()
+	br, bg, bb, ba := b.RGBA()
+	return ar == br && ag == bg && ab == bb && aa == ba
 }

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -17,17 +17,17 @@ import (
 // whatever sits around them — under the terminal's own scrollback, in place of
 // Bubble Tea's standard renderer.
 //
-// Why not Bubble Tea's. Its inline renderer parks the cursor on the frame's
-// last line and gets back to the top with CursorUp(lines-1), counting logical
-// lines. A resize breaks that count: a terminal that rewraps turns one line
-// into several rows, so the cursor stops inside the old frame and the rows
-// above it are stranded. Klaudia used to correct for this by predicting the
-// rewrap, and the prediction could not be made reliable. Measured with the
-// e2e emulator: a drag with resizes 10–40ms apart left stacked input boxes,
-// because the renderer draws on a 60fps tick and the frame the prediction was
-// made from was not the one on screen; a faster drag erased history rows; and
-// on a terminal that does not rewrap at all (xterm) every narrowing erased
-// the whole visible conversation, because the predicted rows never existed.
+// Why not Bubble Tea's. Both of its inline renderers track where the cursor
+// is in rows and move back by that count, and a resize invalidates the count:
+// a terminal that rewraps turns one line into several rows, so the cursor
+// stops inside the old frame and the rows above it are stranded. Measured
+// with the e2e emulator. v1's renderer, with Klaudia predicting the rewrap: a
+// drag with resizes 10–40ms apart left stacked input boxes (it draws on a
+// 60fps tick, so the frame the prediction used was not the one on screen), a
+// faster drag erased history rows, and on a terminal that does not rewrap at
+// all (xterm) every narrowing erased the visible conversation. v2's cell
+// renderer, unaided, strands a box on the first fast narrowing, and loses an
+// editor's output across tea.ExecProcess.
 //
 // This renderer parks the cursor at column 0 of the frame's *first* line
 // instead. Every terminal keeps the cursor in its cell across a resize —
@@ -81,10 +81,21 @@ func newInlineRenderer(out io.Writer) *inlineRenderer {
 	return &inlineRenderer{out: out, done: make(chan struct{})}
 }
 
-// start hides the cursor, turns on bracketed paste and begins flushing. Both
-// modes were the standard renderer's job, which is off.
+// Terminal modes Bubble Tea's renderer would set, and does not while its
+// output is muted: a hidden cursor (the input box draws its own), bracketed
+// paste, and key disambiguation — modifyOtherKeys and the Kitty keyboard
+// protocol, which are what let Shift+Enter arrive as itself rather than as
+// Enter. Terminals ignore whichever they do not support; one that supports
+// the Kitty protocol answers the query, and Bubble Tea turns the answer into
+// the KeyboardEnhancementsMsg that lets the help name Shift+Enter.
+var (
+	modesOn  = ansi.HideCursor + ansi.SetModeBracketedPaste + ansi.SetModifyOtherKeys2 + ansi.PushKittyKeyboard(1) + ansi.RequestKittyKeyboard
+	modesOff = ansi.ResetModifyOtherKeys + ansi.PopKittyKeyboard(1) + ansi.ResetModeBracketedPaste + ansi.ShowCursor
+)
+
+// start sets the terminal modes and begins flushing.
 func (r *inlineRenderer) start() {
-	r.write(ansi.HideCursor + ansi.SetBracketedPasteMode)
+	r.write(modesOn)
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
@@ -112,7 +123,7 @@ func (r *inlineRenderer) stop() {
 	}
 	r.wg.Wait()
 	r.flush()
-	r.write(ansi.ResetBracketedPasteMode + ansi.ShowCursor)
+	r.write(modesOff)
 }
 
 // suspend prints what is queued, erases the live region and gives the
@@ -123,7 +134,7 @@ func (r *inlineRenderer) suspend() {
 	defer r.mu.Unlock()
 	r.frame, r.dirty = nil, true
 	r.flushLocked()
-	r.writeLocked(ansi.ResetBracketedPasteMode + ansi.ShowCursor)
+	r.writeLocked(modesOff)
 	r.drawn, r.suspended = nil, true
 }
 
@@ -132,7 +143,7 @@ func (r *inlineRenderer) suspend() {
 func (r *inlineRenderer) resume() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.writeLocked(ansi.HideCursor + ansi.SetBracketedPasteMode)
+	r.writeLocked(modesOn)
 	r.suspended, r.full, r.dirty = false, true, true
 }
 
@@ -140,7 +151,7 @@ func (r *inlineRenderer) resume() {
 func (r *inlineRenderer) setFrame(view string) {
 	var lines []string
 	if view != "" {
-		lines = strings.Split(view, "\n")
+		lines = strings.Split(downsample(view), "\n")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -163,7 +174,7 @@ func (r *inlineRenderer) resize(w, h int) {
 func (r *inlineRenderer) print(body string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.queued = append(r.queued, strings.Split(body, "\n")...)
+	r.queued = append(r.queued, strings.Split(downsample(body), "\n")...)
 	r.dirty = true
 }
 
@@ -315,9 +326,9 @@ func (p rendered) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return p, cmd
 }
 
-func (p rendered) View() string {
-	p.r.setFrame(p.m.View())
-	return ""
+func (p rendered) View() tea.View {
+	p.r.setFrame(p.m.frame())
+	return tea.View{}
 }
 
 // execProcess runs cmd with the terminal handed over, the live region erased

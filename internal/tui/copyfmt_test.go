@@ -150,13 +150,13 @@ func TestCopyQueuesSequenceForTheNextFrame(t *testing.T) {
 	if !strings.HasPrefix(m.pendingOSC, "\x1b]52;") {
 		t.Fatalf("expected a queued OSC 52 sequence, got %q", m.pendingOSC)
 	}
-	if !strings.HasPrefix(m.View(), "\x1b]52;") {
+	if !strings.HasPrefix(m.frame(), "\x1b]52;") {
 		t.Error("the sequence should be emitted on the next frame")
 	}
 	if m.pendingOSC != "" {
 		t.Error("the sequence must be emitted exactly once")
 	}
-	if strings.HasPrefix(m.View(), "\x1b]52;") {
+	if strings.HasPrefix(m.frame(), "\x1b]52;") {
 		t.Error("the sequence should not repeat on subsequent frames")
 	}
 }

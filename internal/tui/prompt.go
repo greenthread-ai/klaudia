@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/lipgloss/v2"
 )
 
 // The input is drawn inside a border.
@@ -53,11 +53,11 @@ func (m *Model) promptBox() string {
 	if !m.boxed() {
 		return view
 	}
-	// width-3 content + 2 border columns = width-1 total, deliberately one
+	// width-1 total, border included (Lip Gloss v2 widths include it), deliberately one
 	// short of the terminal: writing the last column parks the cursor in the
 	// terminal's pending-wrap state, and inlineRenderer would clip the line
 	// to width-1 anyway, cutting off the right border.
-	return promptBoxStyle.Width(m.width - 3).Render(view)
+	return promptBoxStyle.Width(m.width - 1).Render(view)
 }
 
 // captionStyle indents a line so it reads as a caption under the box rather
@@ -83,11 +83,13 @@ func newPromptInput() textarea.Model {
 	in.EndOfBufferCharacter = ' '
 	in.CharLimit = 0
 	in.MaxHeight = 6
+	in.MinHeight = 1
+	in.DynamicHeight = true
 	in.KeyMap.InsertNewline = newKeymap(false).Newline
 	// Marker on the first line only: repeating it down a wrapped paste would
 	// read as several prompts rather than one.
-	in.SetPromptFunc(promptGutter, func(line int) string {
-		if line == 0 {
+	in.SetPromptFunc(promptGutter, func(p textarea.PromptInfo) string {
+		if p.LineNumber == 0 {
 			return "› "
 		}
 		return "  "

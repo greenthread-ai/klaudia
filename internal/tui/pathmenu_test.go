@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // typeInto feeds a string through the real key path, so the menu is built the
 // way a user builds it rather than by calling refreshPathMenu directly.
 func typeInto(m *Model, s string) {
 	for _, r := range s {
-		m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m.onKey(textKey(string(r)))
 	}
 }
 
@@ -65,14 +65,14 @@ func TestMenuArrowsSelectAndInsert(t *testing.T) {
 	typeInto(m, "@alp")
 	first := m.menu.hits[0]
 
-	m.onKey(tea.KeyMsg{Type: tea.KeyDown})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyDown})
 	if m.menu.idx != 1 {
 		t.Fatalf("Down did not move the selection: idx=%d", m.menu.idx)
 	}
 	if got := m.input.Value(); got != "@"+m.menu.hits[1] {
 		t.Errorf("input = %q, want the selected hit", got)
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyUp})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyUp})
 	if got := m.input.Value(); got != "@"+first {
 		t.Errorf("Up = %q, want back to %q", got, first)
 	}
@@ -85,7 +85,7 @@ func TestMenuEscDismisses(t *testing.T) {
 
 	m := menuModel(t, dir)
 	typeInto(m, "@alp")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 
 	if m.pathMenuView() != "" {
 		t.Error("Esc left the menu on screen")
@@ -94,7 +94,7 @@ func TestMenuEscDismisses(t *testing.T) {
 		t.Errorf("Esc changed the input to %q", m.input.Value())
 	}
 	// Tab brings it back — dismissing is about this keystroke, not the session.
-	m.onKey(tea.KeyMsg{Type: tea.KeyTab})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	if m.input.Value() != "@alpha.go" {
 		t.Errorf("Tab after Esc = %q", m.input.Value())
 	}
@@ -108,7 +108,7 @@ func TestMenuQuotesPathsWithSpaces(t *testing.T) {
 
 	m := menuModel(t, dir)
 	typeInto(m, "@Screenshot")
-	m.onKey(tea.KeyMsg{Type: tea.KeyTab})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyTab})
 
 	want := `@"Screenshot 2026-10-21 at 4.44.59` + "\u202f" + `pm.png"`
 	if got := m.input.Value(); got != want {
@@ -272,12 +272,12 @@ func TestMenuKeysWorkWhileTheModelIsWorking(t *testing.T) {
 	if m.pathMenuView() == "" {
 		t.Fatal("no dropdown while the model works")
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyTab})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	first := m.input.Value()
 	if !strings.HasPrefix(first, "also check @") || strings.HasSuffix(first, "@alp") {
 		t.Fatalf("Tab did not complete the reference: %q", first)
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyDown})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyDown})
 	if second := m.input.Value(); second == first {
 		t.Errorf("Down did not move the selection: still %q", second)
 	}
@@ -294,7 +294,7 @@ func TestMenuUpDoesNotRecallTheQueuedMessage(t *testing.T) {
 	m.steer.add("queued text", "queued text")
 	typeInto(m, "@alp")
 
-	m.onKey(tea.KeyMsg{Type: tea.KeyUp})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyUp})
 	if got := m.input.Value(); strings.Contains(got, "queued text") {
 		t.Errorf("Up recalled the queued message over the open menu: %q", got)
 	}
@@ -315,14 +315,14 @@ func TestMenuEscDoesNotInterruptTheTurn(t *testing.T) {
 	m.turnCancel = func() { interrupted = true }
 	typeInto(m, "@alp")
 
-	m.onKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if interrupted {
 		t.Fatal("closing the dropdown interrupted the turn")
 	}
 	if m.pathMenuView() != "" {
 		t.Error("Esc did not close the menu")
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if !interrupted {
 		t.Error("a second Esc, with the menu gone, did not interrupt")
 	}
@@ -345,7 +345,7 @@ func TestSlashCompletionFollowsTheSubmitPath(t *testing.T) {
 			m := menuModel(t, t.TempDir())
 			m.setState(tt.state)
 			m.input.SetValue("/mod")
-			m.onKey(tea.KeyMsg{Type: tea.KeyTab})
+			m.onKey(tea.KeyPressMsg{Code: tea.KeyTab})
 
 			if completed := m.input.Value() != "/mod"; completed != tt.live {
 				t.Errorf("Tab completed the command = %v, want %v (input %q)", completed, tt.live, m.input.Value())

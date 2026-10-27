@@ -9,14 +9,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
 var (
-	diffAddStyle = baseStyle().Foreground(lipgloss.Color("2")) // green
-	diffDelStyle = baseStyle().Foreground(lipgloss.Color("1")) // red
+	diffAddStyle = chrome{baseStyle().Foreground(lipgloss.Color("2"))} // green
+	diffDelStyle = chrome{baseStyle().Foreground(lipgloss.Color("1"))} // red
 )
 
 const (
@@ -189,7 +189,7 @@ func deviatingMode(m permission.Mode) string {
 // Bypass is the one mode where nothing is checking anything, and in the same
 // dim grey as the token count it read as ordinary chrome. Everything else on
 // this line is information; that one is a warning.
-func modeSegmentStyle(m permission.Mode) lipgloss.Style {
+func modeSegmentStyle(m permission.Mode) chrome {
 	if m == permission.ModeBypassPermissions {
 		return warnStyle
 	}

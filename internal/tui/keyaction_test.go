@@ -3,19 +3,19 @@ package tui
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestKeyActionDefaultMode(t *testing.T) {
 	cases := []struct {
 		name string
-		msg  tea.KeyMsg
+		msg  tea.KeyPressMsg
 		want inputAction
 	}{
-		{"return submits", tea.KeyMsg{Type: tea.KeyEnter}, actionSubmit},
-		{"ctrl+j inserts", tea.KeyMsg{Type: tea.KeyCtrlJ}, actionNewline},
-		{"alt+return inserts", tea.KeyMsg{Type: tea.KeyEnter, Alt: true}, actionNewline},
-		{"other keys unaffected", tea.KeyMsg{Type: tea.KeyCtrlR}, actionNone},
+		{"return submits", tea.KeyPressMsg{Code: tea.KeyEnter}, actionSubmit},
+		{"ctrl+j inserts", tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl}, actionNewline},
+		{"alt+return inserts", tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt}, actionNewline},
+		{"other keys unaffected", tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}, actionNone},
 	}
 	for _, tc := range cases {
 		if got := keyAction(tc.msg, false); got != tc.want {
@@ -27,14 +27,14 @@ func TestKeyActionDefaultMode(t *testing.T) {
 func TestKeyActionNewlineMode(t *testing.T) {
 	cases := []struct {
 		name string
-		msg  tea.KeyMsg
+		msg  tea.KeyPressMsg
 		want inputAction
 	}{
-		{"return inserts", tea.KeyMsg{Type: tea.KeyEnter}, actionNewline},
-		{"alt+return submits", tea.KeyMsg{Type: tea.KeyEnter, Alt: true}, actionSubmit},
+		{"return inserts", tea.KeyPressMsg{Code: tea.KeyEnter}, actionNewline},
+		{"alt+return submits", tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt}, actionSubmit},
 		// The escape hatch: ctrl+j needs no terminal support, so a user who
 		// cannot produce alt+Return can still send.
-		{"ctrl+j submits", tea.KeyMsg{Type: tea.KeyCtrlJ}, actionSubmit},
+		{"ctrl+j submits", tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl}, actionSubmit},
 	}
 	for _, tc := range cases {
 		if got := keyAction(tc.msg, true); got != tc.want {
@@ -78,14 +78,14 @@ func TestNewlineModeAgreesAcrossStates(t *testing.T) {
 
 	m.state = stateIdle
 	m.input.SetValue("line one")
-	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	_, _ = m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := m.input.Value(); got != "line one\n" {
 		t.Fatalf("idle: Return should insert a newline, input = %q", got)
 	}
 
 	m.state = stateRunning
 	m.input.SetValue("follow up")
-	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	_, _ = m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := m.input.Value(); got != "follow up\n" {
 		t.Fatalf("running: Return should insert a newline, input = %q", got)
 	}
@@ -94,7 +94,7 @@ func TestNewlineModeAgreesAcrossStates(t *testing.T) {
 	}
 
 	// alt+Return is what sends, and while running that means queueing.
-	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	_, _ = m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt})
 	if !m.steer.pending() {
 		t.Fatal("running: alt+Return should queue the follow-up")
 	}
@@ -107,13 +107,13 @@ func TestDefaultModeQueuesOnReturn(t *testing.T) {
 	m.state = stateRunning
 	m.input.SetValue("follow up")
 
-	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	_, _ = m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !m.steer.pending() {
 		t.Fatal("Return should queue while running")
 	}
 
 	m.input.SetValue("more")
-	_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	_, _ = m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt})
 	if got := m.input.Value(); got != "more\n" {
 		t.Fatalf("alt+Return should insert a newline, input = %q", got)
 	}

@@ -4,8 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
@@ -63,8 +62,8 @@ func TestInlineCodeIsCopySafe(t *testing.T) {
 	if got := strings.TrimSpace(stripANSI(m.markdown("Run `go test` now."))); got != "Run `go test` now." {
 		t.Errorf("no colour: %q", got)
 	}
-	defer lipgloss.SetColorProfile(lipgloss.ColorProfile())
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	defer func(p colorprofile.Profile) { termProfile = p }(termProfile)
+	termProfile = colorprofile.TrueColor
 	m.buildGlamour(100)
 	if got := strings.TrimSpace(stripANSI(m.markdown("Run `go test` now."))); got != "Run go test now." {
 		t.Errorf("colour: %q", got)

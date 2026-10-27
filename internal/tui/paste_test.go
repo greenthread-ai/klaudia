@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // paste drives a bracketed paste exactly as bubbletea delivers one.
 func paste(m *Model, text string) *Model {
-	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Paste: true, Runes: []rune(text)})
+	model, _ := m.update(tea.PasteMsg{Content: text})
 	return model.(*Model)
 }
 
@@ -68,7 +68,7 @@ func TestPasteLargeLogIsChippedAndExpandsExactly(t *testing.T) {
 		t.Fatalf("expected a chip summarising the paste, got %q", chip)
 	}
 	// The input box must stay small — that is the point of chipping.
-	if rows := wrappedRowCount(chip, m.input.Width()); rows > 2 {
+	if rows := m.input.Height(); rows > 2 {
 		t.Errorf("chip occupies %d rows; a 1000-line paste should not grow the box", rows)
 	}
 	if got := m.promptValue(); got != want {
@@ -138,7 +138,7 @@ func TestSubmitEchoesChipButSendsPayload(t *testing.T) {
 		sent <- turn.Prompt
 		return agent.Result{}, nil
 	}
-	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ := m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = model.(*Model)
 
 	select {
@@ -321,7 +321,7 @@ func TestPasteQueuedMidTurnReachesTheAgentExpanded(t *testing.T) {
 	if !strings.Contains(m.input.Value(), "[#1 pasted") {
 		t.Fatalf("precondition: paste was not chipped, input = %q", m.input.Value())
 	}
-	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ := m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = model.(*Model)
 
 	if got := peekSteerPrompt(m); got != payload {
@@ -343,7 +343,7 @@ func TestQueuedPasteSurvivesReconcile(t *testing.T) {
 	m := newPasteModel(t)
 	m.state = stateRunning
 	m = paste(m, payload)
-	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ := m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = model.(*Model)
 
 	// Nothing on screen or in history mentions the chip any more.
@@ -362,7 +362,7 @@ func TestTwoQueuedPastesBothExpand(t *testing.T) {
 
 	for _, p := range []string{first, second} {
 		m = paste(m, p)
-		model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+		model, _ := m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 		m = model.(*Model)
 	}
 	if got, want := peekSteerPrompt(m), first+"\n"+second; got != want {
@@ -386,7 +386,7 @@ func TestPastedBangCommandRunsExpanded(t *testing.T) {
 		t.Fatalf("precondition: paste was not chipped, input = %q", m.input.Value())
 	}
 
-	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ := m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = model.(*Model)
 
 	out := stripANSI(m.transcript.String())

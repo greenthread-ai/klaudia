@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/greenthread-ai/klaudia/internal/tools"
 )
@@ -48,12 +48,12 @@ func TestAskAlwaysOffersSomethingElse(t *testing.T) {
 // not the nearest label.
 func TestSomethingElseSendsFreeText(t *testing.T) {
 	m, reply := askTwo(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	m.onKey(textKey("3"))
 	if m.state != stateAnsweringOther {
 		t.Fatalf("state = %v, want answering other", m.state)
 	}
 	typeRunes(m, "neither - trace the blast radius first")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	select {
 	case got := <-reply:
@@ -77,7 +77,7 @@ func TestTypingAheadDoesNotAnswer(t *testing.T) {
 	if !strings.Contains(stripANSI(m.bottomView()), "typing doesn't answer") {
 		t.Error("ignored typing should be explained")
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	select {
 	case got := <-reply:
 		t.Fatalf("typed-ahead text answered the question: %q", got)
@@ -87,7 +87,7 @@ func TestTypingAheadDoesNotAnswer(t *testing.T) {
 		t.Fatalf("state = %v, want still awaiting", m.state)
 	}
 	// The next Enter is deliberate and takes the highlighted row.
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := <-reply; got != "Explain the constraint" {
 		t.Errorf("answer = %q, want the first row", got)
 	}
@@ -97,18 +97,18 @@ func TestTypingAheadDoesNotAnswer(t *testing.T) {
 // escape hatch, which opens free text rather than answering.
 func TestArrowsAndEnterPick(t *testing.T) {
 	m, reply := askTwo(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyDown})
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyDown})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := <-reply; got != "Version skew" {
 		t.Errorf("answer = %q, want the second row", got)
 	}
 
 	m, _ = askTwo(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyUp}) // wraps to the escape hatch
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyUp}) // wraps to the escape hatch
 	if !strings.Contains(stripANSI(m.bottomView()), "❯ 3) "+otherAnswerLabel) {
 		t.Errorf("up from the top should wrap to the last row:\n%s", stripANSI(m.bottomView()))
 	}
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.state != stateAnsweringOther {
 		t.Errorf("state = %v, want answering other", m.state)
 	}
@@ -117,9 +117,9 @@ func TestArrowsAndEnterPick(t *testing.T) {
 // Esc is a way back, not a way out: the question is still live.
 func TestEscReturnsToTheOptionList(t *testing.T) {
 	m, reply := askTwo(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
+	m.onKey(textKey("3"))
 	typeRunes(m, "changed my mind")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 
 	if m.state != stateAwaitingAnswer {
 		t.Fatalf("state = %v, want back at the options", m.state)
@@ -128,7 +128,7 @@ func TestEscReturnsToTheOptionList(t *testing.T) {
 		t.Errorf("draft survived the cancel: %q", v)
 	}
 	// The numbered options still work afterwards.
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	m.onKey(textKey("2"))
 	if got := <-reply; got != "Version skew" {
 		t.Errorf("answer = %q, want the second label", got)
 	}
@@ -137,7 +137,7 @@ func TestEscReturnsToTheOptionList(t *testing.T) {
 // The plain path must keep working exactly as before.
 func TestNumberedOptionStillSelectsItsLabel(t *testing.T) {
 	m, reply := askTwo(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")})
+	m.onKey(textKey("1"))
 	if got := <-reply; got != "Explain the constraint" {
 		t.Errorf("answer = %q", got)
 	}
@@ -149,7 +149,7 @@ func TestNumberedOptionStillSelectsItsLabel(t *testing.T) {
 // A digit past the end is a typo, not an answer — it must not be guessed at.
 func TestDigitPastTheListIsIgnored(t *testing.T) {
 	m, reply := askTwo(t)
-	m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("7")})
+	m.onKey(textKey("7"))
 	if m.state != stateAwaitingAnswer {
 		t.Errorf("state = %v, want still awaiting", m.state)
 	}

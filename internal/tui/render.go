@@ -1,10 +1,11 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/glamour/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -24,11 +25,26 @@ func (m *Model) markdown(s string) string {
 		if err != nil {
 			out = seg.text
 		}
-		if out = trimBlankLines(out); out != "" {
+		if out = trimBlankLines(stripOSC8(out)); out != "" {
 			parts = append(parts, out)
 		}
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// osc8 matches an OSC 8 hyperlink open or close, BEL- or ST-terminated.
+var osc8 = regexp.MustCompile("\x1b\\]8;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
+
+// stripOSC8 removes the hyperlinks glamour v2 writes round every Markdown
+// link, unconditionally. Klaudia links scrollback itself (linkify), after
+// deciding whether the terminal supports links at all (/doctor's row);
+// glamour's would make that decision moot where the answer is no, and
+// doubled links where it is yes.
+func stripOSC8(s string) string {
+	if !strings.Contains(s, "\x1b]8;") {
+		return s
+	}
+	return osc8.ReplaceAllString(s, "")
 }
 
 // mdSegment is a run of Markdown; table is the content width a table segment
@@ -120,7 +136,6 @@ func (m *Model) tableRenderer(width int) *glamour.TermRenderer {
 	r, err := glamour.NewTermRenderer(
 		m.glamourThemeOption(),
 		glamour.WithWordWrap(width),
-		glamour.WithColorProfile(lipgloss.ColorProfile()),
 	)
 	if err != nil {
 		return m.glam
@@ -178,7 +193,6 @@ func (m *Model) buildGlamour(width int) {
 	if r, err := glamour.NewTermRenderer(
 		m.glamourThemeOption(),
 		glamour.WithWordWrap(w),
-		glamour.WithColorProfile(lipgloss.ColorProfile()),
 	); err == nil {
 		m.glam = r
 		m.glamWidth = width

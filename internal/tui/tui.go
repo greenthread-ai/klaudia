@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/stopwatch"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/stopwatch"
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/greenthread-ai/klaudia/internal/config"
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
@@ -241,26 +241,46 @@ func baseStyle() lipgloss.Style {
 	return lipgloss.NewStyle().TabWidth(lipgloss.NoTabConversion)
 }
 
+// chrome is a chrome style. Lip Gloss v2 honours NoTabConversion only for a
+// single line: a multi-line string goes through its alignment step, which
+// replaces every tab with four spaces regardless (getLines, lipgloss v2.0.6).
+// So chrome renders a multi-line string a line at a time, which these
+// styles — colour and weight only, no width, padding or border — render
+// identically.
+type chrome struct{ lipgloss.Style }
+
+func (c chrome) Render(strs ...string) string {
+	s := strings.Join(strs, " ")
+	if !strings.Contains(s, "\t") || !strings.Contains(s, "\n") {
+		return c.Style.Render(s)
+	}
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = c.Style.Render(l)
+	}
+	return strings.Join(lines, "\n")
+}
+
 var (
-	userStyle = baseStyle()
-	toolStyle = baseStyle()
-	errStyle  = baseStyle().Foreground(lipgloss.Color("9"))
+	userStyle = chrome{baseStyle()}
+	toolStyle = chrome{baseStyle()}
+	errStyle  = chrome{baseStyle().Foreground(lipgloss.Color("9"))}
 	// bangEchoStyle marks a command the user ran directly, so the transcript
 	// distinguishes "I did this" from "Klaudia did this".
-	bangEchoStyle = baseStyle()
-	askStyle      = baseStyle()
-	bannerStyle   = baseStyle().Faint(true)
-	logoStyle     = baseStyle()
-	hintStyle     = baseStyle().Faint(true).Italic(true)
+	bangEchoStyle = chrome{baseStyle()}
+	askStyle      = chrome{baseStyle()}
+	bannerStyle   = chrome{baseStyle().Faint(true)}
+	logoStyle     = chrome{baseStyle()}
+	hintStyle     = chrome{baseStyle().Faint(true).Italic(true)}
 	// warnStyle marks the one status segment that must not read as ordinary
 	// chrome: a mode where nothing is being checked.
-	warnStyle = baseStyle().Bold(true).Foreground(lipgloss.Color("9"))
+	warnStyle = chrome{baseStyle().Bold(true).Foreground(lipgloss.Color("9"))}
 	// noticeStyle marks a system notice about something that went wrong
 	// invisibly — a dropped web search leaves no other trace in the
 	// transcript, which is what made it a bug. Deliberately not bannerStyle:
 	// faint is for things the user may ignore.
-	noticeStyle  = baseStyle().Foreground(lipgloss.Color("3"))
-	suggestStyle = baseStyle()
+	noticeStyle  = chrome{baseStyle().Foreground(lipgloss.Color("3"))}
+	suggestStyle = chrome{baseStyle()}
 )
 
 func init() { applyChromeTheme(defaultChromePalette) }
@@ -272,13 +292,13 @@ func applyChromeTheme(p themePalette) {
 	accent := lipgloss.Color(p.accent)
 	accent2 := lipgloss.Color(p.accent2)
 	muted := lipgloss.Color(p.muted)
-	logoStyle = baseStyle().Bold(true).Foreground(accent)
-	askStyle = baseStyle().Bold(true).Foreground(accent)
-	suggestStyle = baseStyle().Foreground(accent2)
-	userStyle = baseStyle().Bold(true).Foreground(accent2)
-	bangEchoStyle = baseStyle().Bold(true).Foreground(accent)
-	toolStyle = baseStyle().Foreground(muted)
-	hintStyle = baseStyle().Faint(true).Italic(true).Foreground(muted)
+	logoStyle = chrome{baseStyle().Bold(true).Foreground(accent)}
+	askStyle = chrome{baseStyle().Bold(true).Foreground(accent)}
+	suggestStyle = chrome{baseStyle().Foreground(accent2)}
+	userStyle = chrome{baseStyle().Bold(true).Foreground(accent2)}
+	bangEchoStyle = chrome{baseStyle().Bold(true).Foreground(accent)}
+	toolStyle = chrome{baseStyle().Foreground(muted)}
+	hintStyle = chrome{baseStyle().Faint(true).Italic(true).Foreground(muted)}
 	promptBoxStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(muted).
@@ -335,9 +355,6 @@ type Model struct {
 	// of what Klaudia has written since. It is what makes "your changes" and
 	// "Klaudia's changes" distinguishable at all.
 	base *baseline
-	// screen draws the live region when running in a terminal; nil under
-	// tests, which read View directly.
-	screen *inlineRenderer
 	// promptIsBang tracks whether the input marker is currently "$", so the
 	// prompt function is only rebuilt when the answer changes.
 	promptIsBang bool
@@ -473,6 +490,9 @@ type Model struct {
 	// pendingOSC holds a clipboard escape sequence to emit on the next frame.
 	// Writing it through View keeps it ordered with respect to the renderer.
 	pendingOSC string
+	// screen draws the live region when running in a terminal; nil under
+	// tests, which read frame directly.
+	screen *inlineRenderer
 	// steer holds what the user typed while Klaudia was working. The agent loop
 	// drains it at its next safe point, so a correction lands before the next
 	// consequential action rather than after the turn. Anything still pending
@@ -572,7 +592,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		ctx:     ctx,
 		input:   in,
 		spin:    sp,
-		sw:      stopwatch.NewWithInterval(100 * time.Millisecond),
+		sw:      stopwatch.New(stopwatch.WithInterval(100 * time.Millisecond)),
 		state:   stateIdle,
 		history: history,
 		sess:    sess,
@@ -744,8 +764,21 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resize(msg.Width, msg.Height)
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.onKey(msg)
+
+	case tea.KeyboardEnhancementsMsg:
+		keysDisambiguated = msg.SupportsKeyDisambiguation()
+		m.input.KeyMap.InsertNewline = m.keymap().Newline
+		return m, nil
+
+	case tea.PasteMsg:
+		// A bracketed paste arrives as one message carrying the whole payload.
+		// It is handled before any state dispatch so that pasting into a y/n
+		// prompt can't be read as an answer, and before the textarea so the
+		// widget's sanitizer never sees it (see paste.go).
+		m.quitArmed = false
+		return m.onPaste(msg.Content)
 
 	case eventMsg:
 		m.renderEvent(msg.ev)
@@ -1015,7 +1048,7 @@ func Run(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	// precisely what stops click-drag from selecting text.
 	//
 	// Frames are drawn by inlineRenderer rather than Bubble Tea's own renderer,
-	// which could not survive a resize (see inline.go).
+	// which cannot survive a resize (see inline.go).
 	m := New(ctx, run, history, sess)
 	r := newInlineRenderer(os.Stdout)
 	m.screen, m.out.sink = r, r.print

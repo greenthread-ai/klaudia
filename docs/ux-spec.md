@@ -187,7 +187,8 @@ and exit codes.
   own renderer (`internal/tui/inline.go`), which parks the cursor at the
   frame's *top*, where every terminal leaves it through a resize, and draws
   with autowrap off so a frame drawn for the old width cannot wrap. Nothing is
-  predicted. `internal/tui/e2e/resize_scenario_test.go` drags both kinds of
+  predicted. Bubble Tea v2's renderer was measured the same way during the v2
+  move and failed the same drags, so the TUI kept its own. `internal/tui/e2e/resize_scenario_test.go` drags both kinds of
   terminal at 0, 5 and 20ms per step, changes the height, and resizes
   mid-stream; the drag tests fail against the old renderer. What remains
   manual is real terminals rather than the emulator's model of them.

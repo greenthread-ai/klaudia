@@ -1,15 +1,13 @@
 package tui
 
 import (
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Long output is handed to the user's own pager rather than shown in a pager we
@@ -184,7 +182,7 @@ func (m *Model) showDiff(args []string) tea.Cmd {
 	// git's colours unless the terminal has none (NO_COLOR included), the
 	// same test the Markdown style uses.
 	color := "--color=always"
-	if lipgloss.ColorProfile() == termenv.Ascii {
+	if noColor() {
 		color = "--no-color"
 	}
 	out, err := gitOutput(m.sess.CWD, append([]string{"diff", color}, args...)...)

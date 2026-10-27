@@ -184,25 +184,26 @@ file = "vscode://file/{path}:{line}:{col}"   # or cursor://file/{path}:{line}
 
 ### Return, and multi-line input
 
-`Return` sends. For a new line, press `Option+Return` on macOS (`Alt+Enter`
-on Linux) — or end the line with `\` and press `Return`, which works in every
-terminal with no setup at all, as in Claude Code. (`Ctrl+J` also still works,
-but nobody remembers it.) To swap Return's meaning:
+`Return` sends. For a new line, press `Shift+Return` — or end the line with
+`\` and press `Return`, which works in every terminal with no setup at all, as
+in Claude Code. (`Option+Return` on macOS, `Alt+Enter` on Linux and `Ctrl+J`
+work too.) To swap Return's meaning:
 
 ```toml
 [input]
-enter = "newline"   # Return inserts a newline; Option+Return / Alt+Enter sends
+enter = "newline"   # Return inserts a newline; Ctrl+Return sends
 ```
 
-**Ctrl+Return is not something Klaudia can offer on its own.** A terminal sends
-the same byte for `Return` and `Ctrl+Return` (CR, 0x0D) — `Ctrl+J` is simply the
-LF byte, which is why it is the traditional newline chord. Terminals that
-implement the Kitty keyboard protocol can distinguish the two, but Bubble Tea v1
-does not parse those sequences, and enabling the protocol would break every
-other `Ctrl` binding.
+**Shift+Return and Ctrl+Return need a terminal that can tell them from
+Return.** Plain, they all send the same byte (CR, 0x0D). Klaudia asks the
+terminal for the Kitty keyboard protocol and for xterm's modifyOtherKeys, and
+terminals that implement either (Ghostty, kitty, foot, xterm and others) then
+report the chords as themselves; `/help` names Shift+Return once the terminal
+has said it can. Where neither is available — Apple Terminal — they arrive as
+Return, which is why `Option+Return`, `Ctrl+J` and the trailing `\` stay.
 
-What does work is telling your terminal to send `ESC` `CR` for the chord, which
-arrives as `Alt+Return`:
+If your terminal does not report them, you can tell it to send `ESC` `CR` for
+the chord, which arrives as `Alt+Return`:
 
 | Terminal | Setting | Caveat |
 |---|---|---|
@@ -590,10 +591,9 @@ apiKeyEnv = "MY_API_KEY"
 # idleCompact = false
 
 # Optional: what the Return key does at the prompt. "send" (default) submits
-# and Option+Return / Alt+Enter (or a trailing \) insert a newline; "newline"
-# swaps them. See
-# "Return, and multi-line input" above — ctrl+Return is not a value, because
-# terminals cannot send one.
+# and Shift+Return, Option+Return / Alt+Enter (or a trailing \) insert a
+# newline; "newline" swaps them, and Ctrl+Return sends. See "Return, and
+# multi-line input" above for which terminals can send Shift/Ctrl+Return.
 # [input]
 # enter = "newline"
 

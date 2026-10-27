@@ -10,7 +10,7 @@ import (
 func TestInputIsFramed(t *testing.T) {
 	m := newTestModel()
 	m.resize(72, 24)
-	view := visibleText(m.View())
+	view := visibleText(m.frame())
 
 	if !strings.Contains(view, "╭") || !strings.Contains(view, "╰") {
 		t.Fatalf("expected the input to be boxed:\n%s", view)
@@ -78,7 +78,7 @@ func TestLiveRegionNeverFillsTheLastColumn(t *testing.T) {
 			m := newTestModel()
 			m.resize(w, 40)
 			setup(m)
-			for i, ln := range strings.Split(visibleText(m.View()), "\n") {
+			for i, ln := range strings.Split(visibleText(m.frame()), "\n") {
 				if got := len([]rune(ln)); got >= w {
 					t.Errorf("%s at width %d: line %d is %d cells: %q", name, w, i, got, ln)
 				}
@@ -93,7 +93,7 @@ func TestLiveRegionNeverFillsTheLastColumn(t *testing.T) {
 func TestStatusLineIsCaptionedUnderTheBox(t *testing.T) {
 	m := newTestModel()
 	m.resize(72, 24)
-	lines := strings.Split(visibleText(m.View()), "\n")
+	lines := strings.Split(visibleText(m.frame()), "\n")
 
 	last := lines[len(lines)-1]
 	if !strings.Contains(last, "tokens") {
@@ -128,7 +128,7 @@ func TestFramingDegradesOnSmallTerminals(t *testing.T) {
 	} {
 		m := newTestModel()
 		m.resize(tc.w, tc.h)
-		got := strings.Contains(visibleText(m.View()), "╭")
+		got := strings.Contains(visibleText(m.frame()), "╭")
 		if got != tc.boxed {
 			t.Errorf("%dx%d: boxed = %v, want %v", tc.w, tc.h, got, tc.boxed)
 		}
@@ -142,7 +142,7 @@ func TestPromptMarkerAppearsOnceOnWrappedInput(t *testing.T) {
 	m.resize(60, 24)
 	m.input.SetValue(strings.Repeat("wrapped text ", 12))
 
-	view := visibleText(m.View())
+	view := visibleText(m.frame())
 	if n := strings.Count(view, "›"); n != 1 {
 		t.Errorf("prompt marker appears %d times, want 1:\n%s", n, view)
 	}
@@ -158,7 +158,7 @@ func TestFramedRegionStaysWithinTerminal(t *testing.T) {
 		m := newTestModel()
 		m.resize(80, h)
 		m.input.SetValue(strings.Repeat("long wrapped input ", 30))
-		if n := len(strings.Split(m.View(), "\n")); n >= h {
+		if n := len(strings.Split(m.frame(), "\n")); n >= h {
 			t.Errorf("height %d: live region is %d lines, must leave room", h, n)
 		}
 	}
@@ -167,7 +167,7 @@ func TestFramedRegionStaysWithinTerminal(t *testing.T) {
 func TestPlaceholderFitsANarrowBox(t *testing.T) {
 	m := newTestModel()
 	m.resize(minBoxWidth, 24)
-	for _, ln := range strings.Split(visibleText(m.View()), "\n") {
+	for _, ln := range strings.Split(visibleText(m.frame()), "\n") {
 		if w := len([]rune(ln)); w > minBoxWidth {
 			t.Errorf("line overflows a %d-column terminal (%d cells): %q", minBoxWidth, w, ln)
 		}

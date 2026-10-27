@@ -5,6 +5,32 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+
+- **Shift+Return inserts a newline** (and, with `input.enter = "newline"`,
+  Ctrl+Return sends) on terminals that can tell those chords from Return:
+  Klaudia now asks for the Kitty keyboard protocol and xterm's
+  modifyOtherKeys, which Bubble Tea v2 parses. `/help` names the chord once
+  the terminal has confirmed it, so Apple Terminal — where Shift+Return is
+  still plain Return — is never told to press something that sends.
+  `Option+Return`, `Ctrl+J` and the trailing `\` work as before.
+
+### Changed
+
+- **The TUI moved to Bubble Tea, Bubbles, Lip Gloss and Glamour v2.** The
+  live region stays on Klaudia's own renderer: v2's was put through the same
+  resize tests and stranded a frame on a fast narrowing, as v1's did, and lost
+  an editor's output across `/open`. Lip Gloss v2 leaves colour downsampling
+  to the writer, so scrollback and frames are downsampled to the terminal's
+  profile (NO_COLOR included) by Klaudia. The input box sizes itself
+  (Bubbles v2 `DynamicHeight`), which retires a port of the v1 textarea's
+  wrap algorithm kept only to measure it. Glamour v2 links every Markdown URL
+  itself; those links are removed so Klaudia's own (which honour the
+  hyperlink setting) stay the only ones. Lip Gloss v2 expands tabs in
+  multi-line text even when told not to, which would cost tabular tool output
+  its columns, so chrome styles render such text a line at a time. Binary
+  +1.4 MB.
+
 ### Fixed
 
 - **Resizing the window no longer strands input boxes or erases history.**

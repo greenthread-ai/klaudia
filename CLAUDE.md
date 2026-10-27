@@ -50,7 +50,7 @@ other products (see docs/roadmap.md, "The extraction"); it must not import
 - **doctor** - `/doctor` environment diagnostics
 - **streamjson** - Bidirectional stream-json frontend
 - **acp** - Agent Client Protocol v1 agent (editor-driven sessions)
-- **tui** - Terminal UI (Bubble Tea, with its own inline renderer in `inline.go`);
+- **tui** - Terminal UI (Bubble Tea v2, with its own inline renderer in `inline.go`);
   `tui/e2e` drives the real binary in a pty against a scripted mock provider,
   including window resizes (`KLAUDIA_E2E=1 go test ./internal/tui/e2e/...`)
 - **prompt** - Prompt construction
@@ -152,13 +152,15 @@ the session file instead of from what the user remembers choosing.
 ## Rules
 
 - Pure Go: builds must stay `CGO_ENABLED=0`-clean (no cgo, no system libs).
-- Keep `charmbracelet/bubbles`, `bubbletea`, and `lipgloss` on the **v1** line.
-  The TUI depends on textarea internals that v2 changes (v2
-  `textarea.SetHeight` repositions the viewport), which would break the
-  input-wrap workarounds. A v2 bump is a deliberate project, not a routine
-  `go get -u` (see CHANGELOG). The live region is drawn by
-  `internal/tui/inline.go`, not Bubble Tea's renderer: read its header before
-  changing how frames reach the terminal.
+- The TUI is on Bubble Tea, Bubbles, Lip Gloss and Glamour **v2**
+  (`charm.land/...`). Three things about it are not what the upstream
+  examples suggest. The live region is drawn by `internal/tui/inline.go`, not
+  Bubble Tea's renderer — v2's, like v1's, strands frames on resize; read the
+  header before changing how frames reach the terminal. Lip Gloss v2 styles
+  always emit full colour, so anything Klaudia writes itself goes through
+  `downsample` (`colorprofile.go`). And Lip Gloss v2 expands tabs in any
+  multi-line string despite `NoTabConversion`, which is what the `chrome`
+  style type in `tui.go` works around.
 - The retired JavaScript reference lives on the `js-reference` branch; consult it
   with `git checkout js-reference` (not present on this branch).
 

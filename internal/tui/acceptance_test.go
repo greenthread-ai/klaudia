@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // The five acceptance criteria Klaudia's terminal UX is held to. Each of these
@@ -74,7 +74,7 @@ func TestCriterion2_PasteAnythingReasonable(t *testing.T) {
 				t.Errorf("pasting changed state to %v; nothing should be sent without Enter", m.state)
 			}
 			// Nor should it make the input box unusable.
-			if rows := wrappedRowCount(m.input.Value(), m.input.Width()); rows > m.input.MaxHeight {
+			if rows := m.input.Height(); rows > m.input.MaxHeight {
 				t.Errorf("input grew to %d rows, past the %d-row cap", rows, m.input.MaxHeight)
 			}
 		})
@@ -91,9 +91,9 @@ func TestCriteria345_TerminalOwnsScrollback(t *testing.T) {
 	m.resize(80, 24)
 
 	// (3) No scrollback key is intercepted — they all reach the terminal.
-	for _, k := range []tea.KeyType{tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd} {
+	for _, k := range []rune{tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd} {
 		before := m.transcript.Len()
-		model, cmd := m.onKey(tea.KeyMsg{Type: k})
+		model, cmd := m.onKey(tea.KeyPressMsg{Code: k})
 		m = model.(*Model)
 		if cmd != nil {
 			t.Errorf("key %v produced a command; scrolling must be the terminal's job", k)
@@ -110,13 +110,13 @@ func TestCriteria345_TerminalOwnsScrollback(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		m.appendText(fmt.Sprintf("streamed paragraph %d.\n\n", i))
 	}
-	if strings.Contains(m.View(), "old content the user is reading") {
+	if strings.Contains(m.frame(), "old content the user is reading") {
 		t.Error("committed output must never be redrawn into the live region")
 	}
 
 	// (5) The live region is always the newest thing on screen and always fits,
 	// so "the bottom" is unambiguous and the status bar is never pushed off.
-	view := m.View()
+	view := m.frame()
 	if n := len(strings.Split(view, "\n")); n >= m.height {
 		t.Errorf("live region is %d lines on a %d-line terminal; it must leave room", n, m.height)
 	}

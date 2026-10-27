@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -89,9 +89,9 @@ func TestHelpFollowsTheConfiguredReturnMode(t *testing.T) {
 			}
 
 			// And the key actually does it.
-			send := tea.KeyMsg{Type: tea.KeyEnter}
+			send := tea.KeyPressMsg{Code: tea.KeyEnter}
 			if tt.enterInserts {
-				send = tea.KeyMsg{Type: tea.KeyCtrlJ}
+				send = tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl}
 			}
 			if km.action(send) != actionSubmit {
 				t.Errorf("the documented send chord does not submit")
@@ -152,7 +152,7 @@ func TestBackslashReturnInsertsANewline(t *testing.T) {
 	m := newTestModel()
 	m.resize(100, 30)
 	typeRunes(m, `first\`)
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if got := m.input.Value(); got != "first\n" {
 		t.Fatalf("after \\ + Return: %q, want %q", got, "first\n")
 	}
@@ -168,9 +168,39 @@ func TestBackslashReturnInsertsANewline(t *testing.T) {
 	m2 := newTestModel()
 	m2.resize(100, 30)
 	typeRunes(m2, `a\b`)
-	m2.onKey(tea.KeyMsg{Type: tea.KeyLeft})
-	m2.onKey(tea.KeyMsg{Type: tea.KeyLeft})
+	m2.onKey(tea.KeyPressMsg{Code: tea.KeyLeft})
+	m2.onKey(tea.KeyPressMsg{Code: tea.KeyLeft})
 	if m2.backslashContinues() {
 		t.Error("a backslash before the cursor but not at the end must not continue the line")
+	}
+}
+
+// Shift+Enter is bound in both modes but only named once the terminal has
+// said it can send it: naming it on Apple Terminal would offer a chord that
+// sends the prompt.
+func TestShiftEnterNamedOnlyWhenTheTerminalReportsIt(t *testing.T) {
+	defer func(v bool) { keysDisambiguated = v }(keysDisambiguated)
+	defer func(v string) { goos = v }(goos)
+	goos = "linux"
+	shift := tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift}
+	for _, enterInserts := range []bool{false, true} {
+		if got := keyAction(shift, enterInserts); got != actionNewline {
+			t.Errorf("enterInserts=%v: Shift+Enter = %v, want newline", enterInserts, got)
+		}
+	}
+	ctrl := tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModCtrl}
+	if got := keyAction(ctrl, true); got != actionSubmit {
+		t.Errorf("newline mode: Ctrl+Enter = %v, want submit", got)
+	}
+	keysDisambiguated = false
+	if h := newKeymap(false).Newline.Help().Key; h != "Alt+Enter" {
+		t.Errorf("unreported: newline labelled %q, want Alt+Enter", h)
+	}
+	keysDisambiguated = true
+	if h := newKeymap(false).Newline.Help().Key; h != "Shift+Enter" {
+		t.Errorf("reported: newline labelled %q, want Shift+Enter", h)
+	}
+	if h := newKeymap(true).Submit.Help().Key; h != "Ctrl+Enter" {
+		t.Errorf("reported, newline mode: send labelled %q, want Ctrl+Enter", h)
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/greenthread-ai/klaudia/pkg/agent"
@@ -177,7 +177,7 @@ func TestPlanPanelInTheLiveRegion(t *testing.T) {
 	t.Run("ctrl+t collapses and does not reach the text box", func(t *testing.T) {
 		m := newModel()
 		m.input.SetValue("ab")
-		_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyCtrlT})
+		_, _ = m.onKey(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
 		view := ansi.Strip(m.bottomView())
 		if !strings.Contains(view, "▸ Plan 1/3") || strings.Contains(view, "○ step 3") {
 			t.Errorf("not collapsed:\n%s", view)
@@ -194,7 +194,7 @@ func TestPlanPanelInTheLiveRegion(t *testing.T) {
 		m.width, m.height, m.ready = 100, 40, true
 		m.input.Focus()
 		m.input.SetValue("ab")
-		_, _ = m.onKey(tea.KeyMsg{Type: tea.KeyCtrlT})
+		_, _ = m.onKey(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
 		if m.input.Value() != "ba" {
 			t.Errorf("input = %q, want the transpose", m.input.Value())
 		}

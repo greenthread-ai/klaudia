@@ -8,8 +8,6 @@ import (
 	"sync"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/greenthread-ai/klaudia/internal/memory"
 )
 
@@ -99,7 +97,7 @@ func TestUpdateDrainsQueuedOutput(t *testing.T) {
 	m.resize(80, 24)
 	m.out.drainCmd()
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	_, cmd := m.Update(textKey("x"))
 	if cmd == nil {
 		t.Skip("no output queued for a plain keystroke; nothing to assert")
 	}
@@ -127,10 +125,10 @@ func TestViewIsLiveRegionOnly(t *testing.T) {
 	m.resize(80, 24)
 	m.appendLine("this text went to scrollback")
 
-	if strings.Contains(m.View(), "this text went to scrollback") {
+	if strings.Contains(m.frame(), "this text went to scrollback") {
 		t.Error("committed output must not be redrawn in the live region")
 	}
-	if !strings.Contains(m.View(), "tokens") {
+	if !strings.Contains(m.frame(), "tokens") {
 		t.Error("the live region should still carry the status bar")
 	}
 }
@@ -182,7 +180,7 @@ func TestLiveRegionStaysSmall(t *testing.T) {
 		m := newTestModel()
 		m.resize(120, h)
 		m.out.drainText()
-		if n := len(strings.Split(m.View(), "\n")); n > 6 {
+		if n := len(strings.Split(m.frame(), "\n")); n > 6 {
 			t.Errorf("height %d: live region is %d lines; it must stay small for the "+
 				"renderer's cursor arithmetic to survive a resize", h, n)
 		}
@@ -195,11 +193,11 @@ func TestRepeatedResizeKeepsLiveRegionStable(t *testing.T) {
 	m := newTestModel()
 	m.resize(120, 60)
 	m.out.drainText()
-	baseline := len(strings.Split(m.View(), "\n"))
+	baseline := len(strings.Split(m.frame(), "\n"))
 
 	for _, h := range []int{20, 80, 15, 100, 39, 60} {
 		m.resize(120, h)
-		if got := len(strings.Split(m.View(), "\n")); got != baseline {
+		if got := len(strings.Split(m.frame(), "\n")); got != baseline {
 			t.Fatalf("after resizing to height %d the live region is %d lines, want %d",
 				h, got, baseline)
 		}
@@ -217,7 +215,7 @@ func TestInputEndsUpAtTheBottomOnceOutputFills(t *testing.T) {
 	for i := 0; i < 60; i++ {
 		m.appendLine(fmt.Sprintf("line %d", i))
 	}
-	view := m.View()
+	view := m.frame()
 	if n := len(strings.Split(view, "\n")); n > 4 {
 		t.Errorf("live region is %d lines; it should stay just the input and status bar", n)
 	}

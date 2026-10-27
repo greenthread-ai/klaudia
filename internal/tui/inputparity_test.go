@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // The box should behave the same way regardless of what the agent is doing
@@ -41,17 +41,17 @@ func TestTheBoxBehavesTheSameInEveryStateThatHasOne(t *testing.T) {
 		}},
 		{"tab completes a reference", func(t *testing.T, m *Model, dir string) bool {
 			typeInto(m, "see @alp")
-			m.onKey(tea.KeyMsg{Type: tea.KeyTab})
+			m.onKey(tea.KeyPressMsg{Code: tea.KeyTab})
 			return strings.Contains(m.input.Value(), "alpha.go")
 		}},
 		{"arrows pick from the menu", func(t *testing.T, m *Model, dir string) bool {
 			typeInto(m, "see @alp")
-			m.onKey(tea.KeyMsg{Type: tea.KeyDown})
+			m.onKey(tea.KeyPressMsg{Code: tea.KeyDown})
 			return strings.Contains(m.input.Value(), "alp")
 		}},
 		{"history recalls earlier input", func(t *testing.T, m *Model, dir string) bool {
 			m.pushHistory("an earlier line")
-			m.onKey(tea.KeyMsg{Type: tea.KeyUp})
+			m.onKey(tea.KeyPressMsg{Code: tea.KeyUp})
 			return m.input.Value() == "an earlier line"
 		}},
 		{"paste lands in the box", func(t *testing.T, m *Model, dir string) bool {
@@ -118,7 +118,7 @@ func TestBangIsRefusedNotQueuedWhileWorking(t *testing.T) {
 	m := menuModel(t, t.TempDir())
 	m.setState(stateRunning)
 	typeInto(m, "!git status")
-	m.onKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if m.steer.pending() {
 		t.Error("the ! line was queued as a message to the model")
@@ -140,12 +140,12 @@ func TestUpRecallsTheQueuedMessageThenTheHistory(t *testing.T) {
 	m.setState(stateRunning)
 	m.steer.add("queued follow-up", "queued follow-up")
 
-	m.onKey(tea.KeyMsg{Type: tea.KeyUp})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyUp})
 	if got := m.input.Value(); got != "queued follow-up" {
 		t.Fatalf("first Up gave %q, want the queued message", got)
 	}
 	m.input.Reset()
-	m.onKey(tea.KeyMsg{Type: tea.KeyUp})
+	m.onKey(tea.KeyPressMsg{Code: tea.KeyUp})
 	if got := m.input.Value(); got != "an earlier prompt" {
 		t.Errorf("second Up gave %q, want the history entry", got)
 	}
@@ -159,7 +159,7 @@ func TestHistoryLeavesAMultiLineDraftAlone(t *testing.T) {
 		m.setState(st)
 		m.pushHistory("an earlier prompt")
 		m.input.SetValue("first line\nsecond line")
-		m.onKey(tea.KeyMsg{Type: tea.KeyUp})
+		m.onKey(tea.KeyPressMsg{Code: tea.KeyUp})
 		if m.input.Value() != "first line\nsecond line" {
 			t.Errorf("state %v: Up ate the draft: %q", st, m.input.Value())
 		}

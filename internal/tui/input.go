@@ -1,12 +1,13 @@
 package tui
 
 import (
+	"charm.land/bubbles/v2/textarea"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // inputText is what the user typed, in the two forms the rest of the code has
@@ -39,45 +40,32 @@ func (m *Model) readInput() inputText {
 func (m *Model) inputHeight() int {
 	// The input is shown (and editable) when idle, while the model works (for
 	// queueing a follow-up), and when answering a question in your own words;
-	// other states show a one-line prompt.
+	// other states show a one-line prompt. Within those, the textarea sizes
+	// itself to its wrapped rows (DynamicHeight, bubbles v2), up to MaxHeight.
 	if !m.editableInput() {
 		return 1
 	}
-	// Count wrapped display rows, not logical lines: a single long line that
-	// the textarea soft-wraps must grow the box rather than scroll within one
-	// row. (LineCount counts logical lines only.)
-	h := wrappedRowCount(m.input.Value(), m.input.Width())
-	if h < 1 {
-		return 1
-	}
-	if h > m.input.MaxHeight {
-		return m.input.MaxHeight
-	}
-	return h
+	return m.input.Height()
 }
 
-// syncInputHeight resizes the input to fit its content. Inline rendering means
-// there is no viewport to reserve space for — the live region is simply however
-// tall bottomView draws, clamped by clampBottom.
+// syncInputHeight keeps what depends on the box's height in step with it.
+// Inline rendering means there is no viewport to reserve space for — the live
+// region is simply however tall bottomView draws, clamped by clampBottom.
 func (m *Model) syncInputHeight() {
 	if !m.ready {
 		return
 	}
-	m.input.SetHeight(m.inputHeight())
 	m.syncPromptMarker()
 }
 
-// updateInput is the single choke point for feeding a key to the textarea while
-// keeping the box the right size. It grows the textarea to its full height
-// BEFORE Update, because bubbles' repositionView runs inside Update at the
-// current height and only ever scrolls *toward* the cursor — never back up to
-// reclaim slack. If a newly-wrapped line grew the box after Update, the view
-// would stay scrolled past the top and the first row would vanish (the reported
-// bug). Sizing to MaxHeight first means a line that still fits never scrolls the
-// top out; syncInputHeight then shrinks the box for display with YOffset already
-// at 0. reconcilePastes runs after the edit so deleting a chip drops its payload.
+// updateInput is the single choke point for feeding a key to the textarea.
+// reconcilePastes runs after the edit so deleting a chip drops its payload.
+//
+// Under bubbles v1 this grew the box to MaxHeight before every Update and
+// shrank it after, with a port of the textarea's wrap to measure it: v1 had
+// no height accessor and scrolled the first row out of view when a line
+// wrapped. v2's DynamicHeight sizes the box and resets that scroll itself.
 func (m *Model) updateInput(msg tea.Msg) tea.Cmd {
-	m.input.SetHeight(m.input.MaxHeight)
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	m.syncInputHeight()
@@ -119,8 +107,8 @@ func (m *Model) syncPromptMarker() {
 	if bang {
 		marker = "$ "
 	}
-	m.input.SetPromptFunc(promptGutter, func(line int) string {
-		if line == 0 {
+	m.input.SetPromptFunc(promptGutter, func(p textarea.PromptInfo) string {
+		if p.LineNumber == 0 {
 			return marker
 		}
 		return "  "

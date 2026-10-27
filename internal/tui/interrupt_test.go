@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/anthropics/anthropic-sdk-go"
-	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
@@ -33,7 +33,7 @@ func isQuit(cmd tea.Cmd) bool {
 }
 
 func ctrlC(m *Model) (*Model, tea.Cmd) {
-	model, cmd := m.onKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	model, cmd := m.onKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	return model.(*Model), cmd
 }
 
@@ -153,7 +153,7 @@ func TestAnyOtherKeyDisarmsQuit(t *testing.T) {
 	if !m.quitArmed {
 		t.Fatal("expected quit to be armed")
 	}
-	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
+	model, _ := m.onKey(textKey("h"))
 	m = model.(*Model)
 	if m.quitArmed {
 		t.Fatal("typing should disarm the pending quit")
@@ -171,7 +171,7 @@ func TestCtrlUReachesTheInput(t *testing.T) {
 	m.input.SetValue("some text I want to clear")
 	m.input.CursorEnd()
 
-	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyCtrlU})
+	model, _ := m.onKey(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
 	m = model.(*Model)
 	if m.input.Value() != "" {
 		t.Fatalf("Ctrl+U did not kill the line, input still %q", m.input.Value())
@@ -182,9 +182,9 @@ func TestCtrlDDeletesForward(t *testing.T) {
 	m := newTestModel()
 	m.resize(80, 24)
 	m.input.SetValue("abc")
-	m.input.SetCursor(0)
+	m.input.SetCursorColumn(0)
 
-	model, _ := m.onKey(tea.KeyMsg{Type: tea.KeyCtrlD})
+	model, _ := m.onKey(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
 	m = model.(*Model)
 	if got := m.input.Value(); got != "bc" {
 		t.Fatalf("Ctrl+D should delete forward, got %q want %q", got, "bc")
@@ -205,7 +205,7 @@ func TestQuitLeavesAResumeLineAndAnEmptyFrame(t *testing.T) {
 	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "klaudia -r abc-123") {
 		t.Errorf("no resume line:\n%s", out)
 	}
-	if v := m.View(); v != "" {
+	if v := m.frame(); v != "" {
 		t.Errorf("final frame should be empty, got %q", v)
 	}
 }

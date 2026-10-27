@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/greenthread-ai/klaudia/internal/fuzzy"
@@ -40,41 +40,46 @@ func (m *Model) digitsPick() bool { return m.choiceFilter == "" }
 // a bool because, unlike the @ menu, the picker owns every key while it is
 // open: there is no text box underneath for an unhandled key to fall through
 // to, and a stray character must filter rather than vanish.
-func (m *Model) onChoiceKey(msg tea.KeyMsg) tea.Cmd {
-	switch msg.Type {
-	case tea.KeyEsc:
+func (m *Model) onChoiceKey(msg tea.KeyPressMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
 		m.closeChoice()
 		m.appendLine(toolStyle.Render("  → cancelled"))
 		return nil
-	case tea.KeyEnter:
+	case "enter":
 		m.applyChoice(m.choiceIdx)
 		return nil
-	case tea.KeyUp, tea.KeyCtrlP:
+	case "up", "ctrl+p":
 		m.moveChoice(-1)
 		return nil
-	case tea.KeyDown, tea.KeyCtrlN:
+	case "down", "ctrl+n":
 		m.moveChoice(1)
 		return nil
-	case tea.KeyBackspace:
+	case "backspace":
 		if m.choiceFilter != "" {
 			m.choiceFilter = trimLastRune(m.choiceFilter)
 			m.refilterChoices()
 		}
 		return nil
-	case tea.KeySpace:
-		m.choiceFilter += " "
-		m.refilterChoices()
-		return nil
-	case tea.KeyRunes:
-		if s := string(msg.Runes); len(s) == 1 && s[0] >= '1' && s[0] <= '9' && m.digitsPick() {
+	}
+	if s := typedText(msg); s != "" {
+		if len(s) == 1 && s[0] >= '1' && s[0] <= '9' && m.digitsPick() {
 			m.applyChoice(int(s[0] - '1'))
 			return nil
 		}
-		m.choiceFilter += string(msg.Runes)
+		m.choiceFilter += s
 		m.refilterChoices()
-		return nil
 	}
 	return nil
+}
+
+// typedText is the text a keypress types, or "" for a key that types none
+// (an arrow, a ctrl chord). Shift only changes the text, so it still counts.
+func typedText(msg tea.KeyPressMsg) string {
+	if msg.Mod&^tea.ModShift != 0 {
+		return ""
+	}
+	return msg.Text
 }
 
 // trimLastRune drops the final rune, so backspacing a filter never splits a
@@ -222,15 +227,15 @@ func (m *Model) choiceView() string {
 // appeared — the user answered a question they had not read. And the Enter
 // that follows stray text is swallowed: text then Enter is someone finishing
 // a message, not confirming row one.
-func pickerKey(msg tea.KeyMsg, n int, idx *int, stray *bool) int {
-	switch msg.Type {
-	case tea.KeyUp, tea.KeyCtrlP:
+func pickerKey(msg tea.KeyPressMsg, n int, idx *int, stray *bool) int {
+	switch msg.String() {
+	case "up", "ctrl+p":
 		*idx, *stray = (*idx-1+n)%n, false
 		return -1
-	case tea.KeyDown, tea.KeyCtrlN:
+	case "down", "ctrl+n":
 		*idx, *stray = (*idx+1)%n, false
 		return -1
-	case tea.KeyEnter:
+	case "enter":
 		if *stray {
 			*stray = false
 			return -1
@@ -243,7 +248,7 @@ func pickerKey(msg tea.KeyMsg, n int, idx *int, stray *bool) int {
 		}
 		return -1 // a digit past the list: ignore rather than guess
 	}
-	if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+	if typedText(msg) != "" {
 		*stray = true
 	}
 	return -1

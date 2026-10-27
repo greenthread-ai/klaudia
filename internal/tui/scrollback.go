@@ -4,7 +4,7 @@ import (
 	"strings"
 	"sync"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // printQueue buffers finished output on its way into the terminal's real
@@ -71,7 +71,7 @@ func (q *printQueue) drainCmd() tea.Cmd {
 			q.sink(body)
 			return nil
 		}
-		return tea.Println(body)()
+		return tea.Println(downsample(body))()
 	}
 }
 

@@ -3,8 +3,8 @@ package tui
 import (
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/anthropics/anthropic-sdk-go"
-	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/greenthread-ai/klaudia/pkg/compaction"
 )

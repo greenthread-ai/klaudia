@@ -3,8 +3,8 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/greenthread-ai/klaudia/internal/hostgate"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
@@ -106,7 +106,7 @@ func (m *Model) onPaste(text string) (tea.Model, tea.Cmd) {
 // queued follow-up but not complete a path in it — and that is the same drift
 // editableInput was introduced to stop, after the paste gate and inputHeight
 // disagreed about stateAnsweringOther.
-func (m *Model) onInputKey(msg tea.KeyMsg) bool {
+func (m *Model) onInputKey(msg tea.KeyPressMsg) bool {
 	if !m.editableInput() {
 		return false
 	}
@@ -154,7 +154,7 @@ func (m *Model) onInputKey(msg tea.KeyMsg) bool {
 // queue being non-empty, not of the state, so it is asked of the queue. Before
 // this, ↑ with nothing queued simply did nothing while a turn ran, and the
 // answer box had no history at all.
-func (m *Model) onHistoryKey(msg tea.KeyMsg) bool {
+func (m *Model) onHistoryKey(msg tea.KeyPressMsg) bool {
 	if !m.editableInput() || m.input.LineCount() > 1 {
 		return false
 	}
@@ -175,9 +175,9 @@ func (m *Model) onHistoryKey(msg tea.KeyMsg) bool {
 	return true
 }
 
-func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Any key other than Ctrl+C disarms a pending "press again to quit".
-	if msg.Type != tea.KeyCtrlC {
+	if msg.String() != "ctrl+c" {
 		m.quitArmed = false
 	}
 
@@ -189,7 +189,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// The text box's own keys, before any state dispatch. Esc reaching the menu
 	// ahead of the interrupt is deliberate: closing a dropdown that is on screen
 	// must not also kill the turn behind it. A second Esc does that.
-	if snap, _, _ := m.workList(); msg.Type == tea.KeyCtrlT && planVisible(snap) {
+	if snap, _, _ := m.workList(); msg.String() == "ctrl+t" && planVisible(snap) {
 		m.planCollapsed = !m.planCollapsed
 		return m, nil
 	}
@@ -199,10 +199,10 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.onHistoryKey(msg) {
 		return m, nil
 	}
-	switch msg.Type {
-	case tea.KeyCtrlC:
+	switch msg.String() {
+	case "ctrl+c":
 		return m.onCtrlC()
-	case tea.KeyEsc:
+	case "esc":
 		// Leaving follow mode comes first: Esc while watching a log means "stop
 		// watching", not "kill the turn that started an hour ago". The job keeps
 		// running either way — following is a view, not a lifecycle.
@@ -218,14 +218,6 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// A bracketed paste arrives as one KeyMsg carrying the whole payload. It is
-	// handled before any state dispatch so that pasting into a y/n prompt can't
-	// be read as an answer, and before the textarea so the widget's sanitizer
-	// never sees it (see paste.go).
-	if msg.Paste {
-		return m.onPaste(string(msg.Runes))
-	}
-
 	// What Return means depends on config (see keyAction). Computed once, so
 	// the idle prompt and the queue-while-running path cannot disagree about
 	// which chord sends — they did, in the first cut of this change.
@@ -237,7 +229,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Terminal keeps Alt+Enter for fullscreen.
 	// Only where Return sends: with input.enter = "newline", Return already
 	// inserts one and the send chord should send.
-	if action == actionSubmit && msg.Type == tea.KeyEnter && !msg.Alt && m.backslashContinues() {
+	if action == actionSubmit && msg.String() == "enter" && m.backslashContinues() {
 		action = actionNewline
 	}
 
@@ -368,7 +360,7 @@ func (m *Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAnsweringOther {
-		if msg.Type == tea.KeyEsc { // back to the list, draft discarded
+		if msg.String() == "esc" { // back to the list, draft discarded
 			m.input.Reset()
 			m.syncInputHeight()
 			if m.otherFor == otherPlan {
