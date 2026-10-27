@@ -139,7 +139,7 @@ klaudia
 
 A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
 type-ahead, fuzzy `@path` file completion, input history (↑/↓), and `Esc` to
-interrupt a turn. Type `/help` for the full list.
+interrupt a turn. Type `/help` for the commands by group, and `/help <command>` for one in full.
 
 Typing `@` opens a ranked file menu: `↑`/`↓` pick, `Tab` inserts and cycles,
 `Enter` takes the highlighted file and closes the menu (it does not send),

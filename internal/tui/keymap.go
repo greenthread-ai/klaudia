@@ -46,7 +46,7 @@ func newKeymap(enterInserts bool) keymap {
 	}
 	// Prev and Next share a description on purpose: keyHelp merges bindings
 	// that mean the same thing into one row, so this renders as "↑ / ↓".
-	const history = "Cycle through previous prompts, or the @ file menu (a queued message comes back first)"
+	const history = "Previous prompts (queued message first), or move in the @ menu"
 	return keymap{
 		Submit:    submit,
 		Newline:   newline,
@@ -82,7 +82,7 @@ func (k keymap) helpOrder(ta textarea.KeyMap) []key.Binding {
 // chord that no code looks for.
 var inputPrefixes = [][2]string{
 	{"/", "Type a slash to see matching commands"},
-	{"@", "Type an @ to pick a file (↑/↓ select, Tab cycles, Esc dismisses)"},
+	{"@", "Pick a file to mention (Tab cycles, Esc dismisses)"},
 }
 
 // keyHelp renders the "Keys:" block of /help from the bindings themselves.

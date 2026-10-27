@@ -848,3 +848,50 @@ func TestGoalSettingToggle(t *testing.T) {
 		t.Fatal("second /goal should leave goal-setting")
 	}
 }
+
+// Every command is in exactly one /help group: a new command added to
+// commandList and not to a group would vanish from /help.
+func TestEveryCommandHasOneGroup(t *testing.T) {
+	seen := map[string]int{}
+	for _, g := range commandGroups {
+		for _, n := range g.names {
+			seen[n]++
+		}
+	}
+	for _, c := range commandList {
+		if seen[c.name] != 1 {
+			t.Errorf("%s is in %d /help groups, want 1", c.name, seen[c.name])
+		}
+		delete(seen, c.name)
+	}
+	for n := range seen {
+		t.Errorf("/help group lists %s, which is not a command", n)
+	}
+}
+
+// /help was sixty lines; it is the groups and the keys now, and the detail is
+// one command away.
+func TestHelpIsShortAndDetailIsOneAway(t *testing.T) {
+	help := slashHelp(newTestModel().keyHints(), "review")
+	if n := strings.Count(help, "\n") + 1; n > 25 {
+		t.Errorf("/help is %d lines:\n%s", n, help)
+	}
+	for _, ln := range strings.Split(help, "\n") {
+		if len([]rune(ln)) > 80 {
+			t.Errorf("line wider than 80 columns: %q", ln)
+		}
+	}
+	if !strings.Contains(help, "Skills") || !strings.Contains(help, "/review") {
+		t.Errorf("skills missing:\n%s", help)
+	}
+	got, ok := commandHelp("logs")
+	if !ok || !strings.HasPrefix(got, "/logs [-f|--errors] <job>\n  Page a job's log") {
+		t.Errorf("/help logs = %q", got)
+	}
+	if got, ok := commandHelp("/exit"); !ok || !strings.HasPrefix(got, "/quit") {
+		t.Errorf("/help exit = %q, want the /quit entry", got)
+	}
+	if _, ok := commandHelp("/nope"); ok {
+		t.Error("an unknown command had help")
+	}
+}

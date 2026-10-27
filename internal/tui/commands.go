@@ -91,23 +91,81 @@ func IsBuiltinCommand(name string) bool {
 	return false
 }
 
-// slashHelp renders the command reference from commandList, plus the key
-// reference rendered from the live bindings. keys is passed in rather than
-// rebuilt here because the Return chords depend on config: the help has to
-// describe the bindings this session actually installed.
-func slashHelp(keys string) string {
+// commandGroups sorts commandList by what it is for. /help used to print all
+// of it, one command and description per line, wrapping — sixty lines of
+// scrollback for a list that typing "/" already filters with descriptions.
+// TestEveryCommandHasOneGroup keeps a new command from going missing here.
+var commandGroups = []struct {
+	title string
+	names []string
+}{
+	{"Session", []string{"/model", "/effort", "/mode", "/theme", "/status", "/stats", "/config", "/compact", "/clear", "/export", "/quit", "/help"}},
+	{"Work", []string{"/plan", "/goal", "/stop", "/changes", "/diff", "/undo", "/commit"}},
+	{"Context", []string{"/context", "/pin", "/unpin", "/forget", "/add-dir", "/memory"}},
+	{"Shell", []string{"!<command>", "/jobs", "/logs", "/restart", "/stopjob"}},
+	{"Find", []string{"/search", "/outline", "/show", "/errors", "/last", "/copy", "/open"}},
+	{"Setup", []string{"/mcp", "/agents", "/trust", "/doctor"}},
+}
+
+// helpWidth is where /help wraps a group's names.
+const helpWidth = 78
+
+// slashHelp is /help: the commands by group, names only, then the keys.
+// skills are the skill names, which get a group of their own.
+func slashHelp(keys string, skills ...string) string {
 	var b strings.Builder
-	b.WriteString("Available commands:")
-	for _, c := range commandList {
-		left := c.name
-		if c.args != "" {
-			left += " " + c.args
+	b.WriteString("Commands — /help <command> for one in full; type / to search them")
+	groups := commandGroups
+	if len(skills) > 0 {
+		names := make([]string, len(skills))
+		for i, sk := range skills {
+			names[i] = "/" + sk
 		}
-		fmt.Fprintf(&b, "\n  %-16s %s", left, c.desc)
+		groups = append(groups[:len(groups):len(groups)], struct {
+			title string
+			names []string
+		}{"Skills", names})
+	}
+	for _, g := range groups {
+		line := fmt.Sprintf("  %-9s", g.title)
+		pad := strings.Repeat(" ", len(line))
+		col := len(line)
+		for i, n := range g.names {
+			if i > 0 && col+1+len(n) > helpWidth {
+				b.WriteString("\n" + line)
+				line, col = pad, len(pad)
+			} else if i > 0 {
+				line += " "
+				col++
+			}
+			line += n
+			col += len(n)
+		}
+		b.WriteString("\n" + line)
 	}
 	b.WriteString("\n\n")
 	b.WriteString(keys)
 	return b.String()
+}
+
+// commandHelp is /help <command>: its usage and what it does.
+func commandHelp(name string) (string, bool) {
+	if !strings.HasPrefix(name, "/") && !strings.HasPrefix(name, "!") {
+		name = "/" + name
+	}
+	if alias, ok := commandAliases[strings.TrimPrefix(name, "/")]; ok {
+		name = "/" + alias
+	}
+	for _, c := range commandList {
+		if c.name == name {
+			usage := c.name
+			if c.args != "" {
+				usage += " " + c.args
+			}
+			return usage + "\n  " + c.desc, true
+		}
+	}
+	return "", false
 }
 
 // builtinCommands returns the canonical command names for type-ahead.
@@ -232,7 +290,17 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 
 	switch cmd {
 	case "/help", "/?":
-		m.appendLine(bannerStyle.Render(slashHelp(m.keyHints()) + m.skillHelpLines()))
+		if len(args) > 0 {
+			if text, ok := commandHelp(args[0]); ok {
+				m.appendLine(bannerStyle.Render(text))
+			} else if text, ok := m.skillHelp(args[0]); ok {
+				m.appendLine(bannerStyle.Render(text))
+			} else {
+				m.appendLine(bannerStyle.Render("No command " + args[0] + " — /help lists them."))
+			}
+			break
+		}
+		m.appendLine(bannerStyle.Render(slashHelp(m.keyHints(), m.skillNamesForHelp()...)))
 	case "/quit", "/exit":
 		return m, m.quit()
 	case "/clear":
@@ -704,20 +772,32 @@ func (m *Model) lookupSkill(name string) (SkillCommand, bool) {
 	return SkillCommand{}, false
 }
 
-// skillHelpLines renders the user-defined skills section of /help (empty when
-// none are loaded).
-func (m *Model) skillHelpLines() string {
-	if m.sess == nil || len(m.sess.Skills) == 0 {
-		return ""
+// skillNamesForHelp lists the session's skills for /help's Skills group.
+func (m *Model) skillNamesForHelp() []string {
+	if m.sess == nil {
+		return nil
 	}
-	var b strings.Builder
-	b.WriteString("\nSkills:")
+	names := make([]string, len(m.sess.Skills))
+	for i, sk := range m.sess.Skills {
+		names[i] = sk.Name
+	}
+	return names
+}
+
+// skillHelp is /help <skill>.
+func (m *Model) skillHelp(name string) (string, bool) {
+	if m.sess == nil {
+		return "", false
+	}
+	name = strings.TrimPrefix(name, "/")
 	for _, sk := range m.sess.Skills {
-		desc := sk.Description
-		if desc == "" {
-			desc = "(user-defined skill)"
+		if sk.Name == name {
+			desc := sk.Description
+			if desc == "" {
+				desc = "(user-defined skill)"
+			}
+			return "/" + sk.Name + "\n  " + desc, true
 		}
-		fmt.Fprintf(&b, "\n  /%-14s %s", sk.Name, desc)
 	}
-	return b.String()
+	return "", false
 }

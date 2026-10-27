@@ -144,6 +144,11 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **`/help` is 21 lines instead of 60.** Commands are listed by group
+  (Session, Work, Context, Shell, Find, Setup, and Skills when any are
+  loaded), names only, followed by the keys. `/help <command>` (or a skill
+  name) prints its usage and description. Typing `/` still filters every
+  command with its description.
 - **Resuming says so, in one line.** A resumed session with a clean working
   tree showed nothing, so the model carried on from history the user could
   not see. With anything to reconcile, the card was ten lines restating the
