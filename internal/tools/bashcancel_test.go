@@ -14,7 +14,7 @@ import (
 func TestInterruptedCommandSaysSoAndIsNotATimeout(t *testing.T) {
 	out, _ := formatBashOutput(sandbox.Response{
 		Stdout: "==> Creating kind cluster\n", Canceled: true, ExitCode: 130,
-	}, "./scripts/up.sh")
+	}, "./scripts/up.sh", SpillStore{})
 
 	if !strings.Contains(out, "interrupted by the user") {
 		t.Errorf("interruption not stated:\n%s", out)
@@ -34,7 +34,7 @@ func TestInterruptedCommandSaysSoAndIsNotATimeout(t *testing.T) {
 
 // A real timeout must still read as one.
 func TestTimeoutStillReportsATimeout(t *testing.T) {
-	out, _ := formatBashOutput(sandbox.Response{TimedOut: true, ExitCode: 124}, "sleep 999")
+	out, _ := formatBashOutput(sandbox.Response{TimedOut: true, ExitCode: 124}, "sleep 999", SpillStore{})
 	if !strings.Contains(out, "timed out") {
 		t.Errorf("timeout no longer reported:\n%s", out)
 	}
@@ -42,7 +42,7 @@ func TestTimeoutStillReportsATimeout(t *testing.T) {
 
 // An ordinary failure is unchanged.
 func TestPlainFailureKeepsItsExitCode(t *testing.T) {
-	out, _ := formatBashOutput(sandbox.Response{Stderr: "boom", ExitCode: 2}, "false")
+	out, _ := formatBashOutput(sandbox.Response{Stderr: "boom", ExitCode: 2}, "false", SpillStore{})
 	if !strings.Contains(out, "[exit code 2]") {
 		t.Errorf("exit code lost:\n%s", out)
 	}

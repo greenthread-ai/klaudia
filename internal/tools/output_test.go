@@ -91,10 +91,8 @@ func TestClampReportsHowMuchItRemoved(t *testing.T) {
 }
 
 func TestSpillWritesFullOutputAndFormatNamesIt(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-
 	full := strings.Repeat("build output line\n", 5000)
-	out, fullOut := formatBashOutput(sandbox.Response{Stdout: full}, "make build")
+	out, fullOut := formatBashOutput(sandbox.Response{Stdout: full}, "make build", SpillStore{Dir: t.TempDir()})
 
 	if !strings.Contains(out, "full output:") {
 		t.Fatalf("truncated output should name the spill file:\n%s", oneLineOf(out))
@@ -121,13 +119,12 @@ func TestSpillWritesFullOutputAndFormatNamesIt(t *testing.T) {
 
 func TestNoSpillForShortOutput(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("KLAUDIA_CONFIG_DIR", dir)
 
-	out, _ := formatBashOutput(sandbox.Response{Stdout: "all good\n"}, "echo hi")
+	out, _ := formatBashOutput(sandbox.Response{Stdout: "all good\n"}, "echo hi", SpillStore{Dir: dir})
 	if strings.Contains(out, "full output:") {
 		t.Error("short output needs no spill file")
 	}
-	if entries, err := os.ReadDir(filepath.Join(dir, "outputs")); err == nil && len(entries) > 0 {
+	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
 		t.Errorf("no spill file should have been written, found %d", len(entries))
 	}
 }
@@ -182,8 +179,7 @@ func TestSpillPrefixSanitisesToolNames(t *testing.T) {
 }
 
 func TestSpillWritesUnderTheToolName(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-	path, ok := spillOutput("mcp__github__list_issues", "body")
+	path, ok := SpillStore{Dir: t.TempDir()}.Spill("mcp__github__list_issues", "body")
 	if !ok {
 		t.Fatal("spill failed for an MCP-style tool name")
 	}
@@ -192,12 +188,35 @@ func TestSpillWritesUnderTheToolName(t *testing.T) {
 	}
 }
 
+// A store with no directory is what an embedder that chose none gets: the
+// output is still clamped, but nothing is written anywhere and the notice
+// promises no file.
+func TestZeroSpillStoreClampsWithoutWriting(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("TMPDIR", t.TempDir())
+	var s SpillStore
+	if path, ok := s.Spill("bash", "body"); ok || path != "" {
+		t.Fatalf("Spill on the zero store = %q, %v; want nothing written", path, ok)
+	}
+	out, cut := s.Cap("Grep", strings.Repeat("match\n", 20000))
+	if !cut {
+		t.Fatal("oversized output should still be clamped")
+	}
+	if strings.Contains(out, spillMarker) {
+		t.Errorf("no file was written, so the notice must not name one:\n%s", oneLineOf(out))
+	}
+	for _, d := range []string{os.Getenv("HOME"), os.Getenv("TMPDIR")} {
+		if entries, _ := os.ReadDir(d); len(entries) > 0 {
+			t.Errorf("zero store wrote into %s: %d entries", d, len(entries))
+		}
+	}
+}
+
 // Exit status and timeout annotations must still land after clamping.
 func TestExitAnnotationSurvivesClamping(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	out, fullOut := formatBashOutput(sandbox.Response{
 		Stdout: strings.Repeat("noise\n", 20000), ExitCode: 1,
-	}, "go test ./...")
+	}, "go test ./...", SpillStore{Dir: t.TempDir()})
 	if !strings.Contains(out, "[exit code 1]") {
 		t.Errorf("exit annotation lost:\n%s", oneLineOf(out))
 	}
@@ -230,12 +249,11 @@ func oneLineOf(s string) string {
 
 // End to end through the real Bash tool with a real command.
 func TestBashEndToEndKeepsHeadAndTail(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
 	b, err := NewBash(sandbox.NewLocal())
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := b.Execute(context.Background(), Context{}, []byte(`{"command":"echo FIRST_LINE_MARKER; for i in $(seq 1 6000); do echo filler line $i padding padding padding; done; echo LAST_LINE_MARKER; exit 3"}`))
+	res, err := b.Execute(context.Background(), Context{Spill: SpillStore{Dir: t.TempDir()}}, []byte(`{"command":"echo FIRST_LINE_MARKER; for i in $(seq 1 6000); do echo filler line $i padding padding padding; done; echo LAST_LINE_MARKER; exit 3"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

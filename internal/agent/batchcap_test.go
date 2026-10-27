@@ -36,7 +36,7 @@ func repeatLines(bytes int) string {
 // single user message. Parallel dispatch makes the shape common rather than
 // theoretical.
 func TestOneTurnsResultsAreCappedInAggregate(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	spill := tools.SpillStore{Dir: t.TempDir()}
 
 	const each = 28000
 	texts := make([]string, 10)
@@ -52,7 +52,7 @@ func TestOneTurnsResultsAreCappedInAggregate(t *testing.T) {
 		t.Fatalf("the fixture does not exceed the budget: %d bytes", before)
 	}
 
-	if !capMessage(blocks, names) {
+	if !capMessage(blocks, names, spill) {
 		t.Fatal("capMessage reported no change")
 	}
 	after := totalText(blocks)
@@ -75,14 +75,14 @@ func TestOneTurnsResultsAreCappedInAggregate(t *testing.T) {
 // its share keeps every byte, because trimming it would lose real content
 // without freeing the bytes that are actually the problem.
 func TestSmallResultsSurviveTheAggregateCap(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	spill := tools.SpillStore{Dir: t.TempDir()}
 
 	small := "ok\n"
 	texts := []string{small, repeatLines(maxMessageOutput * 2), small, small}
 	names := []string{"Read", "Grep", "Read", "Read"}
 	blocks := resultBlocksOf(texts...)
 
-	capMessage(blocks, names)
+	capMessage(blocks, names, spill)
 
 	for _, i := range []int{0, 2, 3} {
 		if got := resultBlockText(blocks[i]); got != small {
@@ -100,7 +100,7 @@ func TestAggregateCapLeavesAnOrdinaryTurnAlone(t *testing.T) {
 	texts := []string{repeatLines(4000), "ok\n", repeatLines(12000)}
 	blocks := resultBlocksOf(texts...)
 
-	if capMessage(blocks, []string{"Read", "Read", "Grep"}) {
+	if capMessage(blocks, []string{"Read", "Read", "Grep"}, tools.SpillStore{}) {
 		t.Error("capMessage trimmed a turn that was inside the budget")
 	}
 	for i, b := range blocks {
@@ -146,13 +146,13 @@ func TestFairSharesRedistributesUnusedBudget(t *testing.T) {
 // Images are vision content the model cannot recover from a log file, and the
 // trim is on text only, so they must survive it.
 func TestAggregateCapKeepsImageBlocks(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	spill := tools.SpillStore{Dir: t.TempDir()}
 
 	blocks := []anthropic.BetaContentBlockParamUnion{
 		toolResultWithImages("t1", repeatLines(maxMessageOutput*2), false,
 			[]tools.ResultImage{{MediaType: "image/png", Base64: "iVBOR"}}),
 	}
-	capMessage(blocks, []string{"Read"})
+	capMessage(blocks, []string{"Read"}, spill)
 
 	tr := blocks[0].OfToolResult
 	images := 0
@@ -173,11 +173,11 @@ func TestAggregateCapKeepsImageBlocks(t *testing.T) {
 // second spill would only preserve the already-clamped copy, which is strictly
 // worse than the original the first notice names.
 func TestAlreadySpilledResultsKeepTheirOriginalNotice(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	spill := tools.SpillStore{Dir: t.TempDir()}
 
 	text := repeatLines(maxMessageOutput*2) + "\n[full output: /tmp/first-spill.log]"
 	blocks := resultBlocksOf(text)
-	capMessage(blocks, []string{"Grep"})
+	capMessage(blocks, []string{"Grep"}, spill)
 
 	got := resultBlockText(blocks[0])
 	if !strings.Contains(got, "/tmp/first-spill.log") {

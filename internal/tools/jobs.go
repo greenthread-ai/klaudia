@@ -82,13 +82,27 @@ type JobStore struct {
 }
 
 // NewJobStore creates a store whose jobs are parented to ctx (cancelling it, or
-// calling KillAll, terminates them). session names the log directory.
-func NewJobStore(ctx context.Context, session string) *JobStore {
+// calling KillAll, terminates them).
+//
+// root is the job-log directory the store owns, chosen by the host: each
+// session's logs go in root/<session> ("default" when session is empty), and
+// session directories under root older than a week are pruned. The CLI passes
+// <config root>/jobs. An empty root keeps every log in memory (bounded, see
+// maxMemLog) and writes nothing — an embedded core does not get to pick a
+// directory on its own, and /logs then has no file to page, which is the same
+// degraded path a read-only home directory already takes.
+func NewJobStore(ctx context.Context, root, session string) *JobStore {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	dir := jobLogDir(session)
-	go pruneJobLogs(filepath.Dir(dir), jobLogRetention)
+	dir := ""
+	if root != "" {
+		if session == "" {
+			session = "default"
+		}
+		dir = filepath.Join(root, session)
+		go pruneJobLogs(root, jobLogRetention)
+	}
 	return &JobStore{
 		parent: ctx, logDir: dir,
 		jobs: map[string]*Job{}, names: map[string]int{},

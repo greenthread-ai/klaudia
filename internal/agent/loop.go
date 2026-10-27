@@ -178,6 +178,13 @@ type Options struct {
 	// loop announces with a "plan" event whenever it changes; see planevent.go.
 	// Nil leaves those tools on the store they were built with.
 	Plan *plan.Store
+	// Spill is where clamped tool output is kept in full: the backstop cap,
+	// Bash's own clamp (via tools.Context.Spill) and microcompact's elisions
+	// all write here, so every truncation notice can name a file the model can
+	// read. The host picks the directory — the CLI passes <config
+	// root>/outputs — because an embedded core must not choose where it
+	// writes. The zero value clamps and elides without writing anything.
+	Spill tools.SpillStore
 }
 
 // Result is the outcome of a Run.
@@ -510,7 +517,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		for i, tu := range toolUses {
 			names[i] = tu.Name
 		}
-		capMessage(resultBlocks, names)
+		capMessage(resultBlocks, names, opts.Spill)
 		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
 		messages = append(messages, toolResultMsg)
 
@@ -553,16 +560,20 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 // elisionSpiller gives microcompact somewhere to put the tool results it
 // removes, so an elision stays recoverable: the placeholder names the file and
 // the model can read it. It uses the same store as the per-result cap, under
-// the same 24h prune.
-func elisionSpiller(content string) (string, bool) {
-	return tools.Spill("elided", content)
+// the same 24h prune. A store with no directory yields a nil Spiller, which
+// microcompact already reads as "nowhere to put it".
+func elisionSpiller(s tools.SpillStore) compaction.Spiller {
+	if s.Dir == "" {
+		return nil
+	}
+	return func(content string) (string, bool) { return s.Spill("elided", content) }
 }
 
 // compact applies microcompact then (if near the limit) autocompact to the
 // message list, each unless Options turns it off.
 func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64, emit Emitter, calib *compaction.Calibration, force bool) []anthropic.BetaMessageParam {
 	if !opts.NoMicrocompact {
-		if out, res := compaction.Microcompact(messages, elisionSpiller); res.Compacted {
+		if out, res := compaction.Microcompact(messages, elisionSpiller(opts.Spill)); res.Compacted {
 			messages = out
 			if emit != nil {
 				emit(Event{Type: "compaction", Content: fmt.Sprintf("microcompact: elided %d old tool results (~%d tokens saved)", res.ElidedCount, res.TokensSaved)})
@@ -1182,6 +1193,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 		HostChange: hostChangeFor(opts),
 		Progress:   progress,
 		ReadText:   opts.ReadText,
+		Spill:      opts.Spill,
 	}, raw)
 	if err != nil {
 		return errResult(fmt.Sprintf("Tool execution error: %v", err))
@@ -1217,7 +1229,7 @@ func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts
 	// chatty MCP server was one call away from an unusable session. Content
 	// already within budget comes back untouched, so self-clamping tools are
 	// unaffected.
-	if capped, cut := tools.Cap(tu.Name, content); cut {
+	if capped, cut := opts.Spill.Cap(tu.Name, content); cut {
 		content = capped
 		clamped = true
 	}

@@ -35,7 +35,7 @@ const maxMessageOutput = 200000
 // It runs after the per-call events have been emitted, so a local frontend
 // still shows what each tool actually produced. Only the model-facing copy is
 // trimmed, and the notice naming the spill file travels with it.
-func capMessage(blocks []anthropic.BetaContentBlockParamUnion, names []string) bool {
+func capMessage(blocks []anthropic.BetaContentBlockParamUnion, names []string, spill tools.SpillStore) bool {
 	texts := make([]string, len(blocks))
 	total := 0
 	for i, b := range blocks {
@@ -61,7 +61,7 @@ func capMessage(blocks []anthropic.BetaContentBlockParamUnion, names []string) b
 		if i < len(names) {
 			name = names[i]
 		}
-		capped, cut := tools.CapTo(name, texts[i], budgets[i])
+		capped, cut := spill.CapTo(name, texts[i], budgets[i])
 		if !cut {
 			continue
 		}

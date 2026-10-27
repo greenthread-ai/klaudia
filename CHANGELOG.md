@@ -15,6 +15,15 @@ port mirrors (see `internal/version`).
   debugging switches and have no CLI replacement; embedders get
   `api.Tuning.NoPromptCache` and `agent.Options.NoMicrocompact` /
   `NoAutocompact`. `api.New` and `api.NewOpenAIProvider` take an `api.Tuning`.
+- **The host chooses where the core writes spills and job logs.** The agent
+  loop, the tools and compaction no longer resolve `~/.klaudia` (or
+  `KLAUDIA_CONFIG_DIR`) themselves. `tools.Spill`, `tools.Cap` and
+  `tools.CapTo` are now methods on `tools.SpillStore{Dir}`, which reaches the
+  loop as `agent.Options.Spill`, Bash as `tools.Context.Spill` and sub-agents
+  through `Spawner.WithSpill`. `tools.NewJobStore(ctx, root, session)` takes
+  the job-log root. The CLI passes the same `outputs/` and `jobs/` directories
+  as before, so nothing moves for users; an embedder that passes none gets
+  clamped output with no spill file and in-memory job logs.
 
 ### Added
 - **Clickable links.** URLs and paths to existing files in the transcript are

@@ -165,7 +165,7 @@ func (b *Bash) Execute(ctx context.Context, tctx Context, raw json.RawMessage) (
 		return []Result{{Content: fmt.Sprintf("Failed to run command: %v", err), IsError: true}}, nil
 	}
 
-	model, full := formatBashOutput(resp, in.Command)
+	model, full := formatBashOutput(resp, in.Command, tctx.Spill)
 	return []Result{{Content: model, Full: full, IsError: resp.ExitCode != 0}}, nil
 }
 
@@ -274,8 +274,9 @@ func looksLikeService(command string) bool {
 // formatBashOutput combines stdout/stderr and annotates non-zero exit / timeout.
 // It returns two strings: the model-facing text, clamped to bashMaxOutput (see
 // output.go for why it keeps a tail as well as a head), and the untruncated
-// text for local display. full is empty when nothing was clamped.
-func formatBashOutput(resp sandbox.Response, command string) (model, full string) {
+// text for local display. full is empty when nothing was clamped. spill is
+// where the untruncated text goes when it is clamped (see SpillStore).
+func formatBashOutput(resp sandbox.Response, command string, spill SpillStore) (model, full string) {
 	var b strings.Builder
 	b.WriteString(resp.Stdout)
 	if resp.Stderr != "" {
@@ -291,7 +292,7 @@ func formatBashOutput(resp sandbox.Response, command string) (model, full string
 		// The spill file is the *model's* escape hatch to the elided middle —
 		// it can Read or grep the path. The UI doesn't need it: `full` carries
 		// the same text in memory.
-		if path, ok := spillOutput("bash", raw); ok {
+		if path, ok := spill.Spill("bash", raw); ok {
 			out += "\n" + spillMarker + path + "]"
 		}
 		full = raw

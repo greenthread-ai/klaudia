@@ -118,9 +118,14 @@ a frontend, and `Loop`/`Options`/`Event`/`Turn`/`api.Provider`/`tools.Tool`/
   preserved behind a shim.
 - `api/auth.go` reads credential variables; credential discovery belongs to
   the host and moves out with the rest of the product code.
-- `tools/output.go:142` spills to `session.ConfigRoot()/outputs` — so the
+- ~~`tools/output.go:142` spills to `session.ConfigRoot()/outputs` — so the
   loop's microcompact writes into `~/.klaudia` — and `tools/joblog.go:22`
-  duplicates `ConfigRoot`.
+  duplicates `ConfigRoot`~~ — done: the host passes both directories in,
+  `tools.SpillStore` via `agent.Options.Spill` (and `Spawner.WithSpill`) and
+  the job-log root via `tools.NewJobStore`. Unset, the core writes nothing:
+  output is clamped without a spill file and job logs stay in memory.
+  `agent`, `tools` and `compaction` no longer call `ConfigRoot` or read
+  `KLAUDIA_CONFIG_DIR`.
 - Model-facing error strings name `.klaudia/config.toml`
   (`agent/loop.go`, `api/errors.go`).
 - `agent` imports `trust`, `hooks`, `subagent`, `worktree` and `session`
@@ -128,7 +133,7 @@ a frontend, and `Loop`/`Options`/`Event`/`Turn`/`api.Provider`/`tools.Tool`/
 
 **Stage 0 — internal plumbing.** Env reads become `Options` /
 provider-constructor fields (done for the loop and providers). Inject the
-spill directory (`compaction.Spiller` is already an interface).
+spill and job-log directories (done).
 Move `MessagesFromEntries` from `agent` to `session`. Cut `hooks → config`.
 Product strings behind an injectable hint function.
 

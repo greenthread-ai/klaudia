@@ -72,7 +72,7 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 	// Background-shell store for run_in_background / BashOutput / KillShell.
 	shells := cfg.shells
 	if shells == nil {
-		shells = NewJobStore(context.Background(), "")
+		shells = NewJobStore(context.Background(), "", "")
 	}
 
 	type ctor struct {

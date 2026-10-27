@@ -347,7 +347,7 @@ var _ = context.Background
 func TestTimeoutSuggestsAJobForServices(t *testing.T) {
 	out, _ := formatBashOutput(sandbox.Response{
 		Stdout: "listening\n", TimedOut: true, ExitCode: 124,
-	}, "npm run dev")
+	}, "npm run dev", SpillStore{})
 	if !strings.Contains(out, "run_in_background") {
 		t.Errorf("a timed-out service does not suggest making it a job:\n%s", out)
 	}
@@ -358,7 +358,7 @@ func TestTimeoutSuggestsAJobForServices(t *testing.T) {
 	// A test suite that genuinely hung must not be told to background itself.
 	slow, _ := formatBashOutput(sandbox.Response{
 		Stdout: "…\n", TimedOut: true, ExitCode: 124,
-	}, "go test ./...")
+	}, "go test ./...", SpillStore{})
 	if strings.Contains(slow, "run_in_background") {
 		t.Errorf("a slow test was told to become a service:\n%s", slow)
 	}

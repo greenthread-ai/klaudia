@@ -1115,8 +1115,12 @@ func run(cmd *cobra.Command, opts *options) error {
 	// run context; KillAll stops them — and now their whole process groups — at
 	// session end. The session id names their log directory so /logs can find
 	// them and so a resumed session lands on its own logs.
-	jobStore := tools.NewJobStore(ctx, sessionID)
+	jobStore := tools.NewJobStore(ctx, filepath.Join(session.ConfigRoot(), "jobs"), sessionID)
 	defer jobStore.KillAll()
+	// Where clamped tool output is kept in full (24h). The core no longer
+	// picks these directories itself — an embedded agent must not decide on
+	// its own to write under ~/.klaudia — so the host names both here.
+	spill := tools.SpillStore{Dir: filepath.Join(session.ConfigRoot(), "outputs")}
 	// Lazy language-server pool for code-intel tools (Diagnostics/Definition/
 	// References). Servers are detected on PATH + toolchain dirs, spawned on
 	// first use, and shut down at session end. Not downloaded.
@@ -1256,6 +1260,8 @@ func run(cmd *cobra.Command, opts *options) error {
 	// provider-reported cap or a maxTokens override is lost on exactly the
 	// workload (a sub-agent writing a file) where it matters.
 	wiring.spawner.WithLimits(limits)
+	// Children spill where the parent does.
+	wiring.spawner.WithSpill(spill)
 
 	// MCP config hot reload. An edit to any .mcp.json that applies here takes
 	// effect in this session instead of at the next start — installing a server
@@ -1367,6 +1373,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			OnSummary:       onSummary,
 			Hooks:           hookRunner,
 			Plan:            planStore,
+			Spill:           spill,
 		}
 		turn.Apply(&opts)
 		return opts

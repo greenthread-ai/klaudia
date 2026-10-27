@@ -40,6 +40,7 @@ type Spawner struct {
 	worktrees  bool
 	effort     api.Effort
 	limits     api.ModelLimits
+	spill      tools.SpillStore
 }
 
 // SetDeferred replaces the deferred-tool set. A config reload can add or drop
@@ -129,6 +130,14 @@ func (s *Spawner) WithEffort(e api.Effort) *Spawner {
 // lookup, so a Spawner built without this still behaves sanely.
 func (s *Spawner) WithLimits(l api.ModelLimits) *Spawner {
 	s.limits = l
+	return s
+}
+
+// WithSpill gives sub-agents the parent's spill store, so a child's clamped
+// output and elided results stay recoverable from the same directory as the
+// parent's. Unset, a child clamps without writing (see tools.SpillStore).
+func (s *Spawner) WithSpill(store tools.SpillStore) *Spawner {
+	s.spill = store
 	return s
 }
 
@@ -248,6 +257,7 @@ func (s *Spawner) Spawn(ctx context.Context, subagentType, prompt string, progre
 		DeferredTools: filterDeferred(s.deferred(), childTools),
 		Hooks:         s.hooks,
 		SubAgent:      true,
+		Spill:         s.spill,
 	}, emit)
 	if err != nil {
 		// Whatever the child wrote stays where it is. A failed or interrupted

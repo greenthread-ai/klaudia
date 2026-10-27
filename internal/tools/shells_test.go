@@ -117,8 +117,7 @@ func peekRunning(s *JobStore, id string) bool {
 // touch the developer's ~/.klaudia.
 func newTestJobStore(t *testing.T) *JobStore {
 	t.Helper()
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-	s := NewJobStore(context.Background(), "test")
+	s := NewJobStore(context.Background(), t.TempDir(), "test")
 	t.Cleanup(s.KillAll)
 	return s
 }

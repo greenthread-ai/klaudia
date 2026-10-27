@@ -17,19 +17,6 @@ import (
 // after the session ended. A file fixes all three at once, and it is what makes
 // `/logs` able to hand the user's own $PAGER something real.
 
-// jobLogDir is where job logs live, alongside the existing output spills.
-func jobLogDir(session string) string {
-	base := os.Getenv("KLAUDIA_CONFIG_DIR")
-	if base == "" {
-		home, _ := os.UserHomeDir()
-		base = filepath.Join(home, ".klaudia")
-	}
-	if session == "" {
-		session = "default"
-	}
-	return filepath.Join(base, "jobs", session)
-}
-
 // jobLog is an append-only log file with a byte cursor for incremental reads.
 type jobLog struct {
 	mu   sync.Mutex
@@ -45,8 +32,13 @@ type jobLog struct {
 // maxMemLog bounds the in-memory fallback (256 KiB), keeping the tail.
 const maxMemLog = 256 << 10
 
+// newJobLog opens dir/name.log. An empty dir means the host gave the store no
+// log directory, and the log is memory-only from the start.
 func newJobLog(dir, name string) *jobLog {
 	l := &jobLog{}
+	if dir == "" {
+		return l
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return l
 	}

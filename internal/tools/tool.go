@@ -113,6 +113,10 @@ type Context struct {
 	// per-file, so routing them through it would mean asking the editor for
 	// every candidate.
 	ReadText func(ctx context.Context, path string, line, limit int) (string, error)
+	// Spill is where a tool that clamps its own output (Bash) keeps the
+	// untruncated text. The loop sets it from Options.Spill, the same store
+	// its own backstop cap uses; the zero value clamps without writing.
+	Spill SpillStore
 }
 
 // Tool is the contract implemented by every local tool (Read, Write, Bash, …).

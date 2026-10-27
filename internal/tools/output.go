@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	"github.com/greenthread-ai/klaudia/internal/session"
 )
 
 // Tool output has to be capped — a 5 MB build log would swallow the context
@@ -53,12 +51,32 @@ const (
 	spillMaxAge = 24 * time.Hour
 )
 
+// SpillStore is where the untruncated text of a clamped tool result goes, so
+// the elided middle stays recoverable: the notice names the file, the model
+// can Read or grep it, and /last can page it.
+//
+// The host chooses the directory. The core is meant to be embeddable, and an
+// embedded core must not decide on its own to write into ~/.klaudia; the CLI
+// passes <config root>/outputs, which is where spills have always gone.
+//
+// The zero value (Dir == "") spills nothing: output is still clamped, and the
+// notice simply names no file. That is preferred to a fallback under
+// os.TempDir(), because spills are whole command outputs — build logs, env
+// dumps, file contents — and a host that did not ask for them to be written
+// should not find them in a shared temp directory. Everything downstream
+// already handles a failed spill this way.
+type SpillStore struct {
+	// Dir holds the spill files. Created on first use (0700); .log files in it
+	// older than 24h are pruned on each spill.
+	Dir string
+}
+
 // Cap is the agent loop's backstop: it clamps content to the per-tool budget,
-// writes the untruncated text to disk, and appends a notice naming the file so
-// the model can read what was removed. It returns the text and whether
+// writes the untruncated text to the store, and appends a notice naming the
+// file so the model can read what was removed. It returns the text and whether
 // anything was elided; content already within budget is returned unchanged.
-func Cap(toolName, content string) (string, bool) {
-	return CapTo(toolName, content, maxToolOutput)
+func (s SpillStore) Cap(toolName, content string) (string, bool) {
+	return s.CapTo(toolName, content, maxToolOutput)
 }
 
 // CapTo is Cap against an explicit budget, for the loop's per-message
@@ -69,7 +87,7 @@ func Cap(toolName, content string) (string, bool) {
 // Content that already names a spill file is clamped but not spilled again.
 // The tail keeps that notice, and the file it names holds the original — a
 // second spill would only preserve an already-clamped copy.
-func CapTo(toolName, content string, limit int) (string, bool) {
+func (s SpillStore) CapTo(toolName, content string, limit int) (string, bool) {
 	clamped, elided := clampOutputTo(content, limit)
 	if elided == 0 {
 		return content, false
@@ -77,17 +95,10 @@ func CapTo(toolName, content string, limit int) (string, bool) {
 	if strings.Contains(content, spillMarker) {
 		return clamped, true
 	}
-	if path, ok := spillOutput(toolName, content); ok {
+	if path, ok := s.Spill(toolName, content); ok {
 		clamped += "\n" + spillMarker + path + "]"
 	}
 	return clamped, true
-}
-
-// Spill writes content to the same on-disk store Cap uses and returns its
-// path. Exported for compaction, which elides old tool results and needs
-// somewhere to put the text it is removing.
-func Spill(toolName, content string) (string, bool) {
-	return spillOutput(toolName, content)
 }
 
 // clampOutput trims out to the default per-result budget.
@@ -138,16 +149,16 @@ func cutBeforeFirstLine(s string) string {
 	return s
 }
 
-// spillDir is where full command output is kept.
-func spillDir() string { return filepath.Join(session.ConfigRoot(), "outputs") }
-
-// spillOutput writes the untruncated text to disk and returns its path, so the
-// elided middle stays reachable. The file is named after the tool that
-// produced it, so a directory of spills can be read without opening each one.
-// Failure is not an error worth surfacing — the caller just omits the path
-// from the notice.
-func spillOutput(toolName, full string) (string, bool) {
-	dir := spillDir()
+// Spill writes the untruncated text to the store and returns its path. The
+// file is named after the tool that produced it, so a directory of spills can
+// be read without opening each one. Failure — or a store with no directory —
+// is not an error worth surfacing: the caller just omits the path from the
+// notice. Compaction uses it too, for the old tool results it elides.
+func (s SpillStore) Spill(toolName, full string) (string, bool) {
+	if s.Dir == "" {
+		return "", false
+	}
+	dir := s.Dir
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", false
 	}

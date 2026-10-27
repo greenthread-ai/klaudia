@@ -56,11 +56,17 @@ func toolResultText(t *testing.T, blk anthropic.BetaContentBlockParamUnion) stri
 	return b.String()
 }
 
+// dispatchGusher runs g through dispatch with spills going to a fresh temp dir.
 func dispatchGusher(t *testing.T, g *gusherTool, emit Emitter) anthropic.BetaContentBlockParamUnion {
+	t.Helper()
+	return dispatchGusherSpilling(t, t.TempDir(), g, emit)
+}
+
+func dispatchGusherSpilling(t *testing.T, spillDir string, g *gusherTool, emit Emitter) anthropic.BetaContentBlockParamUnion {
 	t.Helper()
 	l := New(nil, tools.NewRegistry(g))
 	tu := anthropic.BetaToolUseBlock{ID: "t1", Name: "Gusher", Input: map[string]any{}}
-	return l.dispatch(context.Background(), tu, Options{}, emit,
+	return l.dispatch(context.Background(), tu, Options{Spill: tools.SpillStore{Dir: spillDir}}, emit,
 		func(...string) {}, newFailureState())
 }
 
@@ -68,8 +74,6 @@ func dispatchGusher(t *testing.T, g *gusherTool, emit Emitter) anthropic.BetaCon
 // only caller. Every other tool — including every MCP tool — put its entire
 // output into the context window.
 func TestOversizedToolOutputIsCapped(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-
 	full := strings.Repeat("a matching line of some considerable length here\n", 20000)
 	got := toolResultText(t, dispatchGusher(t, &gusherTool{out: full}, nil))
 
@@ -84,8 +88,6 @@ func TestOversizedToolOutputIsCapped(t *testing.T) {
 // Capping without a way back is just data loss. The model must be able to read
 // what was cut.
 func TestCappedOutputNamesARecoverableSpillFile(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-
 	full := strings.Repeat("a matching line of some considerable length here\n", 20000)
 	got := toolResultText(t, dispatchGusher(t, &gusherTool{out: full}, nil))
 
@@ -110,8 +112,6 @@ func TestCappedOutputNamesARecoverableSpillFile(t *testing.T) {
 // The UI must keep showing everything the tool actually produced; only the
 // model's copy is cut.
 func TestCappingKeepsTheFullTextForTheUI(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-
 	full := strings.Repeat("a matching line of some considerable length here\n", 20000)
 	var ev Event
 	blk := dispatchGusher(t, &gusherTool{out: full}, func(e Event) {
@@ -131,15 +131,14 @@ func TestCappingKeepsTheFullTextForTheUI(t *testing.T) {
 
 func TestSmallToolOutputIsUntouched(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("KLAUDIA_CONFIG_DIR", dir)
 
 	const out = "3 files matched\n"
-	got := toolResultText(t, dispatchGusher(t, &gusherTool{out: out}, nil))
+	got := toolResultText(t, dispatchGusherSpilling(t, dir, &gusherTool{out: out}, nil))
 
 	if got != out {
 		t.Errorf("small output should pass through untouched, got %q", got)
 	}
-	if entries, err := os.ReadDir(dir + "/outputs"); err == nil && len(entries) > 0 {
+	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
 		t.Errorf("no spill file should have been written, found %d", len(entries))
 	}
 }
@@ -147,8 +146,6 @@ func TestSmallToolOutputIsUntouched(t *testing.T) {
 // Bash already clamps itself, head-and-tail, because it knows the verdict is at
 // the end. The backstop must not cut that work a second time.
 func TestBackstopLeavesSelfClampedToolsAlone(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-
 	// A tool that clamped itself reports the untruncated text in Full and a
 	// within-budget Content — exactly Bash's shape.
 	self := strings.Repeat("already trimmed to size\n", 50)
@@ -183,8 +180,6 @@ func (c *clampedTool) Execute(context.Context, tools.Context, json.RawMessage) (
 // Images are counted and returned separately from text; capping the text must
 // not drop them.
 func TestCappingPreservesImages(t *testing.T) {
-	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
-
 	g := &gusherTool{
 		out:    strings.Repeat("a matching line of some considerable length here\n", 20000),
 		images: []tools.ResultImage{{MediaType: "image/png", Base64: "aGk="}},
