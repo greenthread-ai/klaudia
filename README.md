@@ -25,6 +25,11 @@ extras we lean on day to day:
   get their own git checkout, so two of them can work at once.
 - **[Effort](#effort)** — `--effort` and `/effort` set how hard the model works
   per response, on both the Anthropic and OpenAI-compatible backends.
+- **[Background work that reports back](#long-running-commands-logs-and-your-shell)**
+  — a job or sub-agent that finishes wakes the model, so a long build needs
+  no polling.
+- **[`/rewind`](#your-changes-and-klaudias)** — back to before any earlier
+  prompt, files and conversation together.
 - Plus [OS/container Bash sandboxing](#sandboxing-the-bash-tool), local
   [web search & browsing](#web-search--browsing), [MCP](#mcp), and
   [skills](#skills).
@@ -39,10 +44,15 @@ CGO_ENABLED=0 go install github.com/greenthread-ai/klaudia/cmd/klaudia@latest
 
 This installs the `klaudia` binary into `$(go env GOPATH)/bin` (commonly
 `~/go/bin`) — make sure that's on your `PATH`. `@latest` is the newest tagged
-release (tags start at `v0.1.0`; each also ships prebuilt binaries on the
-GitHub releases page); `@main` tracks HEAD. `@latest` routes through
-`proxy.golang.org` and can lag a fresh tag by a few minutes — to force a
-refresh, prefix the command with `GOPROXY=direct`.
+release; `@main` tracks HEAD. `@latest` routes through `proxy.golang.org` and
+can lag a fresh tag by a few minutes — to force a refresh, prefix the command
+with `GOPROXY=direct`.
+
+Or take a prebuilt binary: each release on the GitHub releases page ships
+`klaudia_<version>_<os>_<arch>.tar.gz` for macOS and Linux on amd64 and arm64
+(no Windows build — it compiles, but nobody has run it), with
+`checksums.txt` to verify against. `klaudia --version` prints the version and
+the commit the binary was built from.
 
 Prefer to build from a checkout? See [Build](#build).
 
@@ -264,7 +274,8 @@ honoured.
 Long-running commands run detached as **managed jobs**: `Bash` with
 `run_in_background` returns a shell id, `BashOutput` reads new output
 incrementally and `KillShell` stops it — so the agent can launch a dev server or
-watcher and keep working. Jobs get a name, a port and a log file; see
+watcher and keep working. A job that exits on its own wakes the model with its
+result, so it can end its turn and be told. Jobs get a name, a port and a log file; see
 [Long-running commands, logs, and your shell](#long-running-commands-logs-and-your-shell).
 
 ### Headless (one-shot)
@@ -380,6 +391,17 @@ into real scrollback, `/restart` replaces the process in place rather than
 starting a second copy, and a crash is reported when it happens. Running jobs
 are listed under the prompt with their age and port.
 
+The model is told too. A job that exits on its own reports to the model with
+the end of its output — at its next step if it is mid-turn, or as a turn of
+its own if Klaudia is idle — so it can start a 40-minute provisioning run, end
+its turn and be woken by it (a job stopped on request is not reported). Started
+with `watch`, a regex, a job also reports output lines that match as they
+appear, so "start the server and tell me if it errors" needs no polling;
+reports are batched (the first at once, then at most every 30s). `BashOutput`
+can wait up to 600 seconds for an exit or a `filter` match in one call rather
+than poll. This works in the TUI, headless `-p` and `--loop` runs, and over
+stream-json. Logs rotate at 64 MiB, and a read returns at most the newest 4 MiB.
+
 Sub-agents can run in the background too: the model sets `run_in_background`
 on the Agent tool for independent work it does not need before its next step,
 and carries on. A background agent is listed under the prompt with its latest
@@ -418,8 +440,12 @@ Details, including what deliberately does not work: [docs/jobs.md](docs/jobs.md)
 ## Your changes and Klaudia's
 
 Klaudia knows which working-tree changes are yours, which are its own, and which
-are both. `/changes` shows the split. `/commit` stages only its own work,
-lists what it left out, and drafts the message if you don't give one. `/undo`
+are both. `/changes` shows the split, and `/diff` shows the diff in git's
+colours, in `$PAGER` when it is long, naming untracked files that `git diff`
+leaves out. `/commit` stages only its own work (or what you staged), lists
+what it left out, and with no message drafts one from exactly what will be
+committed, in the style of the repository's recent subjects — shown first,
+and committing still needs a `y`. `/undo`
 restores its last change, never touching a file you also edited, and
 `/rewind` goes back to before any earlier prompt this session — files and
 conversation together, with the prompt returned to edit.
@@ -497,7 +523,7 @@ in-process proxy — enforced under the macOS OS sandbox, advisory elsewhere
 | Flag | Mode | Behavior |
 |------|------|----------|
 | *(default)* | `autonomous` | Finish the task; ask before changing this machine |
-| `--permission-mode plan` | `plan` | Read-only; mutations and network blocked |
+| `--permission-mode plan` | `plan` | Read-only research: commands that only inspect run, writes are refused, and a command Klaudia cannot classify asks |
 | `--permission-mode bypassPermissions` | `bypassPermissions` | Allow everything, including host changes — the one way past the gate |
 
 `/mode` switches interactively; `/trust` shows and revokes approvals. Headless
@@ -556,6 +582,12 @@ apiKeyEnv = "MY_API_KEY"
 # reports no limit. If this is set above what the model allows, the provider
 # says so and Klaudia retakes the turn at the limit it named.
 # maxTokens = 32000
+
+# Optional: idle compaction. When the conversation is at 85% or more of the
+# compaction point, the TUI compacts it after four idle minutes — before the
+# prompt cache expires, so the summary is cheap — instead of making the next
+# turn stop for it. Skipped while you are typing. On by default.
+# idleCompact = false
 
 # Optional: what the Return key does at the prompt. "send" (default) submits
 # and Option+Return / Alt+Enter (or a trailing \) insert a newline; "newline"
@@ -694,10 +726,12 @@ effort = "low"          # unset = inherit the session's level
 Precedence is `--effort` → `KLAUDIA_EFFORT` → config; `/effort <level>` beats
 all three for the running session, and `/effort off` restores the provider's
 default. `/effort` with no argument lists the levels and marks the live one.
-`maxEffort = "high"` caps every one of those, `/effort` included.
+`maxEffort = "high"` caps every one of those, `[subagents] effort` too, and
+`/effort` refuses a level above it.
 
 Unset is the default and sends nothing, so you get the provider's own default
-(high on most Claude models). The level reaches both backends from one field —
+(high on most Claude models) — unless `maxEffort` is set, in which case an
+unset effort is sent as the cap on models known to take effort. The level reaches both backends from one field —
 `output_config.effort` on Anthropic, `reasoning_effort` on OpenAI-compatible
 endpoints — and all five values pass through unchanged on both, so the setting
 means the same thing whichever you are on.
@@ -722,6 +756,22 @@ is not used: [docs/effort.md](docs/effort.md).
   configurable. Falls back to local with a warning if the tool is absent.
 - `container` — run inside docker/podman (`runtime`, `image`, `mountCwd`,
   `readOnly`, `network`).
+
+`sandbox.egress` limits where commands can connect, in any mode:
+
+```toml
+[sandbox]
+egress = ["github.com", "*.npmjs.org"]
+```
+
+Every command is pointed at an in-process proxy that forwards to those hosts
+and refuses the rest with a 403 naming the host and the setting. It is
+**enforced** under the macOS OS sandbox (the profile allows outbound traffic to
+the proxy only); in `local` mode and under bubblewrap it is advisory — a
+program that ignores the proxy variables is not stopped — and in a container or
+with `network = "none"` it is not applied, with a warning. `/doctor` shows
+which, and the hosts refused. See
+[docs/trust.md](docs/trust.md#where-data-may-go-sandbox-egress).
 
 ## Web search & browsing
 
@@ -1091,6 +1141,7 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 | `lsp` | language-server client for code intelligence (Diagnostics/Definition/References) |
 | `pkg/permission` | the three permission modes (a leaf package) |
 | `trust` | zones, command/tool classification, session-scoped grants |
+| `hostgate` | the host gate (`agent.Gate`), its approval card, the headless approver |
 | `session` | JSONL transcripts, resume, persisted summaries |
 | `pkg/compaction` | micro + auto context compaction |
 | `mcp` | Model Context Protocol client (2026-07-28) + form elicitation |
@@ -1102,6 +1153,7 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 | `goal` | standing goals, goal specs, and the Ralph loop |
 | `doctor` | `/doctor` environment diagnostics |
 | `sandbox` | local / OS-confined / container Bash execution |
+| `egress` | the `[sandbox] egress` allowlisting proxy |
 | `streamjson` | bidirectional stream-json frontend |
 | `acp` | Agent Client Protocol v1 agent (editor-driven sessions) |
 | `tui` | Bubble Tea terminal UI |
@@ -1110,7 +1162,7 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 | `pkg/plan`, `goal` | the session plan and its artefact; goal specs and the loop that also drives plan runs |
 | `pkg/schema` | JSON Schema for tool inputs |
 | `pkg/tool` | the tool contract: interface, registry, per-call context, results, output spill |
-| `prompt`, `config`, `fuzzy`, `lsp`, `version` | supporting packages |
+| `prompt`, `config`, `fuzzy`, `version` | supporting packages |
 
 ## Documentation
 
@@ -1173,9 +1225,9 @@ tools.
 
 ## Roadmap
 
-[docs/roadmap.md](docs/roadmap.md) — where agentic tooling is heading, ranked
-recommendations, the plan for extracting the agent loop as an embeddable Go
-library, and the TUI audit.
+[docs/roadmap.md](docs/roadmap.md) — what comes next and in what order, where
+agentic tooling is heading, the extraction of the agent loop into `pkg/` as an
+embeddable Go library, and the TUI audit.
 
 ## Non-goals
 

@@ -357,7 +357,7 @@ port mirrors (see `internal/version`).
   loop's own default path now goes through `api.ResolveLimits` so the number
   and its label come from one lookup.
 - **The four `Task*` tools are retired, and `TodoWrite` is backed by the new
-  `internal/plan` store.** Klaudia had two parallel task systems, both
+  `pkg/plan` store.** Klaudia had two parallel task systems, both
   registered and neither authoritative: `TodoWrite`'s whole-list store, and
   `TaskCreate`/`TaskGet`/`TaskList`/`TaskUpdate` over `internal/tasks`. Nothing
   read the second one — not the TUI, not stream-json, not ACP; it was
@@ -672,7 +672,7 @@ port mirrors (see `internal/version`).
   `go doc` the main loop was missing, so delegating research was no way round
   it. They now carry Bash and are held read-only by mode instead — a stronger
   guarantee than a short tool list, and a far less crippling one. Not applied
-  over `--dangerously-skip-permissions`, which means the user has taken
+  under `bypassPermissions`, which means the user has taken
   responsibility for the session. They also stop taking a `git worktree`: a
   child that cannot write has nothing to isolate.
 - **Approving a plan no longer leaves the first command refused by the plan
