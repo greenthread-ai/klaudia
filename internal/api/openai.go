@@ -258,6 +258,16 @@ func translateMessage(m aMsg) []oaMessage {
 	for _, b := range m.Content {
 		switch b.Type {
 		case "text":
+			// A user message's text blocks are separate inputs — an
+			// interrupted prompt and the one that followed it, an
+			// interjection, a reminder — and Chat Completions takes one
+			// string. Concatenated bare, "go slow" and "hello again" reached
+			// the model as "go slowhello again". An assistant's blocks are one
+			// reply split for the API's own reasons, often mid-sentence, so
+			// they are still joined as they were.
+			if m.Role != "assistant" && text.Len() > 0 {
+				text.WriteString("\n\n")
+			}
 			text.WriteString(b.Text)
 		case "tool_use":
 			tc := oaToolCall{ID: b.ID, Type: "function"}
@@ -281,10 +291,14 @@ func translateMessage(m aMsg) []oaMessage {
 		am := oaMessage{Role: "assistant", Content: text.String(), ToolCalls: toolCalls}
 		msgs = append(msgs, am)
 	} else { // user
+		// Tool results first. Chat Completions requires the role:"tool"
+		// messages to follow the assistant's tool_calls directly; text the
+		// user sent alongside them (a steering message delivered after a
+		// tool batch) placed in between made the conversation invalid.
+		msgs = append(msgs, toolResults...)
 		if text.Len() > 0 {
 			msgs = append(msgs, oaMessage{Role: "user", Content: text.String()})
 		}
-		msgs = append(msgs, toolResults...)
 	}
 	return msgs
 }

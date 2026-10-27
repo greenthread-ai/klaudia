@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -181,5 +182,30 @@ func TestConsumeStreamAssembles(t *testing.T) {
 	}
 	if text != "Hello world" || toolName != "Read" || filePath != "/tmp/x" {
 		t.Errorf("assembled blocks wrong: text=%q tool=%q path=%q", text, toolName, filePath)
+	}
+}
+
+// Found by the TUI e2e harness: an interrupted prompt and the next one share a
+// user message, and the shim joined their text blocks bare.
+func TestUserTextBlocksAreSeparated(t *testing.T) {
+	msgs := translateMessage(aMsg{Role: "user", Content: []aBlock{
+		{Type: "text", Text: "go slow"},
+		{Type: "text", Text: "hello again"},
+	}})
+	if len(msgs) != 1 || msgs[0].Content != "go slow\n\nhello again" {
+		t.Errorf("got %+v, want the two inputs separated", msgs)
+	}
+}
+
+// A steering message arrives in the same user message as the tool results it
+// followed. The tool messages must come first: they answer the assistant's
+// tool_calls, and Chat Completions rejects anything in between.
+func TestToolResultsPrecedeUserTextInTheSameMessage(t *testing.T) {
+	msgs := translateMessage(aMsg{Role: "user", Content: []aBlock{
+		{Type: "tool_result", ToolUseID: "call_1", Content: json.RawMessage(`"ok"`)},
+		{Type: "text", Text: "also update the README"},
+	}})
+	if len(msgs) != 2 || msgs[0].Role != "tool" || msgs[1].Role != "user" {
+		t.Fatalf("order = %+v, want tool then user", msgs)
 	}
 }

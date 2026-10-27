@@ -6,6 +6,12 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **OpenAI-compatible providers: steering and interrupted prompts.** A user
+  message's text blocks were concatenated with no separator ("go slow" +
+  "hello again" → "go slowhello again"); they are now separated by a blank
+  line. And text sent alongside tool results (a message typed mid-turn) was
+  placed before the `role:"tool"` messages, which Chat Completions requires
+  to follow the assistant's `tool_calls` directly; tool results now come first.
 - **A question no longer takes your next message as its answer.** Typing at
   an `AskUserQuestion` used to open free text seeded with the keystroke, so a
   message typed ahead while the model worked answered whatever question

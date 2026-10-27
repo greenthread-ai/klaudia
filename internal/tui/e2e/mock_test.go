@@ -240,9 +240,9 @@ var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "questi
 // keyword returns the scripted keyword that appears last in the prompt, or "".
 //
 // Last, not first: after an interrupted turn the next prompt reaches the model
-// merged into the same user message as the interrupted one (and over the
-// OpenAI shim the two texts are joined with no separator — "go slowhello
-// again"), so the newest words are at the end.
+// in the same user message as the interrupted one (separated by a blank line
+// since the shim stopped joining them bare), so the newest words are at the
+// end.
 func keyword(prompt string) string {
 	p := strings.ToLower(prompt)
 	best, at := "", -1
