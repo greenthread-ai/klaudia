@@ -32,6 +32,8 @@ type turnSummary struct {
 	Gaps     []string      // what was NOT verified, stated rather than implied
 	Blocked  []string      // host changes stopped and never approved
 	HasStats bool          // git could be asked
+
+	checkedBefore bool // a check ran this turn, but before the last edit
 }
 
 // verifyCheck is one command that verifies something, and how it went.
@@ -142,10 +144,24 @@ func buildSummary(touched map[string]bool, results []toolResult, gitStat func() 
 	if len(s.Files) > 0 && gitStat != nil {
 		s.Added, s.Removed, s.HasStats = gitStat()
 	}
-	s.Checks = verificationChecks(results)
+	// Only what ran after the last edit verifies it. A test run before the
+	// change says nothing about the change, and reporting it as "tests pass"
+	// is the misleading case; before this, it was also why the footer said
+	// "nothing was run" when something plainly had been.
+	last := -1
+	for i, r := range results {
+		if !r.isError && editTools[r.tool] {
+			last = i
+		}
+	}
+	s.Checks = verificationChecks(results[last+1:])
+	s.checkedBefore = last >= 0 && len(verificationChecks(results[:last])) > 0
 	s.Gaps = verificationGaps(s)
 	return s
 }
+
+// editTools are the tools that change files, for finding the last edit.
+var editTools = map[string]bool{"Write": true, "Edit": true, "NotebookEdit": true}
 
 // blockedHostChanges names host changes stopped this turn and still unapproved.
 //
@@ -184,7 +200,10 @@ func verificationGaps(s turnSummary) []string {
 	// Files changed and nothing was run. The most valuable case, and the one a
 	// completion message is most tempted to gloss over.
 	if len(s.Files) > 0 && len(s.Checks) == 0 {
-		return []string{"nothing was run — these changes are unverified"}
+		if s.checkedBefore {
+			return []string{"nothing was run after the last edit — these changes are unverified"}
+		}
+		return []string{"no build or tests were run — these changes are unverified"}
 	}
 
 	seenFull := map[string]bool{}

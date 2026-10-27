@@ -42,6 +42,10 @@ port mirrors (see `internal/version`).
   otherwise.
 
 ### Fixed
+- **The turn summary counts only checks run after the last edit.** A test
+  run before the change was reported as verifying it, and with no check at
+  all the footer said "nothing was run" even when commands had run. It now
+  says "nothing was run after the last edit" or "no build or tests were run".
 - **The interrupt notice follows the text it interrupted.** Esc wrote
   "⊘ interrupting…" to scrollback at once, above the partial reply still
   being streamed. The live view says "cancelling…" until the turn stops, and

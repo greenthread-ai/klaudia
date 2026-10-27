@@ -299,3 +299,42 @@ func TestBlockedHostChangesOnlyCountsEnforcedStops(t *testing.T) {
 		t.Errorf("got %v, want just the one enforced stop", got)
 	}
 }
+
+// A test run before the last edit verifies nothing about it. It used to be
+// shown as "tests pass", and the gap note said "nothing was run" when
+// something plainly had been.
+func TestChecksBeforeTheLastEditDoNotCount(t *testing.T) {
+	edit := toolResult{tool: "Edit", content: "ok"}
+	s := buildSummary(map[string]bool{"a.go": true}, []toolResult{
+		bashResult("go test ./...", "ok", false),
+		edit,
+	}, nil)
+	if len(s.Checks) != 0 {
+		t.Errorf("a pre-edit run counted as verification: %+v", s.Checks)
+	}
+	if len(s.Gaps) != 1 || !strings.Contains(s.Gaps[0], "nothing was run after the last edit") {
+		t.Errorf("gaps = %q", s.Gaps)
+	}
+
+	s = buildSummary(map[string]bool{"a.go": true}, []toolResult{
+		edit,
+		bashResult("go test ./...", "ok", false),
+	}, nil)
+	if len(s.Checks) != 1 || len(s.Gaps) != 0 {
+		t.Errorf("a post-edit run should verify: checks=%+v gaps=%q", s.Checks, s.Gaps)
+	}
+
+	// A failed edit changed nothing, so the run before it still stands.
+	s = buildSummary(map[string]bool{"a.go": true}, []toolResult{
+		bashResult("go test ./...", "ok", false),
+		{tool: "Edit", isError: true, content: "old_string not found"},
+	}, nil)
+	if len(s.Checks) != 1 {
+		t.Errorf("a failed edit invalidated the earlier run: %+v", s.Checks)
+	}
+
+	s = buildSummary(map[string]bool{"a.go": true}, []toolResult{edit}, nil)
+	if len(s.Gaps) != 1 || !strings.Contains(s.Gaps[0], "no build or tests were run") {
+		t.Errorf("gaps = %q", s.Gaps)
+	}
+}
