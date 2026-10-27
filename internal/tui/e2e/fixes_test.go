@@ -293,3 +293,49 @@ func TestProjectMCPServersAskFirst(t *testing.T) {
 		})
 	}
 }
+
+// /mcp with real servers on both sides of the trust line: a global one (the
+// user's own) is connected at start, and a project one is listed as waiting —
+// before, a held server was absent, and a project whose servers were all held
+// read "No MCP servers configured". Approving from /mcp starts it, and the
+// first turn then has nothing left to ask.
+func TestMCPListsGlobalAndHeldServers(t *testing.T) {
+	env := newEnv(t)
+	write := func(path, name string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(`{"mcpServers":{"`+name+`":{"command":"`+mcpServerBin+`","args":["`+name+`"]}}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(env.Config, ".mcp.json"), "godot")
+	write(filepath.Join(env.Project, ".mcp.json"), "figma")
+	tm := env.Start(t)
+
+	tm.Type("/mcp")
+	tm.Press(keyEnter)
+	snap := tm.WaitText(t, "Manage MCP servers", 15*time.Second)
+	for _, want := range []string{"● connected  godot (1 tool)", "◌ figma — waiting for approval", mcpServerBin + " figma"} {
+		if !strings.Contains(snap.All(), want) {
+			t.Errorf("/mcp lacks %q:\n%s", want, snap.All())
+		}
+	}
+	tm.Press(keyDown) // row 1 is "Disconnect godot"
+	tm.Press(keyEnter)
+	tm.WaitText(t, "Approved 1 project server", 15*time.Second)
+
+	tm.Type("/mcp")
+	tm.Press(keyEnter)
+	tm.WaitFor(t, "figma connected", 15*time.Second, func(s Snapshot) bool {
+		return strings.Contains(s.All(), "● connected  figma (1 tool)")
+	})
+	tm.Press(keyEsc)
+	tm.WaitFor(t, "the picker to close", 5*time.Second, func(s Snapshot) bool {
+		return !strings.Contains(s.All(), "esc to cancel")
+	})
+
+	env.Prompt(t, tm, "hello")
+	tm.WaitText(t, "Hello from the mock model.", 20*time.Second)
+	if strings.Contains(tm.Snapshot().All(), "Start these MCP servers?") {
+		t.Error("the first turn asked about servers already approved from /mcp")
+	}
+}

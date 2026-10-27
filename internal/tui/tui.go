@@ -115,6 +115,9 @@ type MCPController interface {
 	Servers() []MCPServerInfo
 	Reconnect(name string) error
 	Disconnect(name string) error
+	// ApproveProject approves and starts the project servers being held for
+	// approval, remembered until they change.
+	ApproveProject() error
 }
 
 // MCPServerInfo is one MCP server's status for the /mcp view.
@@ -122,6 +125,11 @@ type MCPServerInfo struct {
 	Name      string
 	Connected bool
 	Tools     int
+	// Held is set for a project server waiting for approval; Detail is then
+	// its command or URL, and Refused says the user declined it this session.
+	Held    bool
+	Refused bool
+	Detail  string
 }
 
 // MCPReloadEvent reports the outcome of one hot reload of the MCP config. It

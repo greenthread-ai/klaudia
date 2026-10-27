@@ -130,7 +130,9 @@ port mirrors (see `internal/version`).
   the first message shows each server's command or URL (and env names), the
   answer is kept in `~/.klaudia/mcp-approvals.json` until the set changes, and
   a no lasts the session. Servers in `~/.klaudia/.mcp.json` start as before.
-  Headless runs start project servers only with `--allow-host-changes`. The
+  `/mcp` lists held servers with their commands and can approve them before
+  the first message (or after a no). Headless runs start project servers
+  only with `--allow-host-changes`. The
   approval card's `hooks` flag became `repo_config` (`"hooks"` or `"MCP
   servers"`) on stream-json and ACP; `hooks: true` is still sent for hooks.
 - **Newline is Option+Return (Alt+Enter off the Mac), or end the line with

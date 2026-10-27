@@ -124,6 +124,37 @@ func (t *ProjectTrust) Decide(ctx context.Context, cfg Config, confirm Confirm) 
 	return true, ""
 }
 
+// Pending describes the project servers Admit is holding: one line per
+// server (name and command or URL, as the card shows it), and whether the user
+// has already said no to this set this session.
+func (t *ProjectTrust) Pending(cfg Config) (lines []string, refused bool) {
+	if t == nil {
+		return nil, false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	fp := projectFingerprint(cfg)
+	if t.allowedLocked(fp) {
+		return nil, false
+	}
+	lines, _ = projectLines(cfg)
+	return lines, t.fp == fp && t.decided
+}
+
+// Grant approves cfg's project servers without asking: the user chose to,
+// from /mcp, having been shown them there. It overrides a no given earlier in
+// the session — changing your mind is what the row is for.
+func (t *ProjectTrust) Grant(cfg Config) error {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	fp := projectFingerprint(cfg)
+	t.fp, t.decided, t.allowed = fp, true, true
+	return t.store().Approve(t.Dir, fp)
+}
+
 // projectFingerprint hashes the project servers: every field that decides
 // what runs, by name. The source file is not included, so moving a server
 // between ./.mcp.json and ./.klaudia/.mcp.json is not an approval event.

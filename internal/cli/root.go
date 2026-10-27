@@ -602,6 +602,11 @@ type mcpController struct {
 	// failed at startup contributed no tools, so reconnecting it without a
 	// rebuild left it connected and unusable for the rest of the session.
 	rebuild func()
+	// The project servers held for approval: the trust that holds them, the
+	// whole config they are judged against, and the step that starts them.
+	trust  *mcp.ProjectTrust
+	latest func() mcp.Config
+	start  func() []error
 }
 
 func (c mcpController) Servers() []tui.MCPServerInfo {
@@ -617,7 +622,28 @@ func (c mcpController) Servers() []tui.MCPServerInfo {
 	for _, s := range c.mgr.Servers() {
 		out = append(out, tui.MCPServerInfo{Name: s.Name, Connected: s.Connected(), Tools: counts[s.Name]})
 	}
+	// Held servers are not in the manager at all, so without these a project
+	// whose servers all await approval read as having none configured.
+	if c.latest != nil {
+		lines, refused := c.trust.Pending(c.latest())
+		for _, l := range lines {
+			name, detail, _ := strings.Cut(l, ": ")
+			out = append(out, tui.MCPServerInfo{Name: name, Held: true, Refused: refused, Detail: detail})
+		}
+	}
 	return out
+}
+
+func (c mcpController) ApproveProject() error {
+	if c.latest == nil {
+		return nil
+	}
+	if err := c.trust.Grant(c.latest()); err != nil {
+		// Granted for this session even so; only the memory of it failed.
+		c.start()
+		return fmt.Errorf("started, but the approval was not saved (%w); you will be asked again next session", err)
+	}
+	return errors.Join(c.start()...)
 }
 
 func (c mcpController) Reconnect(name string) error {
@@ -1319,10 +1345,22 @@ func run(cmd *cobra.Command, opts *options) error {
 	// first point where a frontend's approver exists — and starts them on a
 	// yes, before the loop builds its request, so the turn can use them. It
 	// asks once per set per session; Decide returns at once after that.
-	admitMCP := func(ctx context.Context, turn agent.Turn) {
+	latestMCP := func() mcp.Config {
 		mcpLatestMu.Lock()
-		cfg := mcpLatest
-		mcpLatestMu.Unlock()
+		defer mcpLatestMu.Unlock()
+		return mcpLatest
+	}
+	// startAdmitted applies whatever the trust now admits and rebuilds the
+	// registries: after a yes on the first-turn card, and after /mcp's
+	// approve row.
+	startAdmitted := func() []error {
+		run, _ := mcpTrust.Admit(latestMCP())
+		errs := mcpMgr.Reload(ctx, run)
+		rebuildMCP()
+		return errs
+	}
+	admitMCP := func(ctx context.Context, turn agent.Turn) {
+		cfg := latestMCP()
 		var confirm mcp.Confirm
 		if turn.Approver != nil {
 			confirm = func(ctx context.Context, lines, files []string) bool {
@@ -1341,11 +1379,9 @@ func run(cmd *cobra.Command, opts *options) error {
 		if !ok {
 			return
 		}
-		run, _ := mcpTrust.Admit(cfg)
-		for _, e := range mcpMgr.Reload(ctx, run) {
+		for _, e := range startAdmitted() {
 			notify(e.Error())
 		}
-		rebuildMCP()
 	}
 	mcpReloads := &mcpReloadNotifier{}
 	stopWatch, werr := mcp.Watch(cwd, func() {
@@ -1458,17 +1494,18 @@ func run(cmd *cobra.Command, opts *options) error {
 		sess := &tui.Session{
 			// Effective model (flag or config default), never "" — otherwise a
 			// non-Anthropic provider would wrongly resolve to the Anthropic default.
-			SessionID:           sessionID,
-			Model:               modelStr,
-			ResolvedModel:       string(model),
-			Effort:              effort,
-			Theme:               themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
-			PermissionMode:      string(mode),
-			EnterInserts:        tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
-			Hyperlinks:          tui.HyperlinksEnabled(cfg.Links.Enabled, os.Getenv),
-			FileLinks:           cfg.Links.File,
-			Memory:              memStore,
-			MCP:                 mcpController{mgr: mcpMgr, ctx: ctx, rebuild: rebuildMCP},
+			SessionID:      sessionID,
+			Model:          modelStr,
+			ResolvedModel:  string(model),
+			Effort:         effort,
+			Theme:          themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
+			PermissionMode: string(mode),
+			EnterInserts:   tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
+			Hyperlinks:     tui.HyperlinksEnabled(cfg.Links.Enabled, os.Getenv),
+			FileLinks:      cfg.Links.File,
+			Memory:         memStore,
+			MCP: mcpController{mgr: mcpMgr, ctx: ctx, rebuild: rebuildMCP,
+				trust: mcpTrust, latest: latestMCP, start: startAdmitted},
 			OnMCPReload:         mcpReloads.register,
 			Skills:              tuiSkills(skills, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 			Provider:            providerName(cfg),

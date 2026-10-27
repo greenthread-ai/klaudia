@@ -342,14 +342,24 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		var b strings.Builder
 		b.WriteString("MCP servers:")
-		items := make([]choiceItem, 0, len(servers))
+		items := make([]choiceItem, 0, len(servers)+1)
+		held := 0
 		for _, s := range servers {
 			s := s
+			if s.Held {
+				held++
+				why := "waiting for approval — asked at your next message"
+				if s.Refused {
+					why = "declined this session"
+				}
+				fmt.Fprintf(&b, "\n  ◌ %s — %s\n      %s", s.Name, why, s.Detail)
+				continue
+			}
 			status := "● connected"
 			if !s.Connected {
 				status = "○ disconnected"
 			}
-			fmt.Fprintf(&b, "\n  %s  %s (%d tools)", status, s.Name, s.Tools)
+			fmt.Fprintf(&b, "\n  %s  %s (%s)", status, s.Name, countOf(s.Tools, "tool"))
 			if s.Connected {
 				items = append(items, choiceItem{label: "Disconnect " + s.Name, apply: func() string {
 					if err := m.sess.MCP.Disconnect(s.Name); err != nil {
@@ -365,6 +375,16 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 					return "Reconnected " + s.Name + " (its tools work again this session)"
 				}})
 			}
+		}
+		if held > 0 {
+			// The commands are listed above, so choosing this is consent to
+			// what was shown — the same answer as the first-turn card.
+			items = append(items, choiceItem{label: "Approve and start the project's " + countOf(held, "server"), apply: func() string {
+				if err := m.sess.MCP.ApproveProject(); err != nil {
+					return "approve failed: " + err.Error()
+				}
+				return "Approved " + countOf(held, "project server") + " (remembered until they change)"
+			}})
 		}
 		m.appendLine(bannerStyle.Render(b.String()))
 		m.startChoice("Manage MCP servers (Esc to leave as-is):", items)

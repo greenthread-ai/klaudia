@@ -12,7 +12,7 @@ import (
 )
 
 // klaudiaBin is the binary TestMain built, or "" when the e2e tests are off.
-var klaudiaBin string
+var klaudiaBin, mcpServerBin string
 
 func TestMain(m *testing.M) {
 	if os.Getenv("KLAUDIA_E2E") != "1" {
@@ -30,6 +30,15 @@ func TestMain(m *testing.M) {
 	start := time.Now()
 	if err := build.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "e2e: building klaudia:", err)
+		os.RemoveAll(dir)
+		os.Exit(1)
+	}
+	mcpServerBin = filepath.Join(dir, "mcpserver")
+	build = exec.Command("go", "build", "-o", mcpServerBin, "github.com/greenthread-ai/klaudia/internal/tui/e2e/testdata/mcpserver")
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	build.Stdout, build.Stderr = os.Stderr, os.Stderr
+	if err := build.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "e2e: building the MCP server:", err)
 		os.RemoveAll(dir)
 		os.Exit(1)
 	}

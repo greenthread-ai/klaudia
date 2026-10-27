@@ -144,3 +144,28 @@ func TestGlobalOnlyNeedsNoApproval(t *testing.T) {
 		t.Errorf("Decide = %v, %q; want nothing to decide", ok, notice)
 	}
 }
+
+// /mcp lists what is held and can approve it, including after a no — changing
+// your mind is what the row is for.
+func TestPendingAndGrant(t *testing.T) {
+	dir, cfg := projectWithServers(t, repoServers)
+	tr := &ProjectTrust{Dir: dir, Path: filepath.Join(t.TempDir(), "a.json")}
+	lines, refused := tr.Pending(cfg)
+	if len(lines) != 1 || !strings.HasPrefix(lines[0], "repo: ./run-me") || refused {
+		t.Fatalf("Pending = %q, %v", lines, refused)
+	}
+	no, _ := asking(false)
+	tr.Decide(context.Background(), cfg, no)
+	if _, refused := tr.Pending(cfg); !refused {
+		t.Error("a declined set is not reported as declined")
+	}
+	if err := tr.Grant(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if lines, _ := tr.Pending(cfg); len(lines) != 0 {
+		t.Errorf("still pending after Grant: %q", lines)
+	}
+	if !(&ProjectTrust{Dir: dir, Path: tr.Path}).store().Approved(dir, projectFingerprint(cfg)) {
+		t.Error("Grant was not remembered")
+	}
+}

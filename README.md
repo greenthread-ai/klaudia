@@ -721,7 +721,8 @@ still load:
 
 Servers from the project's files arrived with the clone, so — like project
 hooks — they **wait for your approval**: your first message shows each
-server's command or URL, and the answer is remembered in
+server's command or URL (or approve them sooner from `/mcp`, which lists them as
+waiting), and the answer is remembered in
 `~/.klaudia/mcp-approvals.json` until the set changes. The global file's
 servers start at once. A headless run starts project servers only with
 `--allow-host-changes` (see [docs/hooks.md](docs/hooks.md#project-mcp-servers)).

@@ -189,7 +189,9 @@ asks again; a project entry that redefines a global server is the project's.
 The card lists each command or URL and the *names* of its env variables, not
 their values. HTTP servers are held too: nothing is launched, but the model's
 tool calls, with whatever it has read, go to a URL the repository chose. A
-no lasts the session; a headless run behaves as for hooks.
+no lasts the session; a headless run behaves as for hooks. `/mcp` lists held
+servers with their commands and offers an approve row — the same consent as
+the card, given sooner, and the way to change your mind after a no.
 
 Hooks are not sandboxed, whatever `[sandbox]` says. That setting confines the
 *model's* commands; a hook is your own automation, and the things it exists to
