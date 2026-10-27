@@ -163,6 +163,10 @@ port mirrors (see `internal/version`).
   hint fits in 80 columns.
 
 ### Changed
+- **`/diff` pages and colours.** It printed the whole diff, uncoloured, into
+  scrollback. It now uses git's colours (none under `NO_COLOR`), opens a long
+  diff in `$PAGER` as `/last` does, and names untracked files, which `git
+  diff` leaves out and which are often what Klaudia just created.
 - **An approval shows the change once, and a Write shows what it changes.**
   An Edit awaiting approval printed its numbered hunk above the card and then
   again inside it as `replace "old" → "new"`; the card now adds only what the

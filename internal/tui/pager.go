@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -169,4 +171,48 @@ func (m *Model) openInEditor(args []string) tea.Cmd {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg {
 		return pagerDoneMsg{err: err}
 	})
+}
+
+// showDiff is /diff: git's own diff, in git's colours, paged when it is long
+// (as /last pages output) and printed when it is short. It used to print the
+// whole diff, uncoloured, into scrollback — a refactor's diff was hundreds of
+// lines between the user and their prompt.
+//
+// A bare /diff also names untracked files: `git diff` leaves them out, and a
+// file Klaudia created is often the change that matters.
+func (m *Model) showDiff(args []string) tea.Cmd {
+	// git's colours unless the terminal has none (NO_COLOR included), the
+	// same test the Markdown style uses.
+	color := "--color=always"
+	if lipgloss.ColorProfile() == termenv.Ascii {
+		color = "--no-color"
+	}
+	out, err := gitOutput(m.sess.CWD, append([]string{"diff", color}, args...)...)
+	if err != nil {
+		m.appendLine(errStyle.Render("git diff: " + strings.TrimSpace(out) + " " + err.Error()))
+		return nil
+	}
+	if len(args) == 0 {
+		if untracked, err := gitOutput(m.sess.CWD, "ls-files", "--others", "--exclude-standard"); err == nil {
+			if files := strings.Fields(untracked); len(files) > 0 {
+				note := "New, untracked (not in the diff): " + shortList(files, 8)
+				if strings.TrimSpace(out) == "" {
+					m.appendLine(bannerStyle.Render(note))
+					return nil
+				}
+				out = strings.TrimRight(out, "\n") + "\n\n" + note
+			}
+		}
+	}
+	if strings.TrimSpace(out) == "" {
+		m.appendLine(bannerStyle.Render("No changes."))
+		return nil
+	}
+	if m.shouldPage(out) {
+		if cmd, err := m.pageText("diff", out); err == nil {
+			return cmd
+		}
+	}
+	m.appendLine(strings.TrimRight(out, "\n"))
+	return nil
 }

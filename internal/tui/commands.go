@@ -51,7 +51,7 @@ var commandList = []cmdInfo{
 	{"/add-dir", "<path>", "Add a directory to the prompt context"},
 	{"/plan", "[run|off]", "Read-only plan mode · run [N]: work the approved plan to done · stop: halt"},
 	{"/doctor", "", "Run environment diagnostics"},
-	{"/diff", "[args]", "Show git diff of the working tree"},
+	{"/diff", "[args]", "Show the working tree's diff in colour, in $PAGER when long; names new files"},
 	{"/commit", "[msg]", "Commit the files Klaudia changed — or what you staged — with your message or one Klaudia drafts (asks first)"},
 	{"/export", "", "Export the conversation to a Markdown file"},
 	{"/last", "[n|list]", "Show a tool output in full (no arg = latest; list = index)"},
@@ -583,15 +583,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(bannerStyle.Render(m.sess.Doctor()))
 		}
 	case "/diff":
-		out, err := gitOutput(m.sess.CWD, append([]string{"diff"}, args...)...)
-		switch {
-		case err != nil:
-			m.appendLine(errStyle.Render("git diff: " + err.Error()))
-		case strings.TrimSpace(out) == "":
-			m.appendLine(bannerStyle.Render("No changes."))
-		default:
-			m.appendLine(out)
-		}
+		return m, m.showDiff(args)
 	case "/export":
 		path, err := m.exportTranscript()
 		if err != nil {
