@@ -132,3 +132,18 @@ func TestGoalRunCompletesWithOneSummary(t *testing.T) {
 		t.Errorf("completion block printed %d times; want once for the run\n%s", n, snap.All())
 	}
 }
+
+// Found while building this harness: a one-paragraph reply is one long line,
+// and the live preview showed only its first row until the stream ended. The
+// preview must follow the newest text while the turn is still running.
+func TestStreamingPreviewFollowsALongParagraph(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	env.Prompt(t, tm, "longpara")
+	snap := tm.WaitFor(t, "a late word on screen mid-stream", 20*time.Second, func(s Snapshot) bool {
+		return strings.Contains(s.Screen(), "w150")
+	})
+	if snap.HasLine(doneLine) {
+		t.Fatalf("the turn had already finished; the preview was not observed mid-stream\n%s", snap)
+	}
+}

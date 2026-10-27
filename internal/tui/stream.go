@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Progressive flushing of a streaming assistant message.
@@ -254,16 +255,27 @@ func (m *Model) streamTail() string {
 	if raw == "" {
 		return ""
 	}
-	lines := strings.Split(raw, "\n")
-	if len(lines) > streamTailLines {
-		lines = lines[len(lines)-streamTailLines:]
+	// Wrap, then keep the last rows. Truncating each line kept its *start*:
+	// a one-paragraph reply is one long line, so the preview sat frozen on
+	// its first row while the text arrived off its end. width-1, not width:
+	// a preview line that fills the last column is the case that strands
+	// the live region in scrollback (see fitLiveRegion).
+	limit := m.width - 1
+	var rows []string
+	for _, ln := range strings.Split(raw, "\n") {
+		if limit >= 20 && ansi.StringWidth(ln) > limit {
+			rows = append(rows, strings.Split(ansi.Wrap(ln, limit, ""), "\n")...)
+		} else {
+			rows = append(rows, ln)
+		}
 	}
-	for i, ln := range lines {
-		// width-1, not width: a preview line that fills the last column is the
-		// case that strands the live region in scrollback (see fitLiveRegion).
-		lines[i] = truncateToWidth(ln, m.width-1)
+	if len(rows) > streamTailLines {
+		rows = rows[len(rows)-streamTailLines:]
 	}
-	return toolStyle.Render(strings.Join(lines, "\n"))
+	for i, ln := range rows {
+		rows[i] = truncateToWidth(ln, limit) // a backstop for a narrow terminal
+	}
+	return toolStyle.Render(strings.Join(rows, "\n"))
 }
 
 // flushAssistant commits the buffered assistant message to the transcript,

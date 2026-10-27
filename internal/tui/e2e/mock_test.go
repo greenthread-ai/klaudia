@@ -235,7 +235,7 @@ func (m *Mock) complete(w http.ResponseWriter, r *http.Request) {
 const slowSentence = "This reply streams slowly so that it can be interrupted."
 
 // scriptKeywords are the words defaultScript answers to.
-var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "question", "wrapme", "planit"}
+var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "question", "wrapme", "planit", "longpara"}
 
 // keyword returns the scripted keyword that appears last in the prompt, or "".
 //
@@ -274,6 +274,12 @@ func defaultScript(prompt string, step int) Reply {
 				}}}}}
 		}
 		return Reply{Text: "Noted your choice."}
+	case "longpara":
+		var words []string
+		for i := 1; i <= 300; i++ {
+			words = append(words, fmt.Sprintf("w%03d", i))
+		}
+		return Reply{Text: strings.Join(words, " "), ChunkDelay: 15 * time.Millisecond}
 	case "wrapme":
 		if step == 0 {
 			return Reply{Calls: []ToolCall{{"Bash", map[string]any{"command": "echo " + wrapSentence + "; exit 3", "description": "A long failure"}}}}

@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // safePrefixOf feeds the whole text in one go and returns the flushable prefix.
@@ -220,5 +222,23 @@ func TestStreamTailIsBounded(t *testing.T) {
 	tail := m.streamTail()
 	if n := len(strings.Split(tail, "\n")); n > streamTailLines {
 		t.Errorf("live preview is %d lines, want at most %d", n, streamTailLines)
+	}
+}
+
+// Found by the e2e harness: a one-paragraph reply is one long line, and the
+// preview truncated it to its first row, so it looked frozen until the end.
+// The preview follows the newest text.
+func TestStreamTailFollowsALongParagraph(t *testing.T) {
+	m := newTestModel()
+	m.resize(60, 30)
+	m.streamBuf.WriteString(strings.Repeat("early words ", 40) + "the newest words")
+	tail := stripANSI(m.streamTail())
+	if !strings.Contains(tail, "the newest words") {
+		t.Errorf("preview does not show the newest text:\n%s", tail)
+	}
+	for _, row := range strings.Split(tail, "\n") {
+		if w := ansi.StringWidth(row); w >= 60 {
+			t.Errorf("preview row %d wide at 60 columns", w)
+		}
 	}
 }
