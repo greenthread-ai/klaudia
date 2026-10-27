@@ -120,7 +120,7 @@ func TestCriteria345_TerminalOwnsScrollback(t *testing.T) {
 	if n := len(strings.Split(view, "\n")); n >= m.height {
 		t.Errorf("live region is %d lines on a %d-line terminal; it must leave room", n, m.height)
 	}
-	if !strings.Contains(view, "turns") {
+	if !strings.Contains(view, "tokens") {
 		t.Error("the status bar must stay visible as the anchor for 'newest output'")
 	}
 }

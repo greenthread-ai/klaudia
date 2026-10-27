@@ -41,7 +41,7 @@ func (m *Model) onMCPReload(ev MCPReloadEvent) {
 		shown = shown[:maxReloadErrsShown]
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("MCP reload: %d server(s) failed to start", len(ev.ServerErrs)))
+	b.WriteString("MCP reload: " + countOf(len(ev.ServerErrs), "server") + " failed to start")
 	for _, e := range shown {
 		b.WriteString("\n  " + e)
 	}

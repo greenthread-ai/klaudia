@@ -216,7 +216,11 @@ func (m *Model) warnIfDirtyAtStart() {
 	if len(names) > 6 {
 		names = append(names[:6], fmt.Sprintf("… and %d more", len(m.base.dirty)-6))
 	}
+	were := " were"
+	if len(m.base.dirty) == 1 {
+		were = " was"
+	}
 	m.appendLine(hintStyle.Render(fmt.Sprintf(
-		"%d file(s) were already modified before this session: %s. /changes separates them from Klaudia's.",
-		len(m.base.dirty), strings.Join(names, ", "))))
+		"%s already modified before this session: %s. /changes separates them from Klaudia's.",
+		countOf(len(m.base.dirty), "file")+were, strings.Join(names, ", "))))
 }

@@ -86,7 +86,7 @@ func TestMCPReloadWriter(t *testing.T) {
 				`mcp "godot" connect: exec: "npx": not found`,
 				`mcp "db" connect: dial tcp: refused`,
 			}},
-			want: []string{"2 server(s) failed", `"godot"`, `"db"`},
+			want: []string{"2 servers failed", `"godot"`, `"db"`},
 		},
 	}
 	for _, tc := range tests {

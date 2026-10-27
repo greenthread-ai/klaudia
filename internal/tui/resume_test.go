@@ -48,8 +48,8 @@ func TestResumeShowsGoalAndTree(t *testing.T) {
 	out := st.render()
 	for _, want := range []string{
 		"Move session persistence to Postgres",
-		"2 Klaudia change(s)", "src/db/store.go",
-		"1 of your change(s)", "/changes",
+		"2 changes by Klaudia", "src/db/store.go",
+		"1 change of yours", "/changes",
 		"auth-refactor",
 	} {
 		if !strings.Contains(out, want) {

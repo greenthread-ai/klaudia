@@ -165,8 +165,8 @@ func (m *Model) trustCommand(args []string) {
 		}
 		if strings.EqualFold(args[1], "all") {
 			n := tc.RevokeAll()
-			m.appendLine(bannerStyle.Render(fmt.Sprintf("Revoked %d approval(s). "+
-				"Klaudia will ask again before the next host change.", n)))
+			m.appendLine(bannerStyle.Render(fmt.Sprintf("Revoked %s. "+
+				"Klaudia will ask again before the next host change.", countOf(n, "approval"))))
 			return
 		}
 		if tc.Revoke(args[1]) {

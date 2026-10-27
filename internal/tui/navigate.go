@@ -229,7 +229,7 @@ func (m *Model) listErrors(args []string) tea.Cmd {
 		hits[i], hits[j] = hits[j], hits[i]
 	}
 	m.appendLine(bannerStyle.Render(fmt.Sprintf(
-		"%d most recent error(s) — /show <n> for the full output:\n%s",
-		len(hits), strings.Join(hits, "\n"))))
+		"%s, most recent — /show <n> for the full output:\n%s",
+		countOf(len(hits), "error"), strings.Join(hits, "\n"))))
 	return nil
 }

@@ -22,7 +22,7 @@
 <text x="22" y="437" textLength="1197.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /goal [run N|stop|text] No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder</tspan></text>
 <text x="22" y="457" textLength="936.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /memory [add|recent|stale|tag|promote|supersede] Show / audit / curate memory; no args views the index</tspan></text>
 <text x="22" y="477" textLength="585.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /mcp             List MCP servers; reconnect or disconnect them</tspan></text>
-<text x="22" y="497" textLength="477.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /stats           Show session stats (turns, tokens)</tspan></text>
+<text x="22" y="497" textLength="531.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /stats           Show session stats (model calls, tokens)</tspan></text>
 <text x="22" y="517" textLength="468.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /status          Show the current session settings</tspan></text>
 <text x="22" y="537" textLength="576.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /config          Show resolved provider/model/sandbox settings</tspan></text>
 <text x="22" y="557" textLength="441.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  /agents          List available sub-agent types</tspan></text>

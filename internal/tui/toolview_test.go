@@ -67,7 +67,7 @@ func TestShortMode(t *testing.T) {
 func TestStatusLine(t *testing.T) {
 	m := &Model{sess: &Session{Model: "openai/gpt-5.5", PermissionMode: "plan"}, statTurns: 3, statIn: 1000, statOut: 240}
 	got := stripANSI(m.statusLine())
-	for _, want := range []string{"openai/gpt-5.5", "plan", "3 turns", "1.2k tokens"} {
+	for _, want := range []string{"openai/gpt-5.5", "plan", "1.2k tokens"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("statusLine missing %q in %q", want, got)
 		}
@@ -128,8 +128,8 @@ func TestStatusLineOmitsTheSteadyState(t *testing.T) {
 	if !strings.Contains(got, "claude-opus-5") {
 		t.Errorf("the model went missing: %q", got)
 	}
-	if !strings.Contains(got, "turns") {
-		t.Errorf("the turn count went missing: %q", got)
+	if !strings.Contains(got, "tokens") {
+		t.Errorf("the token count went missing: %q", got)
 	}
 }
 

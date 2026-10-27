@@ -95,7 +95,7 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 			return err
 		}
 		if goal.IsComplete(res.Text) {
-			fmt.Fprintf(errOut, "✓ goal complete in %d iteration(s)\n", i)
+			fmt.Fprintf(errOut, "✓ goal complete in %s\n", countOf(i, "iteration"))
 			mergeHint()
 			return nil
 		}

@@ -161,7 +161,7 @@ func Run(in Input) []Check {
 	// This is the only place that can tell the two apart.
 	syncedNote := ""
 	if in.SyncedIgnored > 0 {
-		syncedNote = fmt.Sprintf("; %d synced skill(s) ignored (backend-managed — copy one into .klaudia/skills to use it)", in.SyncedIgnored)
+		syncedNote = "; " + countOf(in.SyncedIgnored, "synced skill") + " ignored (backend-managed — copy one into .klaudia/skills to use it)"
 	}
 	if len(in.Skills) == 0 {
 		add("skills", StatusInfo, "none loaded (add .md files to .klaudia/skills or ~/.klaudia/skills)"+syncedNote)
@@ -298,7 +298,7 @@ func Run(in Input) []Check {
 
 	// MCP.
 	if in.MCPServers > 0 {
-		add("mcp", StatusOK, fmt.Sprintf("%d server(s) configured", in.MCPServers))
+		add("mcp", StatusOK, countOf(in.MCPServers, "server")+" configured")
 	} else {
 		add("mcp", StatusInfo, "no MCP servers configured")
 	}
@@ -325,7 +325,7 @@ func Run(in Input) []Check {
 	case len(in.MissingLSPHints) > 0:
 		add("lsp", StatusWarn, strings.Join(in.MissingLSPHints, "; "))
 	case len(in.LSPServers) > 0:
-		add("lsp", StatusOK, fmt.Sprintf("%d language server(s) detected", len(in.LSPServers)))
+		add("lsp", StatusOK, countOf(len(in.LSPServers), "language server")+" detected")
 	default:
 		add("lsp", StatusInfo, "no language servers detected (install gopls, rust-analyzer, …)")
 	}
@@ -451,4 +451,13 @@ func humanAge(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
+}
+
+// countOf writes n with word in the right number: "1 file", "2 files". It
+// replaces "%d file(s)", which reads as a form being filled in.
+func countOf(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
 }

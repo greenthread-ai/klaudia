@@ -282,7 +282,7 @@ func (m *Model) stopJobCommand(args []string) {
 				n++
 			}
 		}
-		m.appendLine(bannerStyle.Render(fmt.Sprintf("stopped %d job(s)", n)))
+		m.appendLine(bannerStyle.Render("stopped " + countOf(n, "job")))
 		return
 	}
 	ref := firstOr(args, soleRunningJob(m.sess.Jobs))

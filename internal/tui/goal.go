@@ -196,7 +196,7 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 	if claimed {
 		// Mechanical gate first.
 		if n, cerr := m.loopUnchecked(); cerr == nil && n > 0 {
-			m.appendLine(toolStyle.Render(fmt.Sprintf("  ✗ completion claim rejected: %d unchecked item(s) remain in %s", n, m.loopSourceName())))
+			m.appendLine(toolStyle.Render(fmt.Sprintf("  ✗ completion claim rejected: %s still unchecked in %s", countOf(n, "item"), m.loopSourceName())))
 			m.loopVerifying = false
 			return m.continueIteration()
 		}
@@ -205,7 +205,7 @@ func (m *Model) loopNext(res agent.Result, err error) string {
 			m.loopVerifying = false
 			done := m.loopTotal - m.loopRemaining + 1
 			m.loopRemaining = 0
-			m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ %s complete (verified) in %d %s(s).", m.loopKind(), done, m.loopUnit())))
+			m.appendLine(bannerStyle.Render(fmt.Sprintf("  ✓ %s complete (verified) in %s.", m.loopKind(), countOf(done, m.loopUnit()))))
 			m.appendMergeHint()
 			return ""
 		}
@@ -251,10 +251,10 @@ func (m *Model) continueIteration() string {
 	}
 	m.loopWrapUp = true
 	if m.loopPlan {
-		m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d turn(s); recording progress in the plan…", m.loopTotal)))
+		m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %s; recording progress in the plan…", countOf(m.loopTotal, "turn"))))
 		return goal.PlanWrapUpPrompt(m.plan.Path)
 	}
-	m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %d iteration(s); summarising progress to the spec…", m.loopTotal)))
+	m.appendLine(toolStyle.Render(fmt.Sprintf("  stopped after %s; summarising progress to the spec…", countOf(m.loopTotal, "iteration"))))
 	return goal.WrapUpPrompt(m.loopSpecPath)
 }
 
@@ -302,7 +302,7 @@ func (m *Model) runPlan(args []string) (tea.Model, tea.Cmd) {
 		n = min(v, goal.MaxIterations)
 	}
 	m.startPlanRun(n, false)
-	m.appendLine(bannerStyle.Render(fmt.Sprintf("Plan run: %d step(s) left, up to %d turns. Esc or /plan stop to halt.", m.plan.Remaining(), n)))
+	m.appendLine(bannerStyle.Render(fmt.Sprintf("Plan run: %s left, up to %s. Esc or /plan stop to halt.", countOf(m.plan.Remaining(), "step"), countOf(n, "turn"))))
 	m.appendLine(toolStyle.Render(fmt.Sprintf("  ↻ turn 1/%d", n)))
 	m.setState(stateRunning)
 	return m, m.startTurn(goal.PlanIterationPrompt(m.plan.Path))

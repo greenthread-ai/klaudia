@@ -89,13 +89,13 @@ func (st resumeState) render() string {
 	if len(st.KlaudiaWork) > 0 || len(st.UserWork) > 0 {
 		b.WriteString("\nWorking tree\n")
 		if n := len(st.KlaudiaWork); n > 0 {
-			fmt.Fprintf(&b, "  %d Klaudia change(s)\n", n)
+			fmt.Fprintf(&b, "  %s by Klaudia\n", countOf(n, "change"))
 			for _, f := range st.KlaudiaWork {
 				b.WriteString("    " + f + "\n")
 			}
 		}
 		if n := len(st.UserWork); n > 0 {
-			fmt.Fprintf(&b, "  %d of your change(s) — /changes to see the split\n", n)
+			fmt.Fprintf(&b, "  %s of yours — /changes to see the split\n", countOf(n, "change"))
 		}
 		if st.Branch != "" {
 			b.WriteString("  on " + st.Branch + "\n")

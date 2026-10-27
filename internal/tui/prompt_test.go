@@ -99,7 +99,7 @@ func TestStatusLineIsCaptionedUnderTheBox(t *testing.T) {
 	lines := strings.Split(visibleText(m.View()), "\n")
 
 	last := lines[len(lines)-1]
-	if !strings.Contains(last, "turns") {
+	if !strings.Contains(last, "tokens") {
 		t.Fatalf("last line should be the status caption, got %q", last)
 	}
 	if !strings.HasPrefix(last, "  ") {
@@ -184,7 +184,7 @@ func TestStatusCaptionDropsSegmentsNotCharacters(t *testing.T) {
 	m.statTurns, m.statIn, m.statOut = 3, 1000, 200
 
 	wide := visibleText(m.statusLineAt(200))
-	for _, want := range []string{"claude-opus-5", "plan", "3 turns", "1.2k tokens"} {
+	for _, want := range []string{"claude-opus-5", "plan", "1.2k tokens"} {
 		if !strings.Contains(wide, want) {
 			t.Errorf("wide caption missing %q: %q", want, wide)
 		}

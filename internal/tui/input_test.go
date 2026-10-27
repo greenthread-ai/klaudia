@@ -323,7 +323,7 @@ func TestGoalLoopNext(t *testing.T) {
 		t.Fatalf("rejected completion should fall back to iteration prompt; got %q", next)
 	}
 	tr := m.transcript.String()
-	if !strings.Contains(tr, "completion claim rejected: 2 unchecked") {
+	if !strings.Contains(tr, "completion claim rejected: 2 items still unchecked") {
 		t.Errorf("expected rejection line with count; got %q", tr)
 	}
 	if m.loopRemaining != 4 || m.loopVerifying {
@@ -769,7 +769,7 @@ func TestFormatStats(t *testing.T) {
 	// had before so /stats still works on unmapped models.
 	t.Run("unknown limit omits suffix", func(t *testing.T) {
 		got := formatStats(3, 1500, 800, 0, 0, "")
-		if !strings.Contains(got, "turns=3") || !strings.Contains(got, "input_tokens=1500") {
+		if !strings.Contains(got, "model_calls=3") || !strings.Contains(got, "input_tokens=1500") {
 			t.Errorf("base counters missing: %q", got)
 		}
 		if strings.Contains(got, "context:") {

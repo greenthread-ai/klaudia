@@ -130,7 +130,7 @@ func TestViewIsLiveRegionOnly(t *testing.T) {
 	if strings.Contains(m.View(), "this text went to scrollback") {
 		t.Error("committed output must not be redrawn in the live region")
 	}
-	if !strings.Contains(m.View(), "turns") {
+	if !strings.Contains(m.View(), "tokens") {
 		t.Error("the live region should still carry the status bar")
 	}
 }
@@ -221,7 +221,7 @@ func TestInputEndsUpAtTheBottomOnceOutputFills(t *testing.T) {
 	if n := len(strings.Split(view, "\n")); n > 4 {
 		t.Errorf("live region is %d lines; it should stay just the input and status bar", n)
 	}
-	if !strings.Contains(view, "turns") {
+	if !strings.Contains(view, "tokens") {
 		t.Error("status bar should be the last thing drawn")
 	}
 }

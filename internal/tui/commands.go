@@ -39,7 +39,7 @@ var commandList = []cmdInfo{
 	{"/goal", "[run N|stop|text]", "No arg: goal-setting (draft/load a spec). run [N]: iterate to the goal. stop: halt. text: standing reminder"},
 	{"/memory", "[add|recent|stale|tag|promote|supersede]", "Show / audit / curate memory; no args views the index"},
 	{"/mcp", "", "List MCP servers; reconnect or disconnect them"},
-	{"/stats", "", "Show session stats (turns, tokens)"},
+	{"/stats", "", "Show session stats (model calls, tokens)"},
 	{"/status", "", "Show the current session settings"},
 	{"/config", "", "Show resolved provider/model/sandbox settings"},
 	{"/agents", "", "List available sub-agent types"},
@@ -214,7 +214,7 @@ func (m *Model) busyGuard(what string) bool {
 // Unknown limits omit the suffix rather than show a misleading percentage.
 // Extracted so the test can pin the format without standing up a Model.
 func formatStats(turns int, inTok, outTok int64, resident, ctxLimit int, ctxSource string) string {
-	base := fmt.Sprintf("Session: turns=%d  input_tokens=%d  output_tokens=%d", turns, inTok, outTok)
+	base := fmt.Sprintf("Session: model_calls=%d  input_tokens=%d  output_tokens=%d", turns, inTok, outTok)
 	if ctxLimit <= 0 {
 		return base
 	}

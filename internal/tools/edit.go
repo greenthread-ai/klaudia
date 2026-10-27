@@ -188,7 +188,11 @@ func (e *Edit) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	if in.ReplaceAll {
 		n = count
 	}
-	msg := fmt.Sprintf("Edited %s (%d replacement(s))", in.FilePath, n)
+	noun := "replacements"
+	if n == 1 {
+		noun = "replacement"
+	}
+	msg := fmt.Sprintf("Edited %s (%d %s)", in.FilePath, n, noun)
 	if flexible {
 		msg += " — old_string was matched ignoring surrounding whitespace; verify the result with Read if it matters."
 	}

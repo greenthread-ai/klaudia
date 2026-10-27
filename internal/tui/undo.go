@@ -240,7 +240,7 @@ func (p undoPlan) describe() string {
 		}
 	}
 	if len(p.Unmoved) > 0 {
-		fmt.Fprintf(&b, "\n%d file(s) already match the checkpoint.\n", len(p.Unmoved))
+		fmt.Fprintf(&b, "\n%s already match the checkpoint.\n", countOf(len(p.Unmoved), "file"))
 	}
 	if p.Checkout != "" {
 		b.WriteString("\nEquivalent by hand:\n  " +
@@ -280,10 +280,10 @@ func (m *Model) applyUndo(p undoPlan) string {
 
 	var parts []string
 	if restored > 0 {
-		parts = append(parts, fmt.Sprintf("restored %d file(s)", restored))
+		parts = append(parts, "restored "+countOf(restored, "file"))
 	}
 	if deleted > 0 {
-		parts = append(parts, fmt.Sprintf("deleted %d file(s)", deleted))
+		parts = append(parts, "deleted "+countOf(deleted, "file"))
 	}
 	if len(p.Skipped) > 0 {
 		parts = append(parts, fmt.Sprintf("left %d alone (you changed them)", len(p.Skipped)))

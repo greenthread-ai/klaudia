@@ -374,3 +374,12 @@ func (m *Model) inputAffordanceView() string {
 	}
 	return out
 }
+
+// countOf writes n with word in the right number: "1 file", "2 files". It
+// replaces "%d file(s)", which reads as a form being filled in.
+func countOf(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
+}

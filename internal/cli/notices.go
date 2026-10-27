@@ -51,10 +51,19 @@ func mcpReloadWriter(w io.Writer) func(mcp.ReloadEvent) {
 			fmt.Fprintln(w, "warning: mcp config not reloaded:", ev.ConfigErr,
 				"— the previously loaded servers are still running")
 		default:
-			fmt.Fprintf(w, "warning: mcp reload: %d server(s) failed to start\n", len(ev.ServerErrs))
+			fmt.Fprintf(w, "warning: mcp reload: %s failed to start\n", countOf(len(ev.ServerErrs), "server"))
 			for _, e := range ev.ServerErrs {
 				fmt.Fprintln(w, "  "+e)
 			}
 		}
 	}
+}
+
+// countOf writes n with word in the right number: "1 file", "2 files". It
+// replaces "%d file(s)", which reads as a form being filled in.
+func countOf(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
 }

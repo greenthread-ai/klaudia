@@ -271,15 +271,16 @@ func (m *Model) statusLine() string {
 	case m.goalSetting:
 		segments = append(segments, hintStyle.Render("goal-setting"))
 	}
-	// Context pressure is actionable (it tells you when to /compact); raw turn
-	// and token counts are just information.
+	// Context pressure is actionable (it tells you when to /compact); the token
+	// count is just information. There is no turn count: what the loop counts
+	// is model calls, so one prompt that used five tools read "6 turns" — a
+	// number that looked like one thing and was another. /stats has it, named
+	// for what it is.
 	if m.sess != nil && m.sess.ContextWindow > 0 && m.residentTokens > 0 {
 		pct := float64(m.residentTokens) / float64(m.sess.ContextWindow) * 100
 		segments = append(segments, hintStyle.Render(fmt.Sprintf("ctx %.0f%%", pct)))
 	}
-	segments = append(segments,
-		hintStyle.Render(fmt.Sprintf("%d turns", m.statTurns)),
-		hintStyle.Render(fmt.Sprintf("%s tokens", humanTokens(m.statIn+m.statOut))))
+	segments = append(segments, hintStyle.Render(fmt.Sprintf("%s tokens", humanTokens(m.statIn+m.statOut))))
 
 	// width-3: two columns for the caption indent, and one for the reserved
 	// last column the live region never writes to (see promptBox).

@@ -29,7 +29,7 @@ func TestMCPReloadNotice(t *testing.T) {
 		{
 			name:    "a server that fails to launch is named",
 			event:   MCPReloadEvent{ServerErrs: []string{`mcp "godot" connect: exec: "npx": not found`}},
-			wantAll: []string{"1 server(s) failed", "godot", "/mcp"},
+			wantAll: []string{"1 server failed", "godot", "/mcp"},
 		},
 		{
 			// One broken config is one problem; listing twelve servers buries
@@ -40,7 +40,7 @@ func TestMCPReloadNotice(t *testing.T) {
 				"mcp \"c\" connect: boom", "mcp \"d\" connect: boom",
 				"mcp \"e\" connect: boom",
 			}},
-			wantAll:  []string{"5 server(s) failed", "and 2 more"},
+			wantAll:  []string{"5 servers failed", "and 2 more"},
 			wantNone: []string{`"e"`},
 		},
 		{
