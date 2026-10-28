@@ -86,10 +86,11 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 klaudia
 ```
 
-**Existing Claude Code login on macOS**
+**Existing Claude Code login**
 
-Klaudia can reuse an existing Claude Code OAuth session from the macOS Keychain.
-Sign in with Claude Code first, then run Klaudia:
+Klaudia can reuse an existing Claude Code login: from the macOS Keychain, or
+`~/.claude/.credentials.json` on Linux. Sign in with Claude Code first, then
+run Klaudia:
 
 ```bash
 claude
@@ -635,10 +636,17 @@ is selected.
 
 ### Auth
 
-- `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`), or
-- an existing Claude Code OAuth session in the macOS Keychain (Klaudia refreshes
-  expired tokens and writes them back), or
-- a provider key via `apiKey` / `apiKeyEnv` in `.klaudia/config.toml`.
+In order, first hit wins:
+
+- `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`);
+- a key stored with `klaudia --login`, which prompts without echo (or reads
+  one piped on stdin) and writes `credentials.json` under `~/.klaudia`, 0600;
+- an existing Claude Code login, from the macOS Keychain or
+  `~/.claude/.credentials.json` on Linux (Klaudia refreshes an expired token
+  and writes it back, atomically and keeping Claude Code's other fields).
+
+For an OpenAI-compatible provider, the key comes from `apiKey` / `apiKeyEnv`
+in `~/.klaudia/config.toml` (a project config cannot set it).
 
 ### Streaming & reliability
 
@@ -1167,7 +1175,7 @@ used, so asking Klaudia to "write that down" puts it in the right one.
 |---------|----------------|
 | `pkg/agent` | the agentic loop + sub-agent spawning |
 | `pkg/api` | provider abstraction (Anthropic client + OpenAI-compatible shim), model sizing |
-| `anthropicauth` | Klaudia's credential discovery (env, Keychain login) and Anthropic request shaping |
+| `anthropicauth` | Klaudia's credential discovery (env, `--login` store, Claude Code's login) and Anthropic request shaping |
 | `tools` | local tool implementations |
 | `browser` | lazy headless-Chrome engine + web search |
 | `lsp` | language-server client for code intelligence (Diagnostics/Definition/References) |

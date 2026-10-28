@@ -864,6 +864,7 @@ type options struct {
 	model            string
 	fallbackModels   []string
 	restricted       bool
+	login            bool
 	effort           string
 	outputFormat     string
 	inputFormat      string
@@ -960,6 +961,7 @@ func NewRootCommand() *cobra.Command {
 	f.BoolVar(&opts.forkSession, "fork-session", false, "When resuming, start a new session ID (preserves the original)")
 	f.BoolVar(&opts.fullResume, "full", false, "When resuming, replay the entire transcript instead of the compacted summary")
 	f.BoolVar(&opts.partialMessages, "include-partial-messages", false, "Include partial message chunks as they arrive (only with --print and --output-format=stream-json)")
+	f.BoolVar(&opts.login, "login", false, "Store an Anthropic API key for Klaudia (prompted without echo, or piped on stdin) in credentials.json under ~/.klaudia, and exit")
 	f.StringVar(&opts.createConfig, "create-config", "", "Create a starter TOML config and exit: global (~/.klaudia/config.toml) or local (./.klaudia/config.toml)")
 	f.BoolVar(&opts.loop, "loop", false, "Autonomous loop: iterate against the goal spec (PRD.md or .klaudia/GOAL.md) until complete or --max-iterations. Runs unattended, so it needs a mode that does not ask: autonomous (the default) or bypassPermissions; host changes also need --allow-host-changes.")
 	f.IntVar(&opts.maxIterations, "max-iterations", 0, "Max iterations for --loop (0 = default 10, hard cap 50)")
@@ -992,6 +994,12 @@ func run(cmd *cobra.Command, opts *options) error {
 			return err
 		}
 		defer os.RemoveAll(dir)
+		// The --login store is a credential, not state: carried too.
+		if b, err := os.ReadFile(anthropicauth.LoginPath()); err == nil {
+			if err := os.WriteFile(filepath.Join(dir, "credentials.json"), b, 0o600); err != nil {
+				return err
+			}
+		}
 		if b, err := toml.Marshal(conn); err == nil && len(b) > 0 {
 			// 0600: it may hold an inline apiKey.
 			if err := os.WriteFile(filepath.Join(dir, "config.toml"), b, 0o600); err != nil {
@@ -1008,6 +1016,9 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 	}
 
+	if opts.login {
+		return login(cmd)
+	}
 	cwd, _ := os.Getwd()
 	if opts.createConfig != "" {
 		path, err := createConfig(opts.createConfig, cwd)

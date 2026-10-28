@@ -35,7 +35,7 @@ other products (see docs/roadmap.md, "The extraction"); it must not import
 - **pkg/schema** - Type/schema definitions
 - **pkg/tool** - The tool contract: `Tool`, `Registry`, `Context`, `Result`, the spill store and the approver interfaces (`internal/tools` aliases them)
 
-- **anthropicauth** - Klaudia's Anthropic client: credential discovery (env, Keychain login) and the request shaping it sends; kept out of `pkg/api`
+- **anthropicauth** - Klaudia's Anthropic client: credential discovery (env, the `--login` store, Claude Code's login from the Keychain or `~/.claude/.credentials.json`) and the request shaping it sends; kept out of `pkg/api`
 - **tools** - Klaudia's built-in tool implementations (the contract is `pkg/tool`)
 - **browser** - Lazy headless-Chrome engine + web search
 - **trust** - Zones, command/tool classification, session-scoped grants

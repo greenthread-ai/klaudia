@@ -14,6 +14,13 @@ port mirrors (see `internal/version`).
   notify` chooses (`auto`, a list of `bell`/`osc9`/`osc777`, `all`, `off`).
   A new `Notification` hook event fires at the same moments with the reason
   and message, for alerts sent elsewhere. Built on PR #96.
+- **`klaudia --login`, and Claude Code's login on Linux.** `--login` stores
+  an Anthropic API key (prompted without echo, or piped) in `credentials.json`
+  under `~/.klaudia`, 0600, read after the environment variables. On Linux,
+  Claude Code's `~/.claude/.credentials.json` is now read as the Keychain is on
+  macOS, with an expired token refreshed and written back atomically. A flag
+  rather than a `login` subcommand, since a positional argument is a prompt.
+  From PR #100.
 
 ### Security
 
