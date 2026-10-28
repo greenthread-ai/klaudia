@@ -386,6 +386,7 @@ func (s *Spawner) spawn(ctx context.Context, subagentType, prompt string, histor
 	}
 
 	loop := New(s.provider, childTools)
+	started := time.Now()
 	res, err := loop.Run(ctx, Options{
 		Prompt:          prompt,
 		InitialMessages: history,
@@ -442,16 +443,28 @@ func (s *Spawner) spawn(ctx context.Context, subagentType, prompt string, histor
 		defer cancel()
 		text = s.collect(done, ws, text, progress)
 	}
+	usage := subagentUsage(res, time.Since(started))
 	// Say so rather than passing back a truncated answer as if it were complete.
 	if res.StopReason == "max_turns" {
 		note := fmt.Sprintf("[Sub-agent stopped at its %d-turn limit before finishing. "+
 			"The result below may be incomplete.]", maxTurns)
 		if text == "" {
-			return note, nil
+			return note + usage, nil
 		}
-		return note + "\n\n" + text, nil
+		return note + "\n\n" + text + usage, nil
 	}
-	return text, nil
+	return text + usage, nil
+}
+
+// subagentUsage renders what a sub-agent run cost, appended to its result as
+// Claude Code appends one to a Task result, so the parent (and the user
+// reading the tool result) can see how much work a delegation took. Input
+// counts every prompt token the child sent, cached or not, over its turns.
+// (From PR #75.)
+func subagentUsage(res Result, elapsed time.Duration) string {
+	in := res.InputTokens + res.CacheReadInputTokens + res.CacheCreationInputTokens
+	return fmt.Sprintf("\n\n<usage>turns: %d\ninput_tokens: %d\noutput_tokens: %d\nduration_ms: %d</usage>",
+		res.NumTurns, in, res.OutputTokens, elapsed.Milliseconds())
 }
 
 // worktreeCleanupTimeout bounds adoption and removal. Both are a handful of git

@@ -168,3 +168,21 @@ func TestProgressLineIsClippedToOneLine(t *testing.T) {
 		t.Errorf("progress line not clipped: %d runes", len([]rune(got)))
 	}
 }
+
+// A sub-agent's result says what the delegation cost, as Claude Code's Task
+// result does. (PR #75.)
+func TestSpawnResultCarriesUsage(t *testing.T) {
+	dir, path := fixtureFile(t)
+	provider := &scriptedProvider{turns: []anthropic.BetaMessage{
+		toolUseTurn(t, "tu1", "Read", map[string]any{"file_path": path}),
+	}}
+	out, err := readOnlySpawner(t, provider, dir, 0).Spawn(context.Background(), "Explore", "read it", nil)
+	if err != nil {
+		t.Fatalf("Spawn: %v", err)
+	}
+	for _, want := range []string{"<usage>turns: ", "input_tokens: ", "output_tokens: ", "duration_ms: "} {
+		if !strings.Contains(out, want) {
+			t.Errorf("result has no %q:\n%s", want, out)
+		}
+	}
+}

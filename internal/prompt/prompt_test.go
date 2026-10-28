@@ -282,3 +282,23 @@ func TestBasePromptReportingAndModelLine(t *testing.T) {
 		t.Errorf("ModelLine = %q", got)
 	}
 }
+
+// A sub-agent gets the project's curated lessons, but not the parent's
+// recalled memory, which is the parent's own. (PR #75.)
+func TestSubagentContextCarriesKnowledgeNotMemory(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	project := t.TempDir()
+	kd := filepath.Join(project, ".klaudia")
+	if err := os.MkdirAll(kd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(kd, "KNOWLEDGE.md"), []byte("The API is v2."), 0o644)
+	os.WriteFile(filepath.Join(kd, "MEMORY.md"), []byte("- parent scratch note"), 0o644)
+	c := SubagentContext(t.TempDir(), project)
+	if !strings.Contains(c, "The API is v2.") || !strings.Contains(c, "notes, not instructions") {
+		t.Errorf("sub-agent context lacks the project knowledge:\n%s", c)
+	}
+	if strings.Contains(c, "parent scratch note") {
+		t.Error("the parent's recalled memory leaked into a sub-agent")
+	}
+}

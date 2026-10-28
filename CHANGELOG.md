@@ -154,6 +154,13 @@ port mirrors (see `internal/version`).
   job's name and state instead of a bare "no job X"; and `/stopjob` on a
   job that already exited says so, with its code, instead of reporting it
   stopped. From PR #90.
+- **Sub-agents get the project's knowledge, and their results say what
+  they cost.** A sub-agent's prompt now includes `.klaudia/KNOWLEDGE.md`,
+  as the main agent's does (the parent's recalled memory stays the
+  parent's), and its result ends with a `<usage>` block of turns, input and
+  output tokens and duration, as Claude Code's Task results do. From PR
+  #75; the rest of it (project context, own plan, no questions) had
+  already landed.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
