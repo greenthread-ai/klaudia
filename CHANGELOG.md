@@ -100,6 +100,12 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **A resumed session with an orphaned tool result or blank text can be
+  sent again.** A tool result whose call was lost (an interrupted write, a
+  compaction boundary) and blank text in a user message are each rejected by
+  the API on every later request; the request sanitiser now drops them. Blank
+  text in an assistant turn is left alone: the API accepts it back. From
+  PR #26.
 - **`/copy` no longer loses its clipboard escape** when the screen updates
   twice before the next draw: escapes for the terminal now go out on their
   own, not on the front of a frame the next one could replace.

@@ -1,6 +1,10 @@
 package agent
 
-import "github.com/anthropics/anthropic-sdk-go"
+import (
+	"strings"
+
+	"github.com/anthropics/anthropic-sdk-go"
+)
 
 // Placeholders inserted when a transcript is structurally broken (typically
 // because an earlier turn was interrupted, refused, or recorded incompletely).
@@ -24,6 +28,14 @@ const (
 //  3. Consecutive same-role messages: the API requires user/assistant
 //     alternation, so runs of the same role are merged into one message
 //     (their content blocks concatenated in order).
+//  4. Orphan tool_result: one whose tool_use is not in the message just
+//     before it (lost to an interrupted write or a compaction boundary) is
+//     rejected as "unexpected tool_use_id". It is dropped.
+//  5. Blank text in a user message: rejected as "text content blocks must be
+//     non-empty". Dropped. Only in user messages: an assistant turn goes
+//     back as the API sent it — a web-search reply can carry a blank block
+//     the API accepts back (seen by session replay), and editing a turn with
+//     thinking is its own 400. (4 and 5 from PR #26.)
 //
 // Clean conversations return the input slice unchanged. Repaired ones get an
 // independent slice; original messages are never mutated.
@@ -75,6 +87,12 @@ func sanitizeMessages(messages []anthropic.BetaMessageParam) []anthropic.BetaMes
 		if repaired, changed := repairEmptyWebSearchCitations(out[i].Content); changed {
 			out[i].Content = repaired
 		}
+	}
+
+	// (1c) drop orphan tool_results and blank user text. Before (2), so a
+	// message left empty by the drop gets its placeholder.
+	for i := range out {
+		out[i].Content = dropUnsendable(out, i)
 	}
 
 	// (2) fill empty content
@@ -155,6 +173,54 @@ func hasToolResultAt(messages []anthropic.BetaMessageParam, i int, toolUseID str
 	return false
 }
 
+// dropUnsendable returns messages[i].Content without the blocks unsendable
+// reports. The content is copied only when something is dropped.
+func dropUnsendable(messages []anthropic.BetaMessageParam, i int) []anthropic.BetaContentBlockParamUnion {
+	content := messages[i].Content
+	for j, b := range content {
+		if !unsendable(messages, i, b) {
+			continue
+		}
+		kept := append([]anthropic.BetaContentBlockParamUnion{}, content[:j]...)
+		for _, b := range content[j+1:] {
+			if !unsendable(messages, i, b) {
+				kept = append(kept, b)
+			}
+		}
+		return kept
+	}
+	return content
+}
+
+// unsendable reports whether block b of the user message messages[i] is a
+// tool_result answering no tool_use in the message before it, or blank text.
+func unsendable(messages []anthropic.BetaMessageParam, i int, b anthropic.BetaContentBlockParamUnion) bool {
+	if messages[i].Role != anthropic.BetaMessageParamRoleUser {
+		return false
+	}
+	if t := b.OfText; t != nil && strings.TrimSpace(t.Text) == "" {
+		return true
+	}
+	if tr := b.OfToolResult; tr != nil {
+		return !hasToolUseAt(messages, i-1, tr.ToolUseID)
+	}
+	return false
+}
+
+// hasToolUseAt reports whether messages[i] is an assistant message carrying a
+// tool_use with the given ID.
+func hasToolUseAt(messages []anthropic.BetaMessageParam, i int, id string) bool {
+	if i < 0 || i >= len(messages) || messages[i].Role != anthropic.BetaMessageParamRoleAssistant {
+		return false
+	}
+	for _, b := range messages[i].Content {
+		if tu := b.OfToolUse; tu != nil && tu.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // needsSanitize is the fast path — when it returns false, sanitizeMessages
 // returns the input unchanged with no allocation.
 func needsSanitize(messages []anthropic.BetaMessageParam) bool {
@@ -175,6 +241,9 @@ func needsSanitize(messages []anthropic.BetaMessageParam) bool {
 		prev = m.Role
 		for _, b := range m.Content {
 			if tu := b.OfToolUse; tu != nil && !hasToolResultAt(messages, i+1, tu.ID) {
+				return true
+			}
+			if unsendable(messages, i, b) {
 				return true
 			}
 		}

@@ -118,3 +118,46 @@ func TestSanitizeMessagesMergesConsecutiveSameRole(t *testing.T) {
 		t.Errorf("merged user should hold 3 blocks; got %d", len(out[1].Content))
 	}
 }
+
+// Blank text in a user message is rejected on every later request, so it is
+// dropped, and a message left with nothing gets the placeholder. Blank text
+// in an assistant turn is left as the API sent it: the API accepts it back,
+// and editing a turn with thinking is its own 400. (PR #26, user side.)
+func TestSanitizeMessagesDropsBlankUserText(t *testing.T) {
+	user := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("go"), anthropic.NewBetaTextBlock(" \n\t"))
+	asst := asstMessage(anthropic.NewBetaTextBlock(""), anthropic.NewBetaToolUseBlock("t1", map[string]any{}, "Bash"))
+	result := anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock("t1", "ok", false))
+	out := sanitizeMessages([]anthropic.BetaMessageParam{user, asst, result})
+	if len(out[0].Content) != 1 || out[0].Content[0].OfText.Text != "go" {
+		t.Errorf("user content = %#v, want only the non-blank text", out[0].Content)
+	}
+	if len(out[1].Content) != 2 {
+		t.Errorf("assistant turn was edited: %#v", out[1].Content)
+	}
+	if len(user.Content) != 2 {
+		t.Errorf("input mutated: %#v", user.Content)
+	}
+}
+
+// A tool_result whose tool_use is gone (an interrupted write, a compaction
+// boundary) is "unexpected tool_use_id" on every request. It is dropped; the
+// text beside it survives, and a matched round trip is not rewritten.
+// (PR #26.)
+func TestSanitizeMessagesDropsOrphanToolResult(t *testing.T) {
+	user := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("start"))
+	asst := asstMessage(anthropic.NewBetaTextBlock("done"))
+	orphan := anthropic.NewBetaUserMessage(
+		anthropic.NewBetaToolResultBlock("gone", "stale output", false),
+		anthropic.NewBetaTextBlock("next question"),
+	)
+	out := sanitizeMessages([]anthropic.BetaMessageParam{user, asst, orphan})
+	if len(out) != 3 || len(out[2].Content) != 1 || out[2].Content[0].OfText == nil || out[2].Content[0].OfText.Text != "next question" {
+		t.Fatalf("got %#v, want the orphan dropped and the text kept", out)
+	}
+	asst2 := asstMessage(anthropic.NewBetaToolUseBlock("t2", map[string]any{}, "Bash"))
+	res2 := anthropic.NewBetaUserMessage(anthropic.NewBetaToolResultBlock("t2", "ok", false))
+	in := []anthropic.BetaMessageParam{user, asst2, res2}
+	if out := sanitizeMessages(in); &out[0] != &in[0] {
+		t.Error("a clean tool round trip was rewritten")
+	}
+}
