@@ -8,6 +8,7 @@ package prompt
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/greenthread-ai/klaudia/internal/gitprobe"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -191,8 +192,7 @@ func gitInfo(cwd string) (bool, string) {
 }
 
 func runGit(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
+	cmd := gitprobe.Command(dir, args...)
 	out, err := cmd.Output()
 	return string(out), err
 }

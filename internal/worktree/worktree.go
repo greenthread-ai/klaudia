@@ -46,6 +46,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/greenthread-ai/klaudia/internal/gitprobe"
 	"io"
 	"os"
 	"os/exec"
@@ -457,7 +458,9 @@ func copyFile(src, dst string, mode os.FileMode) error {
 // a caller can report what git actually said; callers that print output must
 // not have it polluted with warnings.
 func run(ctx context.Context, dir string, stdin []byte, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	// Guarded: these are Klaudia's own commands, and `git worktree add` runs
+	// the repository's post-checkout hook (see gitprobe).
+	cmd := exec.CommandContext(ctx, "git", gitprobe.Args(args...)...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"github.com/greenthread-ai/klaudia/internal/gitprobe"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -688,10 +689,18 @@ func (m *Model) renderAgents() string {
 
 // gitOutput runs `git <args>` in dir and returns combined output. A non-zero
 // exit returns the output plus the error so callers can surface git's message.
+//
+// Klaudia's own lookups (status, diff, the checkpoint blobs) go through
+// gitprobe, so a repository's config cannot run a program through them. A
+// commit is the user's, and runs plain git: its hooks are part of what they
+// asked for.
 func gitOutput(dir string, args ...string) (string, error) {
-	c := exec.Command("git", args...)
-	if dir != "" {
+	var c *exec.Cmd
+	if len(args) > 0 && args[0] == "commit" {
+		c = exec.Command("git", args...)
 		c.Dir = dir
+	} else {
+		c = gitprobe.Command(dir, args...)
 	}
 	out, err := c.CombinedOutput()
 	return string(out), err

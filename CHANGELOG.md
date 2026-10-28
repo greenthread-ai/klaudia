@@ -52,6 +52,16 @@ port mirrors (see `internal/version`).
   "always run this first" would otherwise outlive the session that read it.
   A headless run refuses the write. The prompt now introduces the file as
   notes to check against the code, not "established facts". From PR #71.
+- **Klaudia's own git commands no longer run a repository's programs.** A
+  repository's `.git/config` travels with an archive or a vendored checkout,
+  and git runs what it names: `core.fsmonitor` on every `status`, external
+  diff and textconv drivers on every `diff`, hooks on `git worktree add`.
+  Klaudia runs those commands itself (the branch in the prompt, ownership,
+  `/diff`, checkpoints, sub-agent worktrees), so opening such a folder ran
+  them. They now run with fsmonitor, hooks and diff drivers off.
+  `/commit` and the goal loop's commits still run plain git, hooks
+  included, because you asked for them. From PR #24; upstream Claude Code
+  fixed the same class in 2.1.265.
 - **A session id cannot be a path.** `--resume` and an ACP client's
   `session/load` took the id into a file path unchecked, so `../..` reached
   outside the sessions directory. Ids are validated where they come in, and

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/greenthread-ai/klaudia/internal/gitprobe"
 	"github.com/pelletier/go-toml/v2"
 	"os"
 	"os/exec"
@@ -742,8 +743,7 @@ func (n *mcpReloadNotifier) emit(ev mcp.ReloadEvent) {
 
 // gitBranch returns the current git branch for dir, or "" if not a repo.
 func gitBranch(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = dir
+	cmd := gitprobe.Command(dir, "rev-parse", "--abbrev-ref", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -753,8 +753,7 @@ func gitBranch(dir string) string {
 
 // gitCommit returns the short HEAD commit hash, or "" outside a repo.
 func gitCommit(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
-	cmd.Dir = dir
+	cmd := gitprobe.Command(dir, "rev-parse", "--short", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
