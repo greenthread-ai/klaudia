@@ -475,7 +475,7 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			}
 			continue
 		}
-		if err != nil && api.IsUnavailable(err) && fallbackNext < len(opts.FallbackModels) {
+		if err != nil && api.IsUnavailable(err) && !api.IsCutOff(err) && fallbackNext < len(opts.FallbackModels) {
 			// The provider, not the request: overloaded, or a 5xx the client
 			// already retried. Carry on with the next model in the chain for
 			// the rest of the Run, refitted to it — an effort it does not take
@@ -497,6 +497,14 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			continue
 		}
 		if err != nil {
+			// A stream that failed after text was shown — cut off by a stall or
+			// dropped connection, or interrupted by the user — keeps that text,
+			// so the history matches what the user read. See interrupted.go.
+			// (PR #53.)
+			if partial, ok := interruptedPartial(assistant, err); ok {
+				messages = append(messages, partial)
+				record(opts.Recorder, "assistant", partial)
+			}
 			res.Messages = messages
 			return res, err
 		}

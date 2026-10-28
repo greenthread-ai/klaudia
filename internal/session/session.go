@@ -384,8 +384,10 @@ func MostRecent(cwd string) (string, bool) {
 // stored request-shape messages: an explicit stop_reason of "refusal" (older
 // response-shape entries keep it), or an assistant turn with no content at all,
 // which is the only way a refusal is persisted once stop_reason is gone. A
-// normal turn always carries text or a tool call; an interrupted turn is not
-// recorded. So an empty trailing assistant turn is a refusal in practice.
+// normal turn always carries text or a tool call, and an interrupted one is
+// recorded only when it had shown text, with a marker after it (agent's
+// interruptedPartial). So an empty trailing assistant turn is a refusal in
+// practice.
 func LastTurnRefused(entries []Entry) bool {
 	for i := len(entries) - 1; i >= 0; i-- {
 		if entries[i].Type != "assistant" {

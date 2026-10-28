@@ -115,6 +115,18 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **A reply that is cut off is reported as cut off, and kept.** A stream
+  that a proxy closed without its final event, or that carried an
+  overloaded or server error after it began, used to end the turn as if the
+  half-built message were the whole answer, or with a raw error. Now, if
+  nothing had been shown it is retried; if text had been shown it is
+  reported as cut off and not retried (that would repeat what you read), and
+  the text you saw is kept in the conversation, closed by a line saying it
+  was cut off or interrupted, so the model knows what it said. A cut-off
+  turn is not handed to a fallback model either. The OpenAI-compatible path
+  does the same for a stream that closes early, keeps text it had streamed
+  when the body read fails, and now honours `Retry-After`. From PRs #29 and
+  #53.
 - **Tool input is validated before the host gate and any approval** (#97),
   so a malformed call is refused as malformed instead of being shown to you
   first.
