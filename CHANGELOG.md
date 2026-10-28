@@ -115,6 +115,14 @@ port mirrors (see `internal/version`).
   Esc closes it first, a turn that ends under it leaves it open, and an
   approval, question or plan from the turn closes it and says so. From PR
   #67.
+- **A stuck MCP tool call times out, and servers start together.** A
+  server that stopped answering mid-call held the turn until you
+  interrupted it, and a headless run for good. A call now has ten minutes
+  (`KLAUDIA_MCP_TOOL_TIMEOUT`, or `"timeout"` in seconds on the server in
+  `.mcp.json`), after which the model is told it timed out and how to
+  raise the limit; the server is not restarted, since slow is not dead.
+  Servers also connect in parallel, so startup waits for the slowest one,
+  not all of them in turn. From PR #38.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

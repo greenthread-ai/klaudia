@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -58,6 +59,23 @@ type ServerConfig struct {
 	// word taken. False is how an operator declines to take it, without giving
 	// up the server for the main agent, which still asks before every call.
 	ReadOnly *bool `json:"readOnly,omitempty"`
+	// Timeout bounds one tool call on this server, in seconds. Unset uses
+	// KLAUDIA_MCP_TOOL_TIMEOUT, or ten minutes. (From PR #38.)
+	Timeout int `json:"timeout,omitempty"`
+}
+
+// toolTimeout is how long one tool call may take on a server with cfg. A
+// server that stops answering mid-call (a dropped HTTP or SSE stream) used to
+// hold the turn until the user interrupted it, and a headless run for good.
+// Ten minutes is generous on purpose: a slow tool is not a stuck one.
+func toolTimeout(cfg ServerConfig) time.Duration {
+	if cfg.Timeout > 0 {
+		return time.Duration(cfg.Timeout) * time.Second
+	}
+	if v, err := strconv.Atoi(strings.TrimSpace(os.Getenv("KLAUDIA_MCP_TOOL_TIMEOUT"))); err == nil && v > 0 {
+		return time.Duration(v) * time.Second
+	}
+	return 10 * time.Minute
 }
 
 // Config is the .mcp.json shape: a map of server name → launch config.
@@ -341,7 +359,7 @@ func (m *Manager) dial(ctx context.Context, name string, cfg ServerConfig) (*Ser
 // connectTimeout bounds launching one server at startup or on a config
 // reload. Generous, because a first `npx` run downloads the server; what it
 // stops is a server that never answers initialize hanging startup for good.
-const connectTimeout = 60 * time.Second
+var connectTimeout = 60 * time.Second // a var so tests need not wait
 
 // dialWithin launches a server, giving up after timeout.
 //
@@ -398,15 +416,28 @@ func Connect(ctx context.Context, cfg Config, el *Elicitor) (*Manager, []error) 
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	for _, name := range names {
-		srv, err := m.dialWithin(connectTimeout, "connect", name, cfg.MCPServers[name])
-		if err != nil {
-			errs = append(errs, err)
+	// In parallel: one after another, every server's start-up time added to
+	// Klaudia's, and a server at its deadline held up all the rest. The
+	// results are kept in name order. (From PR #38.)
+	servers := make([]*Server, len(names))
+	dialErrs := make([]error, len(names))
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			servers[i], dialErrs[i] = m.dialWithin(connectTimeout, "connect", name, cfg.MCPServers[name])
+		}()
+	}
+	wg.Wait()
+	for i, name := range names {
+		if dialErrs[i] != nil {
+			errs = append(errs, dialErrs[i])
 			// Keep a disconnected placeholder so it can be reconnected later.
 			m.servers = append(m.servers, &Server{Name: name})
 			continue
 		}
-		m.servers = append(m.servers, srv)
+		m.servers = append(m.servers, servers[i])
 	}
 	return m, errs
 }

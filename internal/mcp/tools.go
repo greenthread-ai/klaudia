@@ -5,13 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/greenthread-ai/klaudia/internal/textsafe"
 	"strings"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/greenthread-ai/klaudia/internal/textsafe"
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
@@ -56,6 +57,7 @@ type mcpTool struct {
 	inputSchema   json.RawMessage
 	server        *Server
 	readOnly      bool
+	timeout       time.Duration // one call's limit; 0 is toolTimeout's default
 	// mgr is held so a call can relaunch its own server; see Execute.
 	mgr *Manager
 }
@@ -111,9 +113,14 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 		}
 		sess = t.server.sess()
 	}
-	res, err := sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args, Meta: traceMeta(ctx)})
+	res, err := t.call(ctx, sess, args)
 	if err == nil {
 		return []tools.Result{resultOf(res)}, nil
+	}
+	if errors.Is(err, errToolTimeout) {
+		// Not a dead server, as far as anyone knows: a slow one. Restarting
+		// it would throw away whatever it was doing.
+		return []tools.Result{{Content: err.Error(), IsError: true}}, nil
 	}
 
 	// The call failed on the wire. revive probes liveness first, so a bad
@@ -139,11 +146,32 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 	if sess == nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP call failed: %v", err), IsError: true}}, nil
 	}
-	res, err = sess.CallTool(ctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args, Meta: traceMeta(ctx)})
+	res, err = t.call(ctx, sess, args)
 	if err != nil {
 		return []tools.Result{{Content: fmt.Sprintf("MCP call failed after restarting server %q: %v", t.server.Name, err), IsError: true}}, nil
 	}
 	return []tools.Result{resultOf(res)}, nil
+}
+
+// errToolTimeout marks a call that ran out of its timeout (toolTimeout).
+var errToolTimeout = errors.New("mcp tool call timed out")
+
+// call runs one tools/call under the tool's timeout. Running out of it is
+// errToolTimeout, worded for the model; the turn being cancelled is not.
+func (t *mcpTool) call(ctx context.Context, sess *mcpsdk.ClientSession, args any) (*mcpsdk.CallToolResult, error) {
+	timeout := t.timeout
+	if timeout <= 0 {
+		timeout = toolTimeout(ServerConfig{})
+	}
+	cctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	res, err := sess.CallTool(cctx, &mcpsdk.CallToolParams{Name: t.remoteName, Arguments: args, Meta: traceMeta(ctx)})
+	if err != nil && errors.Is(cctx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+		return nil, fmt.Errorf("%w: %s gave no answer within %s; the server may be stuck (/mcp can reconnect it), "+
+			"or the tool is slow (set \"timeout\" in seconds on the server in .mcp.json, or KLAUDIA_MCP_TOOL_TIMEOUT)",
+			errToolTimeout, t.qualifiedName, timeout)
+	}
+	return res, err
 }
 
 // revive relaunches the tool's server if it has died. It is a no-op returning
@@ -210,6 +238,7 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 				inputSchema:   schema,
 				server:        srv,
 				readOnly:      readOnly,
+				timeout:       toolTimeout(cfg),
 				mgr:           m,
 			})
 		}

@@ -843,7 +843,10 @@ increasing precedence: **global** `~/.klaudia/.mcp.json` (honours
 `.klaudia/.mcp.json`. Per server name, the narrower scope wins — a project can
 point a globally configured server at a different binary without disturbing it
 elsewhere. Put personal servers you want everywhere in the global file, and
-servers belonging to a repo in the project's. A server is **stdio** (`command` +
+servers belonging to a repo in the project's. Servers start in parallel, each
+with 60 seconds to answer; a tool call gets ten minutes
+(`KLAUDIA_MCP_TOOL_TIMEOUT`, or `"timeout"` in seconds on the server).
+A server is **stdio** (`command` +
 `args`) or **HTTP** (`url`, with `type:"sse"` for the legacy SSE transport, and
 `headers` sent on every request — typically `Authorization`). `//` and `/* */`
 comments are allowed; a file that still doesn't parse is reported — naming the
