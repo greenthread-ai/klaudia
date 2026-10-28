@@ -20,6 +20,13 @@ port mirrors (see `internal/version`).
   refusal that still arrives is recovered by removing the thinking and
   retrying. Older accounts were never refused, which is why this did not
   show up here. From PR #63.
+- **The permission mode is told in the conversation, not the system
+  prompt.** The plan-mode and bypass instructions were rebuilt into the
+  system prompt each turn, so changing mode (approving a plan) changed it,
+  which on the models above invalidates the model's earlier reasoning. The
+  system prompt now stays as written, and a mode the conversation has not
+  been told yet is added to the next message the model receives, as Claude
+  Code does it. Part of the PR #63 work.
 
 - **Resume picks only this folder's sessions, and reads long lines.**
   Folders whose names differ only in punctuation (`my_proj`, `my-proj`)

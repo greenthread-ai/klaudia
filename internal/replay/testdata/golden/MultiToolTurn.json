@@ -60,6 +60,10 @@
       "type": "tool_result",
       "tool_use_id": "call_0_0",
       "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    }
@@ -112,6 +116,10 @@
       "type": "tool_result",
       "tool_use_id": "call_0_0",
       "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    },
@@ -200,6 +208,10 @@
       "type": "tool_result",
       "tool_use_id": "call_0_0",
       "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    },
@@ -312,6 +324,10 @@
       "type": "tool_result",
       "tool_use_id": "call_0_0",
       "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    },
@@ -449,6 +465,10 @@
       "type": "tool_result",
       "tool_use_id": "call_0_0",
       "result": "Todos updated:\n[~] Read the project\n[ ] Fix the greeting"
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    },

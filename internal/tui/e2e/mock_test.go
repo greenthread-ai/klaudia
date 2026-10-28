@@ -121,9 +121,15 @@ func (req chatRequest) promptAndStep() (string, int) {
 		case "assistant":
 			step++
 		case "user":
-			text := strings.TrimSpace(reminderRe.ReplaceAllString(contentText(msg.Content), ""))
+			text := reminderRe.ReplaceAllString(contentText(msg.Content), "")
+			// The loop appends the permission mode to the message it sends
+			// (agent's mode.go). It is not what the user typed, and its
+			// wording ("MCP tools not marked read-only") would otherwise be
+			// read as a script keyword.
+			text, _, _ = strings.Cut(text, "# Permission mode: ")
+			text = strings.TrimSpace(text)
 			if text == "" {
-				continue // a reminder on its own is not the prompt
+				continue // a reminder or a mode change on its own is not the prompt
 			}
 			return text, step
 		}

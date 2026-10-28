@@ -390,6 +390,7 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	}
 	if opts.Prompt != "" || len(injected) > 0 {
 		userMsg := anthropic.NewBetaUserMessage(promptBlocks(opts.Prompt, injected)...)
+		tellMode(messages, &userMsg, permission.CurrentMode(opts.Permission))
 		messages = append(messages, userMsg)
 		rec("user", userMsg)
 	}
@@ -444,7 +445,7 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 
 		mode := permission.CurrentMode(opts.Permission)
 		announceMode(mode, emit, &modes)
-		system := systemFor(opts.System, mode)
+		system := systemFor(opts.System)
 		prefix := requestPrefix{system: system, tools: toolParams, betas: betas}
 
 		// Compaction runs at the top of every turn (docs/compaction.md):
@@ -675,6 +676,9 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		}
 		capMessage(resultBlocks, names, opts.Spill)
 		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
+		// A tool can change the mode (approving a plan does), so the next
+		// request is told here, in the message carrying the results.
+		tellMode(messages, &toolResultMsg, permission.CurrentMode(opts.Permission))
 		messages = append(messages, toolResultMsg)
 
 		// Now persist BOTH back-to-back. The window for process termination

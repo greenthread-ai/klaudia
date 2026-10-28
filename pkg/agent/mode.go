@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"strings"
+
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread-ai/klaudia/pkg/permission"
@@ -16,11 +18,20 @@ import (
 // the transcript recorded it, and the model carried on hedging about work it
 // was now free to do.
 //
-// So the mode goes in the system prompt, per turn, and a change is announced as
-// an event. The loop is the only place that sees the live mode function, which
-// means every route that changes it — the picker, /mode, /plan, approving a
-// plan, a stream-json control request — is covered without any of them knowing
-// about this.
+// So the mode is told to the model, and a change is announced as an event. The
+// loop is the only place that sees the live mode function, which means every
+// route that changes it — the picker, /mode, /plan, approving a plan, a
+// stream-json control request — is covered without any of them knowing about
+// this.
+//
+// It is told in the conversation, not the system prompt. It used to be a
+// system block rebuilt per turn, and on models with preserved thinking a
+// changed system prompt invalidates every thinking block before the change:
+// an account created on or after 2026-08-31 was refused outright, and with
+// drop_block the model lost its reasoning each time the mode moved. So the
+// system prompt stays as the host wrote it, and a mode that differs from the
+// last one the conversation was told is added to the next user message the
+// loop sends, which is append-only. (PR #63; Claude Code delivers plan mode the same way.)
 
 // modeClause describes the active mode to the model. Autonomous says nothing:
 // it is the mode the base prompt already assumes, and a clause restating the
@@ -53,21 +64,76 @@ func modeClause(mode permission.Mode) string {
 	}
 }
 
-// systemFor returns the system blocks for a turn under mode.
-//
-// The mode clause is a separate block appended after the base prompt rather
-// than spliced into it, so the long, identical prefix stays byte-for-byte
-// stable and keeps whatever prompt caching it has earned. A mode change
-// invalidates nothing before the breakpoint.
-func systemFor(base string, mode permission.Mode) []anthropic.BetaTextBlockParam {
-	var out []anthropic.BetaTextBlockParam
-	if base != "" {
-		out = append(out, anthropic.BetaTextBlockParam{Text: base})
+// autonomousClause is said only on a change back to autonomous: the earlier
+// clause is still in the conversation, and silence would leave it standing.
+const autonomousClause = "# Permission mode: autonomous\n" +
+	"The permission mode is now autonomous. You may edit files and run commands; the host " +
+	"gate still asks before a change to this machine."
+
+// modeHeaders maps each clause's header line back to its mode, so the
+// conversation itself records which mode it was last told.
+var modeHeaders = map[string]permission.Mode{
+	"plan":               permission.ModePlan,
+	"bypass permissions": permission.ModeBypassPermissions,
+	"autonomous":         permission.ModeAutonomous,
+}
+
+// lastToldMode is the mode the conversation last announced, or autonomous
+// when it has announced none (the base prompt's assumption).
+func lastToldMode(messages []anthropic.BetaMessageParam) permission.Mode {
+	const header = "# Permission mode: "
+	told := permission.ModeAutonomous
+	for _, m := range messages {
+		if m.Role != anthropic.BetaMessageParamRoleUser {
+			continue
+		}
+		for _, b := range m.Content {
+			if b.OfText == nil {
+				continue
+			}
+			text := b.OfText.Text
+			for {
+				i := strings.Index(text, header)
+				if i < 0 {
+					break
+				}
+				text = text[i+len(header):]
+				line, _, _ := strings.Cut(text, "\n")
+				if mode, ok := modeHeaders[strings.TrimSpace(line)]; ok {
+					told = mode
+				}
+			}
+		}
 	}
-	if clause := modeClause(mode); clause != "" {
-		out = append(out, anthropic.BetaTextBlockParam{Text: clause})
+	return told
+}
+
+// tellMode adds the mode clause to msg, a user message about to be sent and
+// recorded, when the mode differs from what the conversation was last told.
+// It goes in the message itself rather than a message of its own, so the
+// transcript holds what was sent and nothing reads it as a prompt the user
+// typed.
+func tellMode(history []anthropic.BetaMessageParam, msg *anthropic.BetaMessageParam, mode permission.Mode) {
+	if lastToldMode(append(history[:len(history):len(history)], *msg)) == mode {
+		return
 	}
-	return out
+	text := strings.TrimSpace(modeClause(mode))
+	if mode == permission.ModeAutonomous {
+		text = autonomousClause
+	}
+	if text != "" {
+		msg.Content = append(msg.Content, anthropic.NewBetaTextBlock(text))
+	}
+}
+
+// systemFor returns the system blocks: the base prompt, unchanged for the
+// whole conversation (see the top of this file for why the mode is not here).
+// An empty base prompt yields no block, which the API would reject.
+func systemFor(base string) []anthropic.BetaTextBlockParam {
+	if base == "" {
+		return nil
+	}
+	return []anthropic.BetaTextBlockParam{{Text: base}}
 }
 
 // modeTracker reports mode changes once each.

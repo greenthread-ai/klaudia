@@ -49,6 +49,10 @@
       "tool_use_id": "call_0_0",
       "result": "Input validation error: unknown subagent_type \"Explore\" — Agent accepts: description (required), fork, prompt (required), run_in_background, subagent_type (required).",
       "is_error": true
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    }
@@ -90,6 +94,10 @@
       "tool_use_id": "call_0_0",
       "result": "Input validation error: unknown subagent_type \"Explore\" — Agent accepts: description (required), fork, prompt (required), run_in_background, subagent_type (required).",
       "is_error": true
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    },

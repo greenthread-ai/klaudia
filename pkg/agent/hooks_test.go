@@ -450,7 +450,9 @@ func userBlocks(t *testing.T, messages []anthropic.BetaMessageParam) []string {
 		}
 		var out []string
 		for _, b := range m.Content {
-			if b.OfText != nil {
+			// The mode clause rides in the first user message too (mode.go);
+			// these tests are about what hooks add, not the mode.
+			if b.OfText != nil && !strings.HasPrefix(b.OfText.Text, "# Permission mode: ") {
 				out = append(out, b.OfText.Text)
 			}
 		}

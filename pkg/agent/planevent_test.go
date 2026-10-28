@@ -94,7 +94,7 @@ func TestPlanEventFollowsTheChangeThatCausedIt(t *testing.T) {
 				t.Fatal(err)
 			}
 			reg := tools.NewRegistry(tw, flipTool{onRun: func() {}})
-			l := New(&systemCapture{reply: tc.replies}, reg)
+			l := New(&msgCapture{reply: tc.replies}, reg)
 			var got []string
 			var last *plan.Snapshot
 			emit := func(ev Event) {
@@ -137,7 +137,7 @@ func TestTheNextTurnResendsThePlanOnce(t *testing.T) {
 	store := plan.New("")
 	_ = store.Replace([]plan.Item{{Content: "a", Status: plan.StatusPending}})
 	reg := tools.NewRegistry(flipTool{onRun: func() {}})
-	l := New(&systemCapture{reply: []anthropic.BetaMessage{toolTurn(t, "t1", "Flip", `{}`)}}, reg)
+	l := New(&msgCapture{reply: []anthropic.BetaMessage{toolTurn(t, "t1", "Flip", `{}`)}}, reg)
 	n := 0
 	emit := func(ev Event) {
 		if ev.Type == "plan" {

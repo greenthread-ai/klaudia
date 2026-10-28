@@ -47,6 +47,10 @@
       "tool_use_id": "call_0_0",
       "result": "ls: ./no-such-dir-e2e: No such file or directory\n\n[exit code 1]",
       "is_error": true
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    }

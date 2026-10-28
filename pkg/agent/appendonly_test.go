@@ -141,6 +141,18 @@ func TestAppendOnlyPlainToolTurns(t *testing.T) {
 	}
 }
 
+// Leaving plan mode mid-run (an approved plan) used to rebuild the system
+// prompt; the mode is now told in an appended message (mode.go).
+func TestAppendOnlyAcrossAModeChange(t *testing.T) {
+	mode := permission.ModePlan
+	p := &requestLog{turns: []anthropic.BetaMessage{thinkingToolTurn(t, "a", "Probe"), thinkingToolTurn(t, "b", "Probe")}}
+	New(p, tools.NewRegistry(hookTool{name: "Probe", out: "ok", fn: func(tools.Context) { mode = permission.ModeAutonomous }})).Run(
+		context.Background(), Options{Prompt: "go", Model: "claude-opus-5-5", Permission: permission.Context{Mode: func() permission.Mode { return mode }}}, nil)
+	if b := appendOnlyBreaks(p.reqs); len(b) != 0 {
+		t.Errorf("a mode change broke append-only: %q", b)
+	}
+}
+
 // Report, not assert: these are the causes being measured. Each one that
 // prints is a place the harness drops the model's earlier reasoning.
 func TestAppendOnlyMeasure(t *testing.T) {
@@ -156,13 +168,6 @@ func TestAppendOnlyMeasure(t *testing.T) {
 		tools.NewRegistry(hookTool{name: "Probe", out: "ok", fn: func(c tools.Context) { c.Reveal("Later") }}, hookTool{name: "Later", out: "ok"}),
 		Options{DeferredTools: map[string]bool{"Later": true}},
 		thinkingToolTurn(t, "a", "Probe"), thinkingToolTurn(t, "b", "Later"))
-
-	// Leaving plan mode mid-run (an approved plan) rebuilds the system prompt.
-	mode := permission.ModePlan
-	run("plan mode -> autonomous",
-		tools.NewRegistry(hookTool{name: "Probe", out: "ok", fn: func(tools.Context) { mode = permission.ModeAutonomous }}),
-		Options{Permission: permission.Context{Mode: func() permission.Mode { return mode }}},
-		thinkingToolTurn(t, "a", "Probe"), thinkingToolTurn(t, "b", "Probe"))
 
 	// Microcompact elides old tool results once they pass its threshold.
 	big := strings.Repeat("x", 4*25000)

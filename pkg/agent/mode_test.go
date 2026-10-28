@@ -14,18 +14,20 @@ import (
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
-// systemCapture records the system blocks of every request, which is the only
-// way to tell whether the model was actually told anything.
-type systemCapture struct {
+// msgCapture records the system blocks and messages of every request, which
+// is the only way to tell whether the model was actually told anything.
+type msgCapture struct {
 	mu    sync.Mutex
 	turns [][]anthropic.BetaTextBlockParam
+	msgs  [][]anthropic.BetaMessageParam
 	reply []anthropic.BetaMessage
 	n     int
 }
 
-func (c *systemCapture) StreamTurn(_ context.Context, p anthropic.BetaMessageNewParams, _ api.StreamSink) (anthropic.BetaMessage, error) {
+func (c *msgCapture) StreamTurn(_ context.Context, p anthropic.BetaMessageNewParams, _ api.StreamSink) (anthropic.BetaMessage, error) {
 	c.mu.Lock()
 	c.turns = append(c.turns, p.System)
+	c.msgs = append(c.msgs, p.Messages)
 	i := c.n
 	c.n++
 	c.mu.Unlock()
@@ -35,7 +37,7 @@ func (c *systemCapture) StreamTurn(_ context.Context, p anthropic.BetaMessageNew
 	return anthropic.BetaMessage{StopReason: "end_turn"}, nil
 }
 
-func (c *systemCapture) systemAt(i int) string {
+func (c *msgCapture) systemAt(i int) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var b strings.Builder
@@ -45,66 +47,73 @@ func (c *systemCapture) systemAt(i int) string {
 	return b.String()
 }
 
+// lastUserText is the text of the newest user message of request i, which is
+// where the loop tells the model its mode.
+func (c *msgCapture) lastUserText(i int) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	msgs := c.msgs[i]
+	var b strings.Builder
+	for _, blk := range msgs[len(msgs)-1].Content {
+		if blk.OfText != nil {
+			b.WriteString(blk.OfText.Text)
+		}
+	}
+	return b.String()
+}
+
 // The defect: nothing ever told the model which permission mode it was working
 // under. In plan mode it reasoned its way to an edit, called Edit, and was
 // refused — a wasted turn, and a plan built without knowing that running the
 // build to check it had never been an option.
-func TestPlanModeIsInTheSystemPrompt(t *testing.T) {
-	got := blocksText(systemFor("BASE PROMPT", permission.ModePlan))
-	if !strings.Contains(got, "BASE PROMPT") {
-		t.Error("the base prompt was lost")
+func TestPlanModeIsToldInTheConversation(t *testing.T) {
+	msg := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("go"))
+	tellMode(nil, &msg, permission.ModePlan)
+	got := msg.Content[len(msg.Content)-1].OfText.Text
+	if len(msg.Content) != 2 || !strings.Contains(got, "plan mode") || !strings.Contains(got, "ExitPlanMode") {
+		t.Errorf("plan mode clause = %q; want it added after the prompt, with the way out", got)
 	}
-	if !strings.Contains(got, "plan mode") {
-		t.Errorf("the model was not told it is in plan mode: %q", got)
-	}
-	if !strings.Contains(got, "ExitPlanMode") {
-		t.Errorf("the clause should say how to get out: %q", got)
-	}
-}
-
-func TestBypassModeIsInTheSystemPrompt(t *testing.T) {
-	got := blocksText(systemFor("BASE PROMPT", permission.ModeBypassPermissions))
-	if !strings.Contains(got, "host gate") {
-		t.Errorf("the model was not told the gate is off: %q", got)
+	msg = anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("go"))
+	tellMode(nil, &msg, permission.ModeBypassPermissions)
+	if !strings.Contains(msg.Content[1].OfText.Text, "host gate") {
+		t.Errorf("the model was not told the gate is off: %q", msg.Content[1].OfText.Text)
 	}
 }
 
-// Autonomous is what the base prompt already assumes, so restating it on every
-// turn is tokens spent to change nothing.
-func TestAutonomousAddsNoClause(t *testing.T) {
-	blocks := systemFor("BASE PROMPT", permission.ModeAutonomous)
-	if len(blocks) != 1 {
-		t.Fatalf("got %d system blocks, want 1: %v", len(blocks), blocks)
+// Autonomous is what the base prompt already assumes: nothing is said until
+// the conversation has been told something else, and then the change back is
+// said once.
+func TestModeIsToldOnlyWhenItChanges(t *testing.T) {
+	told := func(history []anthropic.BetaMessageParam, mode permission.Mode) anthropic.BetaMessageParam {
+		msg := anthropic.NewBetaUserMessage(anthropic.NewBetaTextBlock("next"))
+		tellMode(history, &msg, mode)
+		return msg
 	}
-	if blocks[0].Text != "BASE PROMPT" {
-		t.Errorf("system = %q, want the base prompt unchanged", blocks[0].Text)
+	if m := told(nil, permission.ModeAutonomous); len(m.Content) != 1 {
+		t.Error("autonomous was announced to a conversation that was told nothing else")
 	}
-}
-
-// The clause is a separate block so the long, identical prefix stays
-// byte-for-byte stable across a mode change and keeps whatever prompt caching
-// it has earned.
-func TestTheModeClauseIsASeparateBlock(t *testing.T) {
-	for _, mode := range []permission.Mode{permission.ModePlan, permission.ModeBypassPermissions} {
-		blocks := systemFor("BASE PROMPT", mode)
-		if len(blocks) != 2 {
-			t.Fatalf("%s: got %d blocks, want 2", mode, len(blocks))
-		}
-		if blocks[0].Text != "BASE PROMPT" {
-			t.Errorf("%s: the base block was modified: %q", mode, blocks[0].Text)
-		}
+	history := []anthropic.BetaMessageParam{told(nil, permission.ModePlan)}
+	if m := told(history, permission.ModePlan); len(m.Content) != 1 {
+		t.Error("plan mode was told twice")
+	}
+	back := told(history, permission.ModeAutonomous)
+	if len(back.Content) != 2 || !strings.Contains(back.Content[1].OfText.Text, "now autonomous") {
+		t.Error("leaving plan mode was not said")
+	}
+	if m := told(append(history, back), permission.ModeAutonomous); len(m.Content) != 1 {
+		t.Error("the change back was told twice")
 	}
 }
 
-// An empty base prompt must not produce an empty leading block, which the API
-// rejects.
-func TestNoEmptyBaseBlock(t *testing.T) {
-	blocks := systemFor("", permission.ModePlan)
-	if len(blocks) != 1 {
-		t.Fatalf("got %d blocks, want 1", len(blocks))
+// The system prompt is the base prompt in every mode: a changed system prompt
+// invalidates preserved thinking (PR #63). An empty base yields no block,
+// which the API would reject.
+func TestSystemPromptDoesNotCarryTheMode(t *testing.T) {
+	if got := systemFor("BASE PROMPT"); len(got) != 1 || got[0].Text != "BASE PROMPT" {
+		t.Errorf("system = %v", got)
 	}
-	if blocks[0].Text == "" {
-		t.Error("an empty system block was emitted")
+	if got := systemFor(""); len(got) != 0 {
+		t.Errorf("empty base produced %d blocks", len(got))
 	}
 }
 
@@ -160,7 +169,7 @@ func TestAMidRunModeChangeReachesTheModelAndTheFrontend(t *testing.T) {
 	}`), &asst); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	provider := &systemCapture{reply: []anthropic.BetaMessage{asst}}
+	provider := &msgCapture{reply: []anthropic.BetaMessage{asst}}
 
 	l := New(provider, tools.NewRegistry(flip))
 	var modes []string
@@ -180,11 +189,14 @@ func TestAMidRunModeChangeReachesTheModelAndTheFrontend(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	if got := provider.systemAt(0); !strings.Contains(got, "plan mode") {
-		t.Errorf("first request did not tell the model it was in plan mode")
+	if got := provider.lastUserText(0); !strings.Contains(got, "plan mode") {
+		t.Errorf("first request did not tell the model it was in plan mode: %q", got)
 	}
-	if got := provider.systemAt(1); strings.Contains(got, "plan mode") {
-		t.Errorf("the second request still claimed plan mode after the switch:\n%s", got)
+	if got := provider.lastUserText(1); !strings.Contains(got, "now autonomous") {
+		t.Errorf("the second request did not say plan mode had ended: %q", got)
+	}
+	if provider.systemAt(0) != provider.systemAt(1) {
+		t.Error("the system prompt changed with the mode")
 	}
 	mu.Lock()
 	defer mu.Unlock()
@@ -192,14 +204,6 @@ func TestAMidRunModeChangeReachesTheModelAndTheFrontend(t *testing.T) {
 	if len(modes) != len(want) || modes[0] != want[0] || modes[1] != want[1] {
 		t.Errorf("permission_mode events = %v, want %v", modes, want)
 	}
-}
-
-func blocksText(blocks []anthropic.BetaTextBlockParam) string {
-	var b strings.Builder
-	for _, blk := range blocks {
-		b.WriteString(blk.Text)
-	}
-	return b.String()
 }
 
 // flipTool runs a side effect, standing in for the user approving a plan while

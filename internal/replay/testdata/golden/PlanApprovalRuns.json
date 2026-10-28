@@ -49,6 +49,10 @@
       "type": "tool_result",
       "tool_use_id": "call_0_0",
       "result": "Plan approved. Plan mode is now off — proceed with the implementation.\n\nRecord the plan's steps with TodoWrite now, before starting the first one, and keep it updated as you go: mark exactly one item in_progress, complete it, then move on. Revise the list when you hit an error, a new requirement or an unexpected dependency — the list is what the user is watching to see what is done and what is left.\n\nThe approved plan is saved at /e2e/home/.klaudia/plans/26b9e637-d1a8-4026-84c4-a5859b315203.md, and TodoWrite keeps its checklist in step with your list."
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    }
@@ -90,6 +94,10 @@
       "type": "tool_result",
       "tool_use_id": "call_0_0",
       "result": "Plan approved. Plan mode is now off — proceed with the implementation.\n\nRecord the plan's steps with TodoWrite now, before starting the first one, and keep it updated as you go: mark exactly one item in_progress, complete it, then move on. Revise the list when you hit an error, a new requirement or an unexpected dependency — the list is what the user is watching to see what is done and what is left.\n\nThe approved plan is saved at /e2e/home/.klaudia/plans/26b9e637-d1a8-4026-84c4-a5859b315203.md, and TodoWrite keeps its checklist in step with your list."
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    },
@@ -163,6 +171,10 @@
       "type": "tool_result",
       "tool_use_id": "call_0_0",
       "result": "Plan approved. Plan mode is now off — proceed with the implementation.\n\nRecord the plan's steps with TodoWrite now, before starting the first one, and keep it updated as you go: mark exactly one item in_progress, complete it, then move on. Revise the list when you hit an error, a new requirement or an unexpected dependency — the list is what the user is watching to see what is done and what is left.\n\nThe approved plan is saved at /e2e/home/.klaudia/plans/26b9e637-d1a8-4026-84c4-a5859b315203.md, and TodoWrite keeps its checklist in step with your list."
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    },
@@ -261,6 +273,10 @@
       "type": "tool_result",
       "tool_use_id": "call_0_0",
       "result": "Plan approved. Plan mode is now off — proceed with the implementation.\n\nRecord the plan's steps with TodoWrite now, before starting the first one, and keep it updated as you go: mark exactly one item in_progress, complete it, then move on. Revise the list when you hit an error, a new requirement or an unexpected dependency — the list is what the user is watching to see what is done and what is left.\n\nThe approved plan is saved at /e2e/home/.klaudia/plans/26b9e637-d1a8-4026-84c4-a5859b315203.md, and TodoWrite keeps its checklist in step with your list."
+     },
+     {
+      "type": "text",
+      "text": "# Permission mode: bypass permissions\nPermission checks and the host gate are both off for this session; the user has taken responsibility for that. Nothing will stop a destructive command, so the judgement that would have been the gate's is now yours."
      }
     ]
    },
