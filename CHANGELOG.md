@@ -45,6 +45,18 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **Read handles long lines, long files, binaries and bad images.** A
+  single line over 1 MB (minified JavaScript, a data dump) failed the whole
+  read with "token too long"; any length now reads, a long line cut at 2000
+  bytes on a character boundary with a note of how much was left out. A
+  read that stops at its line limit says so and gives the offset to continue
+  from, with the file's total when it was read from disk, so the first 2000
+  lines are not taken for the whole file. A binary file is reported by size
+  instead of dumped as noise. An image is typed from its bytes rather than
+  its name, and an empty one, one that is not an image, or one over the
+  API's 5 MB or 8000-pixel limits is refused before it is sent, since a
+  rejected image stays in the conversation and fails every later request.
+  From PRs #46 and #72.
 - **`AskUserQuestion` is offered only when someone can answer.** A headless
   run or a sub-agent has no one to ask, so the tool is left out of its
   requests rather than offered and failing on every call. From PR #13.

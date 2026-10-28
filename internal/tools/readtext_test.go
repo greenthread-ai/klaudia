@@ -62,7 +62,9 @@ func TestReadAsksTheFrontendForTheWindowItWants(t *testing.T) {
 	if gotPath != path || gotLine != 120 || gotLimit != 2 {
 		t.Errorf("hook got (%q, %d, %d), want (%q, 120, 2)", gotPath, gotLine, gotLimit, path)
 	}
-	want := "   120\tone twenty\n   121\tone twentyone\n"
+	// The window came back full, so it says the file may go on; the editor's
+	// buffer is not counted, so no total is given.
+	want := "   120\tone twenty\n   121\tone twentyone\n\n(showing lines 120–121; there may be more: pass offset=122 to continue)\n"
 	if res[0].Content != want {
 		t.Errorf("content =\n%q\nwant\n%q", res[0].Content, want)
 	}
@@ -127,7 +129,7 @@ func TestReadDoesNotAskTheFrontendForABinaryFile(t *testing.T) {
 	// can supply.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "x.png")
-	if err := os.WriteFile(path, []byte{0x89, 'P', 'N', 'G'}, 0o644); err != nil {
+	if err := os.WriteFile(path, pngBytes(t, 1, 1), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

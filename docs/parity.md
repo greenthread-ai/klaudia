@@ -33,8 +33,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 
 | Feature | JS ref | Klaudia pkg | Status | Notes |
 | --- | --- | --- | --- | --- |
-| Read (text) | 05-app-core | `tools/read.go` | ✅ done | Line range, cat -n format; directory → clean error. |
-| Read (image) | 05-app-core | `tools/read.go` | ✅ done | Returns `ResultImage`; flows to vision via `toolResultWithImages`. |
+| Read (text) | 05-app-core | `tools/read.go` | ✅ done | Line range, cat -n format; lines of any length (cut at 2000 bytes on a rune boundary, with a note); notice when the window stops short of EOF; binary (NUL in first 8 KB) → size only; directory → clean error. |
+| Read (image) | 05-app-core | `tools/read.go` | ✅ done | Returns `ResultImage`; flows to vision via `toolResultWithImages`. Typed from the bytes, not the name; empty, non-image, over 5 MB or over 8000 px a side is refused before sending. |
 | Read (PDF) | 05-app-core | `tools/read.go` + `native/pdf` | 🔀 divergent | Pure-Go text extraction via gopdf (JS rendered pages to images for the model). |
 | Write | 05-app-core | `tools/write.go` | ✅ done | |
 | Edit | 05-app-core | `tools/edit.go` | ✅ done | Exact-match + replace_all. |
