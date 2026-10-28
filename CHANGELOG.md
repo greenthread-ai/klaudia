@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.6.2 — 2026-10-28
+
 ### Fixed
 
 - **`/plan run` works the step list on screen.** A list the model kept for
