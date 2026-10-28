@@ -44,6 +44,7 @@ other products (see docs/roadmap.md, "The extraction"); it must not import
 - **mcp** - Model Context Protocol client (2026-07-28) + form elicitation
 - **subagent** - Built-in sub-agent types
 - **worktree** - Per-sub-agent git checkouts: seed, adopt, conflict reporting
+- **textsafe** - Cleans text that reaches the model from files and servers Klaudia did not write (invisible characters out, lengths capped)
 - **gitprobe** - The guard on git commands Klaudia runs on its own (status, diff, checkpoints, worktrees): no fsmonitor, hooks or external diff drivers from the repository's config
 - **skill** - User-defined skills (`.klaudia/skills`)
 - **hooks** - Lifecycle hooks: the five events, project-hook trust, execution

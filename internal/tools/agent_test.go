@@ -56,7 +56,7 @@ func TestAgentExecuteDelegatesToSpawner(t *testing.T) {
 	if sp.gotType != "Explore" || sp.gotPrompt != "find the bug" {
 		t.Errorf("spawner got type=%q prompt=%q", sp.gotType, sp.gotPrompt)
 	}
-	if res[0].Content != "sub-agent findings" {
+	if res[0].Content != subagentResultHeader+"sub-agent findings" {
 		t.Errorf("result = %q", res[0].Content)
 	}
 }
@@ -146,7 +146,7 @@ func TestAgentForkRoutesTheConversation(t *testing.T) {
 	fs := &forkingSpawner{}
 	raw, _ := json.Marshal(AgentInput{Prompt: "p", SubagentType: "Explore", Description: "d", Fork: true})
 	res, _ := newTestAgent(t, fs).Execute(context.Background(), Context{Conversation: "the conversation"}, raw)
-	if res[0].Content != "forked" || fs.forkedWith != "the conversation" {
+	if res[0].Content != subagentResultHeader+"forked" || fs.forkedWith != "the conversation" {
 		t.Errorf("result %q, forked with %v", res[0].Content, fs.forkedWith)
 	}
 	res, _ = newTestAgent(t, &fakeSpawner{result: "plain"}).Execute(context.Background(), Context{}, raw)

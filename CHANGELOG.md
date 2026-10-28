@@ -62,6 +62,15 @@ port mirrors (see `internal/version`).
   `/commit` and the goal loop's commits still run plain git, hooks
   included, because you asked for them. From PR #24; upstream Claude Code
   fixed the same class in 2.1.265.
+- **Hidden text no longer reaches the model from files.** Project
+  instructions (`CLAUDE.md`, `AGENTS.md`), recalled memory and knowledge, and
+  MCP tool descriptions could carry instructions in invisible characters (tag
+  characters that spell out text, zero-width and bidi characters) that a
+  person reviewing the file would never see. They are stripped, ZWJ and ZWNJ
+  kept for the scripts and emoji that need them; an MCP tool description is
+  also capped at 2 KB. A sub-agent's result is introduced as its report, so
+  text it quotes from what it read is not taken as the user speaking. From
+  PR #30.
 - **A session id cannot be a path.** `--resume` and an ACP client's
   `session/load` took the id into a file path unchecked, so `../..` reached
   outside the sessions directory. Ids are validated where they come in, and

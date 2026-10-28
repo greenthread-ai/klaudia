@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/greenthread-ai/klaudia/internal/textsafe"
 	"strings"
 	"time"
 
@@ -205,7 +206,7 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 			out = append(out, &mcpTool{
 				qualifiedName: qualifiedName(srv.Name, rt.Name),
 				remoteName:    rt.Name,
-				description:   rt.Description,
+				description:   toolDescription(rt.Description),
 				inputSchema:   schema,
 				server:        srv,
 				readOnly:      readOnly,
@@ -288,3 +289,14 @@ func qualifiedName(server, tool string) string {
 // ServerName is the server this tool belongs to — what /mcp counts by, rather
 // than parsing a name that may have been rewritten to fit the API.
 func (t *mcpTool) ServerName() string { return t.server.Name }
+
+// maxToolDescription caps an MCP tool's description. A server writes it and
+// every request carries it: an uncapped one costs context on every turn, and
+// is the easiest place for a server to put instructions for the model.
+const maxToolDescription = 2048
+
+// toolDescription is a server's tool description with invisible characters
+// removed and its length capped. (From PR #30.)
+func toolDescription(d string) string {
+	return textsafe.Truncate(textsafe.StripInvisible(d), maxToolDescription, " […description truncated]")
+}
