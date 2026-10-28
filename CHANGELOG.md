@@ -5,6 +5,28 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Security
+
+- **A repository's config can no longer loosen yours.** `.klaudia/config.toml`
+  arrives with the repo, yet it could start Klaudia in `bypassPermissions`,
+  take the sandbox off, add writable directories, widen the network
+  allowlist, choose the browser binary or profile, or set `provider`,
+  `baseURL` and the API key, which decides where your credentials are sent.
+  A project config may now only tighten: `plan` mode, confinement where you
+  chose none, no network, no mounted working tree, a narrower allowlist.
+  Anything else is ignored with a warning naming the key and where to put it
+  instead.
+- **Approvals show the whole command, with nothing hidden.** Commands were
+  cut at 220 characters, so a dangerous tail could be padded out of view,
+  and control and invisible characters (an ESC or CR that redraws the line,
+  zero-width spaces, bidi overrides) passed through. They are now shown in
+  full with such characters as `\u{…}` escapes, on host-change cards too,
+  and an approval repeats a command its tool line could only show in part.
+- **A session id cannot be a path.** `--resume` and an ACP client's
+  `session/load` took the id into a file path unchecked, so `../..` reached
+  outside the sessions directory. Ids are validated where they come in, and
+  every path built from one keeps only its last element.
+
 ## v0.4.0 — 2026-10-28
 
 ### Added
@@ -29,6 +51,8 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **`[input] enter = "newline"` takes effect.** The section was read and
+  never merged, so the setting did nothing.
 - **Sub-agents fall back too.** The `fallbackModels` chain covered only the
   main loop, so a 529 the parent survived by switching model still failed
   every sub-agent it started. They now get the same chain.

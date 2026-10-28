@@ -64,10 +64,10 @@ func (m *Model) permissionSummary(req agent.ApprovalRequest) string {
 		}
 	case "Bash":
 		if desc := stringField(req.Input, "description"); desc != "" {
-			return "run command — " + desc
+			return "run command — " + visible(desc)
 		}
 		if target := firstNonEmpty(req.Specifier, stringField(req.Input, "command")); target != "" {
-			return "run command " + target
+			return "run command " + visible(target)
 		}
 	}
 	return label
@@ -103,7 +103,7 @@ func permissionDetail(req agent.ApprovalRequest) string {
 			// it cannot classify, and returning early here hid the one line
 			// saying so — the prompt read as an arbitrary refusal-in-waiting
 			// rather than "nothing here classifies cd".
-			detail := "command: " + oneline(cmd, 220)
+			detail := "command: " + visible(cmd)
 			if req.Suggestion != "" {
 				detail += "\n  why: " + oneline(req.Suggestion, 220)
 			}

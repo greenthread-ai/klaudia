@@ -59,7 +59,12 @@ Prefer to build from a checkout? See [Build](#build).
 ### Create a config (optional but recommended)
 
 Klaudia reads `~/.klaudia/config.toml` automatically for every run; a project
-`./.klaudia/config.toml` overlays it when present. Generate a commented starter:
+`./.klaudia/config.toml` overlays it when present. A project config arrives
+with the repository, so it may only **tighten** yours: `plan` mode, a sandbox
+where you have not chosen one, no network, a narrower `egress` list. Your
+provider, `baseURL` and keys, bypass mode, a looser sandbox, extra writable
+directories and browser binary or profile are yours alone; a project setting
+any of them is ignored with a warning. Generate a commented starter:
 
 ```bash
 klaudia --create-config=global   # ~/.klaudia/config.toml  (your default)
@@ -662,8 +667,9 @@ process gets an empty config root, so user config, the global `AGENTS.md` and
 `.mcp.json`, skills, hook and MCP approvals, session history and job logs are
 all absent (and nothing is written back); `~/.claude/skills` and
 `~/.claude/CLAUDE.md` are skipped too; and memory and hooks are off. The
-repository's own files still apply, since they are what is being run. Pass the
-key as `ANTHROPIC_API_KEY` if it normally lives in your user `config.toml`.
+repository's own files still apply, since they are what is being run. How to
+reach the model is kept: the provider, `baseURL`, key and model from your user
+`config.toml` are carried over, as is anything in the environment.
 
 ### Tracing (OpenTelemetry)
 

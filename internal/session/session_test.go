@@ -226,3 +226,29 @@ func TestNewWriterIsLazy(t *testing.T) {
 		t.Fatalf("file must exist after Append: %v", err)
 	}
 }
+
+// An id from outside (--resume, an ACP client) is refused unless it can only
+// be a name; and a path built from one nobody checked still stays inside the
+// sessions directory.
+func TestSessionIDsCannotBePaths(t *testing.T) {
+	for _, id := range []string{"6c5b0b50-43bc-43d9-b8f5-ddddf68bfd35", "my_session.v2"} {
+		if !ValidID(id) {
+			t.Errorf("ValidID(%q) = false", id)
+		}
+	}
+	for _, id := range []string{"", ".", "..", "../x", "a/b", `a\b`, "/etc/passwd", "x\x00y", strings.Repeat("a", 129)} {
+		if ValidID(id) {
+			t.Errorf("ValidID(%q) = true", id)
+		}
+	}
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	cwd := t.TempDir()
+	dir := Dir(cwd)
+	for _, id := range []string{"../../../etc/passwd", "..", "/abs/path"} {
+		for _, p := range []string{Path(cwd, id), ExistingPath(cwd, id), SummaryPath(cwd, id)} {
+			if filepath.Dir(p) != dir {
+				t.Errorf("id %q built %s, outside %s", id, p, dir)
+			}
+		}
+	}
+}

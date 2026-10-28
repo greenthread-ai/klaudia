@@ -81,13 +81,15 @@ func newEnv(t *testing.T) *Env {
 		Mock:    newMock(t, defaultScript),
 	}
 	// The user config lives at $KLAUDIA_CONFIG_DIR/config.toml, which is also
-	// $HOME/.klaudia/config.toml, so either resolution finds the mock.
+	// $HOME/.klaudia/config.toml, so either resolution finds the mock. Only
+	// the user's config may name a provider and endpoint (config.projectSafe),
+	// so the project's carries nothing that would be refused.
 	e.Config = filepath.Join(e.Home, ".klaudia")
 	cfg := fmt.Sprintf("provider = \"openai\"\nbaseURL = %q\nmodel = %q\napiKey = \"mock-key\"\ncontextWindow = 128000\n",
 		e.Mock.BaseURL(), mockModel)
 	for path, data := range map[string]string{
 		filepath.Join(e.Config, "config.toml"):              cfg,
-		filepath.Join(e.Project, ".klaudia", "config.toml"): cfg,
+		filepath.Join(e.Project, ".klaudia", "config.toml"): "contextWindow = 128000\n",
 		filepath.Join(e.Project, "main.go"):                 mainGo,
 		filepath.Join(e.Project, "README.md"):               "# e2e fixture\n",
 		filepath.Join(e.Tmp, ".keep"):                       "",

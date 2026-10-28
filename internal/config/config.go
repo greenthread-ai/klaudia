@@ -107,6 +107,10 @@ type Config struct {
 	// the comment on merge. Use LoadHooks, which keeps each hook attached to
 	// the file it came from.
 	Hooks []Hook `toml:"hooks,omitempty"`
+
+	// Ignored names the project settings Load refused, each with the reason,
+	// for the caller to warn about. Never read from a file.
+	Ignored []string `toml:"-"`
 }
 
 // Hook is one `[[hooks]]` entry.
@@ -170,13 +174,14 @@ type Links struct {
 type Input struct {
 	// Enter is "send" (default) or "newline".
 	//
-	// "send":    Return submits; ctrl+j and alt+Return insert a newline.
-	// "newline": Return inserts a newline; alt+Return and ctrl+j submit.
+	// "send":    Return submits; Shift+Return, alt+Return and ctrl+j insert a
+	//            newline.
+	// "newline": Return and Shift+Return insert a newline; Ctrl+Return,
+	//            alt+Return and ctrl+j submit.
 	//
-	// There is deliberately no "ctrl+Return" setting: a terminal cannot tell
-	// Ctrl+Return from Return — both send CR — unless it is configured to send
-	// something else for that chord. Map it to ESC CR ("\x1b\r") in the
-	// terminal and it arrives here as alt+Return.
+	// Shift+ and Ctrl+Return only exist on terminals that report them (the
+	// Kitty keyboard protocol or modifyOtherKeys); elsewhere they arrive as
+	// Return. See internal/tui/keyaction.go.
 	Enter string `toml:"enter,omitempty"`
 }
 
@@ -282,11 +287,112 @@ func ProjectPath(cwd string) string {
 
 // Load reads ~/.klaudia/config.toml then overlays ./.klaudia/config.toml
 // (project settings win). Missing files are ignored.
+//
+// The project file arrives with the repository, so it may tighten what the
+// user's config allows and never loosen it (projectSafe). Before this, a
+// cloned repo's config could start Klaudia in bypassPermissions, take the
+// sandbox off, widen the network allowlist, or point the provider — and the
+// user's API key or login token — at a server of its choosing. Anything
+// refused is listed in Ignored.
 func Load(cwd string) Config {
 	var cfg Config
 	merge(&cfg, read(UserPath()))
-	merge(&cfg, read(ProjectPath(cwd)))
+	project := projectSafe(read(ProjectPath(cwd)), cfg, &cfg.Ignored)
+	merge(&cfg, project)
 	return cfg
+}
+
+// Connection is the part of the user's config that says how to reach a
+// model — provider, endpoint, key, model and its sizing — and nothing that
+// is state or preference. --restricted runs on an empty config root but
+// still has to reach the provider the user configured; a project config may
+// not supply it (projectSafe), so this is what is carried over.
+func Connection() Config {
+	u := read(UserPath())
+	return Config{
+		Provider: u.Provider, Model: u.Model, BaseURL: u.BaseURL,
+		APIKey: u.APIKey, APIKeyEnv: u.APIKeyEnv,
+		ContextWindow: u.ContextWindow, MaxTokens: u.MaxTokens,
+		Temperature: u.Temperature, MaxRetries: u.MaxRetries,
+		StreamIdleTimeout: u.StreamIdleTimeout, FallbackModels: u.FallbackModels,
+	}
+}
+
+// projectSafe returns the project config with every setting that would
+// loosen the user's removed, appending why to ignored. user is the user's
+// config as loaded, which a project may narrow but not widen.
+//
+// The rule is CLAUDE.md's: a config file must never grant permission. Hooks
+// and .mcp.json servers are not here — they run code, and take the project
+// trust prompt instead (docs/hooks.md).
+func projectSafe(p Config, user Config, ignored *[]string) Config {
+	drop := func(key, why string) {
+		*ignored = append(*ignored, "project config "+key+" ignored: "+why+"; set it in "+UserPath()+" if you mean it")
+	}
+	const creds = "it decides where your credentials are sent"
+	if p.Provider != "" {
+		drop("provider", creds)
+		p.Provider = ""
+	}
+	if p.BaseURL != "" {
+		drop("baseURL", creds)
+		p.BaseURL = ""
+	}
+	if p.APIKey != "" || p.APIKeyEnv != "" {
+		drop("apiKey/apiKeyEnv", creds)
+		p.APIKey, p.APIKeyEnv = "", ""
+	}
+	if m := p.Permissions.Mode; m != "" && m != "plan" {
+		// autonomous is the default: over an unset user mode it changes nothing.
+		if m != "autonomous" || user.Permissions.Mode != "" {
+			drop("permissions.mode = "+m, "a project may only make the mode stricter (plan)")
+		}
+		p.Permissions.Mode = ""
+	}
+	s := &p.Sandbox
+	if s.Mode != "" && (s.Mode == SandboxLocal || user.Sandbox.Mode != "") {
+		if s.Mode != user.Sandbox.Mode {
+			drop("sandbox.mode = "+s.Mode, "a project may confine commands where you have not chosen how, not change your choice")
+		}
+		s.Mode = ""
+	}
+	if len(s.WriteRoots) > 0 {
+		drop("sandbox.writeRoots", "it makes more of the machine writable")
+		s.WriteRoots = nil
+	}
+	if s.Runtime != "" || s.Image != "" {
+		drop("sandbox.runtime/image", "it chooses what runs your commands")
+		s.Runtime, s.Image = "", ""
+	}
+	if s.Network != "" && s.Network != "none" {
+		drop("sandbox.network = "+s.Network, "a project may only cut the network off")
+		s.Network = ""
+	}
+	if s.MountCWD != nil && *s.MountCWD {
+		s.MountCWD = nil // true is the default: nothing to loosen, nothing to say
+	}
+	if len(s.Egress) > 0 && len(user.Sandbox.Egress) > 0 {
+		// Narrow, never widen: only hosts both lists allow.
+		var both []string
+		for _, h := range s.Egress {
+			for _, u := range user.Sandbox.Egress {
+				if strings.EqualFold(h, u) {
+					both = append(both, h)
+					break
+				}
+			}
+		}
+		if len(both) < len(s.Egress) {
+			drop("sandbox.egress hosts outside your own list", "a project may narrow the allowlist, not add to it")
+		}
+		s.Egress = both // empty: nothing in common, so the user's list stands
+	}
+	b := &p.Browser
+	if b.ChromePath != "" || b.RemoteURL != "" || b.UserDataDir != "" {
+		drop("browser.chromePath/remoteUrl/userDataDir", "they choose the program run, where browsing goes, or which profile and cookies it uses")
+		b.ChromePath, b.RemoteURL, b.UserDataDir = "", "", ""
+	}
+	return p
 }
 
 // HookSources is the hook configuration with its provenance intact.
@@ -391,6 +497,11 @@ func merge(dst *Config, src Config) {
 	}
 	if src.MaxEffort != "" {
 		dst.MaxEffort = src.MaxEffort
+	}
+	// Before this line existed, [input] was read and never merged, so
+	// enter = "newline" — documented, and in /help — did nothing at all.
+	if src.Input.Enter != "" {
+		dst.Input.Enter = src.Input.Enter
 	}
 	if src.Links.Enabled != nil {
 		dst.Links.Enabled = src.Links.Enabled

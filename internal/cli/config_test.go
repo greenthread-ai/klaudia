@@ -51,13 +51,22 @@ func TestCreateConfig(t *testing.T) {
 				t.Fatal(err)
 			}
 			body := string(data)
-			for _, want := range []string{
+			wants := []string{
 				`provider = "openai"`,
 				`baseURL = "https://api.example.com/v1"`,
 				`apiKeyEnv = "MY_API_KEY"`,
 				`# Klaudia config`,
 				`# contextWindow = 8192`, // commented example for OpenAI-compatible hosts
-			} {
+			}
+			if tt.scope == "local" {
+				// A project config may not set these (config.projectSafe), so
+				// its starter must not suggest them.
+				wants = []string{`# Klaudia project config`, `# mode = "plan"`}
+				if strings.Contains(body, "provider =") || strings.Contains(body, "baseURL =") {
+					t.Errorf("project starter suggests settings a project config cannot set:\n%s", body)
+				}
+			}
+			for _, want := range wants {
 				if !strings.Contains(body, want) {
 					t.Errorf("starter config missing %s:\n%s", want, body)
 				}
@@ -104,7 +113,7 @@ func TestStarterConfigRoundtripsContextWindow(t *testing.T) {
 	cwd := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("KLAUDIA_CONFIG_DIR", "") // so HOME decides the config root
-	path, err := createConfig("local", cwd)
+	path, err := createConfig("global", cwd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,5 +128,35 @@ func TestStarterConfigRoundtripsContextWindow(t *testing.T) {
 	cfg := config.Load(cwd)
 	if cfg.ContextWindow != 8192 {
 		t.Errorf("ContextWindow = %d, want 8192 (toml tag mismatch?)", cfg.ContextWindow)
+	}
+}
+
+// Every example the project starter offers is one a project config may set:
+// uncommented in full, it loads with nothing ignored.
+func TestProjectStarterOffersOnlyAllowedSettings(t *testing.T) {
+	cwd := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("KLAUDIA_CONFIG_DIR", "")
+	path, err := createConfig("local", cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	var lines []string
+	for _, l := range strings.Split(string(data), "\n") {
+		if t := strings.TrimPrefix(l, "# "); t != l && (strings.Contains(t, " = ") || strings.HasPrefix(t, "[")) {
+			l = t
+		}
+		lines = append(lines, l)
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Load(cwd)
+	if cfg.Permissions.Mode != "plan" || cfg.Model == "" {
+		t.Fatalf("the uncommented starter did not load: %+v", cfg)
+	}
+	if len(cfg.Ignored) != 0 {
+		t.Errorf("the project starter suggests settings that are then ignored: %q", cfg.Ignored)
 	}
 }

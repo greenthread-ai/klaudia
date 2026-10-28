@@ -10,15 +10,15 @@ import (
 // SummaryPath returns the summary file path for a session, stored alongside
 // the transcript in the per-project session directory.
 func SummaryPath(cwd, sessionID string) string {
-	return filepath.Join(Dir(cwd), sessionID+".summary.md")
+	return filepath.Join(Dir(cwd), fileID(sessionID)+".summary.md")
 }
 
 func legacySummaryPath(cwd, sessionID string) string {
-	return filepath.Join(legacyDir(cwd), sessionID+".summary.md")
+	return filepath.Join(legacyDir(cwd), fileID(sessionID)+".summary.md")
 }
 
 func localLegacySummaryPath(cwd, sessionID string) string {
-	return filepath.Join(cwd, ".klaudia", "sessions", sessionID+".summary.md")
+	return filepath.Join(cwd, ".klaudia", "sessions", fileID(sessionID)+".summary.md")
 }
 
 // WriteSummary persists a compaction summary for a session, stamped with the

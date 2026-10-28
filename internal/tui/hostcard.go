@@ -35,11 +35,13 @@ func hostCardLines(hc *hostgate.HostChange) []string {
 	}
 	out = append(out, askStyle.Render(head))
 
+	// Summary and commands come from the model or a repository's config:
+	// shown with nothing hidden (visible), as the plain approval is.
 	if s := strings.TrimSpace(hc.Summary); s != "" {
-		out = append(out, "  "+s)
+		out = append(out, "  "+visible(s))
 	}
 	if r := strings.TrimSpace(hc.Reason); r != "" {
-		out = append(out, toolStyle.Render("  why: "+r))
+		out = append(out, toolStyle.Render("  why: "+visible(r)))
 	}
 
 	for _, line := range hostScopeLines(hc) {
@@ -72,7 +74,7 @@ func hostScopeLines(hc *hostgate.HostChange) []string {
 	var out []string
 	add := func(label string, items []string) {
 		if len(items) > 0 {
-			out = append(out, label+": "+strings.Join(items, ", "))
+			out = append(out, label+": "+visible(strings.Join(items, ", ")))
 		}
 	}
 	add("paths", hc.Paths)
@@ -81,7 +83,7 @@ func hostScopeLines(hc *hostgate.HostChange) []string {
 	// One per line, not joined: a command line contains commas, and a list of
 	// them run together is exactly the thing a user skims instead of reading.
 	for _, c := range hc.Commands {
-		out = append(out, "  "+c)
+		out = append(out, "  "+visible(c))
 	}
 
 	// A caught change has effects rather than a declared scope.

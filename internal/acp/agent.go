@@ -34,6 +34,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	sessions "github.com/greenthread-ai/klaudia/internal/session"
 	"io"
 	"path/filepath"
 	"strconv"
@@ -321,6 +322,9 @@ func (a *Agent) loadSession(raw json.RawMessage) (any, error) {
 	}
 	if p.SessionID == "" {
 		return nil, errorf(codeInvalidParams, "session/load: sessionId is required")
+	}
+	if !sessions.ValidID(p.SessionID) {
+		return nil, errorf(codeInvalidParams, "session/load: sessionId is not a session id")
 	}
 	if err := a.checkCWD("session/load", p.CWD); err != nil {
 		return nil, err

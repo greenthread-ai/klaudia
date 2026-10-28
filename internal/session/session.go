@@ -71,9 +71,33 @@ func legacyDir(cwd string) string {
 	return filepath.Join(legacyProjectsRoot(), EncodePath(cwd))
 }
 
+// ValidID reports whether id can name a session: what Klaudia generates is a
+// UUID, and a user-chosen one may use letters, digits, dot, dash and
+// underscore. Callers taking an id from outside — --resume, an ACP client's
+// session/load — check it, so "../../x" is refused with a reason rather than
+// reaching a path.
+func ValidID(id string) bool {
+	if id == "" || len(id) > 128 || id == "." || id == ".." {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// fileID is the id as a file name. Every path built from a session id goes
+// through it: only the last element is used, so an id nobody validated
+// still cannot name a file outside the sessions directory.
+func fileID(id string) string { return filepath.Base(filepath.Clean("/" + id)) }
+
 // Path returns the transcript file path for a session in a working directory.
 func Path(cwd, sessionID string) string {
-	return filepath.Join(Dir(cwd), sessionID+".jsonl")
+	return filepath.Join(Dir(cwd), fileID(sessionID)+".jsonl")
 }
 
 // ExistingPath returns the transcript file path for a session. It prefers the
@@ -81,7 +105,7 @@ func Path(cwd, sessionID string) string {
 // the same session ID.
 func ExistingPath(cwd, sessionID string) string {
 	path := Path(cwd, sessionID)
-	legacy := filepath.Join(legacyDir(cwd), sessionID+".jsonl")
+	legacy := filepath.Join(legacyDir(cwd), fileID(sessionID)+".jsonl")
 	st, err := os.Stat(path)
 	legacySt, legacyErr := os.Stat(legacy)
 	switch {

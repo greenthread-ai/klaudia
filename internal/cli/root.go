@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/pelletier/go-toml/v2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -470,7 +471,7 @@ func buildProvider(cfg config.Config) (api.Provider, string, error) {
 	switch cfg.Provider {
 	case config.ProviderOpenAI:
 		if endpoint == "" {
-			return nil, "", fmt.Errorf("provider \"openai\" requires baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml (try --create-config=global or --create-config=local)")
+			return nil, "", fmt.Errorf("provider \"openai\" requires baseURL in ~/.klaudia/config.toml (try --create-config=global); a project config cannot set it")
 		}
 		key := cfg.ResolveAPIKey()
 		if key == "" {
@@ -761,9 +762,10 @@ func gitCommit(dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
-const starterConfig = `# Klaudia config
-# Global: ~/.klaudia/config.toml
-# Local:  ./.klaudia/config.toml (overrides global settings)
+const starterConfig = `# Klaudia config: ~/.klaudia/config.toml
+# A project's ./.klaudia/config.toml overlays this, but may only tighten it:
+# provider, endpoint, keys and anything that loosens permissions or the
+# sandbox are yours alone to set, here.
 
 provider = "openai"
 model = "openai/gpt-5.5"
@@ -804,6 +806,28 @@ apiKeyEnv = "MY_API_KEY"
 # worktree = true # a writing sub-agent gets its own git checkout (default)
 `
 
+// starterProjectConfig is what --create-config=local writes: only what a
+// project config may set. It arrives with the repository, so it can tighten
+// the user's config and never loosen it (config.projectSafe).
+const starterProjectConfig = `# Klaudia project config: ./.klaudia/config.toml
+# Overlays ~/.klaudia/config.toml for this repository. It travels with the
+# repo, so it may only tighten: provider, baseURL and keys, bypass mode, a
+# looser sandbox, extra writable directories and a wider network allowlist
+# are ignored here (with a warning) and belong in ~/.klaudia/config.toml.
+
+# model = "sonnet"
+# effort = "high"   # low | medium | high | xhigh | max
+# theme = "nord"
+
+# Stricter than the user's settings, for everyone working in this repo:
+# [permissions]
+# mode = "plan"
+#
+# [sandbox]
+# mode = "os"                 # applies where the user has not chosen one
+# egress = ["github.com"]     # narrows the user's allowlist, or sets one
+`
+
 func createConfig(scope, cwd string) (string, error) {
 	var path string
 	switch scope {
@@ -822,7 +846,11 @@ func createConfig(scope, cwd string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(path, []byte(starterConfig), 0o644); err != nil {
+	body := starterConfig
+	if scope == "local" {
+		body = starterProjectConfig
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -865,6 +893,9 @@ func resolveResumeID(cwd string, opts options, interactive bool) (string, error)
 		return "", fmt.Errorf("--new-session cannot be combined with --resume or --continue")
 	}
 	if opts.resume != "" {
+		if !session.ValidID(opts.resume) {
+			return "", fmt.Errorf("--resume %q is not a session id (letters, digits, '.', '-' and '_' only)", opts.resume)
+		}
 		return opts.resume, nil
 	}
 	if opts.continueSession {
@@ -950,15 +981,23 @@ func run(cmd *cobra.Command, opts *options) error {
 	// .mcp.json, skills, hook and MCP approvals, transcripts, job logs —
 	// rather than a switch per subsystem that the next subsystem forgets.
 	// Memory and hooks are off as well, project ones included: both carry
-	// state from earlier runs or execute it. Credentials still come from the
-	// environment (and the keychain login), so a key kept only in the user
-	// config.toml must be passed as ANTHROPIC_API_KEY.
+	// state from earlier runs or execute it. How to reach the model — the
+	// user config's provider, endpoint, key and model (config.Connection) — is
+	// carried into the empty root: it is not state, and a project config may
+	// not supply it. Environment credentials and the keychain login work too.
 	if opts.restricted {
+		conn := config.Connection()
 		dir, err := os.MkdirTemp("", "klaudia-restricted-")
 		if err != nil {
 			return err
 		}
 		defer os.RemoveAll(dir)
+		if b, err := toml.Marshal(conn); err == nil && len(b) > 0 {
+			// 0600: it may hold an inline apiKey.
+			if err := os.WriteFile(filepath.Join(dir, "config.toml"), b, 0o600); err != nil {
+				return err
+			}
+		}
 		if err := os.Setenv("KLAUDIA_CONFIG_DIR", dir); err != nil {
 			return err
 		}
@@ -1080,6 +1119,9 @@ func run(cmd *cobra.Command, opts *options) error {
 
 	// Select the model provider (.klaudia/config.toml: anthropic | openai).
 	cfg := config.Load(cwd)
+	for _, w := range cfg.Ignored {
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
+	}
 	provider, providerModel, err := buildProvider(cfg)
 	if err != nil {
 		return err

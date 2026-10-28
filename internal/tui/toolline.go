@@ -115,10 +115,16 @@ func shownCallDetail(req agent.ApprovalRequest) string {
 	case "Edit", "Write", "NotebookEdit":
 		return ""
 	case "Bash":
-		if req.Suggestion != "" {
-			return "why: " + oneline(req.Suggestion, 220)
+		// The tool line shows the command cut to the terminal's width and as
+		// written; when that could hide part of it, the approval shows it all.
+		var lines []string
+		if cmd := stringField(req.Input, "command"); needsFullCommand(cmd) {
+			lines = append(lines, "command: "+visible(cmd))
 		}
-		return ""
+		if req.Suggestion != "" {
+			lines = append(lines, "why: "+oneline(req.Suggestion, 220))
+		}
+		return strings.Join(lines, "\n  ")
 	}
 	return permissionDetail(req)
 }

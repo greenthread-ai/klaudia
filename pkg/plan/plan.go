@@ -130,7 +130,8 @@ func PathFor(configRoot, sessionID string) string {
 	if configRoot == "" || sessionID == "" {
 		return ""
 	}
-	return filepath.Join(configRoot, "plans", sessionID+".md")
+	// Only the last element: a session id is not a path (session.ValidID).
+	return filepath.Join(configRoot, "plans", filepath.Base(filepath.Clean("/"+sessionID))+".md")
 }
 
 // Observe registers fn to be called after every change. It is called
