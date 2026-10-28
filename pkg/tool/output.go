@@ -224,6 +224,22 @@ const spillMarker = "[full output: "
 // same way, and Cap can tell content that already names one.
 const SpillMarker = spillMarker
 
+// ClampKeepingTail is ClampOutput split the other way: a third to the head,
+// two thirds to the tail. For output whose newest part is the point, such as a
+// background job's log read, where the error after a reload or the request
+// that just failed is at the end.
+func ClampKeepingTail(out string) (string, int) {
+	limit := maxToolOutput
+	if len(out) <= limit {
+		return out, 0
+	}
+	headBytes := limit / 3
+	head := cutAfterLastLine(out[:headBytes])
+	tail := cutBeforeFirstLine(out[len(out)-(limit-headBytes):])
+	elided := len(out) - len(head) - len(tail)
+	return head + "\n" + elisionMarker(elided) + "\n" + tail, elided
+}
+
 // ClampOutput clamps out to the default per-tool budget, keeping a head and a
 // tail, and reports how many bytes it removed. For a tool that clamps itself
 // (Bash) rather than leaving it to the loop's Cap.

@@ -256,6 +256,9 @@ type ShellOutput struct {
 	// how long it has been quiet.
 	Started    time.Time
 	LastOutput time.Time
+	// LogPath is the job's log file, "" when the log is memory-only, so a
+	// reader that trims Output can say where the rest is.
+	LogPath string
 }
 
 // Read returns output produced since the last read, advancing the cursor.
@@ -277,7 +280,7 @@ func (s *JobStore) Read(ref string) (ShellOutput, bool) {
 	out := ShellOutput{
 		ID: j.ID, Name: j.Name, Command: j.Command, Output: data,
 		Running: !j.exited, ExitCode: j.exitCode,
-		Started: j.Started, LastOutput: j.log.LastWrite(),
+		Started: j.Started, LastOutput: j.log.LastWrite(), LogPath: j.log.Path(),
 	}
 	s.mu.Unlock()
 	return out, true

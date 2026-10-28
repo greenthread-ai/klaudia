@@ -10,6 +10,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/schema"
+	"github.com/greenthread-ai/klaudia/pkg/tool"
 )
 
 // --- BashOutput tool ---
@@ -81,7 +82,7 @@ func (t *BashOutput) CheckPermissions(pctx permission.Context, _ permission.Perm
 	return allowAlways(pctx) // reading output of a shell we already started
 }
 
-func (t *BashOutput) Execute(ctx context.Context, _ Context, raw json.RawMessage) ([]Result, error) {
+func (t *BashOutput) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in BashOutputInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
@@ -109,17 +110,40 @@ func (t *BashOutput) Execute(ctx context.Context, _ Context, raw json.RawMessage
 	if in.Filter != "" {
 		body = filterLines(body, in.Filter)
 	}
-	var b strings.Builder
-	if body == "" {
-		b.WriteString("[no new output]")
-	} else {
-		b.WriteString(body)
-	}
-	b.WriteString("\n" + jobStateLine(out, time.Now()))
+	model, full := clampJobRead(body, out, tctx.Spill)
+	status := "\n" + jobStateLine(out, time.Now())
 	if waited == "timed out" {
-		fmt.Fprintf(&b, " — waited %ds; still going", in.WaitSeconds)
+		status += fmt.Sprintf(" — waited %ds; still going", in.WaitSeconds)
 	}
-	return []Result{{Content: b.String()}}, nil
+	if full != "" {
+		full += status
+	}
+	return []Result{{Content: model + status, Full: full}}, nil
+}
+
+// clampJobRead trims one BashOutput read to the per-tool budget, keeping more
+// of the newest output (tool.ClampKeepingTail) than the loop's head-heavy
+// backstop would: what a job printed last is what the model is asking about.
+// It returns the text for the model and, when something was cut, the
+// untrimmed read for local display.
+//
+// The cut loses nothing. The notice names the job's own log, which already
+// holds the text and survives a restart; only a memory-only log is spilled to
+// a new file. (From PR #65.)
+func clampJobRead(body string, out ShellOutput, spill SpillStore) (model, full string) {
+	if body == "" {
+		return "[no new output]", ""
+	}
+	clamped, elided := tool.ClampKeepingTail(body)
+	if elided == 0 {
+		return body, ""
+	}
+	if out.LogPath != "" {
+		clamped += "\n[the whole of this read is in the job's log: " + out.LogPath + "]"
+	} else if path, ok := spill.Spill("BashOutput", body); ok {
+		clamped += "\n" + tool.SpillMarker + path + "]"
+	}
+	return clamped, body
 }
 
 // jobStateLine is BashOutput's last line: running or exited, for how long,

@@ -172,6 +172,13 @@ port mirrors (see `internal/version`).
   `ANTHROPIC_*` variable the code reads, and `cmd/klaudia/envdocs_test.go`
   fails when code names one without a row, or a row names one no code
   reads. From PR #81, with the table written for today's code.
+- **A long `BashOutput` read keeps the newest output and names the log.**
+  A read of everything a chatty job wrote since last time was cut by the
+  general backstop, which keeps more of the beginning. It is now cut with
+  two thirds of the budget for the end, where the latest error is, and the
+  notice names the job's own log file rather than spilling another copy.
+  A short read of the log no longer skips the bytes it did not return.
+  From PR #65.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

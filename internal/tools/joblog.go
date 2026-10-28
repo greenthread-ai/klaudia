@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,13 +138,16 @@ func (l *jobLog) ReadFrom(offset int64) (string, int64) {
 	if _, err := f.Seek(offset-base, 0); err != nil {
 		return "", size
 	}
+	// ReadFull, and a cursor advanced only past what was read: one Read may
+	// return short, and reporting size then skipped the unread bytes for
+	// good. (From PR #65.)
 	buf := make([]byte, size-offset)
-	n, _ := f.Read(buf)
+	n, _ := io.ReadFull(f, buf)
 	out := string(buf[:n])
 	if skipped > 0 {
 		out = fmt.Sprintf("[… %d bytes of earlier output skipped — /logs has the file …]\n", skipped) + out
 	}
-	return out, size
+	return out, offset + int64(n)
 }
 
 // Size is the number of bytes written so far.
