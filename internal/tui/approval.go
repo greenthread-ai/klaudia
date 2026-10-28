@@ -87,7 +87,30 @@ func (m *Model) permissionPrompt() string {
 	// stop the prompting was the thing that caused more of it. Plan mode
 	// reaches this branch for a command its classifier cannot place (see
 	// trust.InspectCommand); so can an MCP server or an embedding frontend.
-	return fmt.Sprintf("Allow %s? (y)es / (n)o", m.permissionSummary(m.pendingReq))
+	//
+	// "Something else" is offered here as on a host change: declining a tool
+	// call is as often "not like that" as "no". (From PR #85.)
+	return fmt.Sprintf("Allow %s? (y)es / (n)o / (s)omething else", m.permissionSummary(m.pendingReq)) + escCancels
+}
+
+// escCancels ends every permission prompt. Esc during an ask interrupts the
+// whole turn, a bigger answer than any listed one, and nothing on screen said
+// so. (From PR #85.)
+const escCancels = "  (esc cancels turn)"
+
+// redirectAnswerLine echoes "something else": it invites the instruction the
+// user is about to type rather than announcing Klaudia will carry on without.
+const redirectAnswerLine = "declined — say what you'd like instead, and it lands before Klaudia's next step"
+
+// redirectDenial is what the model is told when the user answers "something
+// else": not a refusal to route around, but a redirect to wait for.
+func redirectDenial(host bool) string {
+	what := "declined this"
+	if host {
+		what = "declined this change to their machine"
+	}
+	return "The user " + what + " and is redirecting. Do not look for another way to do it. " +
+		"They are about to say what they want instead — wait for that instruction and follow it."
 }
 
 func permissionDetail(req agent.ApprovalRequest) string {
@@ -174,9 +197,11 @@ func (m *Model) answer(d permission.Decision) {
 	// For a host change, say what the answer reached rather than just that one
 	// was given. "allowed" tells the user nothing about how far it went.
 	if hc := hostgate.CardOf(m.pendingReq); hc != nil {
-		verb = hostAnswerLine(hc, d.Behavior == permission.Allow, m.hostRedirect)
+		verb = hostAnswerLine(hc, d.Behavior == permission.Allow, m.redirect)
+	} else if m.redirect {
+		verb = redirectAnswerLine
 	}
-	m.hostRedirect = false
+	m.redirect = false
 	m.appendLine(toolStyle.Render("  → " + verb))
 	m.setState(stateRunning)
 }

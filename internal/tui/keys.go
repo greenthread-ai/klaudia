@@ -403,7 +403,8 @@ func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.state == stateAwaitingPermission {
-		host := hostgate.CardOf(m.pendingReq) != nil
+		hc := hostgate.CardOf(m.pendingReq)
+		host := hc != nil
 		switch strings.ToLower(msg.String()) {
 		case "y":
 			m.answer(permission.Decision{Behavior: permission.Allow})
@@ -414,22 +415,18 @@ func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			m.answer(permission.Decision{Behavior: permission.Deny, Message: msg})
 		case "s":
-			// "Something else" is not "no". Someone declining a host change
-			// usually wants the task done differently, not abandoned — and the
-			// plain refusal tells the model to stop looking, which is right for
-			// "no" and wrong here. The turn stays alive and whatever they type
-			// next lands before Klaudia's next action, through the same steering
-			// path a mid-turn correction uses.
-			if !host {
+			// "Something else" is not "no". Someone declining a call usually
+			// wants the task done differently, not abandoned, and the plain
+			// refusal tells the model to stop looking, which is right for "no"
+			// and wrong here. The turn stays alive and whatever they type next
+			// lands before Klaudia's next action, through the same steering
+			// path a mid-turn correction uses. A repository-config card has no
+			// task to redirect and does not offer it.
+			if host && hc.RepoConfig != "" {
 				return m, nil
 			}
-			m.hostRedirect = true
-			m.answer(permission.Decision{
-				Behavior: permission.Deny,
-				Message: "The user declined this change to their machine and is redirecting. " +
-					"Do not look for another way to make it. They are about to say what they want " +
-					"instead — wait for that instruction and follow it.",
-			})
+			m.redirect = true
+			m.answer(permission.Decision{Behavior: permission.Deny, Message: redirectDenial(host)})
 		}
 		return m, nil
 	}

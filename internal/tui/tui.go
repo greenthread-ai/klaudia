@@ -358,11 +358,11 @@ type Model struct {
 	// kept so /model <id> can warn about an id the endpoint does not list
 	// without a second lookup. Nil until the list has been fetched once.
 	knownModels []api.ModelInfo
-	// hostRedirect marks the pending answer as "no, do it differently" rather
+	// redirect marks the pending answer as "no, do it differently" rather
 	// than a plain refusal, so the echoed line invites the instruction the user
 	// is about to type instead of announcing that Klaudia will carry on without
 	// it. Cleared as it is read.
-	hostRedirect bool
+	redirect bool
 	// following is the job whose log is being tailed into scrollback, or "".
 	// Follow prints into the terminal's own scrollback rather than a managed
 	// region, which is why scrolling up during follow cannot be snapped back

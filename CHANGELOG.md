@@ -200,6 +200,13 @@ port mirrors (see `internal/version`).
   is a path or more text follows; `//` sends a line as a message whatever
   it says; and a lone unknown `/word` names the nearest commands. From PR
   #82.
+- **Every permission ask offers "something else", and says what Esc does.**
+  `(s)omething else` (decline, and the next thing you type is the
+  instruction) was offered only for host changes; an ordinary ask had just
+  yes or no, and "no" tells the model to stop looking. It is now offered on
+  every ask except a repository-config card, which has no task to redirect.
+  Each prompt ends with "(esc cancels turn)", since Esc interrupts the whole
+  turn. From PR #85, without its `(a)lways`: standing rules are gone.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

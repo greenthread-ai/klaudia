@@ -137,23 +137,23 @@ func hostPrompt(hc *hostgate.HostChange) string {
 	verb := "Change this machine?"
 	switch {
 	case hc != nil && hc.RepoConfig == hostgate.RepoMCP:
-		return "Start these MCP servers? (y)es / (n)o"
+		return "Start these MCP servers? (y)es / (n)o" + escCancels
 	case hc != nil && hc.RepoConfig != "":
 		// No "something else" offered. That answer exists to redirect the model
 		// mid-task; there is no task here to redirect, only a yes or a no about
 		// a config file.
-		return "Run these " + hc.RepoConfig + "? (y)es / (n)o"
+		return "Run these " + hc.RepoConfig + "? (y)es / (n)o" + escCancels
 	case hc != nil && hc.Drift:
 		verb = "Approve this too?"
 	}
-	return verb + " (y)es / (n)o / (s)omething else"
+	return verb + " (y)es / (n)o / (s)omething else" + escCancels
 }
 
 // hostAnswerLine echoes the decision with its reach, so the scrollback records
 // what was agreed to and not merely that something was.
 func hostAnswerLine(hc *hostgate.HostChange, allowed, redirect bool) string {
 	if redirect {
-		return "declined — say what you'd like instead, and it lands before Klaudia's next step"
+		return redirectAnswerLine
 	}
 	if hc != nil && hc.RepoConfig != "" {
 		// A repository's config, not a step of the task: there is nothing to

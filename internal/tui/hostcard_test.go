@@ -113,7 +113,7 @@ func TestMCPServersCardNamesServers(t *testing.T) {
 			t.Errorf("card lacks %q:\n%s", want, card)
 		}
 	}
-	if got := hostPrompt(hc); got != "Start these MCP servers? (y)es / (n)o" {
+	if got := hostPrompt(hc); got != "Start these MCP servers? (y)es / (n)o"+escCancels {
 		t.Errorf("prompt = %q", got)
 	}
 }
