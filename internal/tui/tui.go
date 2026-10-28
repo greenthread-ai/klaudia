@@ -908,6 +908,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		elapsed := m.sw.Elapsed()
 		stopSW := m.sw.Stop()
 		m.turnCancel = nil
+		m.steer.forgetShown()
 		m.cancelling = false // the goroutine returned; we're past the cancel window
 		m.flushAssistant()   // prettify the final answer through glamour
 		m.abandonPendingTools()

@@ -95,6 +95,11 @@ port mirrors (see `internal/version`).
   what it reports or the floor, with a warning at startup or in `/model`
   when it is an alias. With no model set at all, the Claude default is
   still sent, for gateways that serve Claude's ids. From PR #80.
+- **A message you queue mid-turn is shown where the model read it.** It
+  left the queued hint when the turn took it in after a tool call and was
+  written nowhere else, so the transcript showed the work it caused with no
+  sign of the instruction (reported from a `/goal run`). It now appears as
+  `› …` at that point, in the form you typed it (a paste stays a chip).
 - **A picker opened mid-turn no longer starts a second turn.** `/mode`,
   `/mcp` and a `/model` list can open while Klaudia works, but closing the
   picker always went to idle, so the next Enter started a second turn

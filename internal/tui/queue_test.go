@@ -162,3 +162,29 @@ func TestQueuingWritesNothingToScrollback(t *testing.T) {
 		t.Error("the queued message is not shown in the live region")
 	}
 }
+
+// A message queued mid-turn and taken by the agent used to vanish: it left
+// the queued hint and was written nowhere, so the transcript showed the work
+// it caused with no sign of the instruction. Its steer event now writes it,
+// in the form the user typed (a paste stays a chip).
+func TestSteeredMessageIsShownWhereTheModelReadIt(t *testing.T) {
+	m := newTestModel()
+	m.steer.add("[Pasted text #1] and fix it", "the whole pasted log and fix it")
+	in := m.steer.interject()
+	if in.Text != "the whole pasted log and fix it" {
+		t.Fatalf("agent got %q, want the expanded prompt", in.Text)
+	}
+	m.renderEvent(agent.Event{Type: agent.EventSteer, Content: in.Text})
+	out := stripANSI(m.transcript.String())
+	if !strings.Contains(out, "› [Pasted text #1] and fix it") || strings.Contains(out, "whole pasted log") {
+		t.Errorf("transcript = %q, want the typed form once", out)
+	}
+
+	// The TUI's own drains (turn end, interrupt-and-send) echo the message
+	// themselves and must not leave one behind for a later steer event.
+	m.steer.add("queued at the end", "queued at the end")
+	m.steer.drain()
+	if got := m.steer.takeShown(); got != "" {
+		t.Errorf("a TUI-side drain left %q to be shown", got)
+	}
+}

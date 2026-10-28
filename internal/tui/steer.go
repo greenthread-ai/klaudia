@@ -31,6 +31,10 @@ type steerBox struct {
 	display string
 	prompt  string
 	halt    bool
+	// taken holds the display form of each message the agent drained, until
+	// its steer event reaches the transcript (takeShown). The event carries
+	// the expanded prompt, which for a paste is the whole payload.
+	taken []string
 }
 
 // add appends what the user typed, in both its displayed and expanded forms.
@@ -65,12 +69,50 @@ func (b *steerBox) requestHalt() {
 }
 
 // drain takes everything pending, as the expanded text the agent should read.
+// For the TUI's own use (an interrupt-and-send, a turn's end), which echoes
+// the message itself.
 func (b *steerBox) drain() agent.Interjection {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	return b.drainLocked(false)
+}
+
+// interject is drain for the agent loop: what it takes is remembered for the
+// steer event that reports it (takeShown).
+func (b *steerBox) interject() agent.Interjection {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.drainLocked(true)
+}
+
+// forgetShown drops drained messages whose steer event never came (a turn
+// cancelled between the two), so one cannot be shown against a later event.
+func (b *steerBox) forgetShown() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.taken = nil
+}
+
+func (b *steerBox) drainLocked(remember bool) agent.Interjection {
 	in := agent.Interjection{Text: b.prompt, Halt: b.halt}
+	if remember && b.display != "" {
+		b.taken = append(b.taken, b.display)
+	}
 	b.display, b.prompt, b.halt = "", "", false
 	return in
+}
+
+// takeShown returns the display form of the oldest drained message, for the
+// transcript line its steer event writes; "" when there is none.
+func (b *steerBox) takeShown() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.taken) == 0 {
+		return ""
+	}
+	t := b.taken[0]
+	b.taken = b.taken[1:]
+	return t
 }
 
 // peek reports what is pending, for the status hint. Does not consume. This is

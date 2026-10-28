@@ -251,7 +251,7 @@ func (m *Mock) complete(w http.ResponseWriter, r *http.Request) {
 const slowSentence = "This reply streams slowly so that it can be interrupted."
 
 // scriptKeywords are the words defaultScript answers to.
-var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "question", "wrapme", "planit", "longpara", "halfplan", "bgjob", "bgagent", "childtask"}
+var scriptKeywords = []string{"hello", "tools", "fail", "slow", "links", "question", "wrapme", "planit", "longpara", "halfplan", "bgjob", "bgagent", "childtask", "steerme"}
 
 // keyword returns the scripted keyword that appears last in the prompt, or "".
 //
@@ -327,6 +327,10 @@ func defaultScript(prompt string, step int) Reply {
 			return steps[step]
 		}
 		return Reply{Text: "Pausing after the first step."}
+	case "steerme":
+		// A tool slow enough to type into. The follow-up is read after it,
+		// and the next request's prompt is that message, not this keyword.
+		return Reply{Calls: []ToolCall{{"Bash", map[string]any{"command": "sleep 3", "description": "Wait a moment"}}}}
 	case "bgjob":
 		if step == 0 {
 			return Reply{Calls: []ToolCall{{"Bash", map[string]any{"command": "sleep 30", "description": "Background sleeper", "run_in_background": true}}}}

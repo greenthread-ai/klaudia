@@ -465,3 +465,31 @@ func TestNotifiesOnlyWhenUnfocused(t *testing.T) {
 		t.Errorf("rang %d more times while focused", got-before)
 	}
 }
+
+// A message queued while a turn runs is taken into that turn after its tool
+// call, and is shown there. It used to leave the queued hint and appear
+// nowhere, so the transcript showed the work it caused and not the
+// instruction.
+func TestQueuedMessageShowsWhereTheModelReadIt(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	env.Prompt(t, tm, "steerme")
+	tm.WaitFor(t, "the tool to start", 20*time.Second, func(s Snapshot) bool {
+		return strings.Contains(s.Screen(), "sleep 3")
+	})
+	tm.Type("also cover the edge case")
+	tm.Press("\r")
+	snap := tm.WaitFor(t, "the turn to finish", 30*time.Second, func(s Snapshot) bool { return s.HasLine(doneLine) })
+	all := snap.All()
+	tool, note := strings.Index(all, "✓ Bash sleep 3"), strings.Index(all, "› also cover the edge case")
+	if note < 0 || note < tool {
+		t.Errorf("the queued message is not in the transcript after the tool it followed\n%s", all)
+	}
+	reached := false
+	for _, p := range env.Mock.Prompts() {
+		reached = reached || strings.Contains(p, "also cover the edge case")
+	}
+	if !reached {
+		t.Errorf("the message never reached the model; prompts: %q", env.Mock.Prompts())
+	}
+}

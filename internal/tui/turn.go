@@ -107,7 +107,7 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 		Approver:   approver,
 		Asker:      asker,
 		Planner:    planner,
-		Interject:  m.steer.drain,
+		Interject:  m.steer.interject,
 		BeforeEdit: m.beforeEdit,
 		// Read live, every permission check: /mode bypass typed mid-turn, or
 		// ExitPlanMode being approved, has to reach the very next tool
@@ -240,6 +240,20 @@ func (m *Model) renderEvent(ev agent.Event) {
 			if strings.HasPrefix(ev.Content, "autocompact") {
 				m.forgetRewindPoints()
 			}
+		}
+	case agent.EventSteer:
+		// A message the user queued mid-turn has reached the model. It left
+		// the queued hint when the agent took it and was written nowhere
+		// else, so the transcript showed the work it caused with no sign of
+		// the instruction. It goes in where the model read it, as Claude Code
+		// shows it.
+		m.flushAssistant()
+		shown := m.steer.takeShown()
+		if shown == "" {
+			shown = ev.Content
+		}
+		if shown != "" {
+			m.appendLine(userStyle.Render("› ") + shown)
 		}
 	case "notice":
 		// A system notice the user must actually see — something the model was
