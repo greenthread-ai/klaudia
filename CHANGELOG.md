@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.6.1 — 2026-10-28
+
 ### Fixed
 
 - **Loading a tool through tool search no longer throws away the model's
