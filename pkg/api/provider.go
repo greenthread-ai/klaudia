@@ -20,6 +20,9 @@ import (
 type StreamSink struct {
 	OnText     func(string)
 	OnRawEvent func(anthropic.BetaRawMessageStreamEventUnion)
+	// OnTransformations receives the response's input_transformations when
+	// it lists any: thinking blocks the API dropped (thinkingbinding.go).
+	OnTransformations func([]InputTransformation)
 }
 
 func (s StreamSink) text(d string) {
@@ -114,8 +117,21 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	if !c.tuning.NoPromptCache {
 		applyCacheControl(&params)
 	}
+	// Preserved thinking: drop a mismatched block rather than fail the turn,
+	// and report it (thinkingbinding.go). An endpoint that rejects the
+	// controls themselves gets them no more for this client's life.
+	unbound := params
+	bound := false
+	if !c.noBinding.Load() && historyHasThinking(params.Messages) {
+		bindThinking(&params)
+		bound = true
+	}
 
 	msg, err := c.streamRetrying(ctx, params, sink, c.tuning.streamIdleTimeout())
+	if bound && err != nil && isBindingRejected(err) {
+		c.noBinding.Store(true)
+		msg, err = c.streamRetrying(ctx, unbound, sink, c.tuning.streamIdleTimeout())
+	}
 	return msg, annotateNotFound(err, string(params.Model), c.endpoint())
 }
 
@@ -213,6 +229,11 @@ func (c *Client) streamOnce(ctx context.Context, params anthropic.BetaMessageNew
 		repairInvalidToolInputs(&acc, ev)
 		if aerr := acc.Accumulate(ev); aerr != nil {
 			return acc, delivered, false, fmt.Errorf("%w: %w", errAssemble, aerr)
+		}
+		if sink.OnTransformations != nil {
+			if ts := transformationsOf(ev); len(ts) > 0 {
+				sink.OnTransformations(ts)
+			}
 		}
 		if sink.OnRawEvent != nil {
 			delivered = true

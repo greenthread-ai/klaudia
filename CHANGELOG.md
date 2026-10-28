@@ -7,6 +7,20 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **Conversations on Opus 5.5, Fable 5.1 and Sonnet 5.5 no longer risk a
+  400 on every turn.** On these models a thinking block is valid only in the
+  conversation that produced it, and for accounts created on or after
+  2026-08-31 replaying one after the history changed is refused, on every
+  resend. Klaudia changes earlier history in places (microcompact, a mode
+  switch, a tool search reveal), so a new account could be locked out of a
+  session. Once a conversation holds thinking, requests now ask the API to
+  drop a mismatched block instead (`block_binding` drop_block, beta
+  `thinking-binding-controls-2026-08-01`); each drop is reported as a notice;
+  an endpoint that refuses the controls is sent the turn without them; and a
+  refusal that still arrives is recovered by removing the thinking and
+  retrying. Older accounts were never refused, which is why this did not
+  show up here. From PR #63.
+
 - **Resume picks only this folder's sessions, and reads long lines.**
   Folders whose names differ only in punctuation (`my_proj`, `my-proj`)
   share a session directory, so starting Klaudia in one auto-resumed a

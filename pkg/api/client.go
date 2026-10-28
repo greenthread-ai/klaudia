@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -231,6 +232,9 @@ type Client struct {
 	sdk    anthropic.Client
 	cred   Credential
 	tuning Tuning
+	// noBinding is set once the endpoint has refused the thinking-binding
+	// controls, so later requests do not try them again.
+	noBinding atomic.Bool
 	// prepare and listOpts are the host's (WithPrepare, WithListOptions).
 	prepare  func(*anthropic.BetaMessageNewParams)
 	listOpts []option.RequestOption

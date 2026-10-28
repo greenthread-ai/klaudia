@@ -402,6 +402,7 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	var calib compaction.Calibration
 	overflowRecovered := false
 	thinkingRecovered := false
+	bindingRecovered := false // preserved-thinking 400 recovered once (stripThinking)
 	maxTokensLowered := false
 	// The last batch of a Run that stops on MaxTurns or a halt has no next turn
 	// to report it, and the panel would show the step before until the user
@@ -482,6 +483,20 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		l.rememberPrefix(prefix)
 		estimateAtSend := compaction.EstimateTokens(messages)
 		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages)
+		if err != nil && api.IsThinkingBindingError(err) && !bindingRecovered {
+			// A thinking block failed preserved thinking's check on an
+			// endpoint where drop_block could not be asked for: the history
+			// before it changed since it was written. Resending is the same
+			// 400 every time. Removing every thinking block is a leading-run
+			// removal, which the check accepts; the model re-plans without
+			// its earlier reasoning. (PR #63.)
+			bindingRecovered = true
+			messages = stripThinking(messages)
+			if emit != nil {
+				emit(Event{Type: EventNotice, Content: "earlier reasoning could not be replayed (the conversation before it changed) — continuing without it"})
+			}
+			continue
+		}
 		if err != nil && api.IsImmutableThinking(err) && !thinkingRecovered {
 			// The last assistant message was repaired (an interrupted
 			// server-tool call), and the API will not accept a message whose
@@ -915,6 +930,11 @@ func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewPa
 			}
 		},
 		OnRawEvent: rawSink,
+		OnTransformations: func(ts []api.InputTransformation) {
+			if note := droppedThinkingNote(ts); note != "" && emit != nil {
+				emit(Event{Type: EventNotice, Content: note})
+			}
+		},
 	}
 	ctx, span := startChatSpan(ctx, params)
 	assistant, err := l.provider.StreamTurn(ctx, params, sink)
