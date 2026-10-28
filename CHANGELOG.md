@@ -7,6 +7,21 @@ port mirrors (see `internal/version`).
 
 ### Added
 
+- **Language-server tools: hover, document symbols, rename preview and
+  implementation**, loaded on demand through tool search so they cost nothing
+  until used (#95).
+- **Grep takes context lines (`-A`/`-B`/`-C`), a file-type filter and a
+  result limit** (#93), and Grep and Glob honour `.gitignore`, nested files
+  included, while still reaching a hidden path the search names (#70).
+- **Skills:** `$1`…`$N` arguments, `argument-hint` and `allowed-tools` in
+  frontmatter, `${KLAUDIA_SKILL_DIR}`/`${CLAUDE_SKILL_DIR}`, a base-directory
+  line in the result, prose frontmatter and a leading byte-order mark read
+  (#19, #35).
+- **Memory:** a `remove` operation; index lines no longer carry frontmatter;
+  the recalled index is capped at 200 lines or 25 KB, as Claude Code caps its
+  own (the top is kept, with a line saying where the rest is) (#77).
+- **`-p` reads a piped prompt** and refuses an empty one (#60).
+- **stream-json's result line carries the turn's token usage** (#12).
 - **Notifications when Klaudia needs you.** A permission prompt, a question,
   a plan to approve, or a turn that ran 20s or more finishing now raises a
   desktop notification (iTerm2, WezTerm, Ghostty) or rings the bell
@@ -100,6 +115,26 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **Tool input is validated before the host gate and any approval** (#97),
+  so a malformed call is refused as malformed instead of being shown to you
+  first.
+- **Files are replaced atomically, and Write keeps a file's CRLF endings**
+  (#40).
+- **Command output is bounded in memory while it is captured**, and a
+  command that detached a process with `setsid` has that process stopped
+  when it is cancelled on Linux (#41, #51).
+- **Bash:** exit 1 from `grep`, `diff` and `test` is an answer, not an error
+  (#49); a line is parsed before a self-backgrounded service is refused, so
+  `&>` and names like `server` no longer trip it (#73); the non-interactive
+  forms of terminal programs are no longer refused (#74); `git commit` flag
+  clusters like `-am` are parsed rather than matched (#64).
+- **The host gate catches flag-driven package installs** (pacman, rpm, dpkg,
+  nix-env), `git config --global`/`--system`, `sudo pip install`, `sudo make
+  install` and `yarn global`; `pacman -Sy` now asks too (#76).
+- **Edit refuses an empty `old_string`** (#61), **memory adds new bullets
+  above the linked-memory section** (#57), **a language server that never
+  publishes diagnostics is not reported as clean** (#68), and **an MCP stdio
+  server's stderr is forwarded** rather than discarded (#15).
 - **A resumed session with an orphaned tool result or blank text can be
   sent again.** A tool result whose call was lost (an interrupted write, a
   compaction boundary) and blank text in a user message are each rejected by
