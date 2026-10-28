@@ -115,6 +115,9 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **A sub-agent that fails keeps what it found.** Its last completed reply
+  goes back with the error, marked as possibly incomplete, instead of only
+  "Sub-agent failed". From PR #42.
 - **Compaction reads the conversation from the prompt cache.** The summary
   request was sent without the system prompt and tools, so it shared no
   cached prefix with the conversation and paid for the whole history at the

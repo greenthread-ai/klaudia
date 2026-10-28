@@ -147,7 +147,13 @@ func (a *Agent) Execute(ctx context.Context, tctx Context, raw json.RawMessage) 
 	}
 	result, err := spawn(ctx, tctx.Progress)
 	if err != nil {
-		return []Result{{Content: fmt.Sprintf("Sub-agent failed: %v", err), IsError: true}}, nil
+		// With an error the spawner may still return the child's partial
+		// work; it goes back with the failure rather than being dropped.
+		msg := fmt.Sprintf("Sub-agent failed: %v", err)
+		if result != "" {
+			msg += "\n\n" + result
+		}
+		return []Result{{Content: msg, IsError: true}}, nil
 	}
 	// Framed, so the sub-agent's report reads as a report: text it quotes
 	// from files or web pages it read is not the user speaking. (PR #30.)

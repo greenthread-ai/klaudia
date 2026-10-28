@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -10,6 +11,7 @@ import (
 type fakeSpawner struct {
 	gotType, gotPrompt string
 	result             string
+	err                error
 	gotProgress        func(string) // captured so a test can assert it was forwarded
 }
 
@@ -18,7 +20,7 @@ func (f *fakeSpawner) Spawn(_ context.Context, subagentType, prompt string, prog
 	if progress != nil {
 		progress("Read main.go") // a child tool call, as the real spawner relays
 	}
-	return f.result, nil
+	return f.result, f.err
 }
 
 func newTestAgent(t *testing.T, sp Spawner) *Agent {
@@ -152,5 +154,14 @@ func TestAgentForkRoutesTheConversation(t *testing.T) {
 	res, _ = newTestAgent(t, &fakeSpawner{result: "plain"}).Execute(context.Background(), Context{}, raw)
 	if !strings.Contains(res[0].Content, "Forking is not available") {
 		t.Errorf("no fork support was not reported: %q", res[0].Content)
+	}
+}
+
+// A failed sub-agent's partial work goes back with the failure. (PR #42.)
+func TestAgentFailureCarriesPartialWork(t *testing.T) {
+	raw, _ := json.Marshal(AgentInput{Prompt: "p", SubagentType: "Explore", Description: "d"})
+	res, _ := newTestAgent(t, &fakeSpawner{result: "found the config in a.toml", err: errors.New("stream: overloaded")}).Execute(context.Background(), Context{}, raw)
+	if !res[0].IsError || !strings.Contains(res[0].Content, "overloaded") || !strings.Contains(res[0].Content, "found the config in a.toml") {
+		t.Errorf("result = %+v, want the error and the partial work", res[0])
 	}
 }

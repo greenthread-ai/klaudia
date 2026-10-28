@@ -413,14 +413,25 @@ func (s *Spawner) spawn(ctx context.Context, subagentType, prompt string, histor
 		FallbackModels: s.fallbacks,
 	}, emit)
 	if err != nil {
+		// What the child had already worked out goes back with the error,
+		// marked as partial: returning "" threw away everything it found
+		// before a stream error or an overload ended its run. (PR #42.)
+		var partial string
+		if res.Text != "" {
+			text := res.Text
+			if ws != nil {
+				text = ws.Rewrite(text)
+			}
+			partial = fmt.Sprintf("[Sub-agent failed after %d turn(s); its last completed reply follows and may be incomplete.]\n\n%s", res.NumTurns, text)
+		}
 		// Whatever the child wrote stays where it is. A failed or interrupted
 		// run left the checkout in a state nobody has inspected, and applying
 		// half a change to the user's tree is the one outcome isolation exists
 		// to prevent — so the error says where to look instead.
 		if ws != nil {
-			return "", fmt.Errorf("%w (the sub-agent's changes are left in %s)", err, ws.Dir())
+			return partial, fmt.Errorf("%w (the sub-agent's changes are left in %s)", err, ws.Dir())
 		}
-		return "", err
+		return partial, err
 	}
 	text := res.Text
 	if ws != nil {
