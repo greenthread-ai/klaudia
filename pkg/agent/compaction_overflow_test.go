@@ -9,9 +9,9 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 
+	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/pkg/compaction"
-	"github.com/greenthread-ai/klaudia/internal/tools"
 )
 
 // textMessage is an end_turn reply carrying text. It is built from JSON because
