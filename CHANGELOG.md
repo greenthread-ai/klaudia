@@ -74,6 +74,13 @@ port mirrors (see `internal/version`).
   tool is denied, or the question or plan fails, with a message saying the
   client did not answer. A late answer is dropped, not applied to a later
   request. From PR #7.
+- **One overloaded response no longer ends a goal run.** `--loop` stopped
+  at the first iteration that failed, so a 529 or a dropped connection
+  three hours in ended the run. An iteration (and the closing summary) that
+  fails transiently (provider unavailable after the fallback chain, a 429,
+  a stalled or cut-off stream, a network error) is now retried after 30s,
+  1m and 2m, with a line on stderr each time; anything else still stops
+  the run at once. From PR #43.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

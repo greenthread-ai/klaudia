@@ -384,6 +384,30 @@ func IsUnavailable(err error) bool {
 	return ok && (status == 529 || status >= 500)
 }
 
+// IsTransient reports whether the same request may succeed if sent again
+// later: the provider unavailable (IsUnavailable), a rate limit (429), a stream
+// that stalled or was interrupted, or a network error. A cancelled context, a
+// request the API rejected (other 4xx) and a context overflow are not:
+// repeating them fails the same way. This is for a caller that can redo a
+// whole unit of work, such as a goal-loop iteration; the agent loop's own
+// fallback chain uses the narrower IsUnavailable. (From PR #43.)
+func IsTransient(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, ErrStreamInterrupted) || errors.Is(err, ErrStreamStalled) || IsUnavailable(err) {
+		return true
+	}
+	if status, ok := apiStatus(err); ok {
+		return status == 429
+	}
+	if IsContextOverflow(err) {
+		return false
+	}
+	var netErr net.Error // *net.OpError, DNS and dial failures, timeouts
+	return errors.As(err, &netErr)
+}
+
 // IsContextOverflow reports whether err is the provider refusing a request for
 // being larger than the model's context window. The agent loop uses this to
 // compact and retry rather than surfacing a dead end: once a session is over

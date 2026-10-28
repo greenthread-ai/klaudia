@@ -3,13 +3,16 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/greenthread-ai/klaudia/internal/goal"
 	"github.com/greenthread-ai/klaudia/pkg/agent"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
@@ -31,6 +34,32 @@ type loopRun struct {
 	mode       permission.Mode
 	iterations int
 	render     *Renderer
+}
+
+// goalRetryBackoff is how long the goal loop waits before each retry of an
+// iteration that failed transiently. A var so tests need not wait.
+var goalRetryBackoff = []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute}
+
+// retryTransient runs turn, and runs it again after each goalRetryBackoff
+// pause while it fails transiently (api.IsTransient). A goal run is often
+// hours long, and one overloaded response used to end all of it; an iteration
+// re-reads the spec and git, so repeating one is safe, including one that was
+// cut off partway. The turn's own fallback chain has already been tried by the
+// time an error reaches here, so this is the slower, wider net. Other errors,
+// and a cancelled ctx, return at once. (From PR #43.)
+func retryTransient(ctx context.Context, errOut io.Writer, what string, turn func() (agent.Result, error)) (agent.Result, error) {
+	res, err := turn()
+	for retry := 0; err != nil && api.IsTransient(err) && retry < len(goalRetryBackoff); retry++ {
+		wait := goalRetryBackoff[retry]
+		fmt.Fprintf(errOut, "  %s failed (%v); retrying in %s (%d/%d)\n", what, err, wait, retry+1, len(goalRetryBackoff))
+		select {
+		case <-ctx.Done():
+			return res, ctx.Err()
+		case <-time.After(wait):
+		}
+		res, err = turn()
+	}
+	return res, err
 }
 
 // runGoalLoop drives the headless Ralph loop: it iterates against the goal spec,
@@ -93,7 +122,9 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 	stalls := 0
 	for i := 1; i <= iters; i++ {
 		fmt.Fprintf(errOut, "↻ iteration %d/%d\n", i, iters)
-		res, err := runTurn(goal.IterationPrompt(specPath))
+		res, err := retryTransient(ctx, errOut, fmt.Sprintf("iteration %d", i), func() (agent.Result, error) {
+			return runTurn(goal.IterationPrompt(specPath))
+		})
 		if err != nil {
 			return err
 		}
@@ -114,7 +145,9 @@ func runGoalLoop(ctx context.Context, cmd *cobra.Command, p loopRun) error {
 	// Stopped without completing (cap or stall): one wrap-up turn records an
 	// end-of-run summary in the spec so the next run (or a person) can resume.
 	fmt.Fprintf(errOut, "summarising progress to %s…\n", specPath)
-	if _, err := runTurn(goal.WrapUpPrompt(specPath)); err != nil {
+	if _, err := retryTransient(ctx, errOut, "the summary", func() (agent.Result, error) {
+		return runTurn(goal.WrapUpPrompt(specPath))
+	}); err != nil {
 		return err
 	}
 	fmt.Fprintf(errOut, "stopped; goal not yet complete. Progress recorded in %s — re-run to resume.\n", specPath)
