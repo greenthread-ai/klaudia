@@ -21,6 +21,12 @@ port mirrors (see `internal/version`).
   macOS, with an expired token refreshed and written back atomically. A flag
   rather than a `login` subcommand, since a positional argument is a prompt.
   From PR #100.
+- **`${VAR}` in `.mcp.json`.** `${VAR}` and `${VAR:-default}` are expanded
+  from the environment in a server's command, args, env, url and headers, as
+  Claude Code does, so an HTTP server's token need not be a literal in the
+  file. The project-trust card shows the raw templates and names the
+  variables each server reads and the host a remote one sends them to. From
+  PR #8, with headers added.
 
 ### Security
 

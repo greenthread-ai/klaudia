@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -195,15 +196,30 @@ func projectLines(cfg Config) (lines, files []string) {
 		if what == "" {
 			what = strings.TrimSpace(strings.Join(append([]string{sc.Command}, sc.Args...), " "))
 		}
-		// Env names, not values: they can change what runs (PATH,
-		// LD_PRELOAD), and the values are often tokens.
-		if len(sc.Env) > 0 {
-			keys := make([]string, 0, len(sc.Env))
-			for k := range sc.Env {
-				keys = append(keys, k)
+		// Env and header names, not values: they can change what runs (PATH,
+		// LD_PRELOAD) or what a server is told, and the values are often
+		// tokens.
+		for _, kv := range []struct {
+			label string
+			m     map[string]string
+		}{{"env", sc.Env}, {"headers", sc.Headers}} {
+			if len(kv.m) > 0 {
+				keys := make([]string, 0, len(kv.m))
+				for k := range kv.m {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				what += " (" + kv.label + ": " + strings.Join(keys, ", ") + ")"
 			}
-			sort.Strings(keys)
-			what += " (env: " + strings.Join(keys, ", ") + ")"
+		}
+		// The variables it reads, and for a remote server where they go:
+		// ${VAR} is expanded from your environment when it connects.
+		if vars := referencedVars(sc); len(vars) > 0 {
+			read := "reads $" + strings.Join(vars, ", $")
+			if host := urlHost(sc.URL); host != "" {
+				read += ", sent to " + host
+			}
+			what += " (" + read + ")"
 		}
 		lines = append(lines, name+": "+what)
 		if f := cfg.Project[name]; !seen[f] {
@@ -220,4 +236,14 @@ func countServers(n int) string {
 		return "1 MCP server"
 	}
 	return fmt.Sprintf("%d MCP servers", n)
+}
+
+// urlHost is the host a server URL names, or "" when it is not a URL. The raw
+// template is parsed, so a host that is itself a ${VAR} shows as such.
+func urlHost(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Host
 }

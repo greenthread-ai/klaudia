@@ -913,9 +913,15 @@ sub-agents and plan mode stop seeing its tools as read-only, and the main agent
 keeps calling them without asking, as it does every MCP tool outside plan mode.
 This is not a claim that calling them is safe.
 
-There is no `${VAR}` expansion — a value is used exactly as written — but the
-server subprocess inherits Klaudia's environment, so export credentials in your
-shell rather than writing them into the file. `.mcp.json.example` is a working
+`${VAR}` and `${VAR:-default}` are expanded from your environment in
+`command`, `args`, `env`, `url` and `headers`, as Claude Code does, so a token
+for an HTTP server can be `"Authorization": "Bearer ${GITHUB_TOKEN}"` rather
+than a literal in the file. A variable that is unset with no default fails
+that server's connect, naming it. For a project's servers the approval card
+shows the templates as written and says which variables each server reads and
+where a remote one sends them; changing a template asks again. A stdio server
+also inherits Klaudia's environment, so it needs no `env` entry to see a
+variable you exported. `.mcp.json.example` is a working
 starting point; copy it and edit. `.mcp.json` itself is gitignored because a
 credential in it would be a literal in a committed file — `git add -f` it if you
 want a secret-free team config in the repo.

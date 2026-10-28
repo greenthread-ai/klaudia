@@ -254,6 +254,10 @@ func (t headerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 // connectServer connects to a server using the transport its config implies:
 // HTTP (streamable, or SSE) when URL is set, otherwise stdio.
 func connectServer(ctx context.Context, name string, cfg ServerConfig, el *Elicitor) (*Server, error) {
+	cfg, err := expandServerConfig(name, cfg, os.LookupEnv)
+	if err != nil {
+		return nil, err
+	}
 	if url := strings.TrimSpace(cfg.URL); url != "" {
 		var t mcpsdk.Transport
 		switch strings.ToLower(strings.TrimSpace(cfg.Type)) {
