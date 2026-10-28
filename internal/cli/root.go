@@ -1715,6 +1715,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	if interactive {
 		// Shared settings so slash commands can read/change them between turns.
 		sess := &tui.Session{
+			// ↑ history for this project, kept beside its transcripts (under
+			// --restricted, in the throwaway config root with them).
+			PromptHistory: session.NewPromptHistory(session.PromptHistoryPath(cwd), tui.MaxInputHistory),
 			// Effective model (flag or config default), never "" — otherwise a
 			// non-Anthropic provider would wrongly resolve to the Anthropic default.
 			SessionID:      sessionID,

@@ -28,6 +28,7 @@ type keymap struct {
 	Complete  key.Binding
 	Prev      key.Binding
 	Next      key.Binding
+	Search    key.Binding
 	Dismiss   key.Binding
 	Interrupt key.Binding
 	// Suspend, Clear and Quit are the terminal's own chords, which raw mode
@@ -65,6 +66,7 @@ func newKeymap(enterInserts bool) keymap {
 		Complete:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", "Complete a /command or an @<path> reference")),
 		Prev:      key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", history)),
 		Next:      key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", history)),
+		Search:    key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("Ctrl+R", "Search earlier prompts (Ctrl+R again for older)")),
 		Dismiss:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Dismiss the file menu, or interrupt the model mid-turn")),
 		Interrupt: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("Ctrl+C", "Interrupt, or clear the line — press twice to quit")),
 		Suspend:   key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("Ctrl+Z", "Suspend to the shell (fg to come back)")),
@@ -83,6 +85,7 @@ func (k keymap) helpOrder(ta textarea.KeyMap) []key.Binding {
 		k.Complete,
 		k.Prev,
 		k.Next,
+		k.Search,
 		ta.DeleteBeforeCursor,
 		ta.DeleteAfterCursor,
 		k.Dismiss,

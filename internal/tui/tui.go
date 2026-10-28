@@ -57,6 +57,10 @@ type Session struct {
 	FileLinks      string         // file-link URL format; "" = file:// (see fileLinkURL)
 	Skills         []SkillCommand // user-defined skills dispatched as /<name>
 
+	// PromptHistory, if set, keeps ↑ history across sessions in this
+	// project. Nil keeps it for this session only.
+	PromptHistory PromptHistoryStore
+
 	// Render-only context for /config and /context (set once at startup).
 	Provider    string      // resolved provider ("anthropic" | "openai" | …)
 	SandboxMode string      // resolved sandbox mode ("local" | "os" | "container")
@@ -582,6 +586,10 @@ type Model struct {
 	inputHistory []string
 	histPos      int
 	histDraft    string // the in-progress line stashed when navigating up
+	// search is the open Ctrl+R history search, if any (see history.go).
+	search historySearch
+	// historyFaulted is set once a history-file failure has been reported.
+	historyFaulted bool
 	// Verbatim payloads for pastes shown in the input as chips (see paste.go).
 	// Session-scoped, because history recall re-shows a chip.
 	pastes pasteStore
@@ -694,6 +702,7 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	m.introModel, m.introBranch = model, branch
 	m.introTagline, m.hasIntro = randomTagline(), true
 	m.appendLine(m.introText())
+	m.loadInputHistory(history)
 	// A resumed session gets the operational picture instead of the
 	// dirty-tree note: it subsumes it, and adds what did not survive.
 	if len(history) > 0 {
@@ -831,6 +840,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// prompt can't be read as an answer, and before the textarea so the
 		// widget's sanitizer never sees it (see paste.go).
 		m.quitArmed = false
+		if m.search.active {
+			m.endHistorySearch(true) // a paste ends a search, as any edit does
+		}
 		return m.onPaste(msg.Content)
 
 	case eventMsg:

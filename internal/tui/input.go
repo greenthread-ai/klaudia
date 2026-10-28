@@ -260,17 +260,15 @@ func commonPrefix(ss []string) string {
 	return p
 }
 
-// maxInputHistory caps the remembered prompts (ring buffer).
-const maxInputHistory = 200
-
 // pushHistory appends a submitted prompt (dropping an immediate duplicate) and
 // resets the navigation cursor to "not navigating".
 func (m *Model) pushHistory(prompt string) {
 	if n := len(m.inputHistory); n == 0 || m.inputHistory[n-1] != prompt {
 		m.inputHistory = append(m.inputHistory, prompt)
-		if len(m.inputHistory) > maxInputHistory {
-			m.inputHistory = m.inputHistory[len(m.inputHistory)-maxInputHistory:]
+		if len(m.inputHistory) > MaxInputHistory {
+			m.inputHistory = m.inputHistory[len(m.inputHistory)-MaxInputHistory:]
 		}
+		m.storePrompt(prompt)
 	}
 	m.histPos = len(m.inputHistory)
 	m.histDraft = ""
@@ -278,6 +276,10 @@ func (m *Model) pushHistory(prompt string) {
 
 // navigateHistory moves through prior prompts: up = older, down = newer. The
 // in-progress line is stashed on first up and restored past the newest entry.
+//
+// Going up leaves the cursor on the recalled entry's first row and going down
+// on its last, so a run of ↑ (or ↓) keeps browsing through multi-line entries
+// instead of stopping to walk the lines of each one (see onHistoryKey).
 func (m *Model) navigateHistory(up bool) {
 	if len(m.inputHistory) == 0 {
 		return
@@ -299,5 +301,15 @@ func (m *Model) navigateHistory(up bool) {
 	} else {
 		m.input.SetValue(m.inputHistory[m.histPos])
 	}
-	m.input.CursorEnd()
+	m.syncInputHeight()
+	if up {
+		// SetValue leaves the cursor at the end; walk it back to the top. The
+		// bound only guards against a widget that stops moving.
+		for i := 0; m.input.Line() > 0 && i < 10000; i++ {
+			m.input.CursorUp()
+		}
+		m.input.CursorStart()
+	} else {
+		m.input.CursorEnd()
+	}
 }

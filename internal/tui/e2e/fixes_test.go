@@ -520,3 +520,22 @@ func TestSuspendAndResume(t *testing.T) {
 	env.Prompt(t, tm, "hello")
 	tm.WaitText(t, "Hello from the mock model.", 20*time.Second)
 }
+
+// ↑ recalls a prompt from an earlier run in the same project: history used to
+// live in memory only. (PR #88.) Also exercises Ctrl+D on an empty prompt.
+func TestPromptHistorySurvivesARestart(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	env.Prompt(t, tm, "remember this prompt")
+	tm.WaitFor(t, "the reply", 20*time.Second, func(s Snapshot) bool { return s.HasLine(doneLine) })
+	tm.Press("\x04") // Ctrl+D on the empty prompt quits
+	if exited, _ := tm.WaitExit(10 * time.Second); !exited {
+		t.Fatalf("Ctrl+D on an empty prompt did not quit\n%s", tm.Snapshot())
+	}
+
+	tm = env.Start(t)
+	tm.Press("\x1b[A") // ↑
+	tm.WaitFor(t, "the earlier prompt recalled into the box", 10*time.Second, func(s Snapshot) bool {
+		return strings.Contains(s.Screen(), "remember this prompt")
+	})
+}

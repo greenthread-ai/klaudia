@@ -346,6 +346,9 @@ func (m *Model) bottomView() string {
 // and absent while the model worked.
 func (m *Model) inputAffordanceView() string {
 	var out string
+	if m.search.active {
+		return "\n" + caption(m.searchLine())
+	}
 	if m.slashCommandsLive() {
 		if sug := m.slashSuggestionLine(); sug != "" {
 			out += "\n" + caption(sug)

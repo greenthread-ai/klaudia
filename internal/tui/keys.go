@@ -155,11 +155,23 @@ func (m *Model) onInputKey(msg tea.KeyPressMsg) bool {
 // this, ↑ with nothing queued simply did nothing while a turn ran, and the
 // answer box had no history at all.
 func (m *Model) onHistoryKey(msg tea.KeyPressMsg) bool {
-	if !m.editableInput() || m.input.LineCount() > 1 {
+	if !m.editableInput() {
 		return false
 	}
 	prev := key.Matches(msg, m.keymap().Prev)
 	if !prev && !key.Matches(msg, m.keymap().Next) {
+		return false
+	}
+	// ↑ browses only from the box's first row and ↓ from its last
+	// (readline's up-line-or-history), so a multi-line entry recalled from
+	// history can be browsed past instead of trapping the arrows inside it.
+	// Rows are the wrapped rows, so ↑ at the end of a long line first walks
+	// up it. (From PR #88.)
+	li := m.input.LineInfo()
+	if prev && (m.input.Line() > 0 || li.RowOffset > 0) {
+		return false
+	}
+	if !prev && (m.input.Line() < m.input.LineCount()-1 || li.RowOffset+1 < li.Height) {
 		return false
 	}
 	if prev {
@@ -191,6 +203,20 @@ func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// must not also kill the turn behind it. A second Esc does that.
 	if snap, _, _ := m.workList(); msg.String() == "ctrl+t" && planVisible(snap) {
 		m.planCollapsed = !m.planCollapsed
+		return m, nil
+	}
+	// An open Ctrl+R search owns the keyboard, Esc and Ctrl+C included: both
+	// cancel the search, not the session. A key it passes on accepts the
+	// match and is then handled as usual.
+	if m.search.active && m.state == stateIdle {
+		if m.onSearchKey(msg) {
+			return m, nil
+		}
+	} else if m.search.active {
+		m.search = historySearch{} // the state changed under it
+	}
+	if msg.String() == "ctrl+r" && m.state == stateIdle {
+		m.beginHistorySearch()
 		return m, nil
 	}
 	if m.onInputKey(msg) {

@@ -215,6 +215,15 @@ port mirrors (see `internal/version`).
   errors; both now print their usage. `/add-dir` expands `~`, resolves a
   relative path from the project, and refuses one that is not an existing
   directory. From PR #89; its `/help` alignment had already been redone.
+- **Prompt history survives a restart, and Ctrl+R searches it.** ↑
+  recalled nothing after a restart or `--resume`: history was in memory
+  only. It is now kept per project beside the transcripts (never in the
+  repository), the last 200 prompts, and a resumed conversation's prompts
+  are added back. A `!` command is kept as typed, never its output; a
+  prompt with a paste chip or over 8 KiB is not written. ↑ and ↓ browse
+  history from the first and last row of a multi-line prompt instead of
+  being trapped in it, and Ctrl+R is a reverse incremental search, as in
+  Claude Code. From PR #88.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
