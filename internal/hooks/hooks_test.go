@@ -3,6 +3,7 @@ package hooks
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -390,4 +391,27 @@ func joinErrs(errs []error) string {
 		parts[i] = err.Error()
 	}
 	return strings.Join(parts, "\n")
+}
+
+// A Notification hook gets the reason and the message, in Claude Code's
+// field names, and cannot block anything: there is nothing to block.
+func TestNotificationHook(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "payload.json")
+	r := runner(t, []config.Hook{{Event: "Notification", Command: "cat > " + out + "; exit 2"}}, nil)
+	if !r.Has(Notification) {
+		t.Fatal("a Notification hook was not compiled")
+	}
+	res := r.Run(context.Background(), Input{Event: Notification, Message: "Klaudia has a question", NotificationType: "question"}, confirm)
+	if res.Blocked {
+		t.Error("a Notification hook's exit 2 blocked something")
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"hook_event_name":"Notification"`, `"message":"Klaudia has a question"`, `"notification_type":"question"`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("payload lacks %s: %s", want, b)
+		}
+	}
 }

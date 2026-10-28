@@ -40,11 +40,11 @@ it. That ordering is the entire reason hooks are allowed to block at all: a
 config file that could *grant* permission would be a way to switch the host gate
 off by writing a file.
 
-## The four events
+## The five events
 
 Deliberately few. Claude Code has grown past thirty lifecycle events; each one
 is a promise about when the loop will call out, which is a promise about the
-loop's shape. These four cannot be expressed any other way.
+loop's shape. These five cannot be expressed any other way.
 
 | Event | When | Can add context | Can block |
 |---|---|---|---|
@@ -52,6 +52,16 @@ loop's shape. These four cannot be expressed any other way.
 | `UserPromptSubmit` | a prompt is about to be sent | yes | yes |
 | `PreToolUse` | a tool call is about to run | no | yes |
 | `PostToolUse` | a tool call finished | yes (as feedback on the result) | fails the call |
+| `Notification` | Klaudia needs you and the terminal is not focused (TUI) | no | no |
+
+`Notification` is for telling someone elsewhere — a phone, a chat — at the
+same moments the terminal notification fires: a permission prompt, a
+question, a plan to approve, a turn that ran 20s or more finishing. The
+payload adds `message` and `notification_type` (`permission`, `question`,
+`plan`, `done`, `error`). It runs on its own goroutine and its output goes
+nowhere: nothing in the session waits for it. A project's `Notification`
+hooks run only once that project's hooks have been approved; there is no one
+to ask at the moment it fires.
 
 `SessionStart` cannot block because there is nothing to block — the session is
 already starting, you asked for it, and the only honest response to "your
@@ -69,7 +79,7 @@ sub-agent starts. Sub-agents run the two tool events and skip
 
 | Field | Meaning |
 |---|---|
-| `event` | one of the four above. A typo is reported, not silently ignored. |
+| `event` | one of the five above. A typo is reported, not silently ignored. |
 | `matcher` | regexp matched against the tool name. Only meaningful for the two tool events; omit to match every tool. |
 | `command` | run through the same shell as the Bash tool (`bash -c`, or `sh -c` where bash is absent), in the project directory. |
 | `timeout` | Go duration (`"5s"`, `"2m"`). Defaults to 30s. |

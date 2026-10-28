@@ -991,6 +991,28 @@ feature being missing. `/doctor` reports what loaded, from which scope, and
 names the directories when nothing did. A skill directory without a `SKILL.md`
 warns at startup rather than being skipped in silence.
 
+## Notifications
+
+When Klaudia needs you — a permission prompt, a question, a plan to approve,
+or a turn that ran 20s or more finishing — and your terminal is not focused,
+it says so: a desktop notification on terminals known to show one (iTerm2,
+WezTerm, Ghostty), the bell everywhere else and inside tmux. Klaudia asks the
+terminal for focus reports, so nothing fires while you are looking; a
+terminal that never reports focus is treated as unfocused.
+
+```toml
+[tui]
+notify = "auto"   # default; or a list of bell, osc9, osc777; or all; or off
+```
+
+The same moments run the `Notification` hook, for a phone or a chat:
+
+```toml
+[[hooks]]
+event = "Notification"
+command = "jq -r .message | xargs -I{} ntfy publish klaudia {}"
+```
+
 ## Hooks
 
 A hook is a shell command run at a fixed point in a turn — the escape hatch for
@@ -1019,8 +1041,9 @@ command = "echo \"Branch: $(git branch --show-current)\""
 timeout = "5s"
 ```
 
-Four events, deliberately: `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
-`PostToolUse`. The hook is handed a JSON object on stdin using Claude Code's
+Five events, deliberately: `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
+`PostToolUse`, and `Notification` (when Klaudia needs you; see
+[Notifications](#notifications)). The hook is handed a JSON object on stdin using Claude Code's
 field names (`tool_name`, `tool_input`, `tool_response`, `prompt`, …) so
 existing hook scripts work unedited. Exit **2** blocks and its stderr is the
 reason the model is given; any other non-zero status is a malfunction, reported

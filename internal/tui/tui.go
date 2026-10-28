@@ -81,6 +81,12 @@ type Session struct {
 	// Suggest, if set, asks the model one question outside the conversation
 	// (no tools, nothing recorded). Backs /commit's drafted message.
 	Suggest func(ctx context.Context, prompt string) (string, error)
+	// Notify is which terminal notifications to send when Klaudia needs the
+	// user (ParseNotify); the zero value sends none.
+	Notify NotifyModes
+	// OnNotify, if set, runs the Notification hook for the same moments.
+	// Called on its own goroutine: a hook must not hold up the UI.
+	OnNotify func(reason, message string)
 	// OnRewind, if set, records that the conversation was cut back to its
 	// first keep messages, so a resumed session stays rewound.
 	OnRewind func(keep int)
@@ -505,9 +511,14 @@ type Model struct {
 	// out of rendered output. msgAccum collects it across progressive chunks.
 	lastAssistantText string
 	msgAccum          strings.Builder
-	// pendingOSC holds a clipboard escape sequence to emit on the next frame.
-	// Writing it through View keeps it ordered with respect to the renderer.
-	pendingOSC string
+	// pendingRaw collects escapes for the terminal (OSC 52 clipboard,
+	// notifications) when there is no renderer to queue them on: under tests.
+	// See emitRaw.
+	pendingRaw string
+	// focusKnown is set once the terminal has reported focus at all, and
+	// focused is what it last said. notifyAttention stays quiet only when
+	// both say the user is looking.
+	focusKnown, focused bool
 	// screen draws the live region when running in a terminal; nil under
 	// tests, which read frame directly.
 	screen *inlineRenderer
@@ -785,6 +796,14 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.onKey(msg)
 
+	case tea.FocusMsg:
+		m.focusKnown, m.focused = true, true
+		return m, nil
+
+	case tea.BlurMsg:
+		m.focusKnown, m.focused = true, false
+		return m, nil
+
 	case tea.KeyboardEnhancementsMsg:
 		keysDisambiguated = msg.SupportsKeyDisambiguation()
 		m.input.KeyMap.InsertNewline = m.keymap().Newline
@@ -827,11 +846,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pending = msg.reply
 		m.pendingReq = msg.req
 		if hostgate.CardOf(msg.req) != nil {
+			m.notifyAttention("permission", "Klaudia needs your approval for a change to this machine")
 			for _, line := range hostCardLines(hostgate.CardOf(msg.req)) {
 				m.appendLine(line)
 			}
 			return m, m.waitForEvent()
 		}
+		m.notifyAttention("permission", "Klaudia needs your permission: "+oneline(m.permissionSummary(msg.req), 80))
 		m.appendLine(askStyle.Render("Permission required: " + m.permissionSummary(msg.req)))
 		detail := permissionDetail(msg.req)
 		if m.toolShown(msg.req.ToolName) {
@@ -854,6 +875,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// (askView), and answerAsk commits the one chosen. Scrollback keeps
 		// what stays true: what was asked and what was answered.
 		m.appendLine(askStyle.Render("? " + msg.question))
+		m.notifyAttention("question", "Klaudia has a question: "+oneline(msg.question, 80))
 		return m, m.waitForEvent()
 
 	case bgDoneMsg:
@@ -865,6 +887,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.planReply = msg.reply
 		m.planIdx, m.planStray = 0, false
 		m.appendLine(askStyle.Render("Proposed plan:"))
+		m.notifyAttention("plan", "Klaudia proposed a plan")
 		m.appendMarkdown(msg.plan)
 		// The approval picker lives only in the persistent bottom view (see
 		// bottomView/stateAwaitingPlan); don't also write it to scrollback or
@@ -981,6 +1004,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.setState(stateIdle)
 		m.input.Focus()
+		m.notifyTurnEnd(elapsed, msg.err)
 		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW, m.scheduleIdleCompact())
 
 	case idleCompactMsg:

@@ -99,6 +99,8 @@ type Config struct {
 	Input Input `toml:"input,omitempty"`
 	// Links configures clickable (OSC 8) links in the TUI.
 	Links Links `toml:"links,omitempty"`
+	// TUI holds terminal-UI settings that have no section of their own.
+	TUI TUI `toml:"tui,omitempty"`
 	// Subagents configures how sub-agents run.
 	Subagents Subagents `toml:"subagents,omitempty"`
 	// Hooks are lifecycle hooks: shell commands run at fixed points in a turn.
@@ -183,6 +185,15 @@ type Input struct {
 	// Kitty keyboard protocol or modifyOtherKeys); elsewhere they arrive as
 	// Return. See internal/tui/keyaction.go.
 	Enter string `toml:"enter,omitempty"`
+}
+
+// TUI is the [tui] section.
+type TUI struct {
+	// Notify is how Klaudia gets the user's attention when it needs them and
+	// the terminal is not focused: "auto" (the default; a desktop notification
+	// on terminals known to show one, the bell elsewhere), a list of "bell",
+	// "osc9" and "osc777", "all", or "off".
+	Notify string `toml:"notify,omitempty"`
 }
 
 // Permissions sets the session's starting stance.
@@ -502,6 +513,9 @@ func merge(dst *Config, src Config) {
 	// enter = "newline" — documented, and in /help — did nothing at all.
 	if src.Input.Enter != "" {
 		dst.Input.Enter = src.Input.Enter
+	}
+	if src.TUI.Notify != "" {
+		dst.TUI.Notify = src.TUI.Notify
 	}
 	if src.Links.Enabled != nil {
 		dst.Links.Enabled = src.Links.Enabled

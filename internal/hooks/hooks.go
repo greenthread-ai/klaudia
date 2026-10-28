@@ -52,11 +52,16 @@ const (
 	UserPromptSubmit Event = "UserPromptSubmit"
 	PreToolUse       Event = "PreToolUse"
 	PostToolUse      Event = "PostToolUse"
+	// Notification fires when Klaudia needs the user — a permission prompt,
+	// a question, a plan to approve, a long turn finished — and the terminal
+	// is not focused. It cannot block: it is for telling someone elsewhere
+	// (a phone, a chat), and the payload carries the reason and a message.
+	Notification Event = "Notification"
 )
 
 // Events lists every event, in lifecycle order. Used for validation messages
 // and by /doctor.
-var Events = []Event{SessionStart, UserPromptSubmit, PreToolUse, PostToolUse}
+var Events = []Event{SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Notification}
 
 // canBlock reports whether a refusal from this event's hooks means anything.
 //
@@ -65,7 +70,7 @@ var Events = []Event{SessionStart, UserPromptSubmit, PreToolUse, PostToolUse}
 // "your SessionStart hook said no" is to tell them and carry on. Treating its
 // exit 2 as a veto would make a typo in a config file look like a broken
 // install.
-func (e Event) canBlock() bool { return e != SessionStart }
+func (e Event) canBlock() bool { return e != SessionStart && e != Notification }
 
 // matchesTools reports whether this event's hooks are selected by tool name.
 func (e Event) matchesTools() bool { return e == PreToolUse || e == PostToolUse }

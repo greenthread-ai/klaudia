@@ -212,11 +212,7 @@ func (m *Model) frame() string {
 		return ""
 	}
 
-	out := m.clampBottom(m.fitLiveRegion(m.bottomView()))
-	if m.pendingOSC != "" {
-		out, m.pendingOSC = m.pendingOSC+out, ""
-	}
-	return out
+	return m.clampBottom(m.fitLiveRegion(m.bottomView()))
 }
 
 // fitLiveRegion wraps the live region so no line reaches the terminal's last

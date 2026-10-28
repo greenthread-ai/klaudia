@@ -32,6 +32,8 @@ type Screen struct {
 	pending    []byte // an escape sequence or UTF-8 rune split across reads
 	replies    []byte // answers to queries, in order, not yet written
 	links      []string
+	bells      int      // BEL bytes outside an escape sequence
+	notes      []string // OSC 9 desktop-notification bodies
 }
 
 // row is one line of cells. wrapped marks a row the cursor left by wrapping
@@ -212,6 +214,8 @@ func (s *Screen) osc(body string) {
 		s.replies = append(s.replies, "\x1b]10;rgb:ffff/ffff/ffff\x1b\\"...)
 	case body == "11;?":
 		s.replies = append(s.replies, "\x1b]11;rgb:0000/0000/0000\x1b\\"...)
+	case strings.HasPrefix(body, "9;"):
+		s.notes = append(s.notes, strings.TrimPrefix(body, "9;"))
 	case strings.HasPrefix(body, "8;"):
 		// OSC 8 ; params ; URI — an empty URI closes the link.
 		parts := strings.SplitN(body, ";", 3)
@@ -250,6 +254,8 @@ func (s *Screen) Feed(data []byte) {
 				s.x = max(0, min(s.x, s.cols-1)-1)
 			case '\t':
 				s.x = s.clampX((s.x/8 + 1) * 8)
+			case '\a':
+				s.bells++
 			}
 			i++
 			continue
@@ -338,6 +344,8 @@ func (s *Screen) Snapshot() Snapshot {
 	snap := Snapshot{
 		Cols: s.cols, Rows: s.rows, CursorX: s.x, CursorY: s.y,
 		Links: append([]string(nil), s.links...),
+		Bells: s.bells,
+		Notes: append([]string(nil), s.notes...),
 	}
 	for _, r := range s.scrollback {
 		snap.Scrollback = append(snap.Scrollback, s.rowText(r))
@@ -358,6 +366,10 @@ type Snapshot struct {
 	Scrollback []string
 	// Links holds the URI of every OSC 8 hyperlink opened so far.
 	Links []string
+	// Bells counts BEL bytes rung so far; Notes holds every OSC 9
+	// notification's text.
+	Bells int
+	Notes []string
 }
 
 // Screen is the visible screen as text.

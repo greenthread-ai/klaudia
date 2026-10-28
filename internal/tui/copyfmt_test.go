@@ -139,24 +139,19 @@ func TestCopyTargets(t *testing.T) {
 	}
 }
 
-// The escape must go through the render path, not straight to stdout, or it
-// races the renderer mid-frame.
-func TestCopyQueuesSequenceForTheNextFrame(t *testing.T) {
+// The escape goes to the renderer's raw queue, written once at the next
+// flush. It used to ride on the front of a frame, which the next frame could
+// replace before it was drawn, losing the copy.
+func TestCopyQueuesSequenceForTheTerminal(t *testing.T) {
 	m := newTestModel()
 	m.resize(80, 24)
 	m.lastAssistantText = "some answer"
 
 	m.copyToClipboard(nil)
-	if !strings.HasPrefix(m.pendingOSC, "\x1b]52;") {
-		t.Fatalf("expected a queued OSC 52 sequence, got %q", m.pendingOSC)
+	if !strings.HasPrefix(m.pendingRaw, "\x1b]52;") {
+		t.Fatalf("expected a queued OSC 52 sequence, got %q", m.pendingRaw)
 	}
-	if !strings.HasPrefix(m.frame(), "\x1b]52;") {
-		t.Error("the sequence should be emitted on the next frame")
-	}
-	if m.pendingOSC != "" {
-		t.Error("the sequence must be emitted exactly once")
-	}
-	if strings.HasPrefix(m.frame(), "\x1b]52;") {
-		t.Error("the sequence should not repeat on subsequent frames")
+	if strings.Contains(m.frame(), "\x1b]52;") {
+		t.Error("the sequence must not be in a frame")
 	}
 }

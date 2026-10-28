@@ -139,3 +139,12 @@ func TestScreenAutowrapOffClips(t *testing.T) {
 		t.Fatalf("lines = %q, want %q", s.Snapshot().Lines, want)
 	}
 }
+
+func TestScreenRecordsBellsAndNotifications(t *testing.T) {
+	s := newScreen(20, 3)
+	s.Feed([]byte("a\a\x1b]9;hello\ab\x1b]8;;http://x\a"))
+	snap := s.Snapshot()
+	if snap.Bells != 1 || len(snap.Notes) != 1 || snap.Notes[0] != "hello" || snap.Lines[0] != "ab" {
+		t.Fatalf("bells %d notes %q lines %q", snap.Bells, snap.Notes, snap.Lines)
+	}
+}

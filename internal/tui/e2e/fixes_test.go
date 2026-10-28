@@ -445,3 +445,23 @@ func TestProjectConfigCannotLoosen(t *testing.T) {
 	env.Prompt(t, tm, "hello there") // fails unless the request reached the user's (mock) provider
 	tm.WaitFor(t, "the reply", 20*time.Second, func(s Snapshot) bool { return s.HasLine(doneLine) })
 }
+
+// Klaudia rings when it needs the user and the terminal is not focused, and
+// stays quiet once the terminal reports focus.
+func TestNotifiesOnlyWhenUnfocused(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	env.Prompt(t, tm, "ask me a question")
+	tm.WaitFor(t, "a bell for the question", 20*time.Second, func(s Snapshot) bool { return s.Bells > 0 })
+	tm.Press(keyEnter) // answer it
+	tm.WaitFor(t, "the turn to finish", 20*time.Second, func(s Snapshot) bool { return s.HasLine(doneLine) })
+	before := tm.Snapshot().Bells
+
+	tm.Press("\x1b[I") // focus in
+	env.Prompt(t, tm, "another question please")
+	tm.WaitText(t, "Which greeting", 20*time.Second)
+	time.Sleep(300 * time.Millisecond)
+	if got := tm.Snapshot().Bells; got != before {
+		t.Errorf("rang %d more times while focused", got-before)
+	}
+}

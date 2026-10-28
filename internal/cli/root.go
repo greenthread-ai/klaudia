@@ -1633,6 +1633,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			Theme:          themeOrWarn(cfg.Theme, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }), // user default (~/.klaudia) overlaid by project; /theme overrides per session
 			PermissionMode: string(mode),
 			EnterInserts:   tui.EnterInserts(cfg.Input.Enter, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
+			Notify:         tui.ParseNotify(cfg.TUI.Notify, os.Getenv, func(m string) { fmt.Fprintln(cmd.ErrOrStderr(), "warning:", m) }),
 			Hyperlinks:     tui.HyperlinksEnabled(cfg.Links.Enabled, os.Getenv),
 			IdleCompact:    cfg.IdleCompact == nil || *cfg.IdleCompact,
 			FileLinks:      cfg.Links.File,
@@ -1679,6 +1680,16 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 		// 1024 is plenty for a subject and a few lines; Complete refuses a
 		// reply that hits it rather than committing half a message.
+		if hookRunner.Has(hooks.Notification) {
+			// No one to confirm with here: a project's Notification hooks run
+			// only once the project's hooks are approved, and are otherwise
+			// skipped with a notice, as the runner does for any event.
+			sess.OnNotify = func(reason, message string) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				hookRunner.Run(ctx, hooks.Input{Event: hooks.Notification, Message: message, NotificationType: reason}, nil)
+			}
+		}
 		sess.OnRewind = func(keep int) {
 			if transcript != nil {
 				_ = transcript.RecordRewind(keep)

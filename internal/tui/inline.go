@@ -55,6 +55,7 @@ type inlineRenderer struct {
 	everDrawn bool     // whether the cursor is at a frame top yet
 	full      bool     // the next flush redraws every line
 	queued    []string // scrollback lines to print above the frame
+	raw       []string // escapes for the terminal (clipboard, notifications)
 	dirty     bool
 	suspended bool
 
@@ -91,8 +92,16 @@ func newInlineRenderer(out io.Writer) *inlineRenderer {
 // the Kitty protocol answers the query, and Bubble Tea turns the answer into
 // the KeyboardEnhancementsMsg that lets the help name Shift+Enter.
 var (
-	modesOn  = ansi.HideCursor + ansi.SetModeBracketedPaste + ansi.SetModifyOtherKeys2 + ansi.PushKittyKeyboard(1) + ansi.RequestKittyKeyboard
-	modesOff = ansi.ResetModifyOtherKeys + ansi.PopKittyKeyboard(1) + ansi.ResetModeBracketedPaste + ansi.ShowCursor
+	modesOn  = ansi.HideCursor + ansi.SetModeBracketedPaste + ansi.SetModifyOtherKeys2 + ansi.PushKittyKeyboard(1) + ansi.RequestKittyKeyboard + focusOn
+	modesOff = focusOff + ansi.ResetModifyOtherKeys + ansi.PopKittyKeyboard(1) + ansi.ResetModeBracketedPaste + ansi.ShowCursor
+)
+
+// Focus reporting (DECSET 1004): the terminal sends CSI I and CSI O as the
+// window gains and loses focus, which Bubble Tea delivers as FocusMsg and
+// BlurMsg, so a notification is sent only when the user is not looking.
+const (
+	focusOn  = "\x1b[?1004h"
+	focusOff = "\x1b[?1004l"
 )
 
 // start sets the terminal modes and begins flushing.
@@ -180,6 +189,17 @@ func (r *inlineRenderer) print(body string) {
 	r.dirty = true
 }
 
+// emit queues an escape for the terminal itself — OSC 52, a notification —
+// written as is at the next flush, ahead of the frame. Not through the frame:
+// a frame is replaced by the next before it is drawn (the escape would be
+// lost), clipped to the width, and downsampled.
+func (r *inlineRenderer) emit(seq string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.raw = append(r.raw, seq)
+	r.dirty = true
+}
+
 // clearScreen erases the visible screen (not the scrollback) and starts the
 // frame at the top.
 func (r *inlineRenderer) clearScreen() {
@@ -206,7 +226,12 @@ func (r *inlineRenderer) flushLocked() {
 	lines := r.fit(r.frame)
 
 	var b strings.Builder
-	b.WriteString(syncBegin + "\r")
+	b.WriteString(syncBegin)
+	for _, s := range r.raw {
+		b.WriteString(s)
+	}
+	r.raw = nil
+	b.WriteString("\r")
 	moved := 0 // rows below the frame's first line the cursor ends on
 	if r.full || len(r.queued) > 0 || r.drawn == nil {
 		// Redraw from the top: the old frame, however the terminal rewrapped
@@ -331,6 +356,16 @@ func (p rendered) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (p rendered) View() tea.View {
 	p.r.setFrame(p.m.frame())
 	return tea.View{}
+}
+
+// emitRaw sends an escape to the terminal through the renderer, or keeps it
+// for a test to read when there is none.
+func (m *Model) emitRaw(seq string) {
+	if m.screen != nil {
+		m.screen.emit(seq)
+		return
+	}
+	m.pendingRaw += seq
 }
 
 // execProcess runs cmd with the terminal handed over, the live region erased

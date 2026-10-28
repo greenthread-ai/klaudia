@@ -667,8 +667,8 @@ func (m *Model) renderConfig() string {
 	if effort == "" {
 		effort = "(provider default)"
 	}
-	return fmt.Sprintf("Configuration:\n  provider=%s\n  model=%s\n  effort=%s\n  sandbox=%s\n  permissions=%s\n\n  /mode to change permissions · /model to change the model · /effort to change effort",
-		provider, model, effort, sandbox, m.currentMode().Label())
+	return fmt.Sprintf("Configuration:\n  provider=%s\n  model=%s\n  effort=%s\n  sandbox=%s\n  permissions=%s\n  notify=%s\n\n  /mode to change permissions · /model to change the model · /effort to change effort",
+		provider, model, effort, sandbox, m.currentMode().Label(), m.sess.Notify)
 }
 
 // renderAgents lists the available sub-agent types (Agent tool subagent_type).

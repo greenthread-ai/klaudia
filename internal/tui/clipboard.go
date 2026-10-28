@@ -126,7 +126,7 @@ func (m *Model) copyToClipboard(args []string) string {
 	if err != nil {
 		return "copy: " + err.Error()
 	}
-	m.pendingOSC = clipboardSequence(text)
+	m.emitRaw(clipboardSequence(text))
 
 	msg := fmt.Sprintf("Copied %s (%s) to the clipboard via OSC 52.", label, humanBytes(len(text)))
 	if os.Getenv("TMUX") != "" {

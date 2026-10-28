@@ -34,6 +34,11 @@ type Input struct {
 	ToolError  bool   `json:"tool_error,omitempty"`
 	// Prompt is the text about to be sent (UserPromptSubmit).
 	Prompt string `json:"prompt,omitempty"`
+	// Message and NotificationType describe why Klaudia wants the user
+	// (Notification): a one-line message, and a slug — permission, question,
+	// plan, done, error.
+	Message          string `json:"message,omitempty"`
+	NotificationType string `json:"notification_type,omitempty"`
 }
 
 // Result is the combined verdict of every hook that matched an event.

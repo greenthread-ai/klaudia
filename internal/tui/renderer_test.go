@@ -164,3 +164,23 @@ func TestRendererSuspendAndResume(t *testing.T) {
 		t.Fatalf("resume should redraw: %q", got)
 	}
 }
+
+// An escape for the terminal (a notification, OSC 52) is written once, as
+// is, ahead of the frame: not clipped, not downsampled, and not lost when
+// another frame replaces this one before the flush.
+func TestRendererEmitsRawEscapesOnce(t *testing.T) {
+	r, out := newTestRenderer(20, 10)
+	r.setFrame("box")
+	flushed(r, out)
+	r.emit("\a\x1b]9;" + strings.Repeat("long message ", 10) + "\a")
+	r.setFrame("box 2")
+	r.setFrame("box 3")
+	got := flushed(r, out)
+	if !strings.HasPrefix(got, syncBegin+"\a\x1b]9;") || !strings.Contains(got, strings.Repeat("long message ", 10)) {
+		t.Fatalf("escape not written whole, ahead of the frame: %q", got)
+	}
+	r.setFrame("box 4")
+	if again := flushed(r, out); strings.Contains(again, "\x1b]9;") {
+		t.Errorf("escape written twice: %q", again)
+	}
+}

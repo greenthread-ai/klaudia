@@ -5,6 +5,16 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+
+- **Notifications when Klaudia needs you.** A permission prompt, a question,
+  a plan to approve, or a turn that ran 20s or more finishing now raises a
+  desktop notification (iTerm2, WezTerm, Ghostty) or rings the bell
+  (elsewhere and in tmux), only while the terminal is not focused. `[tui]
+  notify` chooses (`auto`, a list of `bell`/`osc9`/`osc777`, `all`, `off`).
+  A new `Notification` hook event fires at the same moments with the reason
+  and message, for alerts sent elsewhere. Built on PR #96.
+
 ### Security
 
 - **A repository's config can no longer loosen yours.** `.klaudia/config.toml`
@@ -51,6 +61,9 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **`/copy` no longer loses its clipboard escape** when the screen updates
+  twice before the next draw: escapes for the terminal now go out on their
+  own, not on the front of a frame the next one could replace.
 - **`[input] enter = "newline"` takes effect.** The section was read and
   never merged, so the setting did nothing.
 - **Sub-agents fall back too.** The `fallbackModels` chain covered only the

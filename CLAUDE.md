@@ -45,7 +45,7 @@ other products (see docs/roadmap.md, "The extraction"); it must not import
 - **subagent** - Built-in sub-agent types
 - **worktree** - Per-sub-agent git checkouts: seed, adopt, conflict reporting
 - **skill** - User-defined skills (`.klaudia/skills`)
-- **hooks** - Lifecycle hooks: the four events, project-hook trust, execution
+- **hooks** - Lifecycle hooks: the five events, project-hook trust, execution
 - **memory** - Auto-memory store
 - **doctor** - `/doctor` environment diagnostics
 - **streamjson** - Bidirectional stream-json frontend
