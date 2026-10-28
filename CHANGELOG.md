@@ -123,6 +123,10 @@ port mirrors (see `internal/version`).
   raise the limit; the server is not restarted, since slow is not dead.
   Servers also connect in parallel, so startup waits for the slowest one,
   not all of them in turn. From PR #38.
+- **An MCP server whose tool list fails says so.** A connected server
+  whose `tools/list` failed was skipped silently, which looked exactly like
+  a server with no tools. The list is now tried once more, and a failure is
+  a warning at startup and shown against the server in `/mcp`. From PR #39.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

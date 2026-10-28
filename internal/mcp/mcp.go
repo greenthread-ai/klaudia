@@ -171,6 +171,8 @@ type Server struct {
 
 	mu      sync.RWMutex
 	session *mcpsdk.ClientSession
+	// listErr is why the last tools/list failed, or nil.
+	listErr error
 
 	// reviveMu serialises automatic relaunches of this one server, and
 	// lastRevive rate-limits them. Both are needed because the attempt can come
@@ -401,6 +403,21 @@ func (m *Manager) dialWithin(timeout time.Duration, verb, name string, cfg Serve
 		discard()
 		return nil, m.ctx.Err()
 	}
+}
+
+// ListError is why the server's tool list could not be read the last time it
+// was asked, or nil. A connected server whose list failed looked exactly like
+// one with no tools; startup and /mcp report this instead. (From PR #39.)
+func (s *Server) ListError() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.listErr
+}
+
+func (s *Server) setListError(err error) {
+	s.mu.Lock()
+	s.listErr = err
+	s.mu.Unlock()
 }
 
 // Connect launches and connects every server in cfg. Servers that fail to

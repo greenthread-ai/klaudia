@@ -643,7 +643,11 @@ func (c mcpController) Servers() []tui.MCPServerInfo {
 	}
 	out := make([]tui.MCPServerInfo, 0)
 	for _, s := range c.mgr.Servers() {
-		out = append(out, tui.MCPServerInfo{Name: s.Name, Connected: s.Connected(), Tools: counts[s.Name]})
+		info := tui.MCPServerInfo{Name: s.Name, Connected: s.Connected(), Tools: counts[s.Name]}
+		if err := s.ListError(); err != nil {
+			info.ListErr = err.Error()
+		}
+		out = append(out, info)
 	}
 	// Held servers are not in the manager at all, so without these a project
 	// whose servers all await approval read as having none configured.
@@ -1434,6 +1438,11 @@ func run(cmd *cobra.Command, opts *options) error {
 	}
 
 	baseTools, deferredTools := buildTools()
+	for _, s := range mcpMgr.Servers() {
+		if err := s.ListError(); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: mcp %q connected but its tools could not be read: %v\n", s.Name, err)
+		}
+	}
 	base = tools.NewRegistry(baseTools...)
 
 	// deferredTools is replaced when the MCP config reloads, on the watcher's

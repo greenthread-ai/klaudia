@@ -458,6 +458,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 				status = "○ disconnected"
 			}
 			fmt.Fprintf(&b, "\n  %s  %s (%s)", status, s.Name, countOf(s.Tools, "tool"))
+			if s.ListErr != "" {
+				fmt.Fprintf(&b, " — tool list failed: %s", s.ListErr)
+			}
 			if s.Connected {
 				items = append(items, choiceItem{label: "Disconnect " + s.Name, apply: func() string {
 					if err := m.sess.MCP.Disconnect(s.Name); err != nil {

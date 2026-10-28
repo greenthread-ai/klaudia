@@ -148,6 +148,8 @@ type MCPServerInfo struct {
 	Held    bool
 	Refused bool
 	Detail  string
+	// ListErr is why a connected server's tool list could not be read.
+	ListErr string
 }
 
 // MCPReloadEvent reports the outcome of one hot reload of the MCP config. It

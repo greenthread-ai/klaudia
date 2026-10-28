@@ -192,8 +192,44 @@ func (t *mcpTool) revive(ctx context.Context) bool {
 // it.
 var listTimeout = 15 * time.Second
 
-// Tools lists every connected server's tools and wraps them. Servers that fail
-// to list are skipped.
+// listRetryDelay is the pause before a failed tools/list is tried again.
+var listRetryDelay = 500 * time.Millisecond
+
+// listTools reads a server's whole tool list, every page of it (a server that
+// paginates used to lose everything after the first), each attempt under
+// listTimeout. A failed read is tried once more after listRetryDelay: a
+// server that has only just finished starting can fail its first list. A
+// listing that fails part-way contributes nothing. (Retry from PR #39.)
+func listTools(ctx context.Context, sess *mcpsdk.ClientSession) ([]*mcpsdk.Tool, error) {
+	var err error
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(listRetryDelay):
+			}
+		}
+		var listed []*mcpsdk.Tool
+		err = nil
+		lctx, cancel := context.WithTimeout(ctx, listTimeout)
+		for rt, terr := range sess.Tools(lctx, nil) {
+			if terr != nil {
+				err = terr
+				break
+			}
+			listed = append(listed, rt)
+		}
+		cancel()
+		if err == nil {
+			return listed, nil
+		}
+	}
+	return nil, fmt.Errorf("listing tools: %w", err)
+}
+
+// Tools lists every connected server's tools and wraps them. A server whose
+// list cannot be read is skipped, and its ListError says why.
 func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 	var out []tools.Tool
 	for _, srv := range m.Servers() {
@@ -201,21 +237,9 @@ func (m *Manager) Tools(ctx context.Context) []tools.Tool {
 		if sess == nil {
 			continue
 		}
-		// Every page: a server that paginates its list used to lose everything
-		// after the first one. A listing that fails part-way contributes
-		// nothing, as a failed listing always has.
-		var listed []*mcpsdk.Tool
-		failed := false
-		lctx, cancel := context.WithTimeout(ctx, listTimeout)
-		for rt, err := range sess.Tools(lctx, nil) {
-			if err != nil {
-				failed = true
-				break
-			}
-			listed = append(listed, rt)
-		}
-		cancel()
-		if failed {
+		listed, err := listTools(ctx, sess)
+		srv.setListError(err)
+		if err != nil {
 			continue
 		}
 		// An override, when present, decides for every tool on the server and
