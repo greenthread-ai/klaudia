@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.4.0 — 2026-10-28
+
 ### Added
 
 - **`/rewind` can summarise up to a prompt** instead of going back to before
