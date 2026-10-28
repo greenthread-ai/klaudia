@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/remote"
@@ -114,7 +115,8 @@ func newLaunchedWithOptions(parent context.Context, opts Options) (*Browser, err
 	// This context carries no timeout by design — chromedp ties the browser's
 	// lifetime to the context of the first run, so a deadline here would be a
 	// deadline on the whole session (see RunWithTimeout for per-action limits).
-	if err := chromedp.Do(ctx); err != nil {
+	// The start is bounded from outside instead (startWithin).
+	if err := startWithin(ctx, launchTimeout, func() { cancel(); allocCancel() }); err != nil {
 		cancel()
 		allocCancel()
 		return nil, plog.annotate(fmt.Errorf("launch chrome: %w", err))
@@ -141,7 +143,7 @@ func newAttached(parent context.Context, opts Options) (*Browser, error) {
 	plog := newProtocolLog()
 	allocCtx, allocCancel := remote.NewAllocator(parent, opts.RemoteURL)
 	ctx, cancel := chromedp.NewContext(allocCtx, plog.options()...)
-	if err := chromedp.Do(ctx); err != nil {
+	if err := startWithin(ctx, launchTimeout, func() { cancel(); allocCancel() }); err != nil {
 		cancel()
 		allocCancel()
 		return nil, plog.annotate(fmt.Errorf("attach chrome at %s: %w", opts.RemoteURL, err))
@@ -166,5 +168,32 @@ func (b *Browser) Close() {
 	}
 	if b.allocCancel != nil {
 		b.allocCancel()
+	}
+}
+
+// launchTimeout bounds starting or attaching to Chrome. A Chrome that never
+// answered on its DevTools pipe (seen in a test run: chromedp sat in
+// connectPipe until the test binary's 10-minute timeout) left the web tool
+// call, and the turn, waiting for good. Generous, since a first launch can
+// set up a profile; a var so a test can shorten it.
+var launchTimeout = 30 * time.Second
+
+// startWithin runs chromedp.Do on ctx, giving up after timeout. The deadline
+// cannot go on ctx itself (chromedp ties the browser's whole lifetime to the
+// context of its first run), so it is enforced from outside: on expiry abort
+// cancels the contexts, which kills a half-started Chrome, and the start is
+// reported as timed out.
+func startWithin(ctx context.Context, timeout time.Duration, abort func()) error {
+	done := make(chan error, 1)
+	go func() { done <- chromedp.Do(ctx) }()
+	t := time.NewTimer(timeout)
+	defer t.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-t.C:
+		abort()
+		<-done // chromedp returns once its context is cancelled
+		return fmt.Errorf("no answer from Chrome within %s", timeout)
 	}
 }

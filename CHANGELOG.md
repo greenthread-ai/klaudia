@@ -5,6 +5,13 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+
+- **Starting Chrome can no longer hang a web tool call.** A Chrome that
+  started but never answered on its DevTools connection left the launch, and
+  the turn waiting on it, stuck for good. Starting or attaching now gives up
+  after 30 seconds with an error saying so, and stops the half-started Chrome.
+
 ## v0.6.0 — 2026-10-28
 
 ### Added
