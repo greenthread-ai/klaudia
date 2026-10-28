@@ -22,6 +22,39 @@ Token counts are estimates (~4 chars/token for text, a flat per-item estimate
 for images/documents) — close enough to drive the thresholds without a real
 tokenizer. See `EstimateTokens` in `pkg/compaction`.
 
+## Preserved thinking: what may not be edited
+
+On Opus 5.5, Fable 5.1 and Sonnet 5.5 a thinking block is valid only in the
+conversation that produced it: the system prompt, the tool set and every
+earlier message must be what they were. Replaying one after any of that
+changed is a 400 for accounts created on or after 2026-08-31 (older accounts
+are not enforced, which is why it did not show up in development). Every
+request after the first must therefore be the previous one with messages
+appended. `pkg/agent/appendonly_test.go` checks exactly that, scenario by
+scenario, through the real loop.
+
+What Klaudia does about it (PR #63):
+
+- **Safety net.** Once the history holds thinking, the Anthropic client asks
+  for `block_binding` `drop_block` (beta `thinking-binding-controls-2026-08-01`):
+  a mismatched block is dropped, with every block after it, instead of the
+  request failing, and each drop is a notice. Where that cannot be asked for,
+  the 400 is recovered once by removing all thinking (`stripThinking`).
+- **Microcompact stands aside** for those conversations: the client asks the
+  API to clear old tool results itself (`clear_tool_uses`, below), which does
+  not count as an edit. A provider without that keeps microcompact.
+- **The permission mode is not in the system prompt**; it is added to the next
+  user message when it changes (`pkg/agent/mode.go`).
+- **Autocompact is safe**: the summary request appends to the conversation, and
+  the history it produces holds no earlier thinking to replay.
+
+Known to remain: a ToolSearch reveal adds a tool definition to `tools`, and
+`/add-dir` changes the system prompt. Each breaks the chain once, and the
+safety net turns that into lost reasoning rather than a failed turn. The fix
+for the first is the API's own server-side tool search (tools declared with
+`defer_loading`), a larger change not yet made. A `/model` switch drops the
+other model's blocks by design.
+
 ## Microcompact
 
 Drops the content of tool results older than the most recent few when they
