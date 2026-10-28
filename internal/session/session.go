@@ -4,7 +4,9 @@ package session
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -264,22 +266,41 @@ func Read(path string) ([]Entry, error) {
 	defer f.Close()
 
 	var entries []Entry
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for sc.Scan() {
-		line := sc.Bytes()
-		if len(line) == 0 {
-			continue
-		}
+	err = eachLine(f, func(line []byte) bool {
 		var e Entry
 		if err := json.Unmarshal(line, &e); err != nil {
-			continue // tolerate malformed/unknown lines
+			return true // tolerate malformed/unknown lines
 		}
 		if e.Type == "user" || e.Type == "assistant" {
 			entries = append(entries, e)
 		}
+		return true
+	})
+	return entries, err
+}
+
+// eachLine calls fn with each non-empty line of r until fn returns false.
+//
+// It has no line-length limit. A bufio.Scanner capped at 16 MB stopped at the
+// first longer line (one image tool result is enough) and the history was
+// returned up to that point, so a resumed session quietly lost everything
+// after it. (From PR #25.)
+func eachLine(r io.Reader, fn func([]byte) bool) error {
+	br := bufio.NewReaderSize(r, 64*1024)
+	for {
+		line, err := br.ReadBytes('\n')
+		if trimmed := bytes.TrimRight(line, "\r\n"); len(trimmed) > 0 {
+			if !fn(trimmed) {
+				return nil
+			}
+		}
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
 	}
-	return entries, sc.Err()
 }
 
 // ResumePoint is what --resume rebuilds a conversation from.
@@ -308,16 +329,10 @@ func ReadForResume(path string) (ResumePoint, error) {
 	defer f.Close()
 
 	var rp ResumePoint
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for sc.Scan() {
-		line := sc.Bytes()
-		if len(line) == 0 {
-			continue
-		}
+	err = eachLine(f, func(line []byte) bool {
 		var e Entry
 		if err := json.Unmarshal(line, &e); err != nil {
-			continue
+			return true
 		}
 		switch {
 		case e.Type == "system" && e.Subtype == SubtypeCompactBoundary && strings.TrimSpace(e.Content) != "":
@@ -340,8 +355,9 @@ func ReadForResume(path string) (ResumePoint, error) {
 		case e.Type == "user" || e.Type == "assistant":
 			rp.After = append(rp.After, e)
 		}
-	}
-	return rp, sc.Err()
+		return true
+	})
+	return rp, err
 }
 
 // EntriesAfter returns the entries timestamped strictly after ts. It is the

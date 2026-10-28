@@ -1,7 +1,6 @@
 package session
 
 import (
-	"bufio"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -50,8 +49,18 @@ func List(cwd string) []Info {
 		if seen[id] {
 			continue
 		}
-		title, ok := firstPrompt(path)
+		title, from, ok := firstPrompt(path)
 		if !ok {
+			continue
+		}
+		// EncodePath maps every non-alphanumeric character to "-", so
+		// /a/my_proj, /a/my-proj and /a/my.proj share one directory, and
+		// auto-resume picked up another folder's conversation. A transcript
+		// whose first message was recorded elsewhere is not this folder's;
+		// one with no recorded cwd (older transcripts, imports) is accepted.
+		// The first message is the one to check: a session resumed by id
+		// from elsewhere appends to its original file. (From PR #25.)
+		if from != "" && !sameDir(from, cwd) {
 			continue
 		}
 		seen[id] = true
@@ -61,40 +70,51 @@ func List(cwd string) []Info {
 	return out
 }
 
+// sameDir reports whether two paths name one directory, through symlinks too:
+// a folder reached by a different spelling (/var and /private/var on macOS)
+// must not hide its own sessions.
+func sameDir(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	return errA == nil && errB == nil && ra == rb
+}
+
 // firstPrompt scans a transcript up to its first message line and returns that
-// line's text if it is a user turn. ok reports whether any message was found at
-// all, which is this file's answer to "does this transcript hold a
-// conversation".
+// line's text if it is a user turn, and the cwd it was recorded in. ok reports
+// whether any message was found at all, which is this file's answer to "does
+// this transcript hold a conversation".
 //
 // It stops at the first message rather than reading the file: transcripts run to
 // megabytes, and List is called for every session in the project.
-func firstPrompt(path string) (title string, ok bool) {
+func firstPrompt(path string) (title, cwd string, ok bool) {
 	f, err := os.Open(path)
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for sc.Scan() {
-		if len(sc.Bytes()) == 0 {
-			continue
-		}
+	_ = eachLine(f, func(line []byte) bool {
 		var e struct {
 			Type    string          `json:"type"`
+			CWD     string          `json:"cwd"`
 			Message json.RawMessage `json:"message"`
 		}
-		if json.Unmarshal(sc.Bytes(), &e) != nil {
-			continue
+		if json.Unmarshal(line, &e) != nil {
+			return true
 		}
 		switch e.Type {
 		case "user":
-			return messageTitle(e.Message), true
+			title, cwd, ok = messageTitle(e.Message), e.CWD, true
+			return false
 		case "assistant":
-			return "", true
+			cwd, ok = e.CWD, true
+			return false
 		}
-	}
-	return "", false
+		return true
+	})
+	return title, cwd, ok
 }
 
 // messageTitle pulls display text out of a recorded Anthropic message. Content

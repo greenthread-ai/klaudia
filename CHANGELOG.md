@@ -5,6 +5,18 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+
+- **Resume picks only this folder's sessions, and reads long lines.**
+  Folders whose names differ only in punctuation (`my_proj`, `my-proj`)
+  share a session directory, so starting Klaudia in one auto-resumed a
+  conversation from the other. A session whose first message was recorded
+  in another folder is now skipped by auto-resume and `/resume` (a symlinked
+  spelling of the same folder still counts as it). And a transcript line
+  over 16 MB, such as one image tool result, stopped the read, so a resumed
+  session lost everything after it; lines of any length are read now. From
+  PR #25.
+
 ## v0.5.0 — 2026-10-28
 
 ### Added
