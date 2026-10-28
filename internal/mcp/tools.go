@@ -136,7 +136,10 @@ func (t *mcpTool) Execute(ctx context.Context, _ tools.Context, raw json.RawMess
 	// distinguishes that from one that never arrived. A read can be repeated
 	// at worst wastefully; anything else is reported, with the ambiguity
 	// stated, so the model checks rather than silently doing it twice.
-	if !t.readOnly {
+	// One failure is not ambiguous: a server that says it has no such
+	// session (a remote server that restarted) had nowhere to run the call,
+	// so sending it again cannot do it twice. (From PR #45.)
+	if !t.readOnly && !errors.Is(err, mcpsdk.ErrSessionMissing) {
 		return []tools.Result{{Content: fmt.Sprintf(
 			"MCP call failed: %v. Server %q had stopped responding and has been restarted. "+
 				"The call may or may not have taken effect before it died — check the state before retrying.",

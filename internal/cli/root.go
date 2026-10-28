@@ -1380,6 +1380,20 @@ func run(cmd *cobra.Command, opts *options) error {
 	for _, e := range mcpErrs {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", e)
 	}
+	// Tell the model too. A server that failed to connect contributes no
+	// tools, and without this the model can only conclude they never
+	// existed, and improvise, rather than tell the user a configured server
+	// is down. (From PR #45.)
+	var downServers []string
+	for _, s := range mcpMgr.Servers() {
+		if !s.Connected() {
+			downServers = append(downServers, s.Name)
+		}
+	}
+	if len(downServers) > 0 {
+		sysPrompt += "\n\n# MCP servers unavailable\nThese configured MCP servers failed to connect at startup, so their tools are missing: " +
+			strings.Join(downServers, ", ") + ". If the task needs one, tell the user; they can retry it with /mcp."
+	}
 	// Persistent memory: one store shared by the Memory tool (agent + sub-agents)
 	// and the /memory command.
 	staticTools := base.All()

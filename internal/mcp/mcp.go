@@ -279,14 +279,31 @@ func connectServer(ctx context.Context, name string, cfg ServerConfig, el *Elici
 		return nil, err
 	}
 	if url := strings.TrimSpace(cfg.URL); url != "" {
-		var t mcpsdk.Transport
+		sse := func() mcpsdk.Transport {
+			return &mcpsdk.SSEClientTransport{Endpoint: url, HTTPClient: clientWithHeaders(cfg.Headers)}
+		}
+		streamable := func() mcpsdk.Transport {
+			return &mcpsdk.StreamableClientTransport{Endpoint: url, HTTPClient: clientWithHeaders(cfg.Headers)}
+		}
 		switch strings.ToLower(strings.TrimSpace(cfg.Type)) {
 		case "sse":
-			t = &mcpsdk.SSEClientTransport{Endpoint: url, HTTPClient: clientWithHeaders(cfg.Headers)}
-		default: // "http" / "streamable" / unset
-			t = &mcpsdk.StreamableClientTransport{Endpoint: url, HTTPClient: clientWithHeaders(cfg.Headers)}
+			return ConnectTransport(ctx, name, sse(), el)
+		case "http", "streamable":
+			return ConnectTransport(ctx, name, streamable(), el)
 		}
-		return ConnectTransport(ctx, name, t, el)
+		// No type: streamable HTTP, then the legacy SSE transport if the
+		// server does not speak it, as the MCP spec's backwards-compatibility
+		// note describes. Plenty of deployed servers are SSE-only, and a
+		// config written for another client often gives no type; they used
+		// to fail here with an HTTP error and no hint. (From PR #45.)
+		srv, err := ConnectTransport(ctx, name, streamable(), el)
+		if err == nil || ctx.Err() != nil {
+			return srv, err
+		}
+		if sseSrv, sseErr := ConnectTransport(ctx, name, sse(), el); sseErr == nil {
+			return sseSrv, nil
+		}
+		return nil, fmt.Errorf("%w (legacy SSE was tried too; set \"type\" to choose one)", err)
 	}
 	if strings.TrimSpace(cfg.Command) == "" {
 		return nil, fmt.Errorf("mcp %q: config has neither command (stdio) nor url (http)", name)

@@ -477,6 +477,28 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 				}})
 			}
 		}
+		// Several down at once (a network blip, a laptop waking) should not
+		// mean reopening /mcp once per server. (From PR #45.)
+		var down []string
+		for _, s := range servers {
+			if !s.Held && !s.Connected {
+				down = append(down, s.Name)
+			}
+		}
+		if len(down) > 1 {
+			items = append([]choiceItem{{label: fmt.Sprintf("Reconnect all disconnected (%d)", len(down)), apply: func() string {
+				var failed []string
+				for _, name := range down {
+					if err := m.sess.MCP.Reconnect(name); err != nil {
+						failed = append(failed, name+": "+err.Error())
+					}
+				}
+				if len(failed) > 0 {
+					return fmt.Sprintf("Reconnected %d of %d; failed: %s", len(down)-len(failed), len(down), strings.Join(failed, "; "))
+				}
+				return fmt.Sprintf("Reconnected %d servers", len(down))
+			}}}, items...)
+		}
 		if held > 0 {
 			// The commands are listed above, so choosing this is consent to
 			// what was shown — the same answer as the first-turn card.

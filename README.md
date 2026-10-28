@@ -848,7 +848,8 @@ with 60 seconds to answer; a tool call gets ten minutes
 (`KLAUDIA_MCP_TOOL_TIMEOUT`, or `"timeout"` in seconds on the server).
 A server is **stdio** (`command` +
 `args`) or **HTTP** (`url`, with `type:"sse"` for the legacy SSE transport, and
-`headers` sent on every request — typically `Authorization`). `//` and `/* */`
+`headers` sent on every request — typically `Authorization`). A `url` with no
+`type` tries streamable HTTP first and falls back to SSE. `//` and `/* */`
 comments are allowed; a file that still doesn't parse is reported — naming the
 file, since all three share a base name — and skipped, while the other files
 still load:

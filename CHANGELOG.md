@@ -127,6 +127,17 @@ port mirrors (see `internal/version`).
   whose `tools/list` failed was skipped silently, which looked exactly like
   a server with no tools. The list is now tried once more, and a failure is
   a warning at startup and shown against the server in `/mcp`. From PR #39.
+- **MCP: SSE fallback, a lost remote session, and servers that are down.**
+  A `url` server with no `type` tries streamable HTTP and then the legacy
+  SSE transport, where SSE-only servers used to fail with an HTTP error. A
+  call that fails because a remote server restarted and no longer knows
+  the session is now sent again after the automatic reconnect, even when
+  it is not read-only: the server said it had no session to run it in, so
+  it cannot run twice; every other wire failure keeps the "may or may not
+  have taken effect" answer. Servers that failed to connect at startup are
+  named to the model, so it tells you rather than concluding the tools
+  never existed, and `/mcp` offers "Reconnect all disconnected" when
+  several are down. From PR #45.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
