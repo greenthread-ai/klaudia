@@ -207,6 +207,14 @@ port mirrors (see `internal/version`).
   every ask except a repository-config card, which has no task to redirect.
   Each prompt ends with "(esc cancels turn)", since Esc interrupts the whole
   turn. From PR #85, without its `(a)lways`: standing rules are gone.
+- **Ctrl+Z, Ctrl+L and Ctrl+D work, and commands refuse arguments they
+  would ignore.** Raw mode delivers the terminal's own chords as keys, so
+  none did anything: Ctrl+Z now suspends to the shell (fg returns), Ctrl+L
+  clears the screen keeping scrollback, and Ctrl+D quits on an empty
+  prompt. `/plan xyz` entered plan mode and `/errors foo` listed ten
+  errors; both now print their usage. `/add-dir` expands `~`, resolves a
+  relative path from the project, and refuses one that is not an existing
+  directory. From PR #89; its `/help` alignment had already been redone.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

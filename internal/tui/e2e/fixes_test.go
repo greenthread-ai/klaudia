@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -492,4 +493,30 @@ func TestQueuedMessageShowsWhereTheModelReadIt(t *testing.T) {
 	if !reached {
 		t.Errorf("the message never reached the model; prompts: %q", env.Mock.Prompts())
 	}
+}
+
+// Ctrl+Z hands the terminal back and Klaudia comes back usable after a
+// SIGCONT, with its frame redrawn by its own renderer, not Bubble Tea's.
+// (The harness's session has no job-control shell, so the kernel discards
+// the SIGTSTP of an orphaned process group and Klaudia waits for the CONT;
+// that still exercises the release, the resume and the redraw.)
+func TestSuspendAndResume(t *testing.T) {
+	env := newEnv(t)
+	tm := env.Start(t)
+	tm.WaitFor(t, "the prompt", 20*time.Second, func(s Snapshot) bool {
+		return strings.Contains(s.Screen(), "Ask Klaudia")
+	})
+	tm.Press("\x1a") // Ctrl+Z
+	tm.WaitFor(t, "the frame to be released", 10*time.Second, func(s Snapshot) bool {
+		return !strings.Contains(s.Screen(), "Ask Klaudia")
+	})
+	time.Sleep(200 * time.Millisecond)
+	if err := tm.cmd.Process.Signal(syscall.SIGCONT); err != nil {
+		t.Fatal(err)
+	}
+	tm.WaitFor(t, "the frame to come back", 10*time.Second, func(s Snapshot) bool {
+		return strings.Contains(s.Screen(), "Ask Klaudia")
+	})
+	env.Prompt(t, tm, "hello")
+	tm.WaitText(t, "Hello from the mock model.", 20*time.Second)
 }

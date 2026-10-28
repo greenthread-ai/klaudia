@@ -390,6 +390,21 @@ func (m *Model) execProcess(cmd *exec.Cmd, fn tea.ExecCallback) tea.Cmd {
 	}
 }
 
+// suspend hands the terminal back and stops the process (Ctrl+Z). Bubble Tea
+// releases its input and raises SIGTSTP on SuspendMsg, and sends ResumeMsg
+// after fg, where the update loop calls resume; the live region is erased
+// first so the shell does not land among Klaudia's frame.
+func (m *Model) suspend() tea.Cmd {
+	r := m.screen
+	if r == nil {
+		return tea.Suspend
+	}
+	return func() tea.Msg {
+		r.suspend()
+		return tea.SuspendMsg{}
+	}
+}
+
 // clearScreen is /clear's erase of the visible screen.
 func (m *Model) clearScreen() tea.Cmd {
 	r := m.screen

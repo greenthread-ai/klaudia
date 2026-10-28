@@ -51,7 +51,7 @@ var commandList = []cmdInfo{
 	{"/forget", "<path>", "Drop a file from the tracked context"},
 	{"/compact", "", "Summarize and compact the conversation history now"},
 	{"/add-dir", "<path>", "Add a directory to the prompt context"},
-	{"/plan", "[run|off]", "Read-only plan mode · run [N]: work the approved plan to done · stop: halt"},
+	{"/plan", "[run|stop|off]", "Read-only plan mode · run [N]: work the approved plan to done · stop: halt"},
 	{"/doctor", "", "Run environment diagnostics"},
 	{"/diff", "[args]", "Show the working tree's diff in colour, in $PAGER when long; names new files"},
 	{"/commit", "[msg]", "Commit the files Klaudia changed — or what you staged — with your message or one Klaudia drafts (asks first)"},
@@ -590,7 +590,13 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			}
 			break
 		}
-		dir := strings.Join(args, " ")
+		// A typo or a literal ~ used to go into the prompt as a directory no
+		// tool could read. (From PR #89.)
+		dir, err := resolveAddDir(m.sess.CWD, strings.Join(args, " "))
+		if err != nil {
+			m.appendLine(errStyle.Render("add-dir: " + err.Error()))
+			break
+		}
 		m.sess.ExtraDirs = append(m.sess.ExtraDirs, dir)
 		m.appendLine(bannerStyle.Render("Added directory (referenced in the prompt context next turn): " + dir))
 	case "/compact":
@@ -621,6 +627,11 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 		}
 		if len(args) > 0 && strings.EqualFold(args[0], "stop") {
 			m.stopLoop()
+			break
+		}
+		if len(args) > 0 && !strings.EqualFold(args[0], "off") {
+			// "/plan xyz" used to enter plan mode as if the word were not there.
+			m.appendLine(errStyle.Render("usage: /plan [run [N] | stop | off]"))
 			break
 		}
 		if len(args) > 0 && strings.ToLower(args[0]) == "off" {

@@ -209,9 +209,13 @@ func (m *Model) showEntry(args []string) tea.Cmd {
 func (m *Model) listErrors(args []string) tea.Cmd {
 	limit := 10
 	if len(args) > 0 {
-		if n, err := strconv.Atoi(args[0]); err == nil && n > 0 {
-			limit = n
+		n, err := strconv.Atoi(args[0])
+		if err != nil || n <= 0 || len(args) > 1 {
+			// "/errors foo" used to list ten errors as if it said nothing.
+			m.appendLine(errStyle.Render("usage: /errors [n]"))
+			return nil
 		}
+		limit = n
 	}
 	var hits []string
 	for i := len(m.nav) - 1; i >= 0 && len(hits) < limit; i-- {

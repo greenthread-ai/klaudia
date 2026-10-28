@@ -202,6 +202,18 @@ func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c":
 		return m.onCtrlC()
+	// Raw mode delivers the terminal's own chords as keys, so job control,
+	// clear and EOF never happened unless acted on here. (From PR #89.)
+	case "ctrl+z":
+		return m, m.suspend()
+	case "ctrl+l":
+		return m, m.clearScreen()
+	case "ctrl+d":
+		// EOF on an empty prompt; anywhere else it stays the textarea's
+		// delete-forward.
+		if m.state == stateIdle && strings.TrimSpace(m.input.Value()) == "" {
+			return m, m.quit()
+		}
 	case "esc":
 		// Leaving follow mode comes first: Esc while watching a log means "stop
 		// watching", not "kill the turn that started an hour ago". The job keeps
