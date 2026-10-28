@@ -234,6 +234,11 @@ func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.suspend()
 	case "ctrl+l":
 		return m, m.clearScreen()
+	case "ctrl+g":
+		// The draft in $EDITOR, wherever there is a real draft to edit.
+		if m.editableInput() {
+			return m, m.editDraft()
+		}
 	case "ctrl+d":
 		// EOF on an empty prompt; anywhere else it stays the textarea's
 		// delete-forward.

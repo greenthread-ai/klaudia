@@ -224,6 +224,10 @@ port mirrors (see `internal/version`).
   history from the first and last row of a multi-line prompt instead of
   being trapped in it, and Ctrl+R is a reverse incremental search, as in
   Claude Code. From PR #88.
+- **Ctrl+G edits the prompt in your editor.** The draft (paste chips
+  expanded) opens in `$VISUAL` or `$EDITOR`, or vi or nano when neither is
+  set, and what you save comes back into the box; an editor that fails
+  leaves the draft as it was. As in Claude Code. From PR #101.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

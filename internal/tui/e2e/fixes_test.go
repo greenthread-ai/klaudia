@@ -539,3 +539,21 @@ func TestPromptHistorySurvivesARestart(t *testing.T) {
 		return strings.Contains(s.Screen(), "remember this prompt")
 	})
 }
+
+// Ctrl+G hands the draft to $EDITOR through the inline renderer and reads
+// what the editor saved back into the box. (PR #101.)
+func TestCtrlGEditsTheDraftInEditor(t *testing.T) {
+	env := newEnv(t)
+	editor := filepath.Join(env.Home, "stub-editor")
+	script := "#!/bin/sh\nprintf 'rewritten by the editor, was: %s' \"$(cat \"$1\")\" > \"$1\"\n"
+	if err := os.WriteFile(editor, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env.Extra = []string{"EDITOR=" + editor}
+	tm := env.Start(t)
+	tm.Type("first draft")
+	tm.Press("\x07") // Ctrl+G
+	tm.WaitFor(t, "the edited draft back in the box", 15*time.Second, func(s Snapshot) bool {
+		return strings.Contains(s.Screen(), "rewritten by the editor, was: first draft") && s.InputBox()
+	})
+}

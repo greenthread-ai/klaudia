@@ -29,13 +29,15 @@ type keymap struct {
 	Prev      key.Binding
 	Next      key.Binding
 	Search    key.Binding
+	Edit      key.Binding
 	Dismiss   key.Binding
 	Interrupt key.Binding
-	// Suspend, Clear and Quit are the terminal's own chords, which raw mode
-	// delivers as keys: nothing happens unless the app acts on them.
+	// Suspend and Clear are the terminal's own chords, which raw mode delivers
+	// as keys: nothing happens unless the app acts on them. Ctrl+D (quit on an
+	// empty prompt, keys.go) is the third, left out of /help: it means what it
+	// means in every shell, and /help has a line budget.
 	Suspend key.Binding
 	Clear   key.Binding
-	Quit    key.Binding
 }
 
 // newKeymap builds the bindings for a Return mode. See keyAction for why the
@@ -67,11 +69,11 @@ func newKeymap(enterInserts bool) keymap {
 		Prev:      key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", history)),
 		Next:      key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", history)),
 		Search:    key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("Ctrl+R", "Search earlier prompts (Ctrl+R again for older)")),
+		Edit:      key.NewBinding(key.WithKeys("ctrl+g"), key.WithHelp("Ctrl+G", "Edit the prompt in $EDITOR")),
 		Dismiss:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Dismiss the file menu, or interrupt the model mid-turn")),
 		Interrupt: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("Ctrl+C", "Interrupt, or clear the line — press twice to quit")),
 		Suspend:   key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("Ctrl+Z", "Suspend to the shell (fg to come back)")),
 		Clear:     key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("Ctrl+L", "Clear the screen (scrollback is kept)")),
-		Quit:      key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("Ctrl+D", "Quit, on an empty prompt")),
 	}
 }
 
@@ -86,13 +88,13 @@ func (k keymap) helpOrder(ta textarea.KeyMap) []key.Binding {
 		k.Prev,
 		k.Next,
 		k.Search,
+		k.Edit,
 		ta.DeleteBeforeCursor,
 		ta.DeleteAfterCursor,
 		k.Dismiss,
 		k.Interrupt,
 		k.Suspend,
 		k.Clear,
-		k.Quit,
 	}
 }
 

@@ -814,6 +814,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.onKey(msg)
 
+	case editDraftDoneMsg:
+		m.applyEditedDraft(msg)
+		return m, nil
+
 	case tea.ResumeMsg:
 		// Back from Ctrl+Z: take the terminal again and redraw (suspend).
 		if m.screen != nil {

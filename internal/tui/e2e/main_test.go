@@ -57,6 +57,8 @@ type Env struct {
 	Project string // the working directory klaudia starts in
 	Tmp     string // TMPDIR
 	Mock    *Mock
+	// Extra is added to the environment of every later Start ("EDITOR=…").
+	Extra []string
 
 	prompts int // prompts sent through Prompt
 }
@@ -118,7 +120,7 @@ func newEnv(t *testing.T) *Env {
 // environ is the child's whole environment. It is built, not inherited, so
 // no provider key, endpoint override or real config directory can leak in.
 func (e *Env) environ() []string {
-	return []string{
+	return append([]string{
 		"HOME=" + e.Home,
 		"KLAUDIA_CONFIG_DIR=" + e.Config,
 		"PATH=" + os.Getenv("PATH"),
@@ -128,7 +130,7 @@ func (e *Env) environ() []string {
 		"COLORTERM=truecolor",
 		"KLAUDIA_HYPERLINKS=1",
 		"USER=e2e",
-	}
+	}, e.Extra...)
 }
 
 // Start runs klaudia --new-session in the project at 100×30.

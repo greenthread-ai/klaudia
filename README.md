@@ -165,7 +165,9 @@ a paste chip, or over 8 KiB, stays in the session's history only. Resuming a
 session also puts its prompts back under ↑. In a multi-line prompt ↑ and ↓ move
 between lines and browse history from the first and last line. `Ctrl+R` searches
 backwards as you type: `Ctrl+R` again for an older match, `Enter` to put the
-match in the box to edit, `Esc` to cancel.
+match in the box to edit, `Esc` to cancel. `Ctrl+G` opens the draft in
+`$VISUAL` or `$EDITOR` (falling back to vi or nano) and puts what you save back
+in the box.
 
 A line that starts with `/` but is not a command is sent as a message when its
 first word is a path (`/etc/nginx/nginx.conf fails to parse`) or is followed by
