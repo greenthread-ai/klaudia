@@ -231,7 +231,7 @@ func TestBackgroundAgentReportsBack(t *testing.T) {
 	tm := env.Start(t)
 	env.Prompt(t, tm, "bgagent")
 	tm.WaitFor(t, "the parent turn to finish while the agent runs", 20*time.Second, func(s Snapshot) bool {
-		return strings.Contains(s.All(), "Started it; carrying on.") && strings.Contains(s.Screen(), "⏵ agent_1")
+		return strings.Contains(s.All(), "Started it; carrying on.") && strings.Contains(s.Screen(), "◯ Explore (agent_1)")
 	})
 	snap := tm.WaitText(t, "Got the background result.", 30*time.Second)
 	if !strings.Contains(snap.All(), "✓ background agent_1 (Explore: survey) finished") {

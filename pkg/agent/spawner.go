@@ -361,8 +361,18 @@ func (s *Spawner) spawn(ctx context.Context, subagentType, prompt string, histor
 	// completely dark: the frontend saw one Agent tool call and nothing until it
 	// returned, so a twenty-minute research run and a hang looked identical.
 	var emit Emitter
-	if progress != nil {
+	sink := usageSinkFrom(ctx)
+	var spent int64
+	if progress != nil || sink != nil {
 		emit = func(ev Event) {
+			if ev.Type == EventUsage && sink != nil {
+				spent += ev.ContextTokens + ev.OutputDelta
+				sink(spent)
+				return
+			}
+			if progress == nil {
+				return
+			}
 			if line := subagentProgressLine(ev); line != "" {
 				// Paths in the child's own checkout are paths the user cannot
 				// open; say where the file really is.

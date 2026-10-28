@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,5 +185,32 @@ func TestSpawnResultCarriesUsage(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("result has no %q:\n%s", want, out)
 		}
+	}
+}
+
+// A sub-agent's tokens reach whoever put a sink in the context, after each
+// of its model calls, so a frontend can show them while it runs.
+func TestSpawnReportsTokensAsItRuns(t *testing.T) {
+	dir, path := fixtureFile(t)
+	withUsage := func(m anthropic.BetaMessage, in, out int) anthropic.BetaMessage {
+		raw, _ := json.Marshal(m)
+		var x map[string]any
+		json.Unmarshal(raw, &x)
+		x["usage"] = map[string]any{"input_tokens": in, "output_tokens": out}
+		raw, _ = json.Marshal(x)
+		var back anthropic.BetaMessage
+		json.Unmarshal(raw, &back)
+		return back
+	}
+	provider := &scriptedProvider{turns: []anthropic.BetaMessage{
+		withUsage(toolUseTurn(t, "tu1", "Read", map[string]any{"file_path": path}), 1000, 50),
+	}}
+	var totals []int64
+	ctx := withUsageSink(context.Background(), func(n int64) { totals = append(totals, n) })
+	if _, err := readOnlySpawner(t, provider, dir, 0).Spawn(ctx, "Explore", "read it", nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(totals) == 0 || totals[0] != 1050 {
+		t.Errorf("token reports = %v, want the first call's 1050 first", totals)
 	}
 }

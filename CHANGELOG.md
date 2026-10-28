@@ -5,6 +5,15 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+
+- **A live panel of running sub-agents.** Under the prompt, `⏺ main` and
+  one row per sub-agent, foreground or background: its type, what it is
+  doing now, how long it has run and the tokens it has used so far, as
+  Claude Code shows them. Sub-agents' individual steps no longer go to the
+  scrollback, where agents running side by side interleaved; what a run
+  came to still does. Background agents moved here from the jobs panel.
+
 ### Changed
 
 - **The Browser tools are offered up front again on every provider.**

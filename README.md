@@ -442,8 +442,9 @@ stream-json. Logs rotate at 64 MiB, and a read returns at most the newest 4 MiB.
 
 Sub-agents can run in the background too: the model sets `run_in_background`
 on the Agent tool for independent work it does not need before its next step,
-and carries on. A background agent is listed under the prompt with its latest
-step, survives Esc (which ends the turn, not the research), and when it
+and carries on. Every running sub-agent, foreground or background, is listed
+under the prompt (`⏺ main`, one `◯` row each) with its latest step, how long
+it has run and the tokens it has used. A background agent survives Esc (which ends the turn, not the research), and when it
 finishes its result goes to the model — straight away if Klaudia is idle, or
 at its next step if it is mid-turn. `/stopjob agent_N` stops one and passes on
 what it had. A headless `-p` run does not end while a background agent it

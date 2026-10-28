@@ -23,8 +23,7 @@ import (
 // jobsPanelRows caps the list; the rest are counted and /jobs shows them all.
 const jobsPanelRows = 3
 
-// jobsPanel renders running jobs and background agents, oldest first, or ""
-// when nothing is running.
+// jobsPanel renders running jobs, oldest first, or "" when none are running.
 func (m *Model) jobsPanel() string {
 	type row struct {
 		started    time.Time
@@ -53,17 +52,7 @@ func (m *Model) jobsPanel() string {
 			rows = append(rows, row{j.Started, head, oneline(j.Command, 200)})
 		}
 	}
-	for _, a := range m.runningAgents() {
-		tail := a.Label
-		if a.Last != "" {
-			tail += " — " + a.Last
-		}
-		head := "⏵ " + a.ID + " · " + elapsed(time.Since(a.Started))
-		if q := time.Since(a.LastAt); !a.LastAt.IsZero() && q >= time.Minute {
-			head += " · quiet " + elapsed(q) // as for jobs: reported, not judged
-		}
-		rows = append(rows, row{a.Started, head, oneline(tail, 200)})
-	}
+	// Background sub-agents are listed in the agents panel (agentspanel.go).
 	if len(rows) == 0 {
 		return ""
 	}

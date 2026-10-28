@@ -70,7 +70,7 @@ func TestRunningAgentsInPanel(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		view := stripANSI(m.bottomView())
-		if strings.Contains(view, "⏵ agent_1") && strings.Contains(view, "Read mcp.go") && strings.Contains(view, "1 agent") {
+		if strings.Contains(view, "◯ Explore (agent_1)") && strings.Contains(view, "Read mcp.go") && strings.Contains(view, "1 agent") {
 			break
 		}
 		if time.Now().After(deadline) {

@@ -36,6 +36,8 @@ type BackgroundTask struct {
 	// A sub-agent waiting on one long call or command says nothing for a
 	// while; how long is for whoever is watching to judge.
 	LastAt time.Time
+	// Tokens is the sub-agent's total so far (subagentusage.go).
+	Tokens int64
 	Result string
 	Err    error
 }
@@ -65,6 +67,11 @@ func (b *Background) Start(label string, work func(ctx context.Context, progress
 
 	go func() {
 		defer cancel()
+		ctx := withUsageSink(ctx, func(total int64) {
+			b.mu.Lock()
+			t.Tokens = total
+			b.mu.Unlock()
+		})
 		result, err := work(ctx, func(line string) {
 			b.mu.Lock()
 			t.Last, t.LastAt = line, time.Now()

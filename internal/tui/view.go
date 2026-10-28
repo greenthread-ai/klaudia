@@ -331,6 +331,9 @@ func (m *Model) bottomView() string {
 	// Running work sits under the prompt, while idle and while running: in a
 	// question's states it would read as one of the answers.
 	if m.state == stateIdle || m.state == stateRunning {
+		if agents := m.agentsPanel(); agents != "" {
+			bottom += "\n" + agents
+		}
 		if jobs := m.jobsPanel(); jobs != "" {
 			bottom += "\n" + jobs
 		}

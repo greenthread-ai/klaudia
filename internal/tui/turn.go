@@ -136,6 +136,7 @@ func (m *Model) renderEvent(ev agent.Event) {
 		m.appendText(ev.Text) // streamed deltas (raw until flushed)
 		m.phase = "streaming"
 	case "tool_use":
+		m.noteAgentStart(ev)
 		m.flushAssistant() // the assistant message before a tool call is complete
 		m.startTool(ev)    // its line is written with the result (toolline.go)
 		// Remember files Klaudia touches so @-completion can rank them first
@@ -177,12 +178,16 @@ func (m *Model) renderEvent(ev agent.Event) {
 		// level down. This goes to scrollback rather than the live region: it is
 		// a record of work that happened, not transient state, and it is the only
 		// evidence the user gets that a sub-agent is progressing.
-		m.flushAssistant()
-		m.appendLine(toolStyle.Render("  ↳ " + ev.Text))
 		if ev.Text != "" {
 			m.phase = "running " + ev.ToolName + " · " + ev.Text
 		}
+		if m.noteAgentProgress(ev) || ev.Text == "" {
+			break // a sub-agent's step: the panel shows it (agentspanel.go)
+		}
+		m.flushAssistant()
+		m.appendLine(toolStyle.Render("  ↳ " + ev.Text))
 	case "tool_result":
+		delete(m.liveAgents, ev.ToolUseID)
 		m.flushAssistant()
 		// Store the untruncated output when the tool kept one: /last should show
 		// everything the command printed, not the clamped copy the model saw.

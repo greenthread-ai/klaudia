@@ -93,6 +93,10 @@ type Event struct {
 	// small uncached tail, so a frontend that showed it understated both the
 	// context and the tokens used many times over.
 	ContextTokens int64 `json:"context_tokens,omitempty"`
+	// Tokens, on a tool_progress from the Agent tool, is the sub-agent's
+	// total so far (prompt including cache, plus output). A progress event
+	// can carry it with no Text: the count moved, nothing new was done.
+	Tokens int64 `json:"tokens,omitempty"`
 	// Plan is the session's plan after a change, on a "plan" event. A full
 	// snapshot rather than a diff: frontends replace what they show, so a
 	// dropped or reordered event cannot leave one drawing a list that never
@@ -1444,14 +1448,21 @@ func (l *Loop) dispatchCall(ctx context.Context, tu anthropic.BetaToolUseBlock, 
 	// frontend can show movement instead of an unexplained pause.
 	var progress func(string)
 	if emit != nil {
+		var tokens atomic.Int64
 		progress = func(line string) {
 			emit(Event{
 				Type:      EventToolProgress,
 				ToolName:  tu.Name,
 				ToolUseID: tu.ID,
 				Text:      line,
+				Tokens:    tokens.Load(),
 			})
 		}
+		// A sub-agent's spend, as it happens (subagentusage.go).
+		ctx = withUsageSink(ctx, func(total int64) {
+			tokens.Store(total)
+			emit(Event{Type: EventToolProgress, ToolName: tu.Name, ToolUseID: tu.ID, Tokens: total})
+		})
 	}
 	results, err := tool.Execute(ctx, tools.Context{
 		WorkingDir:   opts.WorkingDir,
