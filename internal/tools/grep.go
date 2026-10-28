@@ -105,7 +105,12 @@ func (g *Grep) CheckPermissions(pctx permission.Context, _ permission.Permission
 	return allowAlways(pctx)
 }
 
-func (g *Grep) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
+// grepMatchLimit bounds what one search holds in memory: a broad pattern over
+// a large tree collected every match before anything was trimmed, and the loop
+// can show only 30 KB of it anyway. (From PR #37.)
+const grepMatchLimit = 20000
+
+func (g *Grep) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in GrepInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
@@ -133,6 +138,8 @@ func (g *Grep) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 		Exts:       grepTypes[strings.ToLower(in.Type)],
 		Before:     before,
 		After:      after,
+		Limit:      grepMatchLimit,
+		Ctx:        ctx,
 	})
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil
@@ -150,7 +157,11 @@ func (g *Grep) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	default: // files_with_matches
 		out = formatFiles(matches)
 	}
-	return []Result{{Content: headLimit(out, in.HeadLimit)}}, nil
+	out = headLimit(out, in.HeadLimit)
+	if len(matches) > grepMatchLimit {
+		out += fmt.Sprintf("\n[search stopped after %d matches; narrow the pattern, path, glob or type for the rest]", grepMatchLimit)
+	}
+	return []Result{{Content: out}}, nil
 }
 
 // headLimit keeps the first n lines of out and says how many were left out,

@@ -56,7 +56,7 @@ func (g *Glob) CheckPermissions(pctx permission.Context, _ permission.Permission
 	return allowAlways(pctx)
 }
 
-func (g *Glob) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
+func (g *Glob) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in GlobInput
 	if err := json.Unmarshal(raw, &in); err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (g *Glob) Execute(_ context.Context, tctx Context, raw json.RawMessage) ([]
 	} else {
 		root = resolvePath(tctx, root)
 	}
-	files, err := search.Glob(search.GlobOptions{Root: root, Pattern: in.Pattern})
+	files, err := search.Glob(search.GlobOptions{Root: root, Pattern: in.Pattern, Ctx: ctx})
 	if err != nil {
 		return []Result{{Content: fmt.Sprintf("Error: %v", err), IsError: true}}, nil
 	}

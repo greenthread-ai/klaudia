@@ -179,6 +179,12 @@ port mirrors (see `internal/version`).
   notice names the job's own log file rather than spilling another copy.
   A short read of the log no longer skips the bytes it did not return.
   From PR #65.
+- **Grep stops at 20,000 matches, and Grep and Glob stop when you
+  interrupt.** A broad pattern over a large tree held every match in memory
+  before the result was trimmed to 30 KB, and an interrupted search kept
+  walking. Grep now stops after 20,000 and says so, and both stop at once
+  when the turn is cancelled. From PR #37; its general output cap was
+  already on main as the loop's backstop.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
