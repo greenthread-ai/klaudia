@@ -209,6 +209,13 @@ func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.stopFollow() {
 			return m, nil
 		}
+		// Esc on an open picker dismisses the picker, whatever is running
+		// behind it: its hint says "esc to cancel", and a picker opened
+		// mid-turn (/mode while Klaudia works) is not a request to stop the
+		// turn. (From PR #67.)
+		if m.state == stateAwaitingChoice {
+			return m, m.onChoiceKey(msg)
+		}
 		// Interrupt the in-flight turn (and any pending approval/question it is
 		// blocked on). The cancelled context unblocks the agent goroutine, which
 		// then sends doneMsg.

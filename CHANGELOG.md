@@ -95,6 +95,14 @@ port mirrors (see `internal/version`).
   what it reports or the floor, with a warning at startup or in `/model`
   when it is an alias. With no model set at all, the Claude default is
   still sent, for gateways that serve Claude's ids. From PR #80.
+- **A picker opened mid-turn no longer starts a second turn.** `/mode`,
+  `/mcp` and a `/model` list can open while Klaudia works, but closing the
+  picker always went to idle, so the next Enter started a second turn
+  alongside the running one; and Esc, meant to dismiss the picker,
+  interrupted the turn. The picker now returns to the state it opened over,
+  Esc closes it first, a turn that ends under it leaves it open, and an
+  approval, question or plan from the turn closes it and says so. From PR
+  #67.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

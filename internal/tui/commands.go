@@ -218,7 +218,24 @@ func (m *Model) slashSuggestionLine() string {
 
 // startChoice opens a settings picker: a live dropdown in the bottom region
 // that arrows select, typing filters and digits still pick (see choice.go).
+//
+// A picker can open over a running turn (/mode, /mcp, or a /model list that
+// arrives after a turn started): the turn keeps going, and closing the picker
+// returns to stateRunning rather than idle. Returning to idle mid-turn is what
+// let Enter start a second, concurrent turn. It does not open over a prompt the
+// turn is blocked on, which owns the keyboard and would be hidden. (From PR
+// #67.)
 func (m *Model) startChoice(title string, items []choiceItem) {
+	switch m.state {
+	case stateIdle, stateRunning:
+		m.choiceReturn = m.state
+	case stateAwaitingChoice:
+		// One picker replacing another (a /model list landing while /mode is
+		// open): keep where the first one was going to return to.
+	default:
+		m.appendLine(toolStyle.Render("  (not showing the picker: answer the prompt first, then try again)"))
+		return
+	}
 	m.choiceItems = items
 	m.choicePrompt = title
 	m.choiceFilter = ""

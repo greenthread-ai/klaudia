@@ -148,10 +148,37 @@ func (m *Model) applyChoice(n int) {
 	}
 }
 
-// closeChoice clears the picker and returns the keyboard to the prompt.
+// closeChoice clears the picker and returns to the state it opened over:
+// the prompt when idle, the running turn when it opened mid-turn.
 func (m *Model) closeChoice() {
 	m.choiceItems, m.choiceHits, m.choicePrompt, m.choiceFilter, m.choiceIdx = nil, nil, "", "", 0
-	m.setState(stateIdle)
+	m.setState(m.choiceReturn)
+	m.choiceReturn = stateIdle
+}
+
+// closeChoiceForPrompt dismisses an open picker because the running turn now
+// needs an answer (approval, question, plan). That prompt takes the bottom
+// view; the picker's items are dropped rather than left stale, and the user is
+// told it closed so the missing picker is not a mystery.
+func (m *Model) closeChoiceForPrompt() {
+	if m.state != stateAwaitingChoice {
+		return
+	}
+	m.closeChoice()
+	m.appendLine(toolStyle.Render("  → picker closed: Klaudia needs an answer first"))
+}
+
+// settleState moves to s when background work (a turn, a compaction, a !
+// command) finishes or a follow-up turn starts. If a picker is open over that
+// work it stays open, and s becomes the state it returns to; otherwise the
+// picker would vanish under the user's fingers and a later digit would land in
+// the input box.
+func (m *Model) settleState(s uiState) {
+	if m.state == stateAwaitingChoice {
+		m.choiceReturn = s
+		return
+	}
+	m.setState(s)
 }
 
 // choiceView renders the picker: title, a window of rows around the selection,

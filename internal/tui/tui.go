@@ -570,6 +570,9 @@ type Model struct {
 	choiceItems  []choiceItem
 	choicePrompt string
 	choiceFilter string
+	// choiceReturn is the state the picker hands back to when it closes:
+	// stateRunning when it was opened over a turn that is still in flight.
+	choiceReturn uiState
 	choiceHits   []int
 	choiceIdx    int
 	// Input history: submitted prompts (newest last), navigated with Up/Down.
@@ -842,6 +845,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.onBangResult(msg)
 
 	case permissionMsg:
+		m.closeChoiceForPrompt()
 		// The card is about a call whose line is not written yet; write it
 		// (and its diff) first, so the question has its context above it.
 		m.flushAssistant()
@@ -870,6 +874,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case askMsg:
+		m.closeChoiceForPrompt()
 		m.setState(stateAwaitingAnswer)
 		m.askReply = msg.reply
 		m.askOptions = msg.options
@@ -887,6 +892,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.waitForEvent(), cmd)
 
 	case planMsg:
+		m.closeChoiceForPrompt()
 		m.setState(stateAwaitingPlan)
 		m.planReply = msg.reply
 		m.planIdx, m.planStray = 0, false
@@ -975,7 +981,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loopPlan = false // whatever kind of run it was, it is over
 		}
 		if loopPrompt != "" {
-			m.setState(stateRunning)
+			m.settleState(stateRunning)
 			return m, tea.Batch(m.waitForEvent(), m.startTurn(loopPrompt), stopSW)
 		}
 		// A queued message becomes the next turn. Two sources, in priority
@@ -991,7 +997,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if q := strings.TrimSpace(resend.Text); q != "" {
 			m.pushHistory(q)
 			m.appendLine(userStyle.Render("› ") + q)
-			m.setState(stateRunning)
+			m.settleState(stateRunning)
 			// q is the chip form (kept short for the queued hint and ↑ recall);
 			// expand it only on the way to the model.
 			next := m.pastes.expand(q)
@@ -1006,7 +1012,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
 		}
-		m.setState(stateIdle)
+		m.settleState(stateIdle)
 		m.input.Focus()
 		m.notifyTurnEnd(elapsed, msg.err)
 		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW, m.scheduleIdleCompact())
@@ -1051,7 +1057,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case summariseDoneMsg:
 		m.onSummariseDone(msg)
-		m.setState(stateIdle)
+		m.settleState(stateIdle)
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent())
 
@@ -1066,7 +1072,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.residentTokens, m.contextMeasured = compaction.EstimateTokens(m.history), false
 			m.appendLine(bannerStyle.Render("Compacted conversation. Summary:\n" + strings.TrimSpace(msg.summary)))
 		}
-		m.setState(stateIdle)
+		m.settleState(stateIdle)
 		m.input.Focus()
 		return m, tea.Batch(textarea.Blink, m.waitForEvent())
 

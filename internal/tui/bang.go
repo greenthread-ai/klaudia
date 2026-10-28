@@ -156,7 +156,7 @@ func (m *Model) onBangResult(msg bangResultMsg) tea.Cmd {
 	// referent. Recorded as conversation rather than sent as a turn: the user
 	// ran a command, they did not ask a question.
 	m.recordShellContext(msg)
-	m.setState(stateIdle)
+	m.settleState(stateIdle)
 	return nil
 }
 
