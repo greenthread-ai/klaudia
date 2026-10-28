@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -259,6 +260,12 @@ type Result struct {
 type Loop struct {
 	provider api.Provider
 	tools    *tools.Registry
+
+	// compactFailures counts automatic compactions that failed in a row.
+	// After maxCompactFailures the threshold-driven one stops trying (each
+	// attempt is a model call that fails the same way) until one succeeds or
+	// /compact does; a forced compaction, after an overflow, always tries.
+	compactFailures atomic.Int32
 
 	// prefix is the system prompt, tools and betas of the last request sent,
 	// which /compact (Compact) reuses so its summary shares the
@@ -721,7 +728,8 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 	// force is set when the provider has already rejected the request for
 	// size: the threshold is moot, we are over it by definition.
 	if !opts.NoAutocompact &&
-		(force || compaction.ShouldAutocompact(calib.Scale(compaction.EstimateTokens(messages)), opts.ContextWindow)) {
+		(force || (l.compactFailures.Load() < maxCompactFailures &&
+			compaction.ShouldAutocompact(calib.Scale(compaction.EstimateTokens(messages)), opts.ContextWindow))) {
 		// Autocompact is a model call that runs silently (emit=nil), so signal
 		// its start with a contentless "compaction" event — the frontend shows
 		// "compacting…" for the duration. Microcompact above is instant and
@@ -732,19 +740,43 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 		out, err := l.autocompact(ctx, messages, opts, maxTokens, &prefix)
 		switch {
 		case err == nil:
+			l.compactFailures.Store(0)
 			messages = out
 			if emit != nil {
 				emit(Event{Type: EventCompaction, Content: "autocompact: summarized prior conversation"})
 			}
-		case errors.Is(err, errSummaryTruncated) && emit != nil:
+		case ctx.Err() != nil:
+			// The turn was cancelled; that is not compaction failing.
+		default:
 			// Said out loud because keeping the full history is the visible
 			// half of this failure: the user sees no compaction and a context
-			// that keeps growing, and otherwise has no way to know why.
-			emit(Event{Type: EventNotice, Content: err.Error() + " — kept the full history instead of a partial summary"})
+			// that keeps growing, and otherwise has no way to know why. Every
+			// failure, not only a cut-off summary: a silent one is what made
+			// a session that had outgrown its window look merely stuck.
+			// (From PR #28.)
+			n := l.compactFailures.Add(1)
+			if emit != nil {
+				msg := "autocompact failed: " + err.Error() + " — kept the full history"
+				if errors.Is(err, errSummaryTruncated) {
+					msg = err.Error() + " — kept the full history instead of a partial summary"
+				}
+				if n >= maxCompactFailures {
+					msg += fmt.Sprintf("; %d failures in a row, so automatic compaction is paused until /compact succeeds", n)
+				}
+				emit(Event{Type: EventNotice, Content: msg})
+			}
 		}
 	}
 	return messages
 }
+
+// maxCompactFailures is how many automatic compactions may fail in a row
+// before the threshold-driven one stops being attempted.
+const maxCompactFailures = 3
+
+// maxSummaryShrinks bounds how many times a summary request that is itself
+// too long is made smaller and retried.
+const maxSummaryShrinks = 3
 
 // Compact unconditionally summarizes the conversation via the model and returns
 // the replacement history plus the summary text. Used by the TUI's /compact
@@ -757,6 +789,7 @@ func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessagePara
 	if err != nil {
 		return nil, "", err
 	}
+	l.compactFailures.Store(0)
 	return compaction.ReplaceWithSummary(summary), summary, nil
 }
 
@@ -822,30 +855,52 @@ var errSummaryTruncated = errors.New("compaction summary was cut off at the outp
 // truncated one is not.
 // prefix, when known, is the conversation's own system prompt and tools, sent
 // so the summary reads the history from cache; nil sends none, as before.
+//
+// The summary request is the whole history plus an instruction, so when
+// compaction is forced because that history overflowed, the request overflows
+// too. It is then made smaller (compaction.ShrinkForSummary: the older half
+// dropped at a real user turn, or the longest text blocks halved) and retried
+// up to maxSummaryShrinks times, and the summary says the oldest part is not
+// in it. Before, it failed the same way each time and the session was
+// finished. (From PR #28.) The history is sanitized like any request's.
 func (l *Loop) summarize(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model, maxTokens int64, effort api.Effort, prefix *requestPrefix) (string, error) {
 	if maxTokens <= 0 {
 		maxTokens = int64(api.MaxOutputTokens(string(model)))
 	}
-	req := compaction.BuildSummaryRequest(messages, model, maxTokens, effort)
-	req.Betas = api.DefaultBetas
-	if prefix != nil {
-		req.System, req.Tools = prefix.system, prefix.tools
-		if len(prefix.betas) > 0 {
-			req.Betas = prefix.betas
+	dropped := 0
+	for attempt := 0; ; attempt++ {
+		req := compaction.BuildSummaryRequest(sanitizeMessages(messages), model, maxTokens, effort)
+		req.Betas = api.DefaultBetas
+		if prefix != nil {
+			req.System, req.Tools = prefix.system, prefix.tools
+			if len(prefix.betas) > 0 {
+				req.Betas = prefix.betas
+			}
 		}
+		assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+		if err != nil {
+			if !api.IsContextOverflow(err) || attempt == maxSummaryShrinks {
+				return "", err
+			}
+			smaller, n, ok := compaction.ShrinkForSummary(messages)
+			if !ok {
+				return "", err
+			}
+			messages, dropped = smaller, dropped+n
+			continue
+		}
+		if assistant.StopReason == "max_tokens" {
+			return "", fmt.Errorf("%w (%d tokens)", errSummaryTruncated, maxTokens)
+		}
+		summary := finalAssistantText(assistant)
+		if summary == "" {
+			return "", fmt.Errorf("compaction produced no summary")
+		}
+		if dropped > 0 {
+			summary = fmt.Sprintf("(The oldest %d messages were too long to include in this summary and are not reflected in it.)\n\n%s", dropped, summary)
+		}
+		return summary, nil
 	}
-	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
-	if err != nil {
-		return "", err
-	}
-	if assistant.StopReason == "max_tokens" {
-		return "", fmt.Errorf("%w (%d tokens)", errSummaryTruncated, maxTokens)
-	}
-	summary := finalAssistantText(assistant)
-	if summary == "" {
-		return "", fmt.Errorf("compaction produced no summary")
-	}
-	return summary, nil
 }
 
 // streamTurn issues one streaming request via the provider, emitting

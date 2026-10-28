@@ -185,6 +185,14 @@ port mirrors (see `internal/version`).
   walking. Grep now stops after 20,000 and says so, and both stop at once
   when the turn is cancelled. From PR #37; its general output cap was
   already on main as the loop's backstop.
+- **A conversation too long even to summarise recovers.** When a request
+  overflowed the window, compaction sent the same history as its summary
+  request, which overflowed too, and the session was finished. The summary
+  request is now made smaller (the older half dropped at a real turn, or
+  the longest blocks halved) and retried, and the summary says what it
+  left out. Every failed automatic compaction is now reported, not only a
+  cut-off summary, and after three in a row it pauses until `/compact`
+  succeeds. From PR #28.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
