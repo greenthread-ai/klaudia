@@ -43,7 +43,25 @@ brought Shift+Return; v0.3.0 shipped (2026-10-28); `/rewind` gained
 
 Deprioritised by decision (2026-10-27), not scheduled: egress beyond the macOS
 sandbox (DNS, Linux enforcement, a socket bridge for containers), and ACP
-parity (background agents, `session/fork`). Nested sub-agents are declined.
+parity (background agents, `session/fork`). Declined (2026-10-28):
+
+- **Nested sub-agents.** Top-level sub-agents already run in parallel, forks
+  inherit the parent's context, and goal and plan runs carry long multi-step
+  work, so nesting adds nothing those do not cover. What it would add is cost
+  multiplied per level, a runaway three levels down that is hard to see or
+  stop, permission questions routed through layers, and failures reported as
+  summaries of summaries. Claude Code does not allow it either. Revisit only
+  if a parent is seen running out of context coordinating many children, and
+  then reach for compaction or a plan run first.
+- **`/rewind` across a restart.** Within a run, rewind cuts the conversation
+  back (so the model stops believing undone work exists) and restores only
+  Klaudia's uncommitted edits, leaving the user's own; git alone does
+  neither. Across a restart there is a natural break, usually a commit, and
+  git is the tool; carrying "whose edit is this" across processes is the
+  bookkeeping most likely to get the one guarantee wrong (never destroy the
+  user's work). Outside a git repository rewind already restores no files,
+  and a conversation-only rewind after a restart would recreate the mismatch
+  rewind exists to remove.
 
 ## What the field shipped this year
 
