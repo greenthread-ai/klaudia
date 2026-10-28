@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.5.0 — 2026-10-28
+
 ### Added
 
 - **Language-server tools: hover, document symbols, rename preview and
