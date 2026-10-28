@@ -135,12 +135,40 @@ func parseMemoryDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-// PermissionRequest: memory is the agent's own scratch space, not user files.
-func (m *Memory) PermissionRequest(json.RawMessage) permission.PermissionRequest {
+// knowledgeWrite marks a request that writes project knowledge.
+const knowledgeWrite = "memory:knowledge"
+
+// PermissionRequest: memory is the agent's own scratch space, not user files —
+// except project knowledge, which every later session in the project reads
+// as guidance. A write there is marked, and carries the text.
+func (m *Memory) PermissionRequest(raw json.RawMessage) permission.PermissionRequest {
+	var in MemoryInput
+	if json.Unmarshal(raw, &in) != nil {
+		return permission.PermissionRequest{}
+	}
+	switch {
+	case in.Operation == "add" && in.Scope == "project":
+		return permission.PermissionRequest{Raw: knowledgeWrite, Specifier: in.Content}
+	case in.Operation == "promote":
+		return permission.PermissionRequest{Raw: knowledgeWrite, Specifier: "the note " + in.Name}
+	}
 	return permission.PermissionRequest{}
 }
 
-func (m *Memory) CheckPermissions(pctx permission.Context, _ permission.PermissionRequest) permission.Decision {
+// CheckPermissions asks before project knowledge is written, and allows the
+// rest. Knowledge is injected into every later session's prompt, so text a
+// prompt injection talked the model into writing — "always run this script
+// first" from a hostile README — would outlive the session that read it.
+// Asking puts the exact text in front of the user once, at the moment it
+// would become standing guidance; with no one to ask (a headless run) the
+// write is refused, and the model is told why. (PR #71 raised it.)
+func (m *Memory) CheckPermissions(pctx permission.Context, req permission.PermissionRequest) permission.Decision {
+	if req.Raw == knowledgeWrite {
+		return permission.Decision{
+			Behavior: permission.Ask,
+			Message:  "Project knowledge is read into every later session in this project; it is only written with the user's approval.",
+		}
+	}
 	return allowAlways(pctx)
 }
 

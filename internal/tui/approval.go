@@ -62,6 +62,11 @@ func (m *Model) permissionSummary(req agent.ApprovalRequest) string {
 		if target := firstNonEmpty(stringField(req.Input, "notebook_path"), req.Specifier); target != "" {
 			return "edit notebook " + target
 		}
+	case "Memory":
+		if stringField(req.Input, "operation") == "promote" {
+			return "promote a note to project knowledge"
+		}
+		return "add to project knowledge (.klaudia/KNOWLEDGE.md)"
 	case "Bash":
 		if desc := stringField(req.Input, "description"); desc != "" {
 			return "run command — " + visible(desc)
@@ -96,6 +101,11 @@ func permissionDetail(req agent.ApprovalRequest) string {
 	case "NotebookEdit":
 		if path := stringField(req.Input, "notebook_path"); path != "" {
 			return "notebook: " + path
+		}
+	case "Memory":
+		// The text that would become standing guidance, all of it.
+		if req.Specifier != "" {
+			return "text: " + visible(req.Specifier) + "\n  why: " + req.Suggestion
 		}
 	case "Bash":
 		if cmd := stringField(req.Input, "command"); cmd != "" {

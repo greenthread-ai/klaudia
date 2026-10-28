@@ -45,6 +45,13 @@ port mirrors (see `internal/version`).
   zero-width spaces, bidi overrides) passed through. They are now shown in
   full with such characters as `\u{…}` escapes, on host-change cards too,
   and an approval repeats a command its tool line could only show in part.
+- **Project knowledge is written only with your approval.** The model's
+  writes to `.klaudia/KNOWLEDGE.md` (`add` with `scope=project`, or
+  `promote`) now ask first and show the exact text, because it is read into
+  every later session: a prompt injection that talked the model into writing
+  "always run this first" would otherwise outlive the session that read it.
+  A headless run refuses the write. The prompt now introduces the file as
+  notes to check against the code, not "established facts". From PR #71.
 - **A session id cannot be a path.** `--resume` and an ACP client's
   `session/load` took the id into a file path unchecked, so `../..` reached
   outside the sessions directory. Ids are validated where they come in, and

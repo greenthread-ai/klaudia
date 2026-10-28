@@ -50,8 +50,13 @@ infrastructure.
   cheap as memory grows.
 - **`KNOWLEDGE.md`** is the curated, durable knowledge surface — "facts
   we've validated, conventions, lessons learned". System-prompt-injected
-  verbatim under `# Project knowledge`. Has a different lifecycle from
-  session memory: durable, near-canonical, gated.
+  verbatim under `# Project knowledge`, framed as notes to check against
+  the code rather than instructions. Has a different lifecycle from session
+  memory: durable, near-canonical, gated — the model writes it (`add` with
+  `scope=project`, or `promote`) only with the user's approval, shown the
+  exact text, because it is read into every later session and text a prompt
+  injection planted there would outlive the session that read it. With no
+  one to ask (a headless run) the write is refused.
 
 ## The Store + Knowledge interfaces
 
