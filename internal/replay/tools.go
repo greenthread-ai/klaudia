@@ -7,6 +7,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/internal/tools"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
+	"github.com/greenthread-ai/klaudia/pkg/schema"
 )
 
 // recorded is one tool call's result as the recording has it.
@@ -98,9 +99,9 @@ func (t replayTool) executeAs(name string, raw json.RawMessage) ([]tools.Result,
 var envDependent = map[string]bool{"Skill": true, "Agent": true}
 
 // newTools builds the replay's registry and result store from a recording,
-// and checks every recorded call against today's schema: a call the model
-// made that this build would refuse is either a regression or a rename that
-// sessions still in flight will trip over.
+// and checks every recorded call that succeeded against today's schema: one
+// that worked then and would be refused now is either a regression or a
+// rename that sessions still in flight will trip over.
 func newTools(steps Recording) (*tools.Registry, *resultStore, error) {
 	builtin, err := tools.BuiltinTools()
 	if err != nil {
@@ -133,9 +134,24 @@ func newTools(steps Recording) (*tools.Registry, *resultStore, error) {
 		}
 		for _, u := range s.toolUses {
 			used[u.name] = true
-			if r, ok := results[u.id]; ok {
+			// The loop repairs string-encoded scalars against the schema
+			// before validating or running a call (schema.Coerce), so the
+			// input a tool receives is the repaired one; index and check
+			// that, or a call the model sent "offset":"180" is never found.
+			if t, ok := known[u.name]; ok {
+				if fixed, changed := schema.Coerce(t.InputSchema(), u.input); len(changed) > 0 {
+					u.input = fixed
+				}
+			}
+			r, answered := results[u.id]
+			if answered {
 				k := callKey(u.name, u.input)
 				store.byCall[k] = append(store.byCall[k], r)
+			}
+			// Only a call that worked then: one the model got wrong was
+			// refused then too, and refusing it again is not a change.
+			if answered && r.isError {
+				continue
 			}
 			if t, ok := known[u.name]; ok && !envDependent[u.name] {
 				if err := t.ValidateInput(u.input); err != nil {

@@ -17,9 +17,11 @@ import (
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
-// scripted replies in order: a Read of path, then a closing text.
+// scripted replies in order: a Read of path (plus extra input), then a
+// closing text.
 type scripted struct {
 	path  string
+	extra map[string]any
 	calls int
 }
 
@@ -27,7 +29,11 @@ func (s *scripted) StreamTurn(_ context.Context, _ anthropic.BetaMessageNewParam
 	s.calls++
 	body := `{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"done"}]}`
 	if s.calls == 1 {
-		in, _ := json.Marshal(map[string]string{"file_path": s.path})
+		input := map[string]any{"file_path": s.path}
+		for k, v := range s.extra {
+			input[k] = v
+		}
+		in, _ := json.Marshal(input)
 		body = `{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":` + string(in) + `}]}`
 	}
 	var m anthropic.BetaMessage
@@ -98,5 +104,43 @@ func TestRecordThenReplay(t *testing.T) {
 	}
 	if strings.Join(order, ",") != "result,message" {
 		t.Errorf("second request has %v, want the recorded result then the mid-turn message", order)
+	}
+}
+
+// A model that sends a number as a string ("offset":"1") has it repaired by
+// the loop before the tool runs; replay must find the recorded result for
+// the repaired call, not report it as one the recording never saw.
+func TestCoercedCallFindsItsResult(t *testing.T) {
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	dir := t.TempDir()
+	file := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(file, []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tr, err := session.NewTranscript(session.Meta{SessionID: "co", CWD: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := tools.NewRead()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = agent.New(&scripted{path: file, extra: map[string]any{"offset": "1"}}, tools.NewRegistry(read)).Run(context.Background(), agent.Options{
+		Prompt: "read", Model: "test", WorkingDir: dir, Recorder: tr,
+		Permission: permission.Context{Mode: permission.StaticMode(permission.ModeBypassPermissions)},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := Load(session.Path(dir, "co"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), rec, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range res.Findings {
+		t.Error(f)
 	}
 }
