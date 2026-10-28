@@ -59,6 +59,17 @@ type inlineRenderer struct {
 	dirty     bool
 	suspended bool
 
+	// above counts the rows this renderer has printed into the scrollback,
+	// and floor is the height the frame is held at. Once the screen is full,
+	// a frame that grows (the @ menu opening) scrolls the screen, and the
+	// rows that left the top cannot come back, so a frame that then shrank
+	// left blank rows under the input box. Instead the frame keeps its height
+	// with blank rows above it, holding the box at the bottom, until printed
+	// output takes up the slack. above undercounts (lines the shell printed
+	// before Klaudia started), which only means holding less often.
+	above int
+	floor int
+
 	done chan struct{}
 	wg   sync.WaitGroup
 }
@@ -179,6 +190,7 @@ func (r *inlineRenderer) resize(w, h int) {
 	defer r.mu.Unlock()
 	r.width, r.height = w, h
 	r.full, r.dirty = true, true
+	r.floor = 0 // the screen rewrapped: what was held no longer lines up
 }
 
 // print queues finished output for the scrollback above the frame.
@@ -207,6 +219,7 @@ func (r *inlineRenderer) clearScreen() {
 	defer r.mu.Unlock()
 	r.writeLocked(ansi.EraseEntireScreen + ansi.CursorHomePosition)
 	r.drawn, r.everDrawn = nil, true
+	r.above, r.floor = 0, 0
 	r.full, r.dirty = true, true
 }
 
@@ -223,7 +236,7 @@ func (r *inlineRenderer) flushLocked() {
 		return
 	}
 	r.dirty = false
-	lines := r.fit(r.frame)
+	lines := r.hold(r.fit(r.frame))
 
 	var b strings.Builder
 	b.WriteString(syncBegin)
@@ -282,6 +295,39 @@ func (r *inlineRenderer) flushLocked() {
 
 	r.writeLocked(b.String())
 	r.drawn, r.queued, r.full, r.everDrawn = lines, nil, false, true
+}
+
+// hold applies floor: it pads a frame shorter than the floor with blank rows
+// above it, and raises the floor to the frame's height when the screen is
+// full. Rows queued for the scrollback lower the floor first, since they
+// fill the held space from above.
+func (r *inlineRenderer) hold(lines []string) []string {
+	printed := 0
+	for _, q := range r.queued {
+		printed += r.rows(q)
+	}
+	r.above += printed
+	r.floor = max(0, r.floor-printed)
+	if r.height <= 1 || r.above+len(lines) < r.height {
+		r.floor = 0 // room below the frame: nothing has scrolled
+		return lines
+	}
+	limit := r.height - 1 // fit's ceiling
+	if len(lines) >= r.floor {
+		r.floor = min(len(lines), limit)
+		return lines
+	}
+	pad := make([]string, r.floor-len(lines), r.floor)
+	return append(pad, lines...)
+}
+
+// rows is how many terminal rows a printed line takes, wrapped at the width.
+func (r *inlineRenderer) rows(line string) int {
+	w := ansi.StringWidth(line)
+	if r.width <= 0 || w <= r.width {
+		return 1
+	}
+	return (w + r.width - 1) / r.width
 }
 
 // fit keeps every line narrower than the terminal and the frame shorter than

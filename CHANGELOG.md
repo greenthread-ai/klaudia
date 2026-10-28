@@ -7,6 +7,13 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **The input box stays at the bottom after the @ menu closes.** With the
+  screen full, opening the menu scrolls the conversation up to make room,
+  and those rows cannot be brought back; closing it left them blank under
+  the input box. The live region now keeps its height, with the spare rows
+  above the box, until new output fills them, so the box stays at the
+  bottom and opening the menu again does not jump the screen.
+
 - **Conversations on Opus 5.5, Fable 5.1 and Sonnet 5.5 no longer risk a
   400 on every turn.** On these models a thinking block is valid only in the
   conversation that produced it, and for accounts created on or after

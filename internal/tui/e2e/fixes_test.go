@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -556,4 +557,30 @@ func TestCtrlGEditsTheDraftInEditor(t *testing.T) {
 	tm.WaitFor(t, "the edited draft back in the box", 15*time.Second, func(s Snapshot) bool {
 		return strings.Contains(s.Screen(), "rewritten by the editor, was: first draft") && s.InputBox()
 	})
+}
+
+// With the screen full, the @ menu opening scrolls the transcript up to make
+// room, and those rows cannot come back. Closing it used to leave the rows
+// blank under the input box; the box now stays at the bottom, the spare rows
+// held above it until output fills them.
+func TestAtMenuLeavesTheBoxAtTheBottom(t *testing.T) {
+	env := newEnv(t)
+	for i := 0; i < 12; i++ {
+		os.WriteFile(filepath.Join(env.Project, fmt.Sprintf("file%02d.go", i)), []byte("package main\n"), 0o644)
+	}
+	tm := env.Start(t)
+	for i := 1; i <= 2; i++ {
+		env.Prompt(t, tm, "longpara")
+		tm.WaitFor(t, "the reply", 20*time.Second, func(s Snapshot) bool { return len(s.MatchLines(doneLine)) >= i })
+	}
+	tm.Type("look at @fi")
+	tm.WaitFor(t, "the menu", 10*time.Second, func(s Snapshot) bool { return strings.Contains(s.Screen(), "esc to dismiss") })
+	tm.Press(keyEsc)
+	snap := tm.WaitFor(t, "the menu to close", 10*time.Second, func(s Snapshot) bool {
+		return !strings.Contains(s.Screen(), "esc to dismiss")
+	})
+	n := len(snap.Lines)
+	if !strings.Contains(snap.Lines[n-1], "tokens") || !strings.HasPrefix(strings.TrimSpace(snap.Lines[n-4]), "╭") {
+		t.Errorf("the input box is not at the bottom after the menu closed:\n%s", snap.Screen())
+	}
 }
