@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/anthropics/anthropic-sdk-go"
 
@@ -258,6 +259,36 @@ type Result struct {
 type Loop struct {
 	provider api.Provider
 	tools    *tools.Registry
+
+	// prefix is the system prompt, tools and betas of the last request sent,
+	// which /compact (Compact) reuses so its summary shares the
+	// conversation's cached prefix. Guarded by prefixMu.
+	prefixMu sync.Mutex
+	prefix   *requestPrefix
+}
+
+// requestPrefix is what precedes the messages in a request: tool definitions
+// and the system prompt, with the betas sent alongside them. The prompt cache
+// is keyed on tools, then system, then messages, so a summary request without
+// them missed the cache on the entire history — the largest request a session
+// sends, billed in full at the moment it is largest. The tools also define the
+// tool_use blocks the history carries. (From PR #66.)
+type requestPrefix struct {
+	system []anthropic.BetaTextBlockParam
+	tools  []anthropic.BetaToolUnionParam
+	betas  []anthropic.AnthropicBeta
+}
+
+func (l *Loop) rememberPrefix(p requestPrefix) {
+	l.prefixMu.Lock()
+	defer l.prefixMu.Unlock()
+	l.prefix = &p
+}
+
+func (l *Loop) lastPrefix() *requestPrefix {
+	l.prefixMu.Lock()
+	defer l.prefixMu.Unlock()
+	return l.prefix
 }
 
 // New builds a Loop over a model provider (Anthropic, OpenAI-compatible, …).
@@ -376,11 +407,6 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			halted = halted || in.Halt
 		}
 
-		// Compaction runs at the top of every turn (docs/compaction.md):
-		// microcompact first (cheap, local), then autocompact (model-based) if
-		// near the context limit.
-		messages = l.compact(ctx, messages, opts, maxTokens, emit, &calib, false)
-
 		// Build the tool list for this turn: eager tools plus any deferred tools
 		// revealed so far (via ToolSearch). Rebuilt per turn so reveals take
 		// effect on the next request.
@@ -396,6 +422,13 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		mode := permission.CurrentMode(opts.Permission)
 		announceMode(mode, emit, &modes)
 		system := systemFor(opts.System, mode)
+		prefix := requestPrefix{system: system, tools: toolParams, betas: betas}
+
+		// Compaction runs at the top of every turn (docs/compaction.md):
+		// microcompact first (cheap, local), then autocompact (model-based) if
+		// near the context limit. The summary request carries this turn's
+		// system prompt and tools, so it reads the conversation from cache.
+		messages = l.compact(ctx, messages, opts, maxTokens, emit, &calib, prefix, false)
 
 		// Keep the repair, rather than repairing a copy on the way out. The
 		// sanitised version used to be built for the request alone, so the
@@ -424,6 +457,7 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			params.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(opts.Effort)
 		}
 
+		l.rememberPrefix(prefix)
 		estimateAtSend := compaction.EstimateTokens(messages)
 		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages)
 		if err != nil && api.IsImmutableThinking(err) && !thinkingRecovered {
@@ -469,7 +503,7 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			if emit != nil {
 				emit(Event{Type: EventCompaction})
 			}
-			messages = l.compact(ctx, messages, opts, maxTokens, emit, &calib, true)
+			messages = l.compact(ctx, messages, opts, maxTokens, emit, &calib, prefix, true)
 			if emit != nil {
 				emit(Event{Type: EventCompaction, Content: "context overflowed the model's window — summarised and retried"})
 			}
@@ -656,7 +690,7 @@ func elisionSpiller(s tools.SpillStore) compaction.Spiller {
 
 // compact applies microcompact then (if near the limit) autocompact to the
 // message list, each unless Options turns it off.
-func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64, emit Emitter, calib *compaction.Calibration, force bool) []anthropic.BetaMessageParam {
+func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64, emit Emitter, calib *compaction.Calibration, prefix requestPrefix, force bool) []anthropic.BetaMessageParam {
 	if !opts.NoMicrocompact {
 		if out, res := compaction.Microcompact(messages, elisionSpiller(opts.Spill)); res.Compacted {
 			messages = out
@@ -680,7 +714,7 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 		if emit != nil {
 			emit(Event{Type: EventCompaction})
 		}
-		out, err := l.autocompact(ctx, messages, opts, maxTokens)
+		out, err := l.autocompact(ctx, messages, opts, maxTokens, &prefix)
 		switch {
 		case err == nil:
 			messages = out
@@ -704,7 +738,7 @@ func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessagePara
 // the model. Returns an error if the summary call fails, yields no text, or was
 // cut off.
 func (l *Loop) Compact(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model, maxTokens int64, effort api.Effort) ([]anthropic.BetaMessageParam, string, error) {
-	summary, err := l.summarize(ctx, messages, model, maxTokens, effort)
+	summary, err := l.summarize(ctx, messages, model, maxTokens, effort, l.lastPrefix())
 	if err != nil {
 		return nil, "", err
 	}
@@ -742,8 +776,8 @@ func (l *Loop) Complete(ctx context.Context, prompt string, model anthropic.Mode
 
 // autocompact summarizes the conversation via the model and replaces history
 // with the summary. On error the caller keeps messages unchanged.
-func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64) ([]anthropic.BetaMessageParam, error) {
-	summary, err := l.summarize(ctx, messages, opts.Model, maxTokens, opts.Effort)
+func (l *Loop) autocompact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64, prefix *requestPrefix) ([]anthropic.BetaMessageParam, error) {
+	summary, err := l.summarize(ctx, messages, opts.Model, maxTokens, opts.Effort, prefix)
 	if err != nil {
 		return messages, err
 	}
@@ -771,12 +805,20 @@ var errSummaryTruncated = errors.New("compaction summary was cut off at the outp
 // again. So the cap is the session's own resolved one, and a summary that
 // reached it is refused: an unsummarised history is recoverable, a silently
 // truncated one is not.
-func (l *Loop) summarize(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model, maxTokens int64, effort api.Effort) (string, error) {
+// prefix, when known, is the conversation's own system prompt and tools, sent
+// so the summary reads the history from cache; nil sends none, as before.
+func (l *Loop) summarize(ctx context.Context, messages []anthropic.BetaMessageParam, model anthropic.Model, maxTokens int64, effort api.Effort, prefix *requestPrefix) (string, error) {
 	if maxTokens <= 0 {
 		maxTokens = int64(api.MaxOutputTokens(string(model)))
 	}
 	req := compaction.BuildSummaryRequest(messages, model, maxTokens, effort)
 	req.Betas = api.DefaultBetas
+	if prefix != nil {
+		req.System, req.Tools = prefix.system, prefix.tools
+		if len(prefix.betas) > 0 {
+			req.Betas = prefix.betas
+		}
+	}
 	assistant, _, err := l.streamTurn(ctx, req, nil, nil)
 	if err != nil {
 		return "", err

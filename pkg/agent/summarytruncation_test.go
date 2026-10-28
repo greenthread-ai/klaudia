@@ -83,7 +83,7 @@ func TestSummaryIsSizedFromTheSessionAndRefusedWhenCutOff(t *testing.T) {
 					if e.Type == "notice" {
 						notices = append(notices, e.Content)
 					}
-				}, &calib, true)
+				}, &calib, requestPrefix{}, true)
 			if got := p.maxTokens[0]; got != sessionCap {
 				t.Errorf("summary requested max_tokens=%d, want the session's %d", got, sessionCap)
 			}
@@ -127,7 +127,7 @@ func TestAutocompactMarksTheBoundaryInTheTurnsTranscript(t *testing.T) {
 			New(&summaryProvider{stop: tc.stop, text: "the summary"}, tools.NewRegistry()).compact(
 				context.Background(), summaryHistory(),
 				Options{Model: "claude-opus-5-5", ContextWindow: 1_000_000, Recorder: rec},
-				128000, nil, &calib, true)
+				128000, nil, &calib, requestPrefix{}, true)
 			if fmt.Sprint(rec.boundaries) != fmt.Sprint(tc.want) {
 				t.Errorf("boundaries = %q, want %q", rec.boundaries, tc.want)
 			}

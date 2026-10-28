@@ -115,6 +115,14 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **Compaction reads the conversation from the prompt cache.** The summary
+  request was sent without the system prompt and tools, so it shared no
+  cached prefix with the conversation and paid for the whole history at the
+  moment it was largest; idle compaction, which exists to catch the cache
+  while it is warm, got nothing from it. Summary requests now carry the
+  conversation's prefix. Measured on Opus 5.5: 0 tokens read from cache
+  before, the full 20.5k prefix after, at the summary's capped effort as
+  well. From PR #66.
 - **A reply that is cut off is reported as cut off, and kept.** A stream
   that a proxy closed without its final event, or that carried an
   overloaded or server error after it began, used to end the turn as if the

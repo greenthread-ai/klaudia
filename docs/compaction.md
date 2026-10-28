@@ -106,6 +106,16 @@ line saying so. Never with a draft in the input box, never once another turn
 has started, and not at all with `idleCompact = false` in config. Headless
 and stream-json runs have no idle time to use and keep compacting in-turn.
 
+That cache read depends on the summary request starting the way the
+conversation's requests do. The prompt cache is keyed on tools, then system,
+then messages, and the summary request used to carry neither tools nor
+system prompt, so it read nothing from cache — measured on Opus 5.5, 0
+tokens read against 20,504 with the prefix. Every summary request (auto,
+idle and `/compact`) now carries the conversation's system prompt, tools and
+betas; `/compact` reuses the last request's. Its lower effort does not cost
+the cache: the same measurement read the full prefix at medium effort as at
+high.
+
 ## Before either stage: the per-result cap
 
 Compaction deals with history that has already accumulated. The cheaper defence
