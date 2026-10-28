@@ -235,6 +235,8 @@ type Client struct {
 	// noBinding is set once the endpoint has refused the thinking-binding
 	// controls, so later requests do not try them again.
 	noBinding atomic.Bool
+	// noClearing is the same for server-side tool-result clearing.
+	noClearing atomic.Bool
 	// prepare and listOpts are the host's (WithPrepare, WithListOptions).
 	prepare  func(*anthropic.BetaMessageNewParams)
 	listOpts []option.RequestOption

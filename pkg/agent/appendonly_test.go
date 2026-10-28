@@ -169,11 +169,34 @@ func TestAppendOnlyMeasure(t *testing.T) {
 		Options{DeferredTools: map[string]bool{"Later": true}},
 		thinkingToolTurn(t, "a", "Probe"), thinkingToolTurn(t, "b", "Later"))
 
-	// Microcompact elides old tool results once they pass its threshold.
+}
+
+// clearingLog is a requestLog whose provider clears old tool results
+// server-side, as the Anthropic client does once a conversation holds thinking.
+type clearingLog struct{ requestLog }
+
+func (*clearingLog) ClearsToolResults([]anthropic.BetaMessageParam) bool { return true }
+
+// Microcompact edits old tool results in place, which broke the chain; with a
+// provider that clears server-side it is left alone. A provider that does not
+// (the OpenAI-compatible one) keeps microcompact. (PR #63.)
+func TestAppendOnlyWhenTheServerClearsToolResults(t *testing.T) {
 	big := strings.Repeat("x", 4*25000)
 	var turns []anthropic.BetaMessage
 	for i := 0; i < 6; i++ {
 		turns = append(turns, thinkingToolTurn(t, fmt.Sprint("m", i), "Big"))
 	}
-	run("microcompact", tools.NewRegistry(hookTool{name: "Big", out: big}), Options{ContextWindow: 10_000_000}, turns...)
+	reg := func() *tools.Registry { return tools.NewRegistry(hookTool{name: "Big", out: big}) }
+	opts := Options{Prompt: "go", Model: "claude-opus-5-5", ContextWindow: 10_000_000}
+
+	c := &clearingLog{requestLog{turns: turns}}
+	New(c, reg()).Run(context.Background(), opts, nil)
+	if b := appendOnlyBreaks(c.reqs); len(b) != 0 {
+		t.Errorf("with server-side clearing, history was still edited: %q", b)
+	}
+	p := &requestLog{turns: turns}
+	New(p, reg()).Run(context.Background(), opts, nil)
+	if b := appendOnlyBreaks(p.reqs); len(b) == 0 {
+		t.Error("without server-side clearing microcompact should still run (and edit)")
+	}
 }

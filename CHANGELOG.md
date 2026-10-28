@@ -27,6 +27,14 @@ port mirrors (see `internal/version`).
   system prompt now stays as written, and a mode the conversation has not
   been told yet is added to the next message the model receives, as Claude
   Code does it. Part of the PR #63 work.
+- **Old tool results are cleared by the API, not edited, on those models.**
+  Microcompact shortens old tool results in the history Klaudia sends, which
+  on Opus 5.5, Fable 5.1 and Sonnet 5.5 invalidates the model's earlier
+  reasoning. Once a conversation holds thinking, the Anthropic provider now
+  asks the API to clear them itself (`clear_tool_uses`, beta
+  `context-management-2025-06-27`, with microcompact's thresholds) and
+  microcompact stands aside; an endpoint without context management keeps
+  microcompact. Part of the PR #63 work.
 
 - **Resume picks only this folder's sessions, and reads long lines.**
   Folders whose names differ only in punctuation (`my_proj`, `my-proj`)

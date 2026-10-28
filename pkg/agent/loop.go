@@ -732,6 +732,12 @@ func elisionSpiller(s tools.SpillStore) compaction.Spiller {
 // compact applies microcompact then (if near the limit) autocompact to the
 // message list, each unless Options turns it off.
 func (l *Loop) compact(ctx context.Context, messages []anthropic.BetaMessageParam, opts Options, maxTokens int64, emit Emitter, calib *compaction.Calibration, prefix requestPrefix, force bool) []anthropic.BetaMessageParam {
+	// A provider that clears old tool results server-side for this
+	// conversation is left to: eliding them here would edit history, which
+	// invalidates preserved thinking (api/contextedit.go, PR #63).
+	if clearer, ok := l.provider.(api.ToolResultClearer); ok && clearer.ClearsToolResults(messages) {
+		opts.NoMicrocompact = true
+	}
 	if !opts.NoMicrocompact {
 		if out, res := compaction.Microcompact(messages, elisionSpiller(opts.Spill)); res.Compacted {
 			messages = out

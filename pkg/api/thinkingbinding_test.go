@@ -108,3 +108,47 @@ func TestIsThinkingBindingError(t *testing.T) {
 		t.Error("an unrelated error matched")
 	}
 }
+
+// The same conversations have old tool results cleared server-side in place
+// of microcompact; an endpoint that refuses context management is resent the
+// turn without it and not asked again. (PR #63.)
+func TestServerSideClearingRidesWithThinking(t *testing.T) {
+	c, bodies := bodyServer(t, `[]`, false)
+	if !c.ClearsToolResults(withThinkingHistory().Messages) || c.ClearsToolResults(testParams().Messages) {
+		t.Fatal("ClearsToolResults should follow the thinking in the history")
+	}
+	if _, err := c.StreamTurn(context.Background(), withThinkingHistory(), StreamSink{}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains((*bodies)[0], `"clear_tool_uses_20250919"`) || !strings.Contains((*bodies)[0], `"value":40000`) {
+		t.Errorf("request lacks the clearing edit: %s", (*bodies)[0])
+	}
+}
+
+func TestServerSideClearingFallsBackWhereRejected(t *testing.T) {
+	t.Setenv("KLAUDIA_MAX_RETRIES", "0")
+	var bodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(b))
+		if len(bodies) == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(400)
+			fmt.Fprint(w, `{"type":"error","error":{"type":"invalid_request_error","message":"context_management: Extra inputs are not permitted"}}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, sseStart+sseText+sseEnd)
+	}))
+	defer srv.Close()
+	c := New(Credential{APIKey: "sk-fake"}, srv.URL, Tuning{})
+	if _, err := c.StreamTurn(context.Background(), withThinkingHistory(), StreamSink{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(bodies) != 2 || strings.Contains(bodies[1], "clear_tool_uses") || !strings.Contains(bodies[1], "block_binding") {
+		t.Errorf("resend should drop only the clearing edit; requests %d", len(bodies))
+	}
+	if c.ClearsToolResults(withThinkingHistory().Messages) {
+		t.Error("the client still claims to clear after the endpoint refused")
+	}
+}

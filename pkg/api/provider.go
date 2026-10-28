@@ -120,17 +120,33 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	// Preserved thinking: drop a mismatched block rather than fail the turn,
 	// and report it (thinkingbinding.go). An endpoint that rejects the
 	// controls themselves gets them no more for this client's life.
-	unbound := params
-	bound := false
-	if !c.noBinding.Load() && historyHasThinking(params.Messages) {
-		bindThinking(&params)
-		bound = true
+	// The same conversations get old tool results cleared server-side in
+	// place of microcompact (contextedit.go). An endpoint that rejects either
+	// is resent the turn without it, and not asked again.
+	base := params
+	shape := func() anthropic.BetaMessageNewParams {
+		p := base
+		if !c.noBinding.Load() && historyHasThinking(p.Messages) {
+			bindThinking(&p)
+		}
+		if c.ClearsToolResults(p.Messages) {
+			clearToolResults(&p)
+		}
+		return p
 	}
 
-	msg, err := c.streamRetrying(ctx, params, sink, c.tuning.streamIdleTimeout())
-	if bound && err != nil && isBindingRejected(err) {
-		c.noBinding.Store(true)
-		msg, err = c.streamRetrying(ctx, unbound, sink, c.tuning.streamIdleTimeout())
+	msg, err := c.streamRetrying(ctx, shape(), sink, c.tuning.streamIdleTimeout())
+	for retry := 0; err != nil && retry < 2; retry++ {
+		switch {
+		case !c.noBinding.Load() && isBindingRejected(err):
+			c.noBinding.Store(true)
+		case !c.noClearing.Load() && isClearingRejected(err):
+			c.noClearing.Store(true)
+		default:
+			retry = 2
+			continue
+		}
+		msg, err = c.streamRetrying(ctx, shape(), sink, c.tuning.streamIdleTimeout())
 	}
 	return msg, annotateNotFound(err, string(params.Model), c.endpoint())
 }
