@@ -58,6 +58,16 @@ infrastructure.
   injection planted there would outlive the session that read it. With no
   one to ask (a headless run) the write is refused.
 
+## Scope: project only, by decision
+
+Every surface above belongs to one project. There is no user-level memory
+(deferred 2026-10-28, PR #18; the reasoning is in docs/roadmap.md): facts
+about the user belong in `~/.klaudia/AGENTS.md`, and a host that embeds the
+loop supplies its own user memory through the system prompt. If it is added,
+it is a `user` scope behind `Store`, written only with the user's approval,
+like project knowledge, and for a stronger reason: it is read into every
+session in every repository.
+
 ## The Store + Knowledge interfaces
 
 Both are in `internal/memory/store.go`. The filesystem implementation

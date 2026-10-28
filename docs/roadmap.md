@@ -63,6 +63,27 @@ parity (background agents, `session/fork`). Declined (2026-10-28):
   and a conversation-only rewind after a restart would recreate the mismatch
   rewind exists to remove.
 
+Deferred (2026-10-28), PR #18:
+
+- **User-level memory.** Wanted in the abstract (facts about the user
+  re-taught in every checkout), but not as #18 built it, and not yet. The PR
+  adds a read-only `~/.klaudia/MEMORY.md`; nothing writes it, so it is a
+  third global instructions file beside `~/.klaudia/AGENTS.md` and
+  `~/.claude/CLAUDE.md`, which already do that job. Real user memory needs a
+  write path (a `user` scope on the Memory tool), and that is the riskier
+  write: project knowledge is approval-gated because it is read into every
+  later session of one repository (docs/memory-architecture.md); a
+  user-scope note is read into every session of every repository, so text a
+  prompt injection planted from one untrusted checkout follows the user
+  everywhere. And it is a product concern, not a core one: `internal/memory`
+  is Klaudia's, and a frontend that embeds the loop (Cowork or similar)
+  brings its own user memory and passes it in through the system prompt, as
+  any host does. So: until then, user facts go in `~/.klaudia/AGENTS.md`.
+  Revisit if Klaudia stays its own frontend and users ask for the model to
+  write them; the shape then is a `user` scope with the same approval as
+  project knowledge, behind the `Store` interface so the pgmarkdown backend
+  carries it (its tenant label is the natural key).
+
 ## What the field shipped this year
 
 **Claude Code** (code.claude.com/docs/en/whats-new, changelog, fetched
