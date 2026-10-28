@@ -57,6 +57,12 @@ port mirrors (see `internal/version`).
   API's 5 MB or 8000-pixel limits is refused before it is sent, since a
   rejected image stays in the conversation and fails every later request.
   From PRs #46 and #72.
+- **A transcript that cannot be written is reported.** A full disk or a
+  removed sessions directory used to lose the session without a word, found
+  out only when `--resume` had nothing to resume. The first failed write in
+  a turn is now a notice, in every frontend (stderr when headless). Under
+  stream-json, a failing transcript no longer stops the message envelopes on
+  stdout either. From PR #44.
 - **`AskUserQuestion` is offered only when someone can answer.** A headless
   run or a sub-agent has no one to ask, so the tool is left out of its
   requests rather than offered and failing on every call. From PR #13.

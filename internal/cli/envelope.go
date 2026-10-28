@@ -39,30 +39,37 @@ func (e *envelopeRecorder) Record(role string, message json.RawMessage) error {
 
 // multiRecorder fans a Record call out to several recorders (e.g. the transcript
 // writer plus the stream-json envelope emitter). A nil entry is skipped.
+//
+// Every recorder is written even when an earlier one fails, and the first
+// error is returned. Stopping at the first failure meant a full disk under
+// the transcript also cut off the stream-json envelope an embedder reads,
+// which is on stdout and has nothing to do with the disk. (From PR #44.)
 type multiRecorder []agent.Recorder
 
 // RecordCompaction forwards to every recorder that can mark a boundary. The
 // headless path wraps the transcript in a multiRecorder, so without this the
 // assertion in autocompact would fail and the boundary would never be written.
 func (m multiRecorder) RecordCompaction(summary string) error {
+	var first error
 	for _, r := range m {
 		if cr, ok := r.(agent.CompactionRecorder); ok {
-			if err := cr.RecordCompaction(summary); err != nil {
-				return err
+			if err := cr.RecordCompaction(summary); err != nil && first == nil {
+				first = err
 			}
 		}
 	}
-	return nil
+	return first
 }
 
 func (m multiRecorder) Record(role string, message json.RawMessage) error {
+	var first error
 	for _, r := range m {
 		if r == nil {
 			continue
 		}
-		if err := r.Record(role, message); err != nil {
-			return err
+		if err := r.Record(role, message); err != nil && first == nil {
+			first = err
 		}
 	}
-	return nil
+	return first
 }
