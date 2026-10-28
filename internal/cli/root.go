@@ -142,16 +142,6 @@ func skillToolInfos(skills []skill.Skill) []tools.SkillInfo {
 	return infos
 }
 
-// withExtraDirs appends an "additional working directories" note to the system
-// prompt when /add-dir has registered any (v1: informational context only).
-func withExtraDirs(sys string, dirs []string) string {
-	if len(dirs) == 0 {
-		return sys
-	}
-	return sys + "\n\nAdditional working directories the user has made available:\n- " +
-		strings.Join(dirs, "\n- ")
-}
-
 // buildDoctorInput gathers the facts /doctor reports, without prompting.
 //
 // hookRunner may be nil — the common case, meaning no hook is configured
@@ -1682,7 +1672,8 @@ func run(cmd *cobra.Command, opts *options) error {
 		opts := agent.Options{
 			WorkingDir:      cwd,
 			Model:           s.Model,
-			System:          withExtraDirs(sysPrompt, s.ExtraDirs) + prompt.ModelLine(string(s.Model)),
+			System:          sysPrompt + prompt.ModelLine(string(s.Model)),
+			ExtraDirs:       s.ExtraDirs,
 			MaxTurns:        opts.maxTurns,
 			ContextWindow:   s.ContextWindow,
 			MaxTokens:       int64(s.MaxTokens),

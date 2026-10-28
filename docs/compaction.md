@@ -62,9 +62,15 @@ What Klaudia does about it (PR #63):
   deferred tools left out, as before. Opus 5.5 and Sonnet 5.5 accepted it
   live; Fable 5.1 was not probed (the API docs list it as supported).
 
-Known to remain: `/add-dir` changes the system prompt, which breaks the chain
-once; the safety net turns that into lost reasoning rather than a failed
-turn. A `/model` switch drops the other model's blocks by design.
+- **`/add-dir` is told in the next prompt message**, not the system prompt
+  (`pkg/agent/workdirs.go`), naming only directories the conversation has not
+  been told. The note is also the record: a resume reads the directories back
+  from it (`agent.AnnouncedDirs`), where before they were lost and the system
+  prompt silently changed back.
+
+Known to remain: a `/model` switch drops the other model's blocks by design.
+The system prompt's model line is a function of the model called, so a
+return to the first model sends the prompt its blocks were written under.
 
 ## Microcompact
 

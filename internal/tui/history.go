@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/greenthread-ai/klaudia/pkg/agent"
 )
 
 // Prompt history that outlives the session, and Ctrl+R search over it.
@@ -142,7 +144,9 @@ func typedPrompts(history []anthropic.BetaMessageParam) []string {
 			switch {
 			case c.OfToolResult != nil:
 				toolTurn = true
-			case c.OfText != nil:
+			case c.OfText != nil && !agent.IsContextNote(c.OfText.Text):
+				// The mode and directory notes ride in the prompt message
+				// but are the loop's, not the user's.
 				texts = append(texts, c.OfText.Text)
 			}
 		}

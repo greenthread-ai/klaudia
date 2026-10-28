@@ -174,6 +174,9 @@ type Options struct {
 	// instead of from disk. See Turn.ReadText for why a frontend would want
 	// that; nil reads disk.
 	ReadText func(ctx context.Context, path string, line, limit int) (string, error)
+	// ExtraDirs are the directories added with /add-dir, told to the model in
+	// the prompt message, not the system prompt (workdirs.go).
+	ExtraDirs []string
 	// DeferredTools names tools withheld from the initial request (loaded on
 	// demand once ToolSearch reveals them). Typically the MCP tools.
 	DeferredTools map[string]bool
@@ -393,6 +396,7 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	if opts.Prompt != "" || len(injected) > 0 {
 		userMsg := anthropic.NewBetaUserMessage(promptBlocks(opts.Prompt, injected)...)
 		tellMode(messages, &userMsg, permission.CurrentMode(opts.Permission))
+		tellDirs(messages, &userMsg, opts.ExtraDirs)
 		messages = append(messages, userMsg)
 		rec("user", userMsg)
 	}

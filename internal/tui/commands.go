@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -597,8 +598,12 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.appendLine(errStyle.Render("add-dir: " + err.Error()))
 			break
 		}
+		if slices.Contains(m.sess.ExtraDirs, dir) {
+			m.appendLine(bannerStyle.Render("Already added: " + dir))
+			break
+		}
 		m.sess.ExtraDirs = append(m.sess.ExtraDirs, dir)
-		m.appendLine(bannerStyle.Render("Added directory (referenced in the prompt context next turn): " + dir))
+		m.appendLine(bannerStyle.Render("Added directory (the model is told with your next message): " + dir))
 	case "/compact":
 		if m.busyGuard("/compact") {
 			break

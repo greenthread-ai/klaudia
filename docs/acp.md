@@ -131,7 +131,7 @@ itself, with its own reload, liveness and elicitation handling.
 
 **`resume` and `additionalDirectories` session capabilities.** `resume` is
 `session/load` under another name. The extra directories Klaudia has — the
-TUI's `/add-dir` — are informational prompt context, not a second root the tools
+TUI's `/add-dir` — are informational context told to the model, not a second root the tools
 work in, so accepting them here would promise an editor that a folder it added
 to the workspace is one Klaudia will edit in.
 

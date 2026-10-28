@@ -631,6 +631,11 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	if sess == nil {
 		sess = &Session{}
 	}
+	// A resumed conversation records the directories /add-dir added in the
+	// notes that told the model (agent/workdirs.go); bring them back.
+	if len(sess.ExtraDirs) == 0 {
+		sess.ExtraDirs = agent.AnnouncedDirs(history)
+	}
 	in := newPromptInput()
 	in.KeyMap.InsertNewline = newKeymap(sess.EnterInserts).Newline
 

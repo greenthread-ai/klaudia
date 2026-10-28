@@ -19,6 +19,12 @@ port mirrors (see `internal/version`).
   forgotten at every new prompt, so the model had to search again. A model
   without the beta (Sonnet 5) and endpoints without `defer_loading` fall
   back to the old way.
+- **`/add-dir` no longer throws away the model's earlier reasoning, and
+  survives a resume.** It rewrote the system prompt, which on the models
+  above invalidates every earlier thinking block. The model is now told
+  about a new directory in your next message, and a resumed session gets
+  its added directories back from that message; they used to be lost.
+  Adding the same directory twice says so instead of listing it twice.
 
 - **Starting Chrome can no longer hang a web tool call.** A Chrome that
   started but never answered on its DevTools connection left the launch, and

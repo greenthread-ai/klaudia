@@ -261,3 +261,21 @@ func TestCtrlRBackspaceAndPassThrough(t *testing.T) {
 		t.Fatalf("typing after ← = %q, want the cursor moved within the accepted entry", got)
 	}
 }
+
+// The loop's mode and directory notes ride in the prompt message; recall
+// leaves them out, and a resume reads the directories back from them.
+func TestPromptMessageNotesAreNotTyped(t *testing.T) {
+	history := []anthropic.BetaMessageParam{anthropic.NewBetaUserMessage(
+		anthropic.NewBetaTextBlock("look at both"),
+		anthropic.NewBetaTextBlock("# Permission mode: plan\nPlan only."),
+		anthropic.NewBetaTextBlock("# Additional working directories\n"+
+			"The user has made these directories available in addition to the working directory:\n- /srv/other"),
+	)}
+	if got := typedPrompts(history); !reflect.DeepEqual(got, []string{"look at both"}) {
+		t.Errorf("typedPrompts = %q", got)
+	}
+	m := New(t.Context(), nil, history, nil)
+	if !reflect.DeepEqual(m.sess.ExtraDirs, []string{"/srv/other"}) {
+		t.Errorf("resumed ExtraDirs = %v", m.sess.ExtraDirs)
+	}
+}

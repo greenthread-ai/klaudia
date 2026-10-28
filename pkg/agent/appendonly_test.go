@@ -208,3 +208,29 @@ func TestAppendOnlyWhenTheServerClearsToolResults(t *testing.T) {
 		t.Error("without server-side clearing microcompact should still run (and edit)")
 	}
 }
+
+// /add-dir between prompts used to rewrite the system prompt. The directory
+// is now told in the next prompt message, once (workdirs.go).
+func TestAppendOnlyAcrossAddDir(t *testing.T) {
+	p := &requestLog{}
+	reg := tools.NewRegistry(hookTool{name: "Probe", out: "ok"})
+	opts := Options{Prompt: "one", Model: "claude-opus-5-5"}
+	res, _ := New(p, reg).Run(context.Background(), opts, nil)
+	opts.Prompt, opts.InitialMessages, opts.ExtraDirs = "two", res.Messages, []string{"/x"}
+	res, _ = New(p, reg).Run(context.Background(), opts, nil)
+	opts.Prompt, opts.InitialMessages, opts.ExtraDirs = "three", res.Messages, []string{"/x", "/y"}
+	res, _ = New(p, reg).Run(context.Background(), opts, nil)
+	if b := appendOnlyBreaks(p.reqs); len(b) != 0 {
+		t.Errorf("/add-dir broke append-only: %q", b)
+	}
+	if got := AnnouncedDirs(res.Messages); strings.Join(got, ",") != "/x,/y" {
+		t.Errorf("announced = %v, want each directory once, in order", got)
+	}
+	for _, m := range res.Messages {
+		for _, b := range m.Content {
+			if b.OfText != nil && strings.HasPrefix(b.OfText.Text, dirsHeader) && !IsContextNote(b.OfText.Text) {
+				t.Error("the note is not recognised as the loop's")
+			}
+		}
+	}
+}
