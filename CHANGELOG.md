@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.6.0 — 2026-10-28
+
 ### Added
 
 - **A live panel of running sub-agents.** Under the prompt, `⏺ main` and
