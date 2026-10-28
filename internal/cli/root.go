@@ -1705,7 +1705,11 @@ func run(cmd *cobra.Command, opts *options) error {
 			PromptHistory: session.NewPromptHistory(session.PromptHistoryPath(cwd), tui.MaxInputHistory),
 			// Effective model (flag or config default), never "" — otherwise a
 			// non-Anthropic provider would wrongly resolve to the Anthropic default.
-			SessionID:      sessionID,
+			SessionID: sessionID,
+			ApprovePlan: func() (plan.Snapshot, error) {
+				err := planStore.Approve("")
+				return planStore.Snapshot(), err
+			},
 			Model:          modelStr,
 			ResolvedModel:  string(model),
 			Effort:         effort,

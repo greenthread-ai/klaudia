@@ -280,10 +280,23 @@ func (m *Model) startPlanRun(n int, fromApproval bool) {
 }
 
 // runPlan is /plan run [N]: resume the approved plan when it has steps left.
+//
+// A step list the model kept with TodoWrite, never approved through
+// ExitPlanMode, is in the same panel under the same title; asking to run it
+// approves it. It used to be refused with "No approved plan", the panel
+// showing seven steps beneath the message.
 func (m *Model) runPlan(args []string) (tea.Model, tea.Cmd) {
+	if !m.plan.Approved && m.plan.Remaining() > 0 && m.sess.ApprovePlan != nil {
+		snap, err := m.sess.ApprovePlan()
+		if err != nil {
+			m.appendLine(errStyle.Render("Could not save the plan: " + err.Error()))
+			return m, nil
+		}
+		m.plan = snap
+	}
 	switch {
 	case !m.plan.Approved:
-		m.appendLine(errStyle.Render("No approved plan this session. /plan to start one."))
+		m.appendLine(errStyle.Render("No plan this session. /plan to start one."))
 		return m, nil
 	case m.plan.Path == "":
 		m.appendLine(errStyle.Render("The approved plan was not saved, so there is nothing to resume from."))

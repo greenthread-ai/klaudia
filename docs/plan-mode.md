@@ -363,6 +363,13 @@ switch (a plan is approved on the user's branch), and the gate's source (the
 store's snapshot, not a file parse). A plan run is also complete when every
 step is, token or not — the steps are what the user approved.
 
+`/plan run` over a step list nobody approved — the model kept it with
+`TodoWrite`, outside plan mode — approves it first (`plan.Store.Approve` with
+no prose, through `tui.Session.ApprovePlan`), writing the artefact, then runs
+it. The panel shows such a list under the same "Plan" title, so refusing it
+("No approved plan this session") read as a bug with the steps in view; asking
+to run the list is the approval.
+
 The live panel draws whichever list is active (`workList`): the plan, or during
 `/goal run` the spec's checklist via `goal.Checklist` — the parser
 `CountUnchecked` now shares, so the panel and the gate cannot disagree.

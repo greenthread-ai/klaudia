@@ -5,6 +5,13 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+
+- **`/plan run` works the step list on screen.** A list the model kept for
+  itself showed in the Plan panel, but `/plan run` refused it as "no
+  approved plan". Asking to run it now approves it, saves it like an
+  approved plan, and runs it to done.
+
 ## v0.6.1 — 2026-10-28
 
 ### Fixed

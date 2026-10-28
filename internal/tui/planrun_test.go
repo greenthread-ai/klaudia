@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -130,5 +131,46 @@ func TestGoalRunPanelShowsTheSpec(t *testing.T) {
 	}
 	if strings.Contains(view, "stale plan step") {
 		t.Errorf("stale plan shown during a goal run:\n%s", view)
+	}
+}
+
+// /plan run over a step list the model kept with TodoWrite and nobody
+// approved: asking to run it approves it, writes the artefact and starts the
+// run. It used to be refused under a panel showing the steps.
+func TestPlanRunApprovesAnUnapprovedList(t *testing.T) {
+	m := newTestModel()
+	m.resize(100, 30)
+	path := filepath.Join(t.TempDir(), "plan.md")
+	store := plan.New(path)
+	store.Replace([]plan.Item{{Content: "send the email", Status: plan.StatusInProgress}, {Content: "fix selectors", Status: plan.StatusPending}})
+	m.plan = store.Snapshot()
+	m.ctx = t.Context()
+	m.run = func(context.Context, agent.Turn) (agent.Result, error) { return agent.Result{}, nil }
+	m.sess.ApprovePlan = func() (plan.Snapshot, error) {
+		err := store.Approve("")
+		return store.Snapshot(), err
+	}
+
+	if _, cmd := m.runPlan(nil); cmd == nil || !m.loopPlan {
+		t.Fatalf("no run started:\n%s", stripANSI(m.transcript.String()))
+	}
+	if !m.plan.Approved || m.plan.Path != path {
+		t.Errorf("snapshot after run = %+v", m.plan)
+	}
+	if body, err := os.ReadFile(path); err != nil || !strings.Contains(string(body), "- [ ] fix selectors") {
+		t.Errorf("artefact not written: %v\n%s", err, body)
+	}
+}
+
+// With no steps at all there is still nothing to run.
+func TestPlanRunWithNoPlan(t *testing.T) {
+	m := newTestModel()
+	m.resize(100, 30)
+	m.sess.ApprovePlan = func() (plan.Snapshot, error) { t.Fatal("approved an empty plan"); return plan.Snapshot{}, nil }
+	if _, cmd := m.runPlan(nil); cmd != nil || m.loopPlan {
+		t.Error("a run started with no plan")
+	}
+	if out := stripANSI(m.transcript.String()); !strings.Contains(out, "No plan this session") {
+		t.Errorf("message:\n%s", out)
 	}
 }

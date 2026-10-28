@@ -52,7 +52,7 @@ var commandList = []cmdInfo{
 	{"/forget", "<path>", "Drop a file from the tracked context"},
 	{"/compact", "", "Summarize and compact the conversation history now"},
 	{"/add-dir", "<path>", "Add a directory to the prompt context"},
-	{"/plan", "[run|stop|off]", "Read-only plan mode · run [N]: work the approved plan to done · stop: halt"},
+	{"/plan", "[run|stop|off]", "Read-only plan mode · run [N]: work the plan to done · stop: halt"},
 	{"/doctor", "", "Run environment diagnostics"},
 	{"/diff", "[args]", "Show the working tree's diff in colour, in $PAGER when long; names new files"},
 	{"/commit", "[msg]", "Commit the files Klaudia changed — or what you staged — with your message or one Klaudia drafts (asks first)"},

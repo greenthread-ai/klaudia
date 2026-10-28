@@ -112,6 +112,11 @@ type Session struct {
 	// overrides bound in, given whatever the picker already knows about the
 	// model. Nil sizes from the offline table alone.
 	ResolveLimits func(model string, known api.ModelInfo) api.ModelLimits
+	// ApprovePlan, if set, approves the session's current step list as the
+	// plan, as ExitPlanMode's approval does, and returns the store's snapshot.
+	// /plan run uses it when the list on screen was never approved: asking to
+	// run it is the approval.
+	ApprovePlan func() (plan.Snapshot, error)
 	// MCP, if set, lets /mcp inspect and reconnect/disconnect servers. May be nil.
 	MCP MCPController
 	// OnMCPReload, if set, registers a listener for the outcome of MCP config
