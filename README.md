@@ -319,7 +319,10 @@ Permission asks, the model's questions (`AskUserQuestion`) and plan approvals
 (`ExitPlanMode`) all arrive as `control_request` lines and are answered on the
 matching `request_id`. A peer that has not implemented a subtype should answer
 with an error: that reads as "cancelled" and leaves the model where it was,
-rather than an answer the user never gave being attributed to them.
+rather than an answer the user never gave being attributed to them. A request
+nobody answers is denied (or, for a question or plan, fails) after
+`--ask-timeout` (default 10 minutes; `0` waits forever), so a client that does
+not speak the control protocol sees a finished turn, not a hung process.
 
 The first line is `{"type":"system","subtype":"init","schema_version":1,…}`
 with the session id, model, working directory, permission mode and tools. The

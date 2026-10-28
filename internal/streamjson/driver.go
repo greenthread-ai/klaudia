@@ -30,6 +30,12 @@
 // nobody to ask — on the channel whose whole purpose is a client with a user in
 // front of it. A peer that does not implement them should answer with an error,
 // which is read as "cancelled" and leaves the model where it was before.
+//
+// Every control_request waits at most Driver.AskTimeout for its answer
+// (DefaultAskTimeout unless --ask-timeout says otherwise). An unanswered
+// can_use_tool is denied, and an unanswered ask_user or exit_plan fails, with
+// a message saying the client did not answer, so a peer that does not
+// implement the control protocol sees a finished turn, not a hung process.
 package streamjson
 
 import (
@@ -37,8 +43,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
@@ -103,14 +111,32 @@ type Driver struct {
 	// Background, if set, runs the Agent tool's run_in_background work past
 	// the turn; see agent.Background.
 	Background tools.BackgroundRunner
+	// AskTimeout bounds the wait for the answer to each control_request; an
+	// unanswered one is denied or fails when it elapses. Zero or negative
+	// waits until the turn ends, as the JS reference does.
+	AskTimeout time.Duration
 	out        io.Writer
 	mu         sync.Mutex // serializes writes to out
 	pending    sync.Map   // request_id -> chan *controlResp
 }
 
-// NewDriver builds a Driver writing to w.
+// DefaultAskTimeout bounds how long a control_request waits for its answer
+// when the CLI does not say otherwise.
+//
+// The JS reference waits forever, and so did this driver. Forever is the wrong
+// default for an embedding channel: the peer is a program, and one that never
+// answers (it never implemented control responses, or it stalled) left the
+// agent wedged mid-turn with no output and no exit. Ten minutes is a
+// judgement, not a measurement: long enough for a person behind an editor
+// integration to read a prompt and decide, short enough that an unattended
+// pipeline fails inside the run rather than at whatever outer timeout kills
+// it. (From PR #7.)
+const DefaultAskTimeout = 10 * time.Minute
+
+// NewDriver builds a Driver writing to w, waiting DefaultAskTimeout for each
+// control_response.
 func NewDriver(w io.Writer) *Driver {
-	return &Driver{out: w}
+	return &Driver{out: w, AskTimeout: DefaultAskTimeout}
 }
 
 // Run reads messages from r until EOF, running the agent for each user message.
@@ -214,8 +240,10 @@ func (d *Driver) deliverControlResponse(resp *controlResp) {
 // errNoAnswer is returned when the turn was cancelled before the peer replied.
 var errNoAnswer = errors.New("cancelled")
 
-// request emits one control_request and blocks until the peer answers it or ctx
-// is cancelled. The payload's "subtype" selects the request kind.
+// request emits one control_request and blocks until the peer answers it, ctx
+// is cancelled, or AskTimeout passes. The payload's "subtype" selects the
+// request kind. An answer that arrives after the timeout finds no waiter (the
+// deferred Delete has run) and is dropped, not applied to a later request.
 func (d *Driver) request(ctx context.Context, payload map[string]any) (*controlResp, error) {
 	id := uuid.NewString()
 	ch := make(chan *controlResp, 1)
@@ -228,11 +256,22 @@ func (d *Driver) request(ctx context.Context, payload map[string]any) (*controlR
 		"request":    payload,
 	})
 
+	// A nil channel never fires, so no timeout is the unbounded wait.
+	var timeout <-chan time.Time
+	if d.AskTimeout > 0 {
+		timer := time.NewTimer(d.AskTimeout)
+		defer timer.Stop()
+		timeout = timer.C
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, errNoAnswer
 	case resp := <-ch:
 		return resp, nil
+	case <-timeout:
+		return nil, fmt.Errorf("the client was sent a %v control_request but no control_response arrived within %s; "+
+			"a stream-json client must answer control requests", payload["subtype"], d.AskTimeout)
 	}
 }
 
@@ -268,7 +307,7 @@ func (a *controlApprover) Approve(ctx context.Context, req agent.ApprovalRequest
 
 	resp, err := a.driver.request(ctx, payload)
 	if err != nil {
-		return permission.Decision{Behavior: permission.Deny, Message: "cancelled"}
+		return permission.Decision{Behavior: permission.Deny, Message: err.Error()}
 	}
 	decision := permission.Decision{Behavior: permission.Deny, Message: "denied"}
 	if resp.ok() && len(resp.Response) > 0 {

@@ -891,10 +891,11 @@ type options struct {
 	forkSession      bool   // --fork-session
 	fullResume       bool   // --full (replay entire transcript, not the summary)
 
-	partialMessages bool   // --include-partial-messages
-	createConfig    string // --create-config global|local
-	loop            bool   // --loop: autonomous goal-spec iteration
-	maxIterations   int    // --max-iterations: outer-loop cap for --loop
+	partialMessages bool          // --include-partial-messages
+	createConfig    string        // --create-config global|local
+	loop            bool          // --loop: autonomous goal-spec iteration
+	maxIterations   int           // --max-iterations: outer-loop cap for --loop
+	askTimeout      time.Duration // --ask-timeout: bound on a stream-json control_request wait
 }
 
 // resolveResumeID selects the prior session to seed from, if any.
@@ -978,6 +979,7 @@ func NewRootCommand() *cobra.Command {
 	f.StringVar(&opts.createConfig, "create-config", "", "Create a starter TOML config and exit: global (~/.klaudia/config.toml) or local (./.klaudia/config.toml)")
 	f.BoolVar(&opts.loop, "loop", false, "Autonomous loop: iterate against the goal spec (PRD.md or .klaudia/GOAL.md) until complete or --max-iterations. Runs unattended, so it needs a mode that does not ask: autonomous (the default) or bypassPermissions; host changes also need --allow-host-changes.")
 	f.IntVar(&opts.maxIterations, "max-iterations", 0, "Max iterations for --loop (0 = default 10, hard cap 50)")
+	f.DurationVar(&opts.askTimeout, "ask-timeout", streamjson.DefaultAskTimeout, "With --input-format stream-json: how long a control_request (can_use_tool, ask_user, exit_plan) waits for the client's control_response before it is denied (0 = wait forever)")
 
 	return cmd
 }
@@ -1797,6 +1799,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	// by the peer.
 	if opts.inputFormat == "stream-json" {
 		driver := streamjson.NewDriver(cmd.OutOrStdout())
+		driver.AskTimeout = opts.askTimeout
 		driver.Interject = jobInbox.Interject
 		// Background sub-agents: results queue for the model's next turn (or
 		// the running one), and the peer hears about each as it finishes.

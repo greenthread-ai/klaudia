@@ -65,6 +65,15 @@ port mirrors (see `internal/version`).
   `[sandbox] failIfUnavailable = true` refuses to start instead, for any
   sandbox mode that cannot be used; a project config can set it but not
   clear it. From PR #52.
+- **An unanswered stream-json control request no longer hangs the turn.**
+  A `can_use_tool`, `ask_user` or `exit_plan` request waited only for the
+  answer or cancellation, so a client that never implemented the control
+  protocol, or stalled, left the agent wedged with no output and no exit.
+  The wait is now bounded by `--ask-timeout` (default ten minutes, a
+  judgement rather than a measurement; `0` waits forever), after which the
+  tool is denied, or the question or plan fails, with a message saying the
+  client did not answer. A late answer is dropped, not applied to a later
+  request. From PR #7.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
