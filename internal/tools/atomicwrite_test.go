@@ -70,12 +70,18 @@ func TestWritesAreAtomic(t *testing.T) {
 	}
 
 	// A failed write leaves the original untouched and no temporary file.
+	// Root ignores the read-only directory that makes the write fail, so
+	// there is no failure to observe (the Linux suite runs as root in
+	// Docker).
+	if os.Geteuid() == 0 {
+		return
+	}
 	ro := t.TempDir()
 	orig := filepath.Join(ro, "keep.txt")
 	os.WriteFile(orig, []byte("intact"), 0o644)
 	os.Chmod(ro, 0o555)
 	defer os.Chmod(ro, 0o755)
-	if err := writeFileAtomic(orig, []byte("new"), 0o644); err == nil && os.Geteuid() != 0 {
+	if err := writeFileAtomic(orig, []byte("new"), 0o644); err == nil {
 		t.Error("writing into a read-only directory succeeded")
 	}
 	if got, _ := os.ReadFile(orig); string(got) != "intact" {
