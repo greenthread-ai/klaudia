@@ -46,7 +46,7 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 	// be cut to nine — the length of the digit row — which is how an endpoint
 	// serving thirty models answered /model with "the rest are reachable by
 	// typing an id", the one thing the picker exists to spare you.
-	current := api.ResolveModel(m.sess.Model)
+	current := api.ResolveModelFor(m.sess.Provider, m.sess.Model)
 	items := make([]choiceItem, 0, len(models))
 	for _, mi := range models {
 		mi := mi
@@ -76,7 +76,8 @@ func (m *Model) showModelPicker(models []api.ModelInfo) {
 func (m *Model) setModel(id string, contextWindow, maxTokens int) string {
 	id = strings.TrimSpace(id)
 	m.sess.Model = id
-	m.sess.ResolvedModel = string(api.ResolveModel(id))
+	m.sess.ResolvedModel = string(api.ResolveModelFor(m.sess.Provider, id))
+	aliasWarn := api.AliasWarning(m.sess.Provider, id)
 
 	msg := "Model set to " + id
 	if resolved := m.sess.ResolvedModel; resolved != id {
@@ -87,7 +88,7 @@ func (m *Model) setModel(id string, contextWindow, maxTokens int) string {
 	if m.sess.ResolveLimits != nil {
 		l = m.sess.ResolveLimits(id, known)
 	} else {
-		l = api.Resolve(context.Background(), api.LimitsInput{Model: id, Known: known, NoNetwork: true})
+		l = api.Resolve(context.Background(), api.LimitsInput{Model: id, Provider: m.sess.Provider, Known: known, NoNetwork: true})
 	}
 	// An unknown model the endpoint didn't size gets a window of 0: leaving
 	// the previous model's would report context pressure against the wrong
@@ -106,7 +107,11 @@ func (m *Model) setModel(id string, contextWindow, maxTokens int) string {
 		m.sess.Effort = highest
 		msg += ". " + emsg + " — effort lowered to " + string(highest)
 	}
-	return msg + ". Applies to the next turn."
+	msg += ". Applies to the next turn."
+	if aliasWarn != "" {
+		msg += "\n  " + aliasWarn + "."
+	}
+	return msg
 }
 
 // unlistedModelWarning checks a typed /model id against the list the provider
@@ -121,7 +126,7 @@ func (m *Model) unlistedModelWarning(id string) string {
 		return ""
 	}
 	id = strings.TrimSpace(id)
-	resolved := string(api.ResolveModel(id))
+	resolved := string(api.ResolveModelFor(m.sess.Provider, id))
 	for _, mi := range m.knownModels {
 		if mi.ID == id || mi.ID == resolved {
 			return ""

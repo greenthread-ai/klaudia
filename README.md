@@ -269,7 +269,9 @@ them as a picker — Anthropic and OpenAI-compatible endpoints both answer at
 confirm, type to filter, Esc to cancel, and `1`-`9` still pick directly until
 you start filtering. `/model
 <alias|id>` still sets one directly (`opus`, `sonnet`, `haiku`, `fable`, or any
-full ID). Either way Klaudia records that model's real context window and
+full ID). The aliases are Anthropic's names and expand only on the Anthropic
+provider; another provider receives the string as written, with a warning if
+it is an alias. Either way Klaudia records that model's real context window and
 output limit, which is what auto-compaction (and the status bar's `ctx N%`) is sized from and what
 the next turn's `max_tokens` asks for — a model switch moves both.
 

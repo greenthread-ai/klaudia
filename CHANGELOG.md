@@ -88,6 +88,13 @@ port mirrors (see `internal/version`).
   that is not about a model points at the baseURL instead. `/model <id>`
   warns when the id is missing from the list an earlier `/model` fetched,
   and still applies it. From PR #79.
+- **Claude aliases expand only on the Anthropic provider.** With
+  `provider = "openai"`, `--model sonnet` reached the endpoint as
+  `claude-sonnet-5` and was sized from the Claude tables (128000 output
+  tokens). Another provider now receives the string as written, sized from
+  what it reports or the floor, with a warning at startup or in `/model`
+  when it is an alias. With no model set at all, the Claude default is
+  still sent, for gateways that serve Claude's ids. From PR #80.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

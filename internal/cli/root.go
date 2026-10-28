@@ -421,10 +421,10 @@ func acpSessions(cwd string) []acp.SessionSummary {
 // .klaudia/config.toml silently stopped applying after any switch. Off the
 // network because it runs on the UI goroutine; the picker has just listed the
 // models through the cache, so a fresh answer is on disk anyway.
-func limitsResolver(lister api.ModelLister, cfgMaxTokens, cfgContextWindow int) func(string, api.ModelInfo) api.ModelLimits {
+func limitsResolver(provider string, lister api.ModelLister, cfgMaxTokens, cfgContextWindow int) func(string, api.ModelInfo) api.ModelLimits {
 	return func(model string, known api.ModelInfo) api.ModelLimits {
 		return api.Resolve(context.Background(), api.LimitsInput{
-			Model: model, Lister: lister, Known: known, NoNetwork: true,
+			Model: model, Provider: provider, Lister: lister, Known: known, NoNetwork: true,
 			ConfigMaxTokens: cfgMaxTokens, ConfigContextWindow: cfgContextWindow,
 		})
 	}
@@ -1165,7 +1165,13 @@ func run(cmd *cobra.Command, opts *options) error {
 	if modelStr == "" {
 		modelStr = providerModel
 	}
-	model := api.ResolveModel(modelStr)
+	// Claude's aliases are Anthropic's names; another provider gets the model
+	// string as written (resolveModel), and is told once if it is an alias.
+	resolveModel := func(m string) anthropic.Model { return api.ResolveModelFor(cfg.Provider, m) }
+	model := resolveModel(modelStr)
+	if w := api.AliasWarning(cfg.Provider, modelStr); w != "" {
+		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
+	}
 
 	// How big a request to make for this model. Resolved once here, where the
 	// provider and the model are both known, and handed to every frontend
@@ -1184,8 +1190,8 @@ func run(cmd *cobra.Command, opts *options) error {
 		modelCache = api.NewModelCache(l, api.ModelCachePath(session.ConfigRoot(), providerName(cfg), resolveEndpoint(cfg)))
 		lister = modelCache
 	}
-	resolveLimitsFor := limitsResolver(lister, cfg.MaxTokens, cfg.ContextWindow)
-	limits := api.Resolve(ctx, api.LimitsInput{Model: modelStr, Lister: lister, ConfigMaxTokens: cfg.MaxTokens, ConfigContextWindow: cfg.ContextWindow})
+	resolveLimitsFor := limitsResolver(cfg.Provider, lister, cfg.MaxTokens, cfg.ContextWindow)
+	limits := api.Resolve(ctx, api.LimitsInput{Model: modelStr, Provider: cfg.Provider, Lister: lister, ConfigMaxTokens: cfg.MaxTokens, ConfigContextWindow: cfg.ContextWindow})
 	if modelCache != nil && modelCache.Stale() {
 		go func() {
 			rctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -1449,7 +1455,7 @@ func run(cmd *cobra.Command, opts *options) error {
 	fallbacks := func(primary anthropic.Model) []anthropic.Model {
 		var out []anthropic.Model
 		for _, n := range fallbackNames {
-			if m := api.ResolveModel(n); m != primary && m != "" {
+			if m := resolveModel(n); m != primary && m != "" {
 				out = append(out, m)
 			}
 		}
@@ -1719,7 +1725,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			live := resolveLimitsFor(sess.Model, api.ModelInfo{})
 			live.MaxOutputTokens, live.MaxOutputSource = sess.MaxTokens, sess.MaxTokensSource
 			live.ContextWindow, live.ContextSource = sess.ContextWindow, sess.ContextWindowSource
-			in := buildDoctorInput(cfg, api.ResolveModel(sess.Model), live, sess.Effort, cwd, mcpCfg, hookRunner)
+			in := buildDoctorInput(cfg, resolveModel(sess.Model), live, sess.Effort, cwd, mcpCfg, hookRunner)
 			in.Egress = egressDoctor(cfg.Sandbox, executor, egressProxy)
 			return doctor.Format(doctor.Run(in))
 		}
@@ -1741,11 +1747,11 @@ func run(cmd *cobra.Command, opts *options) error {
 			}
 		}
 		sess.Suggest = func(ctx context.Context, prompt string) (string, error) {
-			return loop.Complete(ctx, prompt, api.ResolveModel(sess.Model), 1024, sess.Effort)
+			return loop.Complete(ctx, prompt, resolveModel(sess.Model), 1024, sess.Effort)
 		}
 		sess.Compact = func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
 			return compactAndPersist(ctx, history, func(ctx context.Context, history []anthropic.BetaMessageParam) ([]anthropic.BetaMessageParam, string, error) {
-				return loop.Compact(ctx, history, api.ResolveModel(sess.Model), int64(sess.MaxTokens), sess.Effort)
+				return loop.Compact(ctx, history, resolveModel(sess.Model), int64(sess.MaxTokens), sess.Effort)
 			}, func(summary string) {
 				onSummary(summary)
 				// /compact runs outside the loop, so autocompact's boundary
@@ -1757,7 +1763,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			})
 		}
 		sess.SummariseBefore = func(ctx context.Context, head []anthropic.BetaMessageParam, kept int) ([]anthropic.BetaMessageParam, string, error) {
-			newHead, summary, err := loop.Compact(ctx, head, api.ResolveModel(sess.Model), int64(sess.MaxTokens), sess.Effort)
+			newHead, summary, err := loop.Compact(ctx, head, resolveModel(sess.Model), int64(sess.MaxTokens), sess.Effort)
 			// Not onSummary: the .summary.md file is the resume fallback for a
 			// summary of the whole conversation, which this is not.
 			if err == nil && transcript != nil {
@@ -1773,7 +1779,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			elicitor.SetAsker(turn.Asker)
 			admitMCP(ctx, turn)
 			return loop.Run(ctx, baseOptions(turn, turnSettings{
-				Model: api.ResolveModel(sess.Model), // resolved fresh each turn
+				Model: resolveModel(sess.Model), // resolved fresh each turn
 				// Permission is not set here: the mode comes with the Turn
 				// (tui.Model.liveMode), so a /mode bypass or an approved
 				// ExitPlanMode takes effect on the very next tool dispatch

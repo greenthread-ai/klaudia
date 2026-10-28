@@ -355,3 +355,23 @@ func TestModelByIDNoWarningWhenListedOrNothingFetched(t *testing.T) {
 		t.Error("a listed id should not warn")
 	}
 }
+
+// /model sonnet on another provider passes the alias through, is not sized
+// as Claude, and says so once; on Anthropic it resolves quietly. (PR #80.)
+func TestModelAliasOnAnotherProvider(t *testing.T) {
+	m := pickerModel(t, nil, nil)
+	m.sess.Provider = "openai"
+	msg := m.setModel("sonnet", 0, 0)
+	if m.sess.ResolvedModel != "sonnet" || !strings.Contains(msg, "Claude alias") {
+		t.Errorf("openai: resolved %q, msg %q", m.sess.ResolvedModel, msg)
+	}
+	if m.sess.MaxTokens != api.DefaultMaxOutputTokens {
+		t.Errorf("openai sonnet sized at %d, want the floor", m.sess.MaxTokens)
+	}
+
+	m.sess.Provider = "anthropic"
+	msg = m.setModel("sonnet", 0, 0)
+	if m.sess.ResolvedModel != string(api.ResolveModel("sonnet")) || strings.Contains(msg, "alias") {
+		t.Errorf("anthropic: resolved %q, msg %q", m.sess.ResolvedModel, msg)
+	}
+}

@@ -7,6 +7,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -169,6 +170,47 @@ func MaxOutputTokens(model string) int {
 		return n
 	}
 	return DefaultMaxOutputTokens
+}
+
+// ClaudeProvider reports whether a configured provider name ("" = the default)
+// serves Anthropic's model ids, so that Claude's aliases mean something there.
+func ClaudeProvider(provider string) bool {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "", "anthropic":
+		return true
+	}
+	return false
+}
+
+// ResolveModelFor is ResolveModel for a configured provider. The aliases
+// ("sonnet") are Anthropic's names and expand only there: any other provider
+// gets the string it was given, trimmed, because "sonnet" sent as
+// claude-sonnet-5 to an OpenAI-compatible endpoint, and sized from the Claude
+// tables, is a guess the endpoint never asked for. No model at all still means
+// DefaultModel on every provider, for a gateway that serves Claude's ids under
+// their own names. (From PR #80, which made that case an error instead.)
+func ResolveModelFor(provider, m string) anthropic.Model {
+	if ClaudeProvider(provider) || strings.TrimSpace(m) == "" {
+		return ResolveModel(m)
+	}
+	return anthropic.Model(strings.TrimSpace(m))
+}
+
+// AliasWarning explains, when model is a bare Claude alias used with a
+// provider that does not serve Anthropic's ids, that it is sent as written.
+// It returns "" otherwise. Callers show it once, when the model is chosen,
+// not on every turn that re-resolves it.
+func AliasWarning(provider, model string) string {
+	if ClaudeProvider(provider) {
+		return ""
+	}
+	full, ok := modelAliases[strings.ToLower(strings.TrimSpace(model))]
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("model %q is a Claude alias, which is expanded only for the Anthropic provider; "+
+		"provider %q receives it unchanged. Use the model id your endpoint serves (for Anthropic it would have been %s)",
+		strings.TrimSpace(model), strings.TrimSpace(provider), full)
 }
 
 // ResolveModel turns a CLI --model value into a model ID. Empty → DefaultModel.

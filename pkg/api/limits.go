@@ -58,6 +58,10 @@ type ModelLimits struct {
 // LimitsInput is everything Resolve may consult.
 type LimitsInput struct {
 	Model string
+	// Provider is the configured provider name ("" = Anthropic). Off
+	// Anthropic, Model is not alias-expanded before the table lookup, so
+	// "sonnet" on another endpoint is not sized as claude-sonnet.
+	Provider string
 	// Lister is the provider's model list, or nil. A *ModelCache is read from
 	// disk first; anything else is only called for a model the table lacks.
 	Lister ModelLister
@@ -90,7 +94,7 @@ type cachedLister interface {
 // its own with the opposite precedence and no config, so a maxTokens override
 // silently stopped applying after any model switch.
 func Resolve(ctx context.Context, in LimitsInput) ModelLimits {
-	resolved := string(ResolveModel(in.Model))
+	resolved := string(ResolveModelFor(in.Provider, in.Model))
 	out := ModelLimits{}
 
 	tableMax, tableCtx := modelMaxOutputTokens[resolved], modelContextWindows[resolved]
