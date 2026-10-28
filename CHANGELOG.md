@@ -148,6 +148,12 @@ port mirrors (see `internal/version`).
   first run straight after it failed. The starter is now
   `provider = "anthropic"`, with the OpenAI-compatible block commented out
   beneath it and the sizing notes brought up to date. From PR #78.
+- **`/logs`, `/restart` and `/stopjob` resolve a job the same way.** With
+  no name and several jobs running, all three list the jobs with their
+  usage (only `/logs` did); a name matching nothing is answered with every
+  job's name and state instead of a bare "no job X"; and `/stopjob` on a
+  job that already exited says so, with its code, instead of reporting it
+  stopped. From PR #90.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
