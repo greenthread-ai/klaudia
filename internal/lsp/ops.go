@@ -48,6 +48,9 @@ func (c *Client) Initialize(ctx context.Context, root string) error {
 				"rename":             map[string]any{},
 				"implementation":     map[string]any{},
 			},
+			"workspace": map[string]any{
+				"symbol": map[string]any{},
+			},
 		},
 	}
 	var res struct {
@@ -446,4 +449,46 @@ func SourceLine(uri string, line int) string {
 		}
 	}
 	return ""
+}
+
+// WorkspaceSymbol asks the server for symbols matching query across the whole
+// workspace. It opens no document: the server answers from its own index.
+// (From PR #54.)
+func (c *Client) WorkspaceSymbol(ctx context.Context, query string) ([]Symbol, error) {
+	if !c.supports("workspaceSymbolProvider") {
+		return nil, ErrNotSupported
+	}
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+	var raw json.RawMessage
+	if err := c.call(ctx, "workspace/symbol", map[string]any{"query": query}, &raw); err != nil {
+		return nil, err
+	}
+	return parseWorkspaceSymbols(raw), nil
+}
+
+// parseWorkspaceSymbols decodes a workspace/symbol result: an array of
+// SymbolInformation or the LSP 3.17 WorkspaceSymbol, whose location may carry
+// a URI without a range (decoded as a zero range), or null. Entries without a
+// URI are dropped, since they cannot be pointed at.
+func parseWorkspaceSymbols(raw json.RawMessage) []Symbol {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var arr []struct {
+		Name          string   `json:"name"`
+		Kind          int      `json:"kind"`
+		ContainerName string   `json:"containerName"`
+		Location      Location `json:"location"`
+	}
+	if json.Unmarshal(raw, &arr) != nil {
+		return nil
+	}
+	var out []Symbol
+	for _, s := range arr {
+		if s.Location.URI != "" {
+			out = append(out, Symbol{Name: s.Name, Kind: s.Kind, Location: s.Location, Container: s.ContainerName})
+		}
+	}
+	return out
 }

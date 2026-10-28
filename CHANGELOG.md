@@ -17,6 +17,11 @@ port mirrors (see `internal/version`).
   key. An unset variable is a startup error naming it. User config only: a
   project config's is ignored with a warning, since it sends environment
   variables to your provider. From PR #10.
+- **`WorkspaceSymbol` finds a symbol by name.** Every other LSP tool needs
+  a file and a position first, so a name alone meant a Grep before them.
+  It asks the language server's index (`workspace/symbol`); without a file,
+  every language whose project marker is at the root is searched, and a
+  server that fails is reported beside the others' matches. From PR #54.
 - **Grep takes context lines (`-A`/`-B`/`-C`), a file-type filter and a
   result limit** (#93), and Grep and Glob honour `.gitignore`, nested files
   included, while still reaching a hidden path the search names (#70).

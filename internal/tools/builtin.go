@@ -47,6 +47,7 @@ func BuiltinTools() ([]Tool, error) {
 		func() (Tool, error) { return NewHover(nil) },
 		func() (Tool, error) { return NewDocumentSymbols(nil) },
 		func() (Tool, error) { return NewRename(nil) },
+		func() (Tool, error) { return NewWorkspaceSymbol(nil) },
 		func() (Tool, error) { return NewMemory(nil) },
 		func() (Tool, error) { return NewSkill([]SkillInfo{{Name: "x"}}) },
 		func() (Tool, error) { return NewToolSearch(nil) },

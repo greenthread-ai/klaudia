@@ -31,7 +31,7 @@ const (
 var summaryKey = map[string]string{
 	"Bash": "command", "BashOutput": "bash_id", "KillShell": "shell_id",
 	"Read": "file_path", "Write": "file_path", "Edit": "file_path", "NotebookEdit": "notebook_path",
-	"Diagnostics": "file", "Definition": "file", "References": "file",
+	"Diagnostics": "file", "Definition": "file", "References": "file", "WorkspaceSymbol": "query",
 	"Implementation": "file", "Hover": "file", "DocumentSymbols": "file", "Rename": "file",
 	"Glob": "pattern", "Grep": "pattern",
 	"BrowserSearch": "query", "BrowserFetch": "url", "BrowserNavigate": "url",

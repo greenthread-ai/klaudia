@@ -123,6 +123,7 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 			ctor{"Hover", func() (Tool, error) { return NewHover(pool) }},
 			ctor{"DocumentSymbols", func() (Tool, error) { return NewDocumentSymbols(pool) }},
 			ctor{"Rename", func() (Tool, error) { return NewRename(pool) }},
+			ctor{"WorkspaceSymbol", func() (Tool, error) { return NewWorkspaceSymbol(pool) }},
 		)
 	}
 

@@ -997,6 +997,11 @@ agent real code intelligence:
 - `DocumentSymbols` — an outline of the functions, types, and methods in a file.
 - `Rename` — a preview of the edits a symbol rename would make across the
   workspace (it returns the edits; it does not apply them).
+- `WorkspaceSymbol` — find a symbol by name anywhere in the project, when the
+  agent knows what it's called but not which file declares it. Given a `file`,
+  that file's language server answers; without one, every language whose
+  project file (`go.mod`, `Cargo.toml`, `package.json`, …) is at the workspace
+  root is searched.
 
 Location, symbol, and hover results include the source line's text alongside
 its `file:line`, so the agent sees the code without a follow-up read. A server
