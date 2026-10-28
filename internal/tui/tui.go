@@ -352,6 +352,10 @@ type Model struct {
 	history    []anthropic.BetaMessageParam
 	pending    chan permission.Decision
 	pendingReq agent.ApprovalRequest
+	// knownModels is the model list the provider last reported to /model,
+	// kept so /model <id> can warn about an id the endpoint does not list
+	// without a second lookup. Nil until the list has been fetched once.
+	knownModels []api.ModelInfo
 	// hostRedirect marks the pending answer as "no, do it differently" rather
 	// than a plain refusal, so the echoed line invites the instruction the user
 	// is about to type instead of announcing that Klaudia will carry on without
@@ -1016,6 +1020,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendLine(hintStyle.Render("  You can still set one by name: /model <id>"))
 			return m, nil
 		}
+		m.knownModels = msg.models
 		m.showModelPicker(msg.models)
 		return m, nil
 

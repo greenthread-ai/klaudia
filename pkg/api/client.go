@@ -195,6 +195,21 @@ type Client struct {
 	// httpc is the client the SDK was built with, kept so a stalled stream can
 	// drop its idle connections before retrying — see streamRetrying.
 	httpc *http.Client
+	// baseURL is the custom endpoint the client was built with ("" for the
+	// Anthropic API), kept so a model-not-found error can say where it came
+	// from.
+	baseURL string
+}
+
+// defaultAnthropicEndpoint is what an unset baseURL talks to, named in errors.
+const defaultAnthropicEndpoint = "https://api.anthropic.com"
+
+// endpoint is the base URL requests go to, for error messages.
+func (c *Client) endpoint() string {
+	if c.baseURL != "" {
+		return c.baseURL
+	}
+	return defaultAnthropicEndpoint
 }
 
 // dropIdleConnections discards pooled connections, so the next attempt dials
@@ -259,7 +274,7 @@ func New(cred Credential, baseURL string, tuning Tuning, options ...ClientOption
 	}
 	opts = append(opts, cfg.request...)
 	return &Client{sdk: anthropic.NewClient(opts...), cred: cred, tuning: tuning, httpc: httpc,
-		prepare: cfg.prepare, listOpts: cfg.list}
+		prepare: cfg.prepare, listOpts: cfg.list, baseURL: baseURL}
 }
 
 // IsOAuth reports whether this client authenticates via OAuth bearer token.

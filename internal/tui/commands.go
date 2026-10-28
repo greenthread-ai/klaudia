@@ -350,6 +350,9 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			// the turn drops to the 8192 floor, which is exactly when the user
 			// needs to be told.
 			m.appendLine(bannerStyle.Render(m.setModel(args[0], 0, 0)))
+			if warn := m.unlistedModelWarning(args[0]); warn != "" {
+				m.appendLine(hintStyle.Render(warn))
+			}
 			break
 		}
 		cur := m.sess.Model

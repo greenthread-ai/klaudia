@@ -14,5 +14,6 @@ var Hints = api.Hints{
 	Endpoint:      "the baseURL in ~/.klaudia/config.toml or ./.klaudia/config.toml",
 	Credentials:   ".klaudia/config.toml for a custom provider",
 	Compact:       "/compact",
+	Model:         "run /model to pick one it lists, or pass --model <id> (or set `model` in .klaudia/config.toml)",
 	SharedLogin:   "you signed in via Claude Code OAuth",
 }

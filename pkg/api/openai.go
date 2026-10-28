@@ -145,7 +145,7 @@ func (p *OpenAIProvider) StreamTurn(ctx context.Context, params anthropic.BetaMe
 			return acc, fmt.Errorf("%w: %w", ErrStreamInterrupted, serr)
 		}
 		if !stalled {
-			return acc, serr
+			return acc, annotateNotFound(serr, string(params.Model), p.baseURL)
 		}
 		if !delivered && attempt < maxStreamStallRetries {
 			continue

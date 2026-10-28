@@ -115,7 +115,8 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 		applyCacheControl(&params)
 	}
 
-	return c.streamRetrying(ctx, params, sink, c.tuning.streamIdleTimeout())
+	msg, err := c.streamRetrying(ctx, params, sink, c.tuning.streamIdleTimeout())
+	return msg, annotateNotFound(err, string(params.Model), c.endpoint())
 }
 
 // streamRetrying runs streamOnce under the stall-retry policy. Split out from

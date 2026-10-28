@@ -81,6 +81,13 @@ port mirrors (see `internal/version`).
   a stalled or cut-off stream, a network error) is now retried after 30s,
   1m and 2m, with a line on stderr each time; anything else still stops
   the run at once. From PR #43.
+- **An unknown model says which model, where, and what to do.** A typo'd
+  id ended the turn with the raw provider body (`openai endpoint 404:
+  {"error":…"model_not_found"}`). It now reads "Model not found: X isn't
+  served by Y", says how to choose another, and quotes the provider. A 404
+  that is not about a model points at the baseURL instead. `/model <id>`
+  warns when the id is missing from the list an earlier `/model` fetched,
+  and still applies it. From PR #79.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
