@@ -65,7 +65,7 @@ func newKeymap(enterInserts bool) keymap {
 	return keymap{
 		Submit:    submit,
 		Newline:   newline,
-		Complete:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", "Complete a /command or an @<path> reference")),
+		Complete:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", "Complete a /command, its argument, or an @<path>")),
 		Prev:      key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", history)),
 		Next:      key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", history)),
 		Search:    key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("Ctrl+R", "Search earlier prompts (Ctrl+R again for older)")),

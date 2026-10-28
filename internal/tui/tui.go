@@ -587,7 +587,9 @@ type Model struct {
 	histPos      int
 	histDraft    string // the in-progress line stashed when navigating up
 	// search is the open Ctrl+R history search, if any (see history.go).
-	search historySearch
+	// argCycle is Tab's place among slash-argument candidates (argcomplete.go).
+	argCycle argCycle
+	search   historySearch
 	// historyFaulted is set once a history-file failure has been reported.
 	historyFaulted bool
 	// Verbatim payloads for pastes shown in the input as chips (see paste.go).

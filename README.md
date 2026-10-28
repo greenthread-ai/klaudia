@@ -169,6 +169,11 @@ match in the box to edit, `Esc` to cancel. `Ctrl+G` opens the draft in
 `$VISUAL` or `$EDITOR` (falling back to vi or nano) and puts what you save back
 in the box.
 
+Tab completes a command's argument too: themes, modes, job names for `/logs`,
+`/restart` and `/stopjob`, result numbers for `/last`, pinned files for
+`/unpin`, approval ids for `/trust revoke`, and model ids for `/model` from the
+list `/model` last fetched (Tab never fetches it).
+
 A line that starts with `/` but is not a command is sent as a message when its
 first word is a path (`/etc/nginx/nginx.conf fails to parse`) or is followed by
 more text. A lone unknown `/word` is reported with the nearest commands. Start a

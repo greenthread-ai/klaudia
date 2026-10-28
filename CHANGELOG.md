@@ -228,6 +228,14 @@ port mirrors (see `internal/version`).
   expanded) opens in `$VISUAL` or `$EDITOR`, or vi or nano when neither is
   set, and what you save comes back into the box; an editor that fails
   leaves the draft as it was. As in Claude Code. From PR #101.
+- **Tab completes slash-command arguments.** After `/<command> `, Tab
+  offered file paths, the wrong answer for nearly every command. It now
+  completes themes, modes, job names (`/logs`, `/restart`, `/stopjob`),
+  result numbers (`/last`), pinned files (`/unpin`), approval ids
+  (`/trust revoke`) and model ids from the list `/model` last fetched; one
+  match fills in, several are listed and extended to their common prefix,
+  then cycled. An argument typed as `@…` still completes a path. From PR
+  #86.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

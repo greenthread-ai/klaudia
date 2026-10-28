@@ -17,7 +17,7 @@
 <text x="22" y="357" textLength="603.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  @              Pick a file to mention (Tab cycles, Esc dismisses)</tspan></text>
 <text x="22" y="377" textLength="288.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Enter          Send the prompt</tspan></text>
 <text x="22" y="397" textLength="585.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Option+Return  Newline without sending (or end the line with \)</tspan></text>
-<text x="22" y="417" textLength="540.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Tab            Complete a /command or an @&lt;path&gt; reference</tspan></text>
+<text x="22" y="417" textLength="585.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Tab            Complete a /command, its argument, or an @&lt;path&gt;</tspan></text>
 <text x="22" y="437" textLength="711.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  ↑ / ↓          Previous prompts (queued message first), or move in the @ menu</tspan></text>
 <text x="22" y="457" textLength="576.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Ctrl+R         Search earlier prompts (Ctrl+R again for older)</tspan></text>
 <text x="22" y="477" textLength="387.00" lengthAdjust="spacing" xml:space="preserve"><tspan fill="#cccccc">  Ctrl+G         Edit the prompt in $EDITOR</tspan></text>

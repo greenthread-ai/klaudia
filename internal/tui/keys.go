@@ -114,9 +114,11 @@ func (m *Model) onInputKey(msg tea.KeyPressMsg) bool {
 	// an @<path> reference.
 	if key.Matches(msg, m.keymap().Complete) {
 		v := m.input.Value()
-		if m.slashCommandsLive() && strings.HasPrefix(v, "/") && !strings.ContainsAny(v, " \t") {
+		switch {
+		case m.slashCommandsLive() && strings.HasPrefix(v, "/") && !strings.ContainsAny(v, " \t"):
 			m.completeSlash()
-		} else {
+		case m.completeSlashArg():
+		default:
 			m.completeAtPath()
 		}
 		return true
