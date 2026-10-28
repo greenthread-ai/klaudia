@@ -2,23 +2,22 @@ package cli
 
 import "testing"
 
-// The Browser tools are deferred only where server-side web tools stand in
-// for them; on another provider they are the only web access. (PR #94.)
-func TestBrowserToolsDeferredOnlyOnAnthropic(t *testing.T) {
+// MCP tools and the listed built-ins wait for ToolSearch; the Browser tools
+// are offered up front on every provider, the model choosing between them
+// and any server-side web tools.
+func TestDeferTool(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		deferBrowser bool
-		want         bool
+		name string
+		want bool
 	}{
-		{"BrowserSearch", true, true},
-		{"BrowserFetch", true, true},
-		{"BrowserSearch", false, false},
-		{"mcp__github__search", false, true},
-		{"Hover", false, true},
-		{"Read", true, false},
+		{"mcp__github__search", true},
+		{"Hover", true},
+		{"BrowserSearch", false},
+		{"BrowserNavigate", false},
+		{"Read", false},
 	} {
-		if got := deferTool(tc.name, tc.deferBrowser); got != tc.want {
-			t.Errorf("deferTool(%q, %v) = %v, want %v", tc.name, tc.deferBrowser, got, tc.want)
+		if got := deferTool(tc.name); got != tc.want {
+			t.Errorf("deferTool(%q) = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }

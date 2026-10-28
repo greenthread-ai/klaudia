@@ -5,6 +5,15 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Changed
+
+- **The Browser tools are offered up front again on every provider.**
+  v0.5.0 deferred them behind tool search on Anthropic, where the
+  server-side web tools cover search and fetch. Driving a real local Chrome
+  is its own capability, popular for testing pages and logged-in sessions,
+  and which tool to use is the model's choice over what the provider
+  offers, not something to hide.
+
 ### Fixed
 
 - **The input box stays at the bottom after the @ menu closes.** With the

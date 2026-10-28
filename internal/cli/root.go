@@ -1429,12 +1429,6 @@ func run(cmd *cobra.Command, opts *options) error {
 	// Deferred tool loading: MCP tools can be numerous, so withhold them from
 	// the initial request behind a ToolSearch tool that loads them on demand.
 	// tools.DeferredBuiltins are withheld the same way.
-	// The Browser tools are deferred on Anthropic, where the server-side
-	// web_search and web_fetch cover the common case and four schemas in
-	// every request buy little. Elsewhere they are the only web tools, and
-	// withholding them would cost a ToolSearch round-trip before any web
-	// access. (From PR #94.)
-	deferBrowser := api.ClaudeProvider(cfg.Provider)
 	buildTools := func() ([]tools.Tool, map[string]bool) {
 		all := append([]tools.Tool(nil), staticTools...)
 		all = append(all, mcpMgr.Tools(ctx)...)
@@ -1443,7 +1437,7 @@ func run(cmd *cobra.Command, opts *options) error {
 		}
 		deferred := map[string]bool{}
 		for _, t := range all {
-			if deferTool(t.Name(), deferBrowser) {
+			if deferTool(t.Name()) {
 				deferred[t.Name()] = true
 			}
 		}
@@ -2194,10 +2188,13 @@ func gateFor(g *hostgate.HostGate) agent.Gate {
 }
 
 // deferTool reports whether a tool is withheld from requests until ToolSearch
-// reveals it: every MCP tool, the built-ins in tools.DeferredBuiltins, and the
-// Browser tools when the server-side web tools stand in for them
-// (deferBrowser, true on Anthropic).
-func deferTool(name string, deferBrowser bool) bool {
-	return strings.HasPrefix(name, "mcp__") || tools.DeferredBuiltins[name] ||
-		(deferBrowser && strings.HasPrefix(name, "Browser"))
+// reveals it: every MCP tool, and the built-ins in tools.DeferredBuiltins.
+//
+// Not the Browser tools, on any provider. #94 deferred them on Anthropic,
+// where the server-side web tools cover search and fetch; but driving a real
+// local Chrome (testing a page, a logged-in session) is its own capability,
+// popular with users, and which tool to reach for is the model's call over
+// what is on offer, not ours to make by hiding one. (Reverted 2026-10-28.)
+func deferTool(name string) bool {
+	return strings.HasPrefix(name, "mcp__") || tools.DeferredBuiltins[name]
 }
