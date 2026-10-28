@@ -138,6 +138,11 @@ port mirrors (see `internal/version`).
   named to the model, so it tells you rather than concluding the tools
   never existed, and `/mcp` offers "Reconnect all disconnected" when
   several are down. From PR #45.
+- **The Bash tool says each call is a fresh shell, and names its timeout.**
+  The description now says `cd`, exports and functions do not carry over
+  between calls, and points long-running commands at `run_in_background`.
+  A command that times out is told the limit it hit and how to get past
+  it. From PR #92.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
