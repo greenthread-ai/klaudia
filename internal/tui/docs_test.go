@@ -19,6 +19,7 @@ var notCommands = map[string]bool{
 	"etc": true, "tmp": true, "private": true, "usr": true, "opt": true, "dev": true,
 	"var": true, "home": true, "proc": true, "sys": true, "bin": true,
 	"allow": true, "deny": true, "cost": true, "permissions": true, // removed; docs say so
+	"word": true, // "a lone unknown /word", in the slash-routing paragraph
 }
 
 func TestDocsNameOnlyRealSlashCommands(t *testing.T) {

@@ -157,6 +157,11 @@ A Bubble Tea terminal UI: streamed Markdown answers, `/` slash commands with
 type-ahead, fuzzy `@path` file completion, input history (↑/↓), and `Esc` to
 interrupt a turn. Type `/help` for the commands by group, and `/help <command>` for one in full.
 
+A line that starts with `/` but is not a command is sent as a message when its
+first word is a path (`/etc/nginx/nginx.conf fails to parse`) or is followed by
+more text. A lone unknown `/word` is reported with the nearest commands. Start a
+line with `//` to always send it as a message, minus one slash.
+
 Typing `@` opens a ranked file menu: `↑`/`↓` pick, `Tab` inserts and cycles,
 `Enter` takes the highlighted file and closes the menu (it does not send),
 `Esc` dismisses. Matching is fuzzy, so `@session.ts` finds

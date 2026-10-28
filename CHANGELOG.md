@@ -193,6 +193,13 @@ port mirrors (see `internal/version`).
   left out. Every failed automatic compaction is now reported, not only a
   cut-off summary, and after three in a row it pauses until `/compact`
   succeeds. From PR #28.
+- **A prompt that starts with a path is sent, not rejected.** Any line
+  starting with `/` went to the slash commands, so pasting
+  `/etc/nginx/nginx.conf fails to parse` answered "Unknown command". A
+  line whose first word is not a command is now a message when that word
+  is a path or more text follows; `//` sends a line as a message whatever
+  it says; and a lone unknown `/word` names the nearest commands. From PR
+  #82.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

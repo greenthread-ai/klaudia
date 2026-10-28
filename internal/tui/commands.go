@@ -687,7 +687,7 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 			m.setState(stateRunning)
 			return m, m.startTurn(rendered)
 		}
-		m.appendLine(errStyle.Render("Unknown command " + cmd + ". Try /help."))
+		m.appendLine(errStyle.Render(m.unknownSlashMessage(cmd)))
 	}
 	return m, nil
 }

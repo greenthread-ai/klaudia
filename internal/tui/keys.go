@@ -267,7 +267,8 @@ func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.appendLine(hintStyle.Render("  ! can't run while Klaudia is working — esc to interrupt, then send it"))
 				return m, nil
 			}
-			if strings.HasPrefix(in.Display, "/") {
+			asPrompt, isPrompt := m.slashAsPrompt(in)
+			if strings.HasPrefix(in.Display, "/") && !isPrompt {
 				m.input.Reset()
 				m.pushHistory(in.Display)
 				m.appendLine(userStyle.Render("› ") + in.Display)
@@ -275,7 +276,7 @@ func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m.handleSlash(in.Prompt)
 			}
 			if !in.Empty() {
-				m.steer.add(in.Display, in.Prompt)
+				m.steer.add(asPrompt.Display, asPrompt.Prompt)
 				m.input.Reset()
 				m.syncInputHeight()
 				// No scrollback line here. The queued state is transient — it
@@ -458,10 +459,14 @@ func (m *Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.appendLine(userStyle.Render("› ") + in.Display)
 		m.noteNav(navUser, in.Display, in.Prompt, 0)
 
-		// Slash commands are handled locally, not sent to the model.
-		if strings.HasPrefix(in.Display, "/") {
+		// Slash commands are handled locally, not sent to the model; a line
+		// that only starts with a slash (a path) is a prompt (slashAsPrompt).
+		// History keeps it as typed, so recalling it routes the same way.
+		asPrompt, isPrompt := m.slashAsPrompt(in)
+		if strings.HasPrefix(in.Display, "/") && !isPrompt {
 			return m.handleSlash(in.Prompt)
 		}
+		in = asPrompt
 
 		m.setState(stateRunning)
 		// Do NOT arm another waitForEvent here: exactly one channel reader must
