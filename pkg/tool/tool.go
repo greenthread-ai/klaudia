@@ -66,6 +66,14 @@ type Asker interface {
 	Ask(ctx context.Context, question string, options []AskOption) (string, error)
 }
 
+// AskOnly is implemented by a tool that can do nothing without an Asker
+// (AskUserQuestion). The loop leaves such a tool out of the request when the
+// turn has none — a headless run, a sub-agent — rather than offering the
+// model a tool whose every call fails.
+type AskOnly interface {
+	NeedsAsker()
+}
+
 // Planner handles ExitPlanMode: the model presents its plan and the frontend
 // decides whether to approve it and leave read-only plan mode. Returns true if
 // approved (the frontend then switches the session out of plan mode).

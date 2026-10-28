@@ -43,6 +43,66 @@ port mirrors (see `internal/version`).
   variables each server reads and the host a remote one sends them to. From
   PR #8, with headers added.
 
+### Fixed
+
+- **`AskUserQuestion` is offered only when someone can answer.** A headless
+  run or a sub-agent has no one to ask, so the tool is left out of its
+  requests rather than offered and failing on every call. From PR #13.
+- **A sub-agent that fails keeps what it found.** Its last completed reply
+  goes back with the error, marked as possibly incomplete, instead of only
+  "Sub-agent failed". From PR #42.
+- **Compaction reads the conversation from the prompt cache.** The summary
+  request was sent without the system prompt and tools, so it shared no
+  cached prefix with the conversation and paid for the whole history at the
+  moment it was largest; idle compaction, which exists to catch the cache
+  while it is warm, got nothing from it. Summary requests now carry the
+  conversation's prefix. Measured on Opus 5.5: 0 tokens read from cache
+  before, the full 20.5k prefix after, at the summary's capped effort as
+  well. From PR #66.
+- **A reply that is cut off is reported as cut off, and kept.** A stream
+  that a proxy closed without its final event, or that carried an
+  overloaded or server error after it began, used to end the turn as if the
+  half-built message were the whole answer, or with a raw error. Now, if
+  nothing had been shown it is retried; if text had been shown it is
+  reported as cut off and not retried (that would repeat what you read), and
+  the text you saw is kept in the conversation, closed by a line saying it
+  was cut off or interrupted, so the model knows what it said. A cut-off
+  turn is not handed to a fallback model either. The OpenAI-compatible path
+  does the same for a stream that closes early, keeps text it had streamed
+  when the body read fails, and now honours `Retry-After`. From PRs #29 and
+  #53.
+- **Tool input is validated before the host gate and any approval** (#97),
+  so a malformed call is refused as malformed instead of being shown to you
+  first.
+- **Files are replaced atomically, and Write keeps a file's CRLF endings**
+  (#40).
+- **Command output is bounded in memory while it is captured**, and a
+  command that detached a process with `setsid` has that process stopped
+  when it is cancelled on Linux (#41, #51).
+- **Bash:** exit 1 from `grep`, `diff` and `test` is an answer, not an error
+  (#49); a line is parsed before a self-backgrounded service is refused, so
+  `&>` and names like `server` no longer trip it (#73); the non-interactive
+  forms of terminal programs are no longer refused (#74); `git commit` flag
+  clusters like `-am` are parsed rather than matched (#64).
+- **The host gate catches flag-driven package installs** (pacman, rpm, dpkg,
+  nix-env), `git config --global`/`--system`, `sudo pip install`, `sudo make
+  install` and `yarn global`; `pacman -Sy` now asks too (#76).
+- **Edit refuses an empty `old_string`** (#61), **memory adds new bullets
+  above the linked-memory section** (#57), **a language server that never
+  publishes diagnostics is not reported as clean** (#68), and **an MCP stdio
+  server's stderr is forwarded** rather than discarded (#15).
+- **A resumed session with an orphaned tool result or blank text can be
+  sent again.** A tool result whose call was lost (an interrupted write, a
+  compaction boundary) and blank text in a user message are each rejected by
+  the API on every later request; the request sanitiser now drops them. Blank
+  text in an assistant turn is left alone: the API accepts it back. From
+  PR #26.
+- **`/copy` no longer loses its clipboard escape** when the screen updates
+  twice before the next draw: escapes for the terminal now go out on their
+  own, not on the front of a frame the next one could replace.
+- **`[input] enter = "newline"` takes effect.** The section was read and
+  never merged, so the setting did nothing.
+
 ### Security
 
 - **A repository's config can no longer loosen yours.** `.klaudia/config.toml`
@@ -115,60 +175,6 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
-- **A sub-agent that fails keeps what it found.** Its last completed reply
-  goes back with the error, marked as possibly incomplete, instead of only
-  "Sub-agent failed". From PR #42.
-- **Compaction reads the conversation from the prompt cache.** The summary
-  request was sent without the system prompt and tools, so it shared no
-  cached prefix with the conversation and paid for the whole history at the
-  moment it was largest; idle compaction, which exists to catch the cache
-  while it is warm, got nothing from it. Summary requests now carry the
-  conversation's prefix. Measured on Opus 5.5: 0 tokens read from cache
-  before, the full 20.5k prefix after, at the summary's capped effort as
-  well. From PR #66.
-- **A reply that is cut off is reported as cut off, and kept.** A stream
-  that a proxy closed without its final event, or that carried an
-  overloaded or server error after it began, used to end the turn as if the
-  half-built message were the whole answer, or with a raw error. Now, if
-  nothing had been shown it is retried; if text had been shown it is
-  reported as cut off and not retried (that would repeat what you read), and
-  the text you saw is kept in the conversation, closed by a line saying it
-  was cut off or interrupted, so the model knows what it said. A cut-off
-  turn is not handed to a fallback model either. The OpenAI-compatible path
-  does the same for a stream that closes early, keeps text it had streamed
-  when the body read fails, and now honours `Retry-After`. From PRs #29 and
-  #53.
-- **Tool input is validated before the host gate and any approval** (#97),
-  so a malformed call is refused as malformed instead of being shown to you
-  first.
-- **Files are replaced atomically, and Write keeps a file's CRLF endings**
-  (#40).
-- **Command output is bounded in memory while it is captured**, and a
-  command that detached a process with `setsid` has that process stopped
-  when it is cancelled on Linux (#41, #51).
-- **Bash:** exit 1 from `grep`, `diff` and `test` is an answer, not an error
-  (#49); a line is parsed before a self-backgrounded service is refused, so
-  `&>` and names like `server` no longer trip it (#73); the non-interactive
-  forms of terminal programs are no longer refused (#74); `git commit` flag
-  clusters like `-am` are parsed rather than matched (#64).
-- **The host gate catches flag-driven package installs** (pacman, rpm, dpkg,
-  nix-env), `git config --global`/`--system`, `sudo pip install`, `sudo make
-  install` and `yarn global`; `pacman -Sy` now asks too (#76).
-- **Edit refuses an empty `old_string`** (#61), **memory adds new bullets
-  above the linked-memory section** (#57), **a language server that never
-  publishes diagnostics is not reported as clean** (#68), and **an MCP stdio
-  server's stderr is forwarded** rather than discarded (#15).
-- **A resumed session with an orphaned tool result or blank text can be
-  sent again.** A tool result whose call was lost (an interrupted write, a
-  compaction boundary) and blank text in a user message are each rejected by
-  the API on every later request; the request sanitiser now drops them. Blank
-  text in an assistant turn is left alone: the API accepts it back. From
-  PR #26.
-- **`/copy` no longer loses its clipboard escape** when the screen updates
-  twice before the next draw: escapes for the terminal now go out on their
-  own, not on the front of a frame the next one could replace.
-- **`[input] enter = "newline"` takes effect.** The section was read and
-  never merged, so the setting did nothing.
 - **Sub-agents fall back too.** The `fallbackModels` chain covered only the
   main loop, so a 529 the parent survived by switching model still failed
   every sub-agent it started. They now get the same chain.

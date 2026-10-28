@@ -410,7 +410,7 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// Build the tool list for this turn: eager tools plus any deferred tools
 		// revealed so far (via ToolSearch). Rebuilt per turn so reveals take
 		// effect on the next request.
-		toolParams, terr := l.buildToolParams(ctx, opts.DeferredTools, revealed.snapshot())
+		toolParams, terr := l.buildToolParams(ctx, opts.DeferredTools, revealed.snapshot(), opts.Asker != nil)
 		if terr != nil {
 			res.Messages = messages
 			return res, terr
@@ -1490,7 +1490,7 @@ func toolResultWithImages(toolUseID, text string, isErr bool, images []tools.Res
 // buildToolParams converts the registry's tools into API tool params. Deferred
 // tools are omitted unless they've been revealed (ToolSearch); ToolSearch itself
 // is always included so the model can discover the deferred ones.
-func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[string]bool) ([]anthropic.BetaToolUnionParam, error) {
+func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[string]bool, canAsk bool) ([]anthropic.BetaToolUnionParam, error) {
 	names := l.tools.Names()
 	out := make([]anthropic.BetaToolUnionParam, 0, len(names))
 	for _, name := range names {
@@ -1498,6 +1498,11 @@ func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[strin
 			continue
 		}
 		t, _ := l.tools.Lookup(name)
+		// Nobody to ask: leave out a tool that can only ask (tools.AskOnly),
+		// rather than offer one whose every call fails. (PR #13 raised it.)
+		if _, askOnly := t.(tools.AskOnly); askOnly && !canAsk {
+			continue
+		}
 		desc, err := t.Description(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("tool %s description: %w", name, err)

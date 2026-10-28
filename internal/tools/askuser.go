@@ -67,6 +67,10 @@ func (a *AskUserQuestion) CheckPermissions(pctx permission.Context, _ permission
 	return allowAlways(pctx)
 }
 
+// NeedsAsker marks the tool as one the loop leaves out of a turn with no one
+// to ask (tool.AskOnly).
+func (a *AskUserQuestion) NeedsAsker() {}
+
 func (a *AskUserQuestion) Execute(ctx context.Context, tctx Context, raw json.RawMessage) ([]Result, error) {
 	var in AskUserQuestionInput
 	if err := json.Unmarshal(raw, &in); err != nil {

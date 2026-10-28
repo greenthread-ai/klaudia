@@ -29,7 +29,7 @@ func TestBuildToolParamsDeferral(t *testing.T) {
 	deferred := map[string]bool{"Write": true}
 
 	// Write is deferred and not yet revealed → only Read is offered.
-	params, err := l.buildToolParams(context.Background(), deferred, map[string]bool{})
+	params, err := l.buildToolParams(context.Background(), deferred, map[string]bool{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestBuildToolParamsDeferral(t *testing.T) {
 	}
 
 	// Once revealed, Write is offered too.
-	params, _ = l.buildToolParams(context.Background(), deferred, map[string]bool{"Write": true})
+	params, _ = l.buildToolParams(context.Background(), deferred, map[string]bool{"Write": true}, true)
 	names = namesOf(params)
 	if !slices.Contains(names, "Read") || !slices.Contains(names, "Write") {
 		t.Errorf("after reveal: got %v, want Read+Write", names)
