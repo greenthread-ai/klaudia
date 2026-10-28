@@ -167,6 +167,11 @@ port mirrors (see `internal/version`).
   through tool search like MCP tools. On other providers, where they are
   the only web tools, nothing changes. From PR #94 (its `Task*` half is
   moot: those tools were retired).
+- **Every environment variable is documented, and a test keeps it so.**
+  The README has an "Environment variables" table of every `KLAUDIA_*` and
+  `ANTHROPIC_*` variable the code reads, and `cmd/klaudia/envdocs_test.go`
+  fails when code names one without a row, or a row names one no code
+  reads. From PR #81, with the table written for today's code.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
