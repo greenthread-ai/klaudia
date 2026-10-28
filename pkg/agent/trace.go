@@ -24,8 +24,15 @@ import (
 // Klaudia CLI installs OTLP when OTEL_EXPORTER_OTLP_* is set).
 const genAISemconv = "1.37.0"
 
-var tracer = otel.Tracer("github.com/greenthread-ai/klaudia/pkg/agent",
-	trace.WithSchemaURL("https://opentelemetry.io/schemas/"+genAISemconv))
+// tracer is looked up from the global provider at each span, not once at
+// package init. A tracer taken before any provider is set is a delegate that
+// binds to the first provider installed and never follows a later one, so an
+// embedder (or a test) that replaces the provider would keep tracing into the
+// old one.
+func tracer() trace.Tracer {
+	return otel.Tracer("github.com/greenthread-ai/klaudia/pkg/agent",
+		trace.WithSchemaURL("https://opentelemetry.io/schemas/"+genAISemconv))
+}
 
 // Attribute names, from the GenAI conventions at genAISemconv.
 const (
@@ -53,7 +60,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	if opts.SubAgent {
 		name = "klaudia sub-agent"
 	}
-	ctx, span := tracer.Start(ctx, "invoke_agent "+name, trace.WithAttributes(
+	ctx, span := tracer().Start(ctx, "invoke_agent "+name, trace.WithAttributes(
 		attribute.String(attrOperation, "invoke_agent"),
 		attribute.String(attrAgentName, name),
 		attribute.String(attrRequestModel, string(opts.Model)),
@@ -77,7 +84,7 @@ func (l *Loop) Run(ctx context.Context, opts Options, emit Emitter) (Result, err
 
 // startChatSpan opens the span for one model request.
 func startChatSpan(ctx context.Context, params anthropic.BetaMessageNewParams) (context.Context, trace.Span) {
-	return tracer.Start(ctx, "chat "+string(params.Model), trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
+	return tracer().Start(ctx, "chat "+string(params.Model), trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
 		attribute.String(attrOperation, "chat"),
 		attribute.String(attrRequestModel, string(params.Model)),
 		attribute.Int64(attrMaxTokens, params.MaxTokens),
@@ -107,7 +114,7 @@ func endChatSpan(span trace.Span, m anthropic.BetaMessage, err error) {
 // context the tool runs in, so an MCP call can pass the trace on and a
 // sub-agent's invoke_agent nests under it.
 func (l *Loop) dispatch(ctx context.Context, tu anthropic.BetaToolUseBlock, opts Options, emit Emitter, reveal func(...string), fs *failureState) anthropic.BetaContentBlockParamUnion {
-	ctx, span := tracer.Start(ctx, "execute_tool "+tu.Name, trace.WithAttributes(
+	ctx, span := tracer().Start(ctx, "execute_tool "+tu.Name, trace.WithAttributes(
 		attribute.String(attrOperation, "execute_tool"),
 		attribute.String(attrToolName, tu.Name),
 		attribute.String(attrToolCallID, tu.ID),

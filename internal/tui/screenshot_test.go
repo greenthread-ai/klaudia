@@ -71,6 +71,9 @@ func screenshotFrame() string {
 	// CI failed the check on every push.
 	defer func(g string, d bool) { goos, keysDisambiguated = g, d }(goos, keysDisambiguated)
 	goos, keysDisambiguated = "darwin", false
+	// Restored too: left at TrueColor, every later test in the process
+	// rendered in colour, and one that expects none failed under -count=2.
+	defer func(p colorprofile.Profile) { termProfile = p }(termProfile)
 	termProfile = colorprofile.TrueColor
 	applyChromeTheme(defaultChromePalette)
 	defer applyChromeTheme(defaultChromePalette)
