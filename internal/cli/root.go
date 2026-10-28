@@ -788,26 +788,34 @@ const starterConfig = `# Klaudia config: ~/.klaudia/config.toml
 # provider, endpoint, keys and anything that loosens permissions or the
 # sandbox are yours alone to set, here.
 
-provider = "openai"
-model = "openai/gpt-5.5"
-baseURL = "https://api.example.com/v1"
+# Provider: "anthropic" (the default) or "openai" (any OpenAI-compatible
+# endpoint; see below). Anthropic's credential is never read from this file:
+# ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in the environment, then
+# klaudia --login, then a Claude Code sign-in on this machine.
+provider = "anthropic"
 
-# apiKeyEnv is the NAME of the environment variable that holds your API key:
-# pick any name, then export a variable of that name, e.g. for the value below:
-#   export MY_API_KEY="sk-..."
-# Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
-apiKeyEnv = "MY_API_KEY"
+# Default model; --model overrides it per run, /model mid-session.
+# model = "sonnet" # haiku | sonnet | opus | fable, or a full model ID
 
-# Temperature for the model. Omitted by default (server picks its own default).
-# Some providers reject this field; remove the line to omit it from the request.
+# To use an OpenAI-compatible endpoint instead, replace the provider line
+# above with these (delete the leading "#" from each), then export the
+# variable named in apiKeyEnv:
+#
+#   provider = "openai"
+#   model = "openai/gpt-5.5"
+#   baseURL = "https://api.example.com/v1"
+#   apiKeyEnv = "MY_API_KEY" # the NAME of the variable: export MY_API_KEY="sk-..."
+#
+# Temperature (OpenAI-compatible only). Omitted by default, so the server
+# picks its own; some providers reject the field.
 # temperature = 1.0
 
-# Context window in tokens — drives autocompaction so long sessions don't
-# overflow the model upstream ("max_tokens must be at least 1, got -N" or
-# "context length exceeded"). Defaults to 200000 (Anthropic-sized); set this
-# to the actual window your provider/model exposes. Common values: 8192, 16384,
-# 32768, 128000.
-# contextWindow = 8192
+# Context window and output cap in tokens. Klaudia sizes both itself: the
+# provider's own figures from GET /v1/models, then a built-in table of
+# Claude models, then a floor. Set these only for an endpoint that reports
+# neither and serves a model Klaudia does not know (e.g. 128000).
+# contextWindow = 128000
+# maxTokens = 16384
 
 # TUI theme (Markdown + chrome). /theme switches it for a session.
 # theme = "nord" # klaudia (default) | dracula | gruvbox | tokyo-night | nord | light | catppuccin

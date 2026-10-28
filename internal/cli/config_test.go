@@ -52,11 +52,12 @@ func TestCreateConfig(t *testing.T) {
 			}
 			body := string(data)
 			wants := []string{
-				`provider = "openai"`,
-				`baseURL = "https://api.example.com/v1"`,
-				`apiKeyEnv = "MY_API_KEY"`,
+				"\nprovider = \"anthropic\"\n", // active (From PR #78.)
+				`#   provider = "openai"`,      // the alternative stays commented out
+				`#   baseURL = "https://api.example.com/v1"`,
+				`#   apiKeyEnv = "MY_API_KEY"`,
 				`# Klaudia config`,
-				`# contextWindow = 8192`, // commented example for OpenAI-compatible hosts
+				`# contextWindow = 128000`, // commented example for hosts nothing can size
 			}
 			if tt.scope == "local" {
 				// A project config may not set these (config.projectSafe), so
@@ -118,7 +119,8 @@ func TestStarterConfigRoundtripsContextWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
-	got := strings.Replace(string(data), "# contextWindow = 8192", "contextWindow = 8192", 1)
+	got := strings.Replace(string(data), "# contextWindow = 128000", "contextWindow = 128000", 1)
+	got = strings.Replace(got, "# maxTokens = 16384", "maxTokens = 16384", 1)
 	if got == string(data) {
 		t.Fatal("commented contextWindow line not found in starter — toml tag/example may have drifted")
 	}
@@ -126,8 +128,12 @@ func TestStarterConfigRoundtripsContextWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Load(cwd)
-	if cfg.ContextWindow != 8192 {
-		t.Errorf("ContextWindow = %d, want 8192 (toml tag mismatch?)", cfg.ContextWindow)
+	if cfg.ContextWindow != 128000 || cfg.MaxTokens != 16384 {
+		t.Errorf("ContextWindow = %d, MaxTokens = %d, want 128000 and 16384 (toml tag mismatch?)", cfg.ContextWindow, cfg.MaxTokens)
+	}
+	// The active lines parse too: the starter as written is Anthropic.
+	if cfg.Provider != "anthropic" {
+		t.Errorf("Provider = %q, want the starter's anthropic", cfg.Provider)
 	}
 }
 

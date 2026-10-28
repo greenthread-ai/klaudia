@@ -143,6 +143,11 @@ port mirrors (see `internal/version`).
   between calls, and points long-running commands at `run_in_background`.
   A command that times out is told the limit it hit and how to get past
   it. From PR #92.
+- **`--create-config=global` writes an Anthropic starter.** It wrote
+  `provider = "openai"` with a placeholder endpoint and key variable, so a
+  first run straight after it failed. The starter is now
+  `provider = "anthropic"`, with the OpenAI-compatible block commented out
+  beneath it and the sizing notes brought up to date. From PR #78.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
