@@ -312,3 +312,14 @@ func TestLoadHonoursConfigDir(t *testing.T) {
 		t.Errorf("UserPath() = %q", got)
 	}
 }
+
+// failIfUnavailable only ever turns on: a later layer that leaves it out
+// (TOML has no way to say "unset") cannot clear an earlier one. (PR #52.)
+func TestFailIfUnavailableMergesOneWay(t *testing.T) {
+	var c Config
+	merge(&c, Config{Sandbox: Sandbox{FailIfUnavailable: true}})
+	merge(&c, Config{Sandbox: Sandbox{Mode: SandboxOS}})
+	if !c.Sandbox.FailIfUnavailable {
+		t.Error("a later layer cleared failIfUnavailable")
+	}
+}

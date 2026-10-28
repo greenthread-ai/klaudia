@@ -774,7 +774,9 @@ is not used: [docs/effort.md](docs/effort.md).
 - `local` (default) — run on the host, unconfined.
 - `os` — host confinement: `sandbox-exec` (macOS) / `bubblewrap` (Linux). Reads
   are unrestricted; writes limited to cwd + temp (+ `writeRoots`); `network`
-  configurable. Falls back to local with a warning if the tool is absent.
+  configurable. Falls back to local with a warning if the tool is absent or
+  cannot run (bwrap needs unprivileged user namespaces); set
+  `failIfUnavailable = true` to refuse to start instead.
 - `container` — run inside docker/podman (`runtime`, `image`, `mountCwd`,
   `readOnly`, `network`).
 

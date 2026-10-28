@@ -237,6 +237,10 @@ type Sandbox struct {
 	// by an in-process proxy (internal/egress). Enforced under the macOS OS
 	// sandbox, advisory elsewhere — /doctor says which. Unset: no limit.
 	Egress []string `toml:"egress,omitempty"`
+	// FailIfUnavailable refuses to start when the configured sandbox cannot
+	// be used, instead of warning and running commands unconfined. Merged
+	// one way: any layer can set it, none can clear it.
+	FailIfUnavailable bool `toml:"failIfUnavailable,omitempty"`
 }
 
 // Browser engines.
@@ -543,6 +547,9 @@ func merge(dst *Config, src Config) {
 	}
 	if len(src.Sandbox.Egress) > 0 {
 		dst.Sandbox.Egress = src.Sandbox.Egress
+	}
+	if src.Sandbox.FailIfUnavailable {
+		dst.Sandbox.FailIfUnavailable = true
 	}
 	if len(src.Sandbox.WriteRoots) > 0 {
 		dst.Sandbox.WriteRoots = append(dst.Sandbox.WriteRoots, src.Sandbox.WriteRoots...)

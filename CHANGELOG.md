@@ -57,6 +57,14 @@ port mirrors (see `internal/version`).
   API's 5 MB or 8000-pixel limits is refused before it is sent, since a
   rejected image stays in the conversation and fails every later request.
   From PRs #46 and #72.
+- **bwrap that is installed but cannot run is noticed at start.** Where
+  unprivileged user namespaces are off (many containers, some hardened
+  hosts), `sandbox.mode = "os"` found bwrap on the PATH and then failed
+  every Bash call. It is now tried once at start and, if it cannot run,
+  Klaudia falls back to local execution with a warning saying why. A new
+  `[sandbox] failIfUnavailable = true` refuses to start instead, for any
+  sandbox mode that cannot be used; a project config can set it but not
+  clear it. From PR #52.
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in
