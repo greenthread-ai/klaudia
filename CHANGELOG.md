@@ -10,6 +10,13 @@ port mirrors (see `internal/version`).
 - **Language-server tools: hover, document symbols, rename preview and
   implementation**, loaded on demand through tool search so they cost nothing
   until used (#95).
+- **`extraHeadersEnv` for OpenAI-compatible endpoints gated by headers.**
+  A map of header name to the name of an environment variable (never a
+  value in the file, as `apiKeyEnv`), sent on every request, so an endpoint
+  behind a Cloudflare Access service token is reachable, with or without a
+  key. An unset variable is a startup error naming it. User config only: a
+  project config's is ignored with a warning, since it sends environment
+  variables to your provider. From PR #10.
 - **Grep takes context lines (`-A`/`-B`/`-C`), a file-type filter and a
   result limit** (#93), and Grep and Glob honour `.gitignore`, nested files
   included, while still reaching a hidden path the search names (#70).

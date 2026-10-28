@@ -27,6 +27,27 @@ type OpenAIProvider struct {
 	temperature *float64
 	tuning      Tuning
 	http        *http.Client
+	// headers are sent on every request: an endpoint gated by headers (a
+	// Cloudflare Access service token) rather than, or as well as, a key.
+	headers map[string]string
+}
+
+// WithHeaders adds headers to every request the provider makes, and returns
+// it. With headers set, an empty key sends no Authorization at all.
+func (p *OpenAIProvider) WithHeaders(h map[string]string) *OpenAIProvider {
+	p.headers = h
+	return p
+}
+
+// setAuth sets Authorization when a key is configured and every extra header,
+// for both request paths (a turn and the model list) alike. (From PR #10.)
+func (p *OpenAIProvider) setAuth(req *http.Request) {
+	if p.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
+	for name, value := range p.headers {
+		req.Header.Set(name, value)
+	}
 }
 
 // NewOpenAIProvider builds the provider. baseURL should include the /v1 suffix.
@@ -168,7 +189,7 @@ func (p *OpenAIProvider) streamAttempt(ctx context.Context, body []byte, model s
 	if err != nil {
 		return anthropic.BetaMessage{}, false, false, err
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	p.setAuth(httpReq)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
 

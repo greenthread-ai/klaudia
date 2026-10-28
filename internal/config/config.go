@@ -6,6 +6,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -87,6 +88,14 @@ type Config struct {
 	APIKey string `toml:"apiKey,omitempty"`
 	// APIKeyEnv names an environment variable holding the key.
 	APIKeyEnv string `toml:"apiKeyEnv,omitempty"`
+	// ExtraHeadersEnv maps an HTTP header name to the NAME of an environment
+	// variable holding its value (never a value in the file, as apiKeyEnv),
+	// sent on every request to an OpenAI-compatible endpoint, for one gated by
+	// headers rather than, or as well as, a bearer key (a Cloudflare Access
+	// service token):
+	//   extraHeadersEnv = { "CF-Access-Client-Id" = "CF_ID", "CF-Access-Client-Secret" = "CF_SECRET" }
+	// User config only: projectSafe drops it from a project's.
+	ExtraHeadersEnv map[string]string `toml:"extraHeadersEnv,omitempty"`
 	// Sandbox configures how the Bash tool executes commands.
 	Sandbox Sandbox `toml:"sandbox,omitempty"`
 	// Browser configures local browser-backed tools (BrowserSearch/BrowserFetch and browser tools).
@@ -326,7 +335,7 @@ func Connection() Config {
 	u := read(UserPath())
 	return Config{
 		Provider: u.Provider, Model: u.Model, BaseURL: u.BaseURL,
-		APIKey: u.APIKey, APIKeyEnv: u.APIKeyEnv,
+		APIKey: u.APIKey, APIKeyEnv: u.APIKeyEnv, ExtraHeadersEnv: u.ExtraHeadersEnv,
 		ContextWindow: u.ContextWindow, MaxTokens: u.MaxTokens,
 		Temperature: u.Temperature, MaxRetries: u.MaxRetries,
 		StreamIdleTimeout: u.StreamIdleTimeout, FallbackModels: u.FallbackModels,
@@ -356,6 +365,13 @@ func projectSafe(p Config, user Config, ignored *[]string) Config {
 	if p.APIKey != "" || p.APIKeyEnv != "" {
 		drop("apiKey/apiKeyEnv", creds)
 		p.APIKey, p.APIKeyEnv = "", ""
+	}
+	if len(p.ExtraHeadersEnv) > 0 {
+		// Each entry names an environment variable whose value is sent off
+		// the machine: a repository could otherwise send $GITHUB_TOKEN to
+		// your provider as a header.
+		drop("extraHeadersEnv", "it sends environment variables to your provider")
+		p.ExtraHeadersEnv = nil
 	}
 	if m := p.Permissions.Mode; m != "" && m != "plan" {
 		// autonomous is the default: over an unset user mode it changes nothing.
@@ -486,6 +502,12 @@ func merge(dst *Config, src Config) {
 	if src.APIKeyEnv != "" {
 		dst.APIKeyEnv = src.APIKeyEnv
 	}
+	for header, envVar := range src.ExtraHeadersEnv {
+		if dst.ExtraHeadersEnv == nil {
+			dst.ExtraHeadersEnv = map[string]string{}
+		}
+		dst.ExtraHeadersEnv[header] = envVar
+	}
 	if src.Temperature != nil {
 		dst.Temperature = src.Temperature
 	}
@@ -609,4 +631,24 @@ func (c Config) ResolveAPIKey() string {
 		return strings.TrimSpace(os.Getenv(c.APIKeyEnv))
 	}
 	return ""
+}
+
+// ResolveExtraHeaders reads ExtraHeadersEnv's variables into header values.
+// It returns the headers and the sorted names (never values) of referenced
+// variables that are unset or empty. (From PR #10.)
+func (c Config) ResolveExtraHeaders() (map[string]string, []string) {
+	if len(c.ExtraHeadersEnv) == 0 {
+		return nil, nil
+	}
+	headers := make(map[string]string, len(c.ExtraHeadersEnv))
+	var missing []string
+	for header, envVar := range c.ExtraHeadersEnv {
+		if val := strings.TrimSpace(os.Getenv(envVar)); val != "" {
+			headers[header] = val
+		} else {
+			missing = append(missing, envVar)
+		}
+	}
+	sort.Strings(missing)
+	return headers, missing
 }

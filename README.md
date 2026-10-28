@@ -584,6 +584,12 @@ baseURL = "https://api.example.com/v1"
 # Or set apiKey = "sk-..." inline — but the env form keeps secrets out of files.
 apiKeyEnv = "MY_API_KEY"
 
+# Optional: headers sent on every request, each read from the NAMED env var,
+# for an endpoint gated by headers (a Cloudflare Access service token) instead
+# of, or as well as, a key. With these set, no key is required. User config
+# only: a project's .klaudia/config.toml cannot set it.
+# extraHeadersEnv = { "CF-Access-Client-Id" = "CF_ID", "CF-Access-Client-Secret" = "CF_SECRET" }
+
 # Optional: set the model's context window in tokens so autocompaction kicks
 # in before the provider overflows. Klaudia resolves it for you — this key, then
 # the model's own figure from GET /v1/models, then a built-in table — and falls
