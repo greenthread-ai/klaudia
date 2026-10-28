@@ -161,6 +161,12 @@ port mirrors (see `internal/version`).
   output tokens and duration, as Claude Code's Task results do. From PR
   #75; the rest of it (project context, own plan, no questions) had
   already landed.
+- **The Browser tools load on demand on Anthropic.** Their four schemas
+  were in every request even where the server-side `web_search` and
+  `web_fetch` cover the common case; on Anthropic they are now found
+  through tool search like MCP tools. On other providers, where they are
+  the only web tools, nothing changes. From PR #94 (its `Task*` half is
+  moot: those tools were retired).
 - **A transcript that cannot be written is reported.** A full disk or a
   removed sessions directory used to lose the session without a word, found
   out only when `--resume` had nothing to resume. The first failed write in

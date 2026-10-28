@@ -282,4 +282,7 @@ Server-side features are gated behind beta headers sent as `anthropic-beta`:
 | Browser Automation | the local browser tools above; an MCP browser server can be registered for richer control |
 
 The Anthropic server-side `web_search` / `web_fetch` betas remain available when
-running on the Anthropic provider (`pkg/agent/webtools.go`).
+running on the Anthropic provider (`pkg/agent/webtools.go`). There the local
+Browser tools are deferred behind ToolSearch, since the server tools cover the
+common case; on any other provider they are the only web tools and are sent
+with every request (`deferTool` in `internal/cli/root.go`).
