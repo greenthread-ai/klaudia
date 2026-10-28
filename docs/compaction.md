@@ -47,13 +47,24 @@ What Klaudia does about it (PR #63):
   user message when it changes (`pkg/agent/mode.go`).
 - **Autocompact is safe**: the summary request appends to the conversation, and
   the history it produces holds no earlier thinking to replay.
+- **A ToolSearch reveal does not change `tools`** (`pkg/api/toolreveal.go`).
+  Every tool is sent from the first request, the deferred ones with
+  `defer_loading`, which keeps them out of the model's context and out of the
+  check until referenced. A reveal is recorded as a marker block in the
+  tool-result message, so it survives the end of a run and a resume (the
+  revealed set used to start empty every run, changing `tools` again on the
+  next prompt). The Anthropic client sends each marker as a `role: "system"`
+  message of `tool_addition` blocks directly after that message (beta
+  `mid-conversation-tool-changes-2026-07-01`), which appends rather than
+  edits. Fallbacks: a model that refuses `tool_addition` (Sonnet 5, measured)
+  gets the revealed tool with the flag cleared, remembered per model; an
+  endpoint that refuses `defer_loading`, and the OpenAI shim, get unrevealed
+  deferred tools left out, as before. Opus 5.5 and Sonnet 5.5 accepted it
+  live; Fable 5.1 was not probed (the API docs list it as supported).
 
-Known to remain: a ToolSearch reveal adds a tool definition to `tools`, and
-`/add-dir` changes the system prompt. Each breaks the chain once, and the
-safety net turns that into lost reasoning rather than a failed turn. The fix
-for the first is the API's own server-side tool search (tools declared with
-`defer_loading`), a larger change not yet made. A `/model` switch drops the
-other model's blocks by design.
+Known to remain: `/add-dir` changes the system prompt, which breaks the chain
+once; the safety net turns that into lost reasoning rather than a failed
+turn. A `/model` switch drops the other model's blocks by design.
 
 ## Microcompact
 

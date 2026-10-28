@@ -28,20 +28,18 @@ func TestBuildToolParamsDeferral(t *testing.T) {
 
 	deferred := map[string]bool{"Write": true}
 
-	// Write is deferred and not yet revealed → only Read is offered.
-	params, err := l.buildToolParams(context.Background(), deferred, map[string]bool{}, true)
+	// Both are sent; only Write is marked defer_loading. A reveal does not
+	// change this list (api/toolreveal.go).
+	params, err := l.buildToolParams(context.Background(), deferred, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	names := namesOf(params)
-	if !slices.Contains(names, "Read") || slices.Contains(names, "Write") {
-		t.Errorf("before reveal: got %v, want [Read] only", names)
+	if names := namesOf(params); !slices.Contains(names, "Read") || !slices.Contains(names, "Write") {
+		t.Errorf("got %v, want Read and Write", names)
 	}
-
-	// Once revealed, Write is offered too.
-	params, _ = l.buildToolParams(context.Background(), deferred, map[string]bool{"Write": true}, true)
-	names = namesOf(params)
-	if !slices.Contains(names, "Read") || !slices.Contains(names, "Write") {
-		t.Errorf("after reveal: got %v, want Read+Write", names)
+	for _, p := range params {
+		if got, want := p.OfTool.DeferLoading.Value, p.OfTool.Name == "Write"; got != want {
+			t.Errorf("%s defer_loading = %v, want %v", p.OfTool.Name, got, want)
+		}
 	}
 }

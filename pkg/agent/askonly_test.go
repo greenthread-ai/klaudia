@@ -18,7 +18,7 @@ func TestAskOnlyToolsNeedAnAsker(t *testing.T) {
 	read, _ := tools.NewRead()
 	l := New(nil, tools.NewRegistry(ask, read))
 	has := func(canAsk bool) bool {
-		ps, err := l.buildToolParams(context.Background(), nil, nil, canAsk)
+		ps, err := l.buildToolParams(context.Background(), nil, canAsk)
 		if err != nil {
 			t.Fatal(err)
 		}

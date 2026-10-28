@@ -336,12 +336,10 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		}
 	}
 
-	// Deferred tools are withheld from the request until ToolSearch reveals them.
 	betas := api.DefaultBetas
 	if opts.WebTools {
 		betas = append(append([]string{}, betas...), api.WebToolBetas...)
 	}
-	revealed := newRevealSet()
 
 	// The system prompt is rebuilt per turn because the permission mode can
 	// change mid-run — approving a plan flips it — and the model has to be
@@ -435,10 +433,10 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			halted = halted || in.Halt
 		}
 
-		// Build the tool list for this turn: eager tools plus any deferred tools
-		// revealed so far (via ToolSearch). Rebuilt per turn so reveals take
-		// effect on the next request.
-		toolParams, terr := l.buildToolParams(ctx, opts.DeferredTools, revealed.snapshot(), opts.Asker != nil)
+		// The tool list for this turn: every tool, the deferred ones marked
+		// defer_loading. ToolSearch reveals one by a marker in the history,
+		// not by changing this list (api/toolreveal.go).
+		toolParams, terr := l.buildToolParams(ctx, opts.DeferredTools, opts.Asker != nil)
 		if terr != nil {
 			res.Messages = messages
 			return res, terr
@@ -650,8 +648,9 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 			return res, nil
 		}
 
-		// Dispatch tools and append their results. reveal lets ToolSearch mark
-		// deferred tools active for subsequent turns.
+		// Dispatch tools and append their results. reveal collects the
+		// deferred tools ToolSearch makes active, recorded below.
+		revealed := newRevealSet()
 		reveal := revealed.add
 		// A tool_use the model never finished emitting because the turn hit the
 		// output-token limit arrives here with empty ("{}") arguments — the
@@ -680,6 +679,7 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		}
 		capMessage(resultBlocks, names, opts.Spill)
 		toolResultMsg := anthropic.NewBetaUserMessage(resultBlocks...)
+		recordReveals(messages, &toolResultMsg, revealed.snapshot())
 		// A tool can change the mode (approving a plan does), so the next
 		// request is told here, in the message carrying the results.
 		tellMode(messages, &toolResultMsg, permission.CurrentMode(opts.Permission))
@@ -1599,15 +1599,13 @@ func toolResultWithImages(toolUseID, text string, isErr bool, images []tools.Res
 }
 
 // buildToolParams converts the registry's tools into API tool params. Deferred
-// tools are omitted unless they've been revealed (ToolSearch); ToolSearch itself
-// is always included so the model can discover the deferred ones.
-func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[string]bool, canAsk bool) ([]anthropic.BetaToolUnionParam, error) {
+// tools are marked defer_loading, which keeps them out of the model's context
+// until a reveal surfaces them; ToolSearch itself never is, so the model can
+// discover the rest.
+func (l *Loop) buildToolParams(ctx context.Context, deferred map[string]bool, canAsk bool) ([]anthropic.BetaToolUnionParam, error) {
 	names := l.tools.Names()
 	out := make([]anthropic.BetaToolUnionParam, 0, len(names))
 	for _, name := range names {
-		if deferred[name] && !revealed[name] && name != "ToolSearch" {
-			continue
-		}
 		t, _ := l.tools.Lookup(name)
 		// Nobody to ask: leave out a tool that can only ask (tools.AskOnly),
 		// rather than offer one whose every call fails. (PR #13 raised it.)
@@ -1625,8 +1623,32 @@ func (l *Loop) buildToolParams(ctx context.Context, deferred, revealed map[strin
 				InputSchema: inputSchemaParam(t.InputSchema()),
 			},
 		})
+		if deferred[name] && name != "ToolSearch" {
+			out[len(out)-1].OfTool.DeferLoading = anthropic.Bool(true)
+		}
 	}
 	return out, nil
+}
+
+// recordReveals adds a marker to msg, the tool-result message about to be
+// sent and recorded, for each tool in revealed that the conversation has not
+// revealed already. Kept in the message itself, so a reveal outlives the run
+// and a resume, as the tool list it stands for does.
+func recordReveals(history []anthropic.BetaMessageParam, msg *anthropic.BetaMessageParam, revealed map[string]bool) {
+	if len(revealed) == 0 {
+		return
+	}
+	had := api.RevealedTools(history)
+	names := make([]string, 0, len(revealed))
+	for n := range revealed {
+		if !had[n] {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		msg.Content = append(msg.Content, api.RevealBlock(n))
+	}
 }
 
 // schemaFieldList renders a tool's accepted input fields as

@@ -112,20 +112,25 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	if c.prepare != nil {
 		c.prepare(&params)
 	}
-	// Cache the stable prefix (tools + system) plus a rolling conversation
-	// breakpoint so each turn doesn't re-pay full price for the whole history.
-	if !c.tuning.NoPromptCache {
-		applyCacheControl(&params)
-	}
 	// Preserved thinking: drop a mismatched block rather than fail the turn,
 	// and report it (thinkingbinding.go). An endpoint that rejects the
 	// controls themselves gets them no more for this client's life.
 	// The same conversations get old tool results cleared server-side in
-	// place of microcompact (contextedit.go). An endpoint that rejects either
-	// is resent the turn without it, and not asked again.
+	// place of microcompact (contextedit.go), and every conversation has its
+	// tool reveals sent as appended tool_addition messages (toolreveal.go).
+	// An endpoint or model that rejects any of them is resent the turn
+	// without it, and not asked again.
 	base := params
+	var added bool
 	shape := func() anthropic.BetaMessageNewParams {
 		p := base
+		added = shapeReveals(&p, c.revealMode(p.Model))
+		// Cache the stable prefix (tools + system) plus a rolling conversation
+		// breakpoint so each turn doesn't re-pay full price for the whole
+		// history. After the reveals, which add and remove messages.
+		if !c.tuning.NoPromptCache {
+			applyCacheControl(&p)
+		}
 		if !c.noBinding.Load() && historyHasThinking(p.Messages) {
 			bindThinking(&p)
 		}
@@ -136,14 +141,18 @@ func (c *Client) StreamTurn(ctx context.Context, params anthropic.BetaMessageNew
 	}
 
 	msg, err := c.streamRetrying(ctx, shape(), sink, c.tuning.streamIdleTimeout())
-	for retry := 0; err != nil && retry < 2; retry++ {
+	for retry := 0; err != nil && retry < 4; retry++ {
 		switch {
 		case !c.noBinding.Load() && isBindingRejected(err):
 			c.noBinding.Store(true)
 		case !c.noClearing.Load() && isClearingRejected(err):
 			c.noClearing.Store(true)
+		case !c.noDeferLoading.Load() && isDeferRejected(err):
+			c.noDeferLoading.Store(true)
+		case added && isToolChangeRejected(err):
+			c.noToolChanges.Store(string(params.Model), true)
 		default:
-			retry = 2
+			retry = 4
 			continue
 		}
 		msg, err = c.streamRetrying(ctx, shape(), sink, c.tuning.streamIdleTimeout())

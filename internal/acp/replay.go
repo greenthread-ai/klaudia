@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/greenthread-ai/klaudia/pkg/api"
 )
 
 // Replaying a loaded conversation.
@@ -39,7 +41,7 @@ func (t *translator) replayMessage(m anthropic.BetaMessageParam) bool {
 		switch {
 		case b.OfText != nil:
 			text := b.OfText.Text
-			if strings.TrimSpace(text) == "" {
+			if _, marker := api.RevealedName(b); marker || strings.TrimSpace(text) == "" {
 				continue
 			}
 			if m.Role == anthropic.BetaMessageParamRoleAssistant {

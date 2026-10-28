@@ -262,7 +262,7 @@ func (f *failureState) clear(key, tool string) {
 	delete(f.streaks, tool)
 }
 
-// revealSet is the set of deferred tools ToolSearch has made active.
+// revealSet is the set of deferred tools ToolSearch made active in one batch.
 //
 // ToolSearch is not concurrency-safe, so nothing grouped can reveal anything
 // today. It is guarded anyway: reveal is handed to every tool through
@@ -283,8 +283,8 @@ func (r *revealSet) add(names ...string) {
 	}
 }
 
-// snapshot copies the set for the request builder, which reads it between
-// turns. Copying keeps buildToolParams taking a plain map.
+// snapshot copies the set for recordReveals, which reads it after the
+// dispatch.
 func (r *revealSet) snapshot() map[string]bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()

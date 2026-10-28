@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -237,6 +238,11 @@ type Client struct {
 	noBinding atomic.Bool
 	// noClearing is the same for server-side tool-result clearing.
 	noClearing atomic.Bool
+	// noDeferLoading is set once the endpoint has refused defer_loading, and
+	// noToolChanges holds each model that refused a tool_addition: their
+	// reveals fall back to changing the tools array (toolreveal.go).
+	noDeferLoading atomic.Bool
+	noToolChanges  sync.Map
 	// prepare and listOpts are the host's (WithPrepare, WithListOptions).
 	prepare  func(*anthropic.BetaMessageNewParams)
 	listOpts []option.RequestOption

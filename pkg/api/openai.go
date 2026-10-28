@@ -227,6 +227,9 @@ func (p *OpenAIProvider) streamAttempt(ctx context.Context, body []byte, model s
 
 // translateRequest converts the Anthropic params into an OpenAI chat request.
 func (p *OpenAIProvider) translateRequest(params anthropic.BetaMessageNewParams) (oaRequest, error) {
+	// Chat Completions has no deferred tools: leave out the unrevealed ones
+	// and the reveal markers (toolreveal.go).
+	shapeReveals(&params, revealByOmission)
 	out := oaRequest{
 		Model:               string(params.Model),
 		Temperature:         p.temperature,

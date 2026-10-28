@@ -153,22 +153,30 @@ func TestAppendOnlyAcrossAModeChange(t *testing.T) {
 	}
 }
 
-// Report, not assert: these are the causes being measured. Each one that
-// prints is a place the harness drops the model's earlier reasoning.
-func TestAppendOnlyMeasure(t *testing.T) {
-	run := func(name string, reg *tools.Registry, opts Options, turns ...anthropic.BetaMessage) {
-		p := &requestLog{turns: turns}
-		opts.Prompt, opts.Model = "go", "claude-opus-5-5"
-		New(p, reg).Run(context.Background(), opts, nil)
-		t.Logf("%-28s %d requests, breaks: %q", name, len(p.reqs), appendOnlyBreaks(p.reqs))
+// A ToolSearch reveal used to add the tool's definition to the next request,
+// and the set began empty on every Run, so the next prompt took it away
+// again. The tools array now carries every tool from the first request and
+// the reveal is a marker in the history (api/toolreveal.go).
+func TestAppendOnlyAcrossAToolSearchReveal(t *testing.T) {
+	p := &requestLog{turns: []anthropic.BetaMessage{thinkingToolTurn(t, "a", "Probe"), thinkingToolTurn(t, "b", "Later")}}
+	reg := tools.NewRegistry(hookTool{name: "Probe", out: "ok", fn: func(c tools.Context) { c.Reveal("Later") }}, hookTool{name: "Later", out: "ok"})
+	opts := Options{Prompt: "go", Model: "claude-opus-5-5", DeferredTools: map[string]bool{"Later": true}}
+	res, err := New(p, reg).Run(context.Background(), opts, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	// A ToolSearch reveal adds a deferred tool's definition to the next request.
-	run("ToolSearch reveal",
-		tools.NewRegistry(hookTool{name: "Probe", out: "ok", fn: func(c tools.Context) { c.Reveal("Later") }}, hookTool{name: "Later", out: "ok"}),
-		Options{DeferredTools: map[string]bool{"Later": true}},
-		thinkingToolTurn(t, "a", "Probe"), thinkingToolTurn(t, "b", "Later"))
-
+	// A second prompt, as the TUI sends it: a new Run over the history.
+	opts.Prompt, opts.InitialMessages = "again", res.Messages
+	if _, err := New(p, reg).Run(context.Background(), opts, nil); err != nil {
+		t.Fatal(err)
+	}
+	if b := appendOnlyBreaks(p.reqs); len(b) != 0 {
+		t.Errorf("a reveal broke append-only: %q", b)
+	}
+	last := p.reqs[len(p.reqs)-1]
+	if got := api.RevealedTools(last.Messages); !got["Later"] || len(got) != 1 {
+		t.Errorf("revealed in the next run's history = %v, want Later", got)
+	}
 }
 
 // clearingLog is a requestLog whose provider clears old tool results

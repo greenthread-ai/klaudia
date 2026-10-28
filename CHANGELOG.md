@@ -7,6 +7,19 @@ port mirrors (see `internal/version`).
 
 ### Fixed
 
+- **Loading a tool through tool search no longer throws away the model's
+  earlier reasoning.** On Opus 5.5, Fable 5.1 and Sonnet 5.5 a thinking
+  block is bound to the tool list it was written under, and a tool search
+  added the found tool to that list, so every load dropped the reasoning so
+  far. The list now holds every tool from the start, the unloaded ones marked
+  `defer_loading` and hidden from the model, and a load is announced in the
+  conversation (`tool_addition`, beta
+  `mid-conversation-tool-changes-2026-07-01`). Loaded tools also stay loaded
+  for the rest of the session, including after a resume: they used to be
+  forgotten at every new prompt, so the model had to search again. A model
+  without the beta (Sonnet 5) and endpoints without `defer_loading` fall
+  back to the old way.
+
 - **Starting Chrome can no longer hang a web tool call.** A Chrome that
   started but never answered on its DevTools connection left the launch, and
   the turn waiting on it, stuck for good. Starting or attaching now gives up

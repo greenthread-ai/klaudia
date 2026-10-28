@@ -39,8 +39,10 @@ func applyCacheControl(params *anthropic.BetaMessageNewParams) {
 	// last *regular* tool: server-side tools (web_search/web_fetch) are appended
 	// at the end via a different union variant with no OfTool/CacheControl, so
 	// marking the literal last element would be a silent no-op.
+	// Nor a deferred one: the API refuses cache_control on a defer_loading
+	// tool (toolreveal.go).
 	for i := len(params.Tools) - 1; i >= 0; i-- {
-		if params.Tools[i].OfTool != nil {
+		if params.Tools[i].OfTool != nil && !params.Tools[i].OfTool.DeferLoading.Value {
 			params.Tools[i].OfTool.CacheControl = cc
 			break
 		}
@@ -49,10 +51,14 @@ func applyCacheControl(params *anthropic.BetaMessageNewParams) {
 	if n := len(params.System); n > 0 {
 		params.System[n-1].CacheControl = cc
 	}
-	// Rolling conversation breakpoint: the last block of the last message.
-	if n := len(params.Messages); n > 0 {
-		if blocks := params.Messages[n-1].Content; len(blocks) > 0 {
+	// Rolling conversation breakpoint: the last block of the last message
+	// that has blocks of its own. A tool_addition message (toolreveal.go) is
+	// raw JSON with none, and when it comes last the breakpoint goes on the
+	// tool results before it.
+	for i := len(params.Messages) - 1; i >= 0; i-- {
+		if blocks := params.Messages[i].Content; len(blocks) > 0 {
 			setBlockCacheControl(&blocks[len(blocks)-1], cc)
+			break
 		}
 	}
 }
