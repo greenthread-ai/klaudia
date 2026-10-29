@@ -3,9 +3,11 @@ package api
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/google/uuid"
@@ -17,6 +19,13 @@ type oaChunk struct {
 		Delta struct {
 			Content   string       `json:"content"`
 			ToolCalls []oaToolCall `json:"tool_calls"`
+			// Reasoning is a reasoning model's thinking, which vLLM streams
+			// as "reasoning" and DeepSeek (and older vLLM) as
+			// "reasoning_content". It is counted, not kept: nothing renders
+			// thinking yet, and sending it back as content would put the
+			// model's scratch work into its own history as if it had said it.
+			Reasoning        string `json:"reasoning"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
@@ -54,6 +63,7 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 	finish := ""
 	var inTok, outTok int64
 	delivered := false
+	reasoned := 0 // characters of reasoning seen, for the empty-reply placeholder
 
 	// Synthesize the opening events for a single text content block. We emit a
 	// message_start with a placeholder message, then a text content_block_start;
@@ -107,6 +117,7 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 			inTok, outTok = chunk.Usage.PromptTokens, chunk.Usage.CompletionTokens
 		}
 		for _, ch := range chunk.Choices {
+			reasoned += utf8.RuneCountInString(ch.Delta.Reasoning) + utf8.RuneCountInString(ch.Delta.ReasoningContent)
 			if ch.Delta.Content != "" {
 				startBlocks()
 				delivered = true
@@ -142,7 +153,7 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 		if text.Len() == 0 {
 			return anthropic.BetaMessage{}, delivered, err
 		}
-		partial, _ := assembleMessage(model, text.String(), nil, finish, inTok, outTok)
+		partial, _ := assembleMessage(model, text.String(), nil, finish, inTok, outTok, reasoned)
 		return partial, delivered, err
 	}
 	// A connection closed cleanly mid-reply ends the scan with no error. With
@@ -163,7 +174,7 @@ func (p *OpenAIProvider) consumeStream(body io.Reader, model string, sink Stream
 		sink.raw(synthEvent(map[string]any{"type": "message_stop"}))
 	}
 
-	msg, err := assembleMessage(model, text.String(), tools, finish, inTok, outTok)
+	msg, err := assembleMessage(model, text.String(), tools, finish, inTok, outTok, reasoned)
 	return msg, delivered, err
 }
 
@@ -180,7 +191,14 @@ func synthEvent(payload map[string]any) anthropic.BetaRawMessageStreamEventUnion
 // assembleMessage builds an anthropic.BetaMessage from the accumulated stream
 // by constructing the Messages-API JSON and unmarshaling it (robustly handles
 // the content-block union types).
-func assembleMessage(model, text string, tools map[int]*toolAccum, finish string, inTok, outTok int64) (anthropic.BetaMessage, error) {
+//
+// reasoned is how much reasoning the model streamed. It only changes the
+// placeholder for an empty reply: a reasoning model that spends its whole
+// output budget thinking answers with nothing, and "no content" alone reads
+// as a server fault rather than as the budget it is (measured: gpt-oss-20b at
+// max_tokens=50 returned content null, finish_reason length, and a paragraph
+// of reasoning).
+func assembleMessage(model, text string, tools map[int]*toolAccum, finish string, inTok, outTok int64, reasoned int) (anthropic.BetaMessage, error) {
 	var content []map[string]any
 	if text != "" {
 		content = append(content, map[string]any{"type": "text", "text": text})
@@ -195,10 +213,11 @@ func assembleMessage(model, text string, tools map[int]*toolAccum, finish string
 		if reason == "" {
 			reason = "empty response"
 		}
-		content = append(content, map[string]any{
-			"type": "text",
-			"text": "[Provider returned no content — finish_reason=" + reason + "]",
-		})
+		placeholder := "[Provider returned no content — finish_reason=" + reason + "]"
+		if reasoned > 0 {
+			placeholder = fmt.Sprintf("[Provider returned no content — the model reasoned (%d characters, not shown) and stopped before answering; finish_reason=%s]", reasoned, reason)
+		}
+		content = append(content, map[string]any{"type": "text", "text": placeholder})
 	}
 	// Emit tool_use blocks in ascending index order.
 	idxs := make([]int, 0, len(tools))
