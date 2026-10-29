@@ -52,6 +52,10 @@ func BuiltinTools() ([]Tool, error) {
 		func() (Tool, error) { return NewSkill([]SkillInfo{{Name: "x"}}) },
 		func() (Tool, error) { return NewToolSearch(nil) },
 		func() (Tool, error) { return NewAgent(nil, nil) },
+		func() (Tool, error) { return NewTranscribe(nil, nil) },
+		func() (Tool, error) { return NewSpeak(nil, nil) },
+		func() (Tool, error) { return NewGenerateImage(nil, nil) },
+		func() (Tool, error) { return NewGenerateMusic(nil, nil) },
 	}
 	for _, mk := range extra {
 		t, err := mk()

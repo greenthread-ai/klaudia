@@ -361,6 +361,10 @@ func (m *Model) handleSlash(input string) (tea.Model, tea.Cmd) {
 	case "/last":
 		return m, m.showResult(args)
 	case "/model":
+		if len(args) > 0 && m.sess.ModelDenied != nil && m.sess.ModelDenied(args[0]) {
+			m.appendLine(errStyle.Render("model: " + args[0] + " is denied by [models] deny in your config; the model is unchanged."))
+			break
+		}
 		if len(args) > 0 {
 			// The confirmation was being computed and dropped here, so
 			// `/model <id>` was the one path that changed the model and said

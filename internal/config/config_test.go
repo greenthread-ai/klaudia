@@ -373,3 +373,37 @@ func TestResolveExtraHeaders(t *testing.T) {
 		t.Errorf("missing = %v, want [CF_SECRET]", missing)
 	}
 }
+
+// [models] deny is a list a project may add to and never shorten: denying is
+// tightening, and a repository's list replacing the user's would un-deny.
+func TestModelsDenyMergesAndMatches(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("KLAUDIA_CONFIG_DIR", "")
+	writeConfig(t, home, `[models]
+deny = ["*-Uncensored"]
+`)
+	cwd := t.TempDir()
+	writeConfig(t, cwd, `[models]
+deny = ["black-forest-labs/*"]
+`)
+	m := Load(cwd).Models
+	for id, want := range map[string]bool{
+		"Qwen/Qwen3.8-27B-Uncensored":       true,
+		"qwen/qwen3.8-27b-uncensored":       true, // ids are not consistently cased
+		"black-forest-labs/FLUX.2-klein-4B": true,
+		"openai/gpt-oss-20b":                false,
+	} {
+		if got := m.Denied(id); got != want {
+			t.Errorf("Denied(%q) = %v, want %v (deny %q)", id, got, want, m.Deny)
+		}
+	}
+	for pat, id := range map[string]string{"exact/id": "exact/id", "a*b*c": "axxbyyc", "*": "anything/at/all"} {
+		if !(Models{Deny: []string{pat}}).Denied(id) {
+			t.Errorf("%q should match %q", pat, id)
+		}
+	}
+	if (Models{Deny: []string{"a*b*b"}}).Denied("ab") || (Models{Deny: []string{""}}).Denied("") {
+		t.Error("over-eager match")
+	}
+}

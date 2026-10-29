@@ -108,6 +108,10 @@ type Session struct {
 	// backing the /model picker. Nil when the provider can't enumerate them, in
 	// which case /model stays type-the-name only.
 	ListModels func(context.Context) ([]api.ModelInfo, error)
+	// ModelDenied reports whether config's [models] deny names a model, so
+	// /model <id> refuses it. ListModels already leaves denied models out of
+	// the picker. Nil denies nothing.
+	ModelDenied func(id string) bool
 	// ResolveLimits sizes a model for /model: the startup resolver with config
 	// overrides bound in, given whatever the picker already knows about the
 	// model. Nil sizes from the offline table alone.

@@ -64,7 +64,8 @@ framework), `05-app-core` (agent loop/tools), `06-app-ui` (TUI screens),
 | Per-message tool-result cap | 05-app-core | `agent/batchcap.go` | 🔀 divergent | One turn's combined tool-result text held to 200 KB, on top of the 30 KB per-result cap. Shares are water-filled, not split evenly; images and an existing spill notice are left alone. See `docs/compaction.md`. |
 | Provider abstraction | 03-providers | `api/provider.go` | 🔀 divergent | Multi-provider interface (Anthropic + OpenAI-compatible); JS was Anthropic-centric. |
 | Anthropic Messages (Beta, streaming) | 02/03 | `api/client.go` | ✅ done | Streamed with an idle watchdog (`streamIdleTimeout` in config). |
-| OpenAI-compatible Chat Completions | — | `api/openai*.go` | 🔀 divergent | Translation shim; SSE stream:true. Image tool_results translated to `image_url` content parts. |
+| OpenAI-compatible Chat Completions | — | `api/openai*.go` | 🔀 divergent | Translation shim; SSE stream:true. Image tool_results translated to `image_url` content parts. `delta.reasoning` is counted, not kept. |
+| Model kinds + media tools | — | `api/modelkind.go`, `api/media.go`, `tools/media.go` | 🔀 divergent | New capability with no JS analogue: `GET /v1/models` metadata classifies each model; non-chat ones become Transcribe / Speak / GenerateImage / GenerateMusic, registered per kind the endpoint serves. `[models] deny`. See `docs/models.md`. |
 | Prompt caching | 03-providers | `api/cache.go` | ✅ done | `cache_control` breakpoints on tools + system + a rolling conversation tail; usage surfaced as `cache_read/creation_input_tokens`. Off with `api.Tuning.NoPromptCache`. |
 | stream-json output (authoritative envelope) | 08-entry | `streamjson/` + `cli/envelope.go` | ✅ done | |
 | stream-json partial deltas | 08-entry | `cli/partial.go` + `api/StreamSink` | ✅ done | Behind `--include-partial-messages`; emits JS `stream_event` lines. OpenAI shim synthesizes the sequence. |

@@ -112,6 +112,8 @@ type Config struct {
 	TUI TUI `toml:"tui,omitempty"`
 	// Subagents configures how sub-agents run.
 	Subagents Subagents `toml:"subagents,omitempty"`
+	// Models restricts which of the endpoint's models Klaudia will use.
+	Models Models `toml:"models,omitempty"`
 	// Hooks are lifecycle hooks: shell commands run at fixed points in a turn.
 	//
 	// Note that Load does NOT merge this field, and that is deliberate — see
@@ -140,6 +142,54 @@ type Hook struct {
 	Command string `toml:"command"`
 	// Timeout is a Go duration ("5s", "2m"). Empty uses the package default.
 	Timeout string `toml:"timeout,omitempty"`
+}
+
+// Models is the [models] section.
+type Models struct {
+	// Deny lists models Klaudia must not use, by id or with * matching any
+	// run of characters ("*-Uncensored", "black-forest-labs/*"). A denied
+	// model is left out of /model and the media tools, and refused as the
+	// session's model. The endpoint decides what a key may call; this is the
+	// user deciding what they want called. A project's list adds to the
+	// user's: denying is tightening, so a repository may do it.
+	Deny []string `toml:"deny,omitempty"`
+}
+
+// Denied reports whether id matches an entry in Deny. Case-insensitive: model
+// ids are not consistently cased across gateways.
+func (m Models) Denied(id string) bool {
+	id = strings.ToLower(id)
+	for _, pat := range m.Deny {
+		if globMatch(strings.ToLower(strings.TrimSpace(pat)), id) {
+			return true
+		}
+	}
+	return false
+}
+
+// globMatch matches s against pat, where * is any run of characters,
+// slashes included — unlike path.Match, whose * stops at "/", which is the
+// one character every vendor-prefixed model id has.
+func globMatch(pat, s string) bool {
+	if pat == "" {
+		return false
+	}
+	parts := strings.Split(pat, "*")
+	if len(parts) == 1 {
+		return pat == s
+	}
+	if !strings.HasPrefix(s, parts[0]) {
+		return false
+	}
+	s = s[len(parts[0]):]
+	for _, mid := range parts[1 : len(parts)-1] {
+		i := strings.Index(s, mid)
+		if i < 0 {
+			return false
+		}
+		s = s[i+len(mid):]
+	}
+	return strings.HasSuffix(s, parts[len(parts)-1])
 }
 
 // Subagents configures sub-agent execution.
@@ -520,6 +570,9 @@ func merge(dst *Config, src Config) {
 	if src.MaxRetries != nil {
 		dst.MaxRetries = src.MaxRetries
 	}
+	// Added to, never replaced: a project's list replacing the user's would
+	// let a repository un-deny a model, and a config file may only tighten.
+	dst.Models.Deny = append(dst.Models.Deny, src.Models.Deny...)
 	if len(src.FallbackModels) > 0 {
 		dst.FallbackModels = src.FallbackModels
 	}

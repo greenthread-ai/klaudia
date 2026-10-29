@@ -433,6 +433,48 @@ func limitsResolver(provider string, lister api.ModelLister, cfgMaxTokens, cfgCo
 	}
 }
 
+// deniedModelsOut wraps a lister so models config denies are never offered.
+func deniedModelsOut(list func(context.Context) ([]api.ModelInfo, error), deny config.Models) func(context.Context) ([]api.ModelInfo, error) {
+	if list == nil || len(deny.Deny) == 0 {
+		return list
+	}
+	return func(ctx context.Context) ([]api.ModelInfo, error) {
+		models, err := list(ctx)
+		out := models[:0:0]
+		for _, m := range models {
+			if !deny.Denied(m.ID) {
+				out = append(out, m)
+			}
+		}
+		return out, err
+	}
+}
+
+// mediaCatalog is the endpoint's non-chat models, less any config denies,
+// for the media tools. From the cache at any age — a stale list still names
+// the models, and the refresh runs in the background — and fetched now only
+// when there is no cache at all, which is the first run against an endpoint.
+// Registration happens once, at startup, so a list that arrives later would
+// not add tools; that fetch is the one-time price of having them on run one.
+func mediaCatalog(ctx context.Context, cache *api.ModelCache, deny config.Models) tools.MediaModels {
+	if cache == nil {
+		return nil
+	}
+	listed, _ := cache.Cached()
+	if len(listed) == 0 {
+		lctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		listed, _ = cache.ListModels(lctx)
+		cancel()
+	}
+	var out tools.MediaModels
+	for _, m := range listed {
+		if !m.Chat() && !deny.Denied(m.ID) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 // cachedModelLister prefers the cache, so listing models refreshes it.
 func cachedModelLister(c *api.ModelCache, p api.Provider) func(context.Context) ([]api.ModelInfo, error) {
 	if c != nil {
@@ -820,6 +862,13 @@ provider = "anthropic"
 # contextWindow = 128000
 # maxTokens = 16384
 
+# Models Klaudia must not use: ids, or * for any run of characters. Denied
+# models are left out of /model and the media tools, here and in headless
+# runs, which otherwise use an endpoint's speech, image and music models
+# without asking (docs/models.md).
+# [models]
+# deny = ["*-Uncensored"]
+
 # TUI theme (Markdown + chrome). /theme switches it for a session.
 # theme = "nord" # klaudia (default) | dracula | gruvbox | tokyo-night | nord | light | catppuccin
 
@@ -854,6 +903,9 @@ const starterProjectConfig = `# Klaudia project config: ./.klaudia/config.toml
 # Stricter than the user's settings, for everyone working in this repo:
 # [permissions]
 # mode = "plan"
+#
+# [models]
+# deny = ["black-forest-labs/*"] # adds to the user's list, never shortens it
 #
 # [sandbox]
 # mode = "os"                 # applies where the user has not chosen one
@@ -1188,6 +1240,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	// string as written (resolveModel), and is told once if it is an alias.
 	resolveModel := func(m string) anthropic.Model { return api.ResolveModelFor(cfg.Provider, m) }
 	model := resolveModel(modelStr)
+	if cfg.Models.Denied(modelStr) || cfg.Models.Denied(string(model)) {
+		return fmt.Errorf("model %s is denied by [models] deny in your config; choose another with --model or the model setting", modelStr)
+	}
 	if w := api.AliasWarning(cfg.Provider, modelStr); w != "" {
 		fmt.Fprintln(cmd.ErrOrStderr(), "warning:", w)
 	}
@@ -1340,12 +1395,17 @@ func run(cmd *cobra.Command, opts *options) error {
 	// one repo cannot overwrite each other's plan, and resolved after the
 	// resume branch above so --resume keeps writing the same file.
 	planStore := plan.New(plan.PathFor(session.ConfigRoot(), sessionID))
-	base, err := tools.DefaultRegistry(executor,
+	regOpts := []tools.RegOption{
 		tools.WithBrowserEngine(browserEngine),
 		tools.WithJobStore(jobStore),
 		tools.WithLSP(lspPool),
 		tools.WithPlanStore(planStore),
-	)
+	}
+	// The endpoint's speech, transcription, image and music models, as tools.
+	if mc, ok := provider.(api.MediaClient); ok {
+		regOpts = append(regOpts, tools.WithMedia(mc, mediaCatalog(ctx, modelCache, cfg.Models)))
+	}
+	base, err := tools.DefaultRegistry(executor, regOpts...)
 	if err != nil {
 		return err
 	}
@@ -1751,7 +1811,8 @@ func run(cmd *cobra.Command, opts *options) error {
 			// Nil unless the provider can enumerate its models; /model falls
 			// back to type-the-id when it is. Through the cache, so the picker
 			// keeps it current.
-			ListModels:    cachedModelLister(modelCache, provider),
+			ListModels:    deniedModelsOut(cachedModelLister(modelCache, provider), cfg.Models),
+			ModelDenied:   cfg.Models.Denied,
 			ResolveLimits: resolveLimitsFor,
 			Trust:         tui.NewTrustController(hostGate),
 			Jobs:          jobStore,

@@ -47,7 +47,21 @@ func ClassifyToolCall(name string, input []byte, cwd string, roots Roots) Assess
 		p := firstNonEmpty(in.FilePath, in.NotebookPath)
 		return pathAssessment(name, KindWrite, p, cwd, roots)
 
-	case "Read":
+	case "Speak", "GenerateImage", "GenerateMusic":
+		// The media tools write their output where the model says, so they are
+		// Write as far as the machine is concerned. No path means the working
+		// directory, which is project work and needs no effect.
+		var in struct {
+			FilePath string `json:"file_path"`
+		}
+		if err := json.Unmarshal(input, &in); err != nil {
+			return Assessment{}
+		}
+		return pathAssessment(name, KindWrite, in.FilePath, cwd, roots)
+
+	case "Read", "Transcribe":
+		// Transcribe reads a file to send it to the endpoint, which is Read
+		// with the contents leaving in a different direction.
 		var in struct {
 			FilePath string `json:"file_path"`
 		}

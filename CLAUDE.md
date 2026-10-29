@@ -78,8 +78,9 @@ where the implementation deliberately differs from them — read it before
 "fixing" something that looks unimplemented. `docs/trust.md`, `docs/jobs.md`,
 `docs/working-tree.md`, `docs/hooks.md`, `docs/acp.md`, `docs/effort.md`,
 `docs/plan-mode.md`, `docs/releasing.md`, `docs/compaction.md`,
-`docs/memory-architecture.md` and `docs/server-side-tools.md` cover subsystems
-in detail; `docs/parity.md` maps features against Claude Code, and
+`docs/memory-architecture.md`, `docs/server-side-tools.md` and
+`docs/models.md` (model kinds, the media tools, `[models] deny`) cover
+subsystems in detail; `docs/parity.md` maps features against Claude Code, and
 `docs/roadmap.md` is the forward plan (recommendations, not records).
 
 `docs/plan-mode.md` records five decisions, all landed. In brief: a permission refusal

@@ -297,6 +297,11 @@ klaudia -p "provision the box" --allow-host-changes
 a disposable CI image, a provisioning run. It permits the *declared operation*,
 not everything: a run that asked to install nginx has not asked to reboot.
 
+An endpoint's speech, transcription, image and music models are used without
+asking, here as interactively. A scripted run has already delegated the work,
+and generating media on the endpoint it configured is part of that work. Keep
+a model out with `[models] deny`; `docs/models.md` has the reasoning.
+
 `--loop` runs in autonomous mode, the default; the
 `--dangerously-skip-permissions` flag it once needed has been removed
 (`--permission-mode bypassPermissions` is the explicit way past the gate).

@@ -7,6 +7,7 @@ import (
 	"github.com/greenthread-ai/klaudia/internal/browser"
 	"github.com/greenthread-ai/klaudia/internal/lsp"
 	"github.com/greenthread-ai/klaudia/internal/sandbox"
+	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
@@ -17,6 +18,8 @@ type regOptions struct {
 	shells  *JobStore
 	lsp     *lsp.Pool
 	plans   *plan.Store
+	media   api.MediaClient
+	models  MediaModels
 }
 
 // RegOption configures DefaultRegistry.
@@ -35,6 +38,13 @@ func WithJobStore(s *JobStore) RegOption { return func(o *regOptions) { o.shells
 // the store built by default is reachable only from inside the registry, which
 // is how the todo list came to be rendered by exactly one frontend.
 func WithPlanStore(s *plan.Store) RegOption { return func(o *regOptions) { o.plans = s } }
+
+// WithMedia supplies the endpoint's non-chat models and the client that calls
+// them. Each media tool is registered only when models lists one of its kind
+// (media.go); omitted, or with a provider that serves none, there are none.
+func WithMedia(client api.MediaClient, models MediaModels) RegOption {
+	return func(o *regOptions) { o.media, o.models = client, models }
+}
 
 // WithLSP supplies the language-server pool backing Diagnostics/Definition/
 // References. The caller Close()s it at session end. When omitted, the LSP tools
@@ -125,6 +135,23 @@ func DefaultRegistry(executor sandbox.Executor, opts ...RegOption) (*Registry, e
 			ctor{"Rename", func() (Tool, error) { return NewRename(pool) }},
 			ctor{"WorkspaceSymbol", func() (Tool, error) { return NewWorkspaceSymbol(pool) }},
 		)
+	}
+
+	// One tool per kind of non-chat model the endpoint lists.
+	if cfg.media != nil {
+		client, models := cfg.media, cfg.models
+		if ms := models.of(api.ModelKindTranscribe); len(ms) > 0 {
+			ctors = append(ctors, ctor{"Transcribe", func() (Tool, error) { return NewTranscribe(client, ms) }})
+		}
+		if ms := models.of(api.ModelKindSpeech); len(ms) > 0 {
+			ctors = append(ctors, ctor{"Speak", func() (Tool, error) { return NewSpeak(client, ms) }})
+		}
+		if ms := models.of(api.ModelKindImage); len(ms) > 0 {
+			ctors = append(ctors, ctor{"GenerateImage", func() (Tool, error) { return NewGenerateImage(client, ms) }})
+		}
+		if ms := models.of(api.ModelKindMusic); len(ms) > 0 {
+			ctors = append(ctors, ctor{"GenerateMusic", func() (Tool, error) { return NewGenerateMusic(client, ms) }})
+		}
 	}
 
 	ts := make([]Tool, 0, len(ctors))

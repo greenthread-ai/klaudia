@@ -1152,7 +1152,7 @@ func envFailureMsg(tool string, n int, sig string) string {
 // property of the loop, not of any one tool.
 func editedPaths(name string, raw []byte) []string {
 	switch name {
-	case "Write", "Edit", "NotebookEdit":
+	case "Write", "Edit", "NotebookEdit", "Speak", "GenerateImage", "GenerateMusic":
 	default:
 		return nil
 	}
