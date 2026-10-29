@@ -116,7 +116,7 @@ Some consequences worth being explicit about:
   virtualenv or a prefix you own, and do not ask. `pip install
   --break-system-packages` is the exception: the flag exists only to override
   the guard on an interpreter the OS or Homebrew manages, so it asks without
-  `sudo`. A headless run used it to install into Homebrew's Python after the
+  `sudo`. A headless run used it to install into Homebrew's Python after
   pip refused it without the flag. The same override set through
   `PIP_BREAK_SYSTEM_PACKAGES=1` is not read.
 
