@@ -5,6 +5,45 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Added
+
+- **Speech, transcription, image and music models as tools.** On an
+  OpenAI-compatible endpoint that also serves these models, Klaudia offers
+  `Transcribe`, `Speak`, `GenerateImage` and `GenerateMusic`, one for each
+  kind of model the endpoint lists. Each tool's description names its models.
+  Generated files are saved where the work that uses them lives, or in the
+  working directory under a name taken from the request, and never overwrite
+  an existing file. Images are shown to the model so it can check them.
+  Using these models never asks, headless runs included. See
+  `docs/models.md`.
+- **`[models] deny`** keeps models out of use: ids, or patterns where `*`
+  matches anything. A denied model is left out of `/model` and the media
+  tools, and is refused as `--model`, as the configured model, and by
+  `/model <id>`. A project config can add to the list but not remove from
+  it. Until gateways mark abliterated models, this is how to opt out of
+  them (`deny = ["*-Uncensored"]`).
+
+### Changed
+
+- **`/model` offers only chat models.** Endpoints that list speech, image or
+  music models next to chat models used to offer them all, and picking one
+  failed on the next turn. `/doctor` now breaks the list down by kind and
+  warns when the configured model can't chat.
+
+### Fixed
+
+- **Models on OpenAI-compatible gateways get their real context window.**
+  The `context_length` in `/v1/models` was ignored, so every model there ran
+  at the unknown-model floor and compacted with no known window.
+- **A reply that was all reasoning says so.** vLLM-served reasoning models
+  (gpt-oss, Qwen3) that used their whole budget thinking showed only "no
+  content". The message now gives how much they reasoned and why they
+  stopped.
+- **`pip install --break-system-packages` counts as a change to the
+  machine.** Without `sudo`, it went through as project work, and a headless
+  run used it to install packages into Homebrew's Python. It now needs
+  approval, so a headless run refuses it.
+
 ## v0.6.2 — 2026-10-28
 
 ### Fixed
