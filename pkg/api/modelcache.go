@@ -59,16 +59,48 @@ func ModelCachePath(root, provider, endpoint string) string {
 	return filepath.Join(root, "cache", "models-"+provider+"-"+hex.EncodeToString(sum[:4])+".json")
 }
 
+// modelCacheVersion is bumped when a record gains fields a refresh would fill.
+// A file from an older version still parses, but is not fresh: version 1 held
+// no kinds and dropped context_length, so trusting it for a day would size
+// every model on a gateway at the floor until it expired.
+const modelCacheVersion = 2
+
 type modelCacheFile struct {
+	Version   int                `json:"version,omitempty"`
 	FetchedAt time.Time          `json:"fetched_at"`
 	Models    []modelCacheRecord `json:"models"`
 }
 
+// modelCacheRecord is ModelInfo on disk. A file written before Kind existed
+// reads back with every kind unknown, which counts as chat — the behaviour of
+// the version that wrote it — until the next refresh.
 type modelCacheRecord struct {
-	ID            string `json:"id"`
-	DisplayName   string `json:"display_name,omitempty"`
-	ContextWindow int    `json:"context_window,omitempty"`
-	MaxTokens     int    `json:"max_tokens,omitempty"`
+	ID            string    `json:"id"`
+	DisplayName   string    `json:"display_name,omitempty"`
+	ContextWindow int       `json:"context_window,omitempty"`
+	MaxTokens     int       `json:"max_tokens,omitempty"`
+	Kind          ModelKind `json:"kind,omitempty"`
+	Description   string    `json:"description,omitempty"`
+	Endpoints     []string  `json:"endpoints,omitempty"`
+	Params        []string  `json:"params,omitempty"`
+	Inputs        []string  `json:"inputs,omitempty"`
+	Outputs       []string  `json:"outputs,omitempty"`
+}
+
+func (r modelCacheRecord) info() ModelInfo {
+	return ModelInfo{
+		ID: r.ID, DisplayName: r.DisplayName, ContextWindow: r.ContextWindow, MaxTokens: r.MaxTokens,
+		Kind: r.Kind, Description: r.Description, Endpoints: r.Endpoints, Params: r.Params,
+		Inputs: r.Inputs, Outputs: r.Outputs,
+	}
+}
+
+func cacheRecord(m ModelInfo) modelCacheRecord {
+	return modelCacheRecord{
+		ID: m.ID, DisplayName: m.DisplayName, ContextWindow: m.ContextWindow, MaxTokens: m.MaxTokens,
+		Kind: m.Kind, Description: m.Description, Endpoints: m.Endpoints, Params: m.Params,
+		Inputs: m.Inputs, Outputs: m.Outputs,
+	}
 }
 
 // Cached returns the stored list and whether it is fresh. A missing, unreadable
@@ -88,10 +120,10 @@ func (c *ModelCache) Cached() ([]ModelInfo, bool) {
 	}
 	models := make([]ModelInfo, 0, len(f.Models))
 	for _, r := range f.Models {
-		models = append(models, ModelInfo{ID: r.ID, DisplayName: r.DisplayName, ContextWindow: r.ContextWindow, MaxTokens: r.MaxTokens})
+		models = append(models, r.info())
 	}
 	age := c.now().Sub(f.FetchedAt)
-	return models, age >= 0 && age < c.maxAge
+	return models, f.Version >= modelCacheVersion && age >= 0 && age < c.maxAge
 }
 
 // FetchedAt reports when the stored list was fetched, and how many models it
@@ -132,9 +164,9 @@ func (c *ModelCache) write(models []ModelInfo) {
 	if c.path == "" {
 		return
 	}
-	f := modelCacheFile{FetchedAt: c.now().UTC()}
+	f := modelCacheFile{Version: modelCacheVersion, FetchedAt: c.now().UTC()}
 	for _, m := range models {
-		f.Models = append(f.Models, modelCacheRecord{ID: m.ID, DisplayName: m.DisplayName, ContextWindow: m.ContextWindow, MaxTokens: m.MaxTokens})
+		f.Models = append(f.Models, cacheRecord(m))
 	}
 	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {

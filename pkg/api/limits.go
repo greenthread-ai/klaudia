@@ -181,6 +181,9 @@ func lookupModel(ctx context.Context, lister ModelLister, model string) (ModelIn
 	return findModel(models, model)
 }
 
+// FindModel is findModel for callers outside the package.
+func FindModel(models []ModelInfo, model string) (ModelInfo, bool) { return findModel(models, model) }
+
 // findModel matches an id exactly, then by suffix: a server-side alias can
 // answer under a different id than it is listed by (OpenAI-compatible
 // gateways prefix with the vendor, e.g. "openai/gpt-5.5" listed as "gpt-5.5").

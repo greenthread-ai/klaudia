@@ -205,6 +205,19 @@ func buildDoctorInput(cfg config.Config, model anthropic.Model, limits api.Model
 	// Read-only: the cache is only consulted for its age, never refreshed here.
 	cache := api.NewModelCache(nil, api.ModelCachePath(session.ConfigRoot(), providerName(cfg), resolveEndpoint(cfg)))
 	in.ModelsFetchedAt, in.ModelsCount, in.ModelsCached = cache.FetchedAt()
+	if listed, _ := cache.Cached(); len(listed) > 0 {
+		in.ModelKinds = map[string]int{}
+		for _, mi := range listed {
+			k := string(mi.Kind)
+			if mi.Chat() {
+				k = "chat"
+			}
+			in.ModelKinds[k]++
+		}
+		if mi, ok := api.FindModel(listed, string(model)); ok {
+			in.ModelKind = string(mi.Kind)
+		}
+	}
 	if cfg.Provider == config.ProviderOpenAI {
 		if cfg.ResolveAPIKey() != "" {
 			in.AuthOK, in.AuthKind = true, "api-key"

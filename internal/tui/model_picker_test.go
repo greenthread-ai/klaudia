@@ -375,3 +375,48 @@ func TestModelAliasOnAnotherProvider(t *testing.T) {
 		t.Errorf("anthropic: resolved %q, msg %q", m.sess.ResolvedModel, msg)
 	}
 }
+
+// An endpoint that serves speech, transcription and image models lists them
+// beside the chat ones. The picker and Tab offer only chat models; typing one
+// of the others still applies (the user may know better) but says the next
+// turn will be refused.
+func TestModelPickerOffersOnlyChatModels(t *testing.T) {
+	listed := []api.ModelInfo{
+		{ID: "qwen-chat", Kind: api.ModelKindChat},
+		{ID: "bare-id"}, // unclassified counts as chat
+		{ID: "qwen-tts", Kind: api.ModelKindSpeech},
+		{ID: "flux", Kind: api.ModelKindImage},
+	}
+	m := pickerModel(t, nil, nil)
+	m.knownModels = listed
+	m.showModelPicker(listed)
+	if len(m.choiceItems) != 2 {
+		t.Errorf("picker offers %d models, want the 2 that can chat:\n%s", len(m.choiceItems), pickerView(m))
+	}
+	if out := pickerView(m); strings.Contains(out, "qwen-tts") || strings.Contains(out, "flux") {
+		t.Errorf("non-chat model offered:\n%s", out)
+	}
+	if got := completeModelArg(m, nil, ""); len(got) != 2 {
+		t.Errorf("Tab offers %v, want the 2 chat models", got)
+	}
+
+	m.setState(stateIdle)
+	m.handleSlash("/model qwen-tts")
+	if m.sess.Model != "qwen-tts" {
+		t.Errorf("model = %q, want the typed id applied anyway", m.sess.Model)
+	}
+	if out := visibleText(m.transcript.String()); !strings.Contains(out, "qwen-tts is listed as a tts model, not a chat model") {
+		t.Errorf("expected a not-a-chat-model warning:\n%s", out)
+	}
+}
+
+func TestModelPickerSaysWhenNothingCanChat(t *testing.T) {
+	m := pickerModel(t, nil, nil)
+	m.showModelPicker([]api.ModelInfo{{ID: "qwen-tts", Kind: api.ModelKindSpeech}})
+	if m.state == stateAwaitingChoice {
+		t.Error("no chat model means no picker")
+	}
+	if out := visibleText(m.transcript.String()); !strings.Contains(out, "none of them is a chat model") {
+		t.Errorf("expected an explanation:\n%s", out)
+	}
+}

@@ -37,7 +37,16 @@ func (m *Model) fetchModels() tea.Cmd {
 }
 
 // showModelPicker turns the fetched list into the standard numbered picker.
-func (m *Model) showModelPicker(models []api.ModelInfo) {
+func (m *Model) showModelPicker(all []api.ModelInfo) {
+	// Only what can hold a conversation. An endpoint that also serves speech,
+	// transcription or image models lists them in the same /v1/models, and
+	// picking one here used to send the next turn to an endpoint that refuses
+	// it.
+	models := api.ChatModels(all)
+	if len(models) == 0 && len(all) > 0 {
+		m.appendLine(bannerStyle.Render(fmt.Sprintf("The provider listed %d models and none of them is a chat model. /model <id> still works.", len(all))))
+		return
+	}
 	if len(models) == 0 {
 		m.appendLine(bannerStyle.Render("The provider reported no models. /model <id> still works."))
 		return
@@ -129,6 +138,9 @@ func (m *Model) unlistedModelWarning(id string) string {
 	resolved := string(api.ResolveModelFor(m.sess.Provider, id))
 	for _, mi := range m.knownModels {
 		if mi.ID == id || mi.ID == resolved {
+			if !mi.Chat() {
+				return "  " + mi.ID + " is listed as a " + string(mi.Kind) + " model, not a chat model; the next turn will be refused. Run /model to pick a chat model."
+			}
 			return ""
 		}
 	}

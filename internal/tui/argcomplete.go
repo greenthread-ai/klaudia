@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 )
 
@@ -151,7 +152,7 @@ func completeModelArg(m *Model, prev []string, _ string) []string {
 		return nil
 	}
 	out := make([]string, 0, len(m.knownModels))
-	for _, mi := range m.knownModels {
+	for _, mi := range api.ChatModels(m.knownModels) {
 		out = append(out, mi.ID)
 	}
 	return out

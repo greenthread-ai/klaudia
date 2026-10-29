@@ -82,6 +82,13 @@ type Input struct {
 	ModelsCached    bool
 	ModelsFetchedAt time.Time
 	ModelsCount     int
+	// ModelKinds counts the cached list by what each model does ("chat",
+	// "tts", ...; unclassified models count as chat), and ModelKind is the
+	// configured model's, "" when it is not in the list or unclassified. An
+	// endpoint that serves speech or image models lists them beside the chat
+	// ones, and a non-chat model configured as the default fails every turn.
+	ModelKinds map[string]int
+	ModelKind  string
 	// Now is the clock for ages; zero means time.Now. Set by tests.
 	Now time.Time
 	// MissingLSPHints are actionable suggestions for languages present in the
@@ -256,11 +263,18 @@ func Run(in Input) []Check {
 			now = time.Now()
 		}
 		age := now.Sub(in.ModelsFetchedAt)
-		msg := fmt.Sprintf("%d models, checked %s ago", in.ModelsCount, humanAge(age))
+		msg := fmt.Sprintf("%d models", in.ModelsCount)
+		if len(in.ModelKinds) > 1 {
+			msg += " (" + kindCounts(in.ModelKinds) + ")"
+		}
+		msg += fmt.Sprintf(", checked %s ago", humanAge(age))
 		if age >= 24*time.Hour {
 			msg += " — stale, refreshes on the next start"
 		}
 		add("model list", StatusInfo, msg)
+	}
+	if in.ModelKind != "" && in.ModelKind != "chat" {
+		add("model kind", StatusWarn, model+" is listed as a "+in.ModelKind+" model, not a chat model — every turn will be refused; pick a chat model with /model")
 	}
 
 	// Effort, and the one way it goes wrong quietly. max_tokens is a hard
@@ -484,4 +498,23 @@ func countOf(n int, word string) string {
 		return "1 " + word
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// kindCounts renders ModelKinds chat first, then the rest by name.
+func kindCounts(kinds map[string]int) string {
+	names := make([]string, 0, len(kinds))
+	for k := range kinds {
+		if k != "chat" {
+			names = append(names, k)
+		}
+	}
+	sort.Strings(names)
+	if kinds["chat"] > 0 {
+		names = append([]string{"chat"}, names...)
+	}
+	parts := make([]string, 0, len(names))
+	for _, k := range names {
+		parts = append(parts, fmt.Sprintf("%d %s", kinds[k], k))
+	}
+	return strings.Join(parts, ", ")
 }

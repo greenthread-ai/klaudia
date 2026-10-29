@@ -360,6 +360,12 @@ func TestModelListAgeIsReported(t *testing.T) {
 			want: true, contains: []string{"checked 5m ago"}},
 		{name: "stale", in: Input{Now: now, ModelsCached: true, ModelsCount: 14, ModelsFetchedAt: now.Add(-30 * time.Hour)},
 			want: true, contains: []string{"checked 30h ago", "stale, refreshes on the next start"}},
+		{name: "by kind, chat first", in: Input{Now: now, ModelsCached: true, ModelsCount: 8, ModelsFetchedAt: now,
+			ModelKinds: map[string]int{"tts": 1, "chat": 4, "image": 1, "stt": 1, "music": 1}},
+			want: true, contains: []string{"8 models (4 chat, 1 image, 1 music, 1 stt, 1 tts)"}},
+		{name: "one kind is not broken down", in: Input{Now: now, ModelsCached: true, ModelsCount: 3, ModelsFetchedAt: now,
+			ModelKinds: map[string]int{"chat": 3}},
+			want: true, absent: "("},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -379,5 +385,17 @@ func TestModelListAgeIsReported(t *testing.T) {
 				t.Errorf("status = %q, want info", c.Status)
 			}
 		})
+	}
+}
+
+func TestDoctorWarnsWhenTheModelCannotChat(t *testing.T) {
+	c, ok := find(Run(Input{Model: "qwen-tts", ModelKind: "tts"}), "model kind")
+	if !ok || c.Status != StatusWarn || !strings.Contains(c.Detail, "listed as a tts model") {
+		t.Errorf("want a warning for a tts default, got %+v (present %v)", c, ok)
+	}
+	for _, kind := range []string{"", "chat"} {
+		if _, ok := find(Run(Input{Model: "m", ModelKind: kind}), "model kind"); ok {
+			t.Errorf("kind %q should not warn", kind)
+		}
 	}
 }

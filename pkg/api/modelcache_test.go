@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -105,7 +106,11 @@ func TestResolvePrefersTheProviderOverTheTable(t *testing.T) {
 
 func TestModelCache(t *testing.T) {
 	t.Run("a live call writes the cache and it reads back fresh", func(t *testing.T) {
-		live := &fakeLister{models: []ModelInfo{{ID: "m", DisplayName: "M", ContextWindow: 1, MaxTokens: 2}}}
+		live := &fakeLister{models: []ModelInfo{{
+			ID: "m", DisplayName: "M", ContextWindow: 1, MaxTokens: 2,
+			Kind: ModelKindSpeech, Description: "d", Endpoints: []string{"audio_speech"},
+			Params: []string{"voice"}, Inputs: []string{"text"}, Outputs: []string{"audio"},
+		}}}
 		c := NewModelCache(live, filepath.Join(t.TempDir(), "sub", "models.json"))
 		if !c.Stale() {
 			t.Fatal("a missing cache must be stale")
@@ -114,7 +119,7 @@ func TestModelCache(t *testing.T) {
 			t.Fatal(err)
 		}
 		got, fresh := c.Cached()
-		if !fresh || len(got) != 1 || got[0] != live.models[0] {
+		if !fresh || len(got) != 1 || !reflect.DeepEqual(got[0], live.models[0]) {
 			t.Errorf("Cached() = %+v, %v", got, fresh)
 		}
 	})
@@ -125,6 +130,19 @@ func TestModelCache(t *testing.T) {
 		}
 		if got, fresh := c.Cached(); !fresh || got[0].ID != "kept" {
 			t.Errorf("cache changed: %+v %v", got, fresh)
+		}
+	})
+	t.Run("a file from before kinds is stale, but still read", func(t *testing.T) {
+		p := filepath.Join(t.TempDir(), "models.json")
+		c := NewModelCache(&fakeLister{}, p)
+		v1 := `{"fetched_at":"` + c.now().UTC().Format(time.RFC3339) + `","models":[{"id":"old"}]}`
+		_ = os.WriteFile(p, []byte(v1), 0o644)
+		got, fresh := c.Cached()
+		if fresh {
+			t.Error("a version-1 file read as fresh, so it would answer for a day without kinds or context windows")
+		}
+		if len(got) != 1 || got[0].ID != "old" {
+			t.Errorf("the old list should still be returned: %+v", got)
 		}
 	})
 	t.Run("a corrupt file is stale", func(t *testing.T) {
