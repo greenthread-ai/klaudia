@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.7.0 — 2026-10-29
+
 ### Added
 
 - **Speech, transcription, image and music models as tools.** On an
