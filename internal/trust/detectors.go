@@ -248,9 +248,14 @@ func detectPacman(c *cmdCtx, args []bashparser.Word) []Effect {
 // detectPip: `pip install` is project work in a virtualenv and user work with
 // --user. Through sudo it writes the system interpreter's site-packages, which
 // is this machine. Unprivileged, it is treated as any unmodelled program: we
-// cannot tell a venv from a system Python from the command line.
+// cannot tell a venv from a system Python from the command line — unless the
+// command says. --break-system-packages exists only to override PEP 668's
+// refusal to write an interpreter the OS or Homebrew manages, so it names
+// the machine's interpreter as surely as sudo does. A headless run installed
+// gTTS and Pillow into Homebrew's Python that way, one call after the
+// unflagged dry run had been refused.
 func detectPip(c *cmdCtx, args []bashparser.Word) []Effect {
-	if !c.priv {
+	if !c.priv && !breaksSystemPackages(args) {
 		return detectUnknown(c, args)
 	}
 	lits, dropped := literals(args)
@@ -268,6 +273,15 @@ func detectPip(c *cmdCtx, args []bashparser.Word) []Effect {
 		return nil // list, show, freeze, download
 	}
 	return packageEffects(c, kind, "pip", ops[0], ops[1:], dropped)
+}
+
+func breaksSystemPackages(args []bashparser.Word) bool {
+	for _, w := range args {
+		if w.Literal && w.Text == "--break-system-packages" {
+			return true
+		}
+	}
+	return false
 }
 
 // detectPython sees `python -m pip …` as pip; anything else is unmodelled.

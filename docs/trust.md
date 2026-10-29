@@ -113,7 +113,12 @@ Some consequences worth being explicit about:
   how a protection gets switched off. It does decide the cases a command line
   cannot: `sudo pip install` and `sudo make install` write the system
   interpreter and prefix, while the same commands unprivileged are usually a
-  virtualenv or a prefix you own, and do not ask.
+  virtualenv or a prefix you own, and do not ask. `pip install
+  --break-system-packages` is the exception: the flag exists only to override
+  the guard on an interpreter the OS or Homebrew manages, so it asks without
+  `sudo`. A headless run used it to install into Homebrew's Python after the
+  pip refused it without the flag. The same override set through
+  `PIP_BREAK_SYSTEM_PACKAGES=1` is not read.
 
 ## MCP tools
 

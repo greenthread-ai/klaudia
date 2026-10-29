@@ -197,6 +197,10 @@ var corpus = []corpusCase{
 	{cmd: "sudo make -j4 PREFIX=/usr/local install", ask: true, want: "installs package make install"},
 	{cmd: "sudo ninja -C build install", ask: true, want: "installs package ninja install"},
 	{cmd: "sudo cmake --install build", ask: true, want: "installs package cmake install"},
+	// The flag that overrides PEP 668 names the managed interpreter without sudo.
+	{cmd: "pip3 install --break-system-packages Pillow", ask: true, want: "installs package pip:Pillow"},
+	{cmd: "python3 -m pip install --break-system-packages gtts", ask: true, want: "installs package pip:gtts"},
+	{cmd: "python3 --version 2>/dev/null; pip3 install --break-system-packages Pillow 2>&1 | tail -3", ask: true, want: "installs package pip:Pillow"},
 	{cmd: "pip install --user requests"},
 	{cmd: "pip install -r requirements.txt"},
 	{cmd: "python3 -m pip install -e ."},
