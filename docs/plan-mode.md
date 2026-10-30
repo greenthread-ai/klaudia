@@ -298,6 +298,21 @@ What the implementation settled:
   `TodoWrite` before starting the first one and to revise them as it goes.
   Approving a plan should begin working through a visible list, not merely
   unlock the tools.
+- **A new plan starts its own list.** Approval used to keep whatever list was
+  in the store, so the file and the panel showed the *previous* plan's steps
+  under the new plan until the model's next `TodoWrite` — measured across the
+  transcripts at nearly every approval, once for 2h11m. `ExitPlanMode` takes
+  the plan's `steps`, and `Store.ApproveNew` makes them the list (or empties
+  it when none are given). `/plan run`, which approves the list already there,
+  keeps using `Store.Approve`.
+- **The list is what is followed.** The approved prose and the checklist are
+  allowed to diverge — the list is revised as work goes — so the file opens
+  with a note saying the checklist is current and is what the work follows,
+  and the resume note and the approval result say the same. The panel is
+  titled "Steps" until a plan is approved and "Plan" after, so a working list
+  no longer reads as an approved plan. ACP's `session/load` posts the stored
+  plan; only a list that never reached the store (unapproved lists are not
+  written) falls back to the history's last `TodoWrite`, once.
 - **`Store.Observe`** delivers the current snapshot on subscribe, so a frontend
   needs no separate first read and cannot miss an update landing between the
   two. D4 did not end up using it (see below); it remains unused.

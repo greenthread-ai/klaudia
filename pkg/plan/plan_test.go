@@ -447,3 +447,71 @@ func TestTakeReloadedOnce(t *testing.T) {
 		t.Error("the note was handed out twice")
 	}
 }
+
+// A plan approved after another left the first plan's checklist on screen and
+// in the file until the model next called TodoWrite (measured: 4–12 stale
+// steps at nearly every approval, once for 2h11m). A new plan starts its own
+// list; approving what is already there (/plan run) keeps it.
+func TestApprovalStartsTheNewPlansList(t *testing.T) {
+	old := []Item{{Content: "old step", Status: StatusCompleted}, {Content: "old next", Status: StatusPending}}
+	tests := []struct {
+		name    string
+		approve func(*Store) error
+		want    []string
+	}{
+		{name: "a new plan's steps replace the old list",
+			approve: func(s *Store) error { return s.ApproveNew("Plan two.", []string{"new a", " ", "new b"}) },
+			want:    []string{"new a", "new b"}},
+		{name: "a new plan with no steps clears the old list",
+			approve: func(s *Store) error { return s.ApproveNew("Plan two.", nil) }},
+		{name: "approving the existing list keeps it",
+			approve: func(s *Store) error { return s.Approve("") },
+			want:    []string{"old step", "old next"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			path := PathFor(t.TempDir(), "sess")
+			s := New(path)
+			_ = s.ApproveNew("Plan one.", nil)
+			_ = s.Replace(old)
+			if err := tc.approve(s); err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, it := range s.Items() {
+				got = append(got, it.Content)
+				if it.Content != "old step" && it.Status != StatusPending {
+					t.Errorf("%q starts as %s, want pending", it.Content, it.Status)
+				}
+			}
+			if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+				t.Errorf("list = %q, want %q", got, tc.want)
+			}
+			body, _ := os.ReadFile(path)
+			if len(tc.want) == 0 && !strings.Contains(string(body), "_No steps recorded yet._") {
+				t.Errorf("a plan with no steps yet should say so:\n%s", body)
+			}
+			if strings.Contains(tc.name, "new plan") && strings.Contains(string(body), "old next") {
+				t.Errorf("the file still lists the previous plan's steps:\n%s", body)
+			}
+		})
+	}
+}
+
+// The file says which half the work follows, and that note never leaks into
+// the prose when the file is read back.
+func TestFileSaysTheChecklistIsFollowed(t *testing.T) {
+	path := PathFor(t.TempDir(), "sess")
+	_ = New(path).ApproveNew("Do X.", []string{"a"})
+	body, _ := os.ReadFile(path)
+	if !strings.Contains(string(body), followedNote) {
+		t.Errorf("file lacks the note:\n%s", body)
+	}
+	r := Open(path)
+	if strings.Contains(r.prose, "what the work follows") {
+		t.Errorf("the note leaked into the prose: %q", r.prose)
+	}
+	if note, _ := r.TakeReloaded(); !strings.Contains(note, "the list is what is followed") {
+		t.Errorf("resume note does not say the list is followed: %q", note)
+	}
+}

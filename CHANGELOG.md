@@ -6,6 +6,18 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **Approving a plan no longer shows the previous plan's steps.** Approval kept
+  whatever checklist was already there, so at the moment a plan was approved
+  the panel and the plan file showed the *last* plan's steps (or the research
+  checklist) under it until the model next called `TodoWrite` — measured at
+  nearly every approval in the transcripts, once for over two hours; a plan
+  run in that window followed the wrong list. `ExitPlanMode` now takes the
+  plan's `steps` and approval makes them the checklist; with none given the
+  list starts empty. The plan file says the checklist is current and is what
+  the work follows, the panel reads "Steps" until a plan is approved, and an
+  ACP `session/load` shows the stored plan rather than the last `TodoWrite`
+  in the history. Verified live: a research list, then approval with steps —
+  the plan event and the file carry only the plan's own steps.
 - **`--resume` brings the approved plan back.** The plan was written to
   `~/.klaudia/plans/<session-id>.md` on approval, but a resumed session started
   with an empty step list: no panel, and the model, asked, said there was no

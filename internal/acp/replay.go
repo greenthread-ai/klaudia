@@ -6,6 +6,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/greenthread-ai/klaudia/pkg/api"
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // Replaying a loaded conversation.
@@ -25,12 +26,28 @@ import (
 // that produced at least one update, which the caller logs: a transcript that
 // replays to nothing is the signature of a format change, and it is otherwise
 // indistinguishable from an empty session.
-func (t *translator) replay(history []anthropic.BetaMessageParam) int {
+//
+// store is the session's plan, which wins over the plan the history implies.
+// Each TodoWrite in the history used to be posted as the plan, so a loaded
+// session showed the last TodoWrite — the previous plan's list when a newer
+// plan had been approved without one. Only a list that never reached the
+// store (an unapproved working list is not written to disk) falls back to the
+// history, and then once, as the last list rather than every one in turn.
+func (t *translator) replay(history []anthropic.BetaMessageParam, store *plan.Store) int {
 	shown := 0
 	for _, m := range history {
 		if t.replayMessage(m) {
 			shown++
 		}
+	}
+	if store != nil {
+		if snap := store.Snapshot(); snap.Approved || len(snap.Items) > 0 {
+			t.post(planUpdate{Kind: "plan", Entries: snapshotEntries(snap)})
+			return shown
+		}
+	}
+	if t.replayedPlan != nil {
+		t.post(planUpdate{Kind: "plan", Entries: t.replayedPlan})
 	}
 	return shown
 }
@@ -59,7 +76,7 @@ func (t *translator) replayMessage(m anthropic.BetaMessageParam) bool {
 			// client was never sent.
 			if entries, ok := planEntries(tu.Name, tu.Input); ok {
 				t.suppress(tu.ID)
-				t.post(planUpdate{Kind: "plan", Entries: entries})
+				t.replayedPlan = entries // posted once, by replay, if the store has none
 				any = true
 				continue
 			}

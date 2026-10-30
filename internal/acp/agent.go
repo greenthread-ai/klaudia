@@ -339,7 +339,7 @@ func (a *Agent) loadSession(raw json.RawMessage) (any, error) {
 		history := existing.history
 		mode := existing.mode
 		existing.mu.Unlock()
-		newTranslator(a, existing.id).replay(history)
+		newTranslator(a, existing.id).replay(history, existing.plan)
 		a.postCommands(existing.id)
 		return loadSessionResult{Modes: modeState(mode)}, nil
 	}
@@ -358,7 +358,7 @@ func (a *Agent) loadSession(raw json.RawMessage) (any, error) {
 	// Inline, before the response. The spec requires the conversation to have
 	// been sent by the time session/load returns, and unlike session/new the
 	// client already has the id, so there is nothing to wait for.
-	if shown := newTranslator(a, s.id).replay(history); shown == 0 && len(history) > 0 {
+	if shown := newTranslator(a, s.id).replay(history, s.plan); shown == 0 && len(history) > 0 {
 		a.logf("session/load " + p.SessionID + ": " + itoa(len(history)) +
 			" message(s) replayed to nothing — the transcript holds no displayable content")
 	}

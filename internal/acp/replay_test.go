@@ -1,9 +1,13 @@
 package acp
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
+
+	"github.com/greenthread-ai/klaudia/pkg/plan"
 )
 
 // Helpers for building a transcript the way the loop records one.
@@ -168,7 +172,7 @@ func TestReplay(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var r recorder
-			shown := newTranslator(&r, "sess_1").replay(tc.history)
+			shown := newTranslator(&r, "sess_1").replay(tc.history, nil)
 			if shown != tc.wantShown {
 				t.Errorf("shown = %d, want %d", shown, tc.wantShown)
 			}
@@ -211,7 +215,7 @@ func TestReplayDropsImagesFromToolResults(t *testing.T) {
 		},
 	}
 	var r recorder
-	newTranslator(&r, "sess_1").replay(history)
+	newTranslator(&r, "sess_1").replay(history, nil)
 	if len(r.updates) != 2 {
 		t.Fatalf("got %d updates, want 2: %v", len(r.updates), r.updates)
 	}
@@ -239,10 +243,53 @@ func TestReplayJoinsMultipleTextBlocksOfAResult(t *testing.T) {
 		},
 	}
 	var r recorder
-	newTranslator(&r, "sess_1").replay(history)
+	newTranslator(&r, "sess_1").replay(history, nil)
 	want := `{"sessionUpdate":"tool_call_update","toolCallId":"tu_1","status":"completed",
 		"content":[{"type":"content","content":{"type":"text","text":"a.go:1\nb.go:2"}}]}`
 	if !jsonEqual(t, r.updates[1], want) {
 		t.Errorf("got %v\nwant %s", r.updates[1], want)
+	}
+}
+
+// A loaded session showed the last TodoWrite in its history as the plan —
+// the previous plan's list when a newer plan was approved without one — and
+// posted every intermediate list on the way. The stored plan wins; a history
+// with no stored plan falls back to its last list, posted once.
+func TestLoadShowsTheStoredPlan(t *testing.T) {
+	history := []anthropic.BetaMessageParam{
+		assistantToolUse("tu_1", "TodoWrite", map[string]any{"todos": []any{map[string]any{"content": "first list", "status": "pending"}}}),
+		userToolResult("tu_1", "ok", false),
+		assistantToolUse("tu_2", "TodoWrite", map[string]any{"todos": []any{map[string]any{"content": "old plan step", "status": "completed"}}}),
+		userToolResult("tu_2", "ok", false),
+	}
+	stored := plan.New("")
+	_ = stored.ApproveNew("The newer plan.", []string{"new plan step"})
+
+	tests := []struct {
+		name  string
+		store *plan.Store
+		want  string
+	}{
+		{name: "the stored plan wins", store: stored, want: "new plan step"},
+		{name: "no stored plan: the history's last list, once", store: plan.New(""), want: "old plan step"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var r recorder
+			newTranslator(&r, "sess_1").replay(history, tc.store)
+			var plans []string
+			for _, u := range r.updates {
+				j, _ := json.Marshal(u)
+				if strings.Contains(string(j), `"sessionUpdate":"plan"`) {
+					plans = append(plans, string(j))
+				}
+			}
+			if len(plans) != 1 {
+				t.Fatalf("posted %d plan updates, want 1: %v", len(plans), plans)
+			}
+			if !strings.Contains(plans[0], tc.want) {
+				t.Errorf("plan = %s, want it to show %q", plans[0], tc.want)
+			}
+		})
 	}
 }

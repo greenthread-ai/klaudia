@@ -50,7 +50,7 @@ func TestRenderPlan(t *testing.T) {
 		},
 		{
 			name: "short list shows every step in order", width: 80, rows: 4,
-			snap:     plan.Snapshot{Items: items(done, prog, pend)},
+			snap:     plan.Snapshot{Approved: true, Items: items(done, prog, pend)},
 			contains: []string{"Plan 1/3", "✓ step 1", "● Doing step 2", "○ step 3"},
 		},
 		{
@@ -64,13 +64,22 @@ func TestRenderPlan(t *testing.T) {
 			// The panel must not grow with the plan: it shares the live
 			// region with the input, and clampBottom trims from the top.
 			name: "long list folds and windows", width: 80, rows: planMaxRows,
-			snap:     plan.Snapshot{Items: twelve},
+			snap:     plan.Snapshot{Approved: true, Items: twelve},
 			contains: []string{"Plan 3/12", "✓ 3 done", "● Doing step 4", "○ later 5", "+4 more"},
 			absent:   []string{"step 1", "later 12"},
 		},
 		{
-			name: "collapsed is one line naming the active step", width: 80, rows: 1, collapsed: true,
+			// Before approval it is the model's working list, not "the
+			// plan": a research checklist titled Plan read as the approved
+			// plan's steps.
+			name: "an unapproved list is titled Steps", width: 80, rows: 4,
 			snap:     plan.Snapshot{Items: items(done, prog, pend)},
+			contains: []string{"Steps 1/3"},
+			absent:   []string{"Plan 1/3"},
+		},
+		{
+			name: "collapsed is one line naming the active step", width: 80, rows: 1, collapsed: true,
+			snap:     plan.Snapshot{Approved: true, Items: items(done, prog, pend)},
 			contains: []string{"▸ Plan 1/3 · Doing step 2", "ctrl+t"},
 		},
 		{

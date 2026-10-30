@@ -81,3 +81,35 @@ func TestExitPlanHeadless(t *testing.T) {
 		t.Errorf("headless should surface the plan: %+v", res[0])
 	}
 }
+
+// Approving a plan with its steps makes approval and the checklist one act;
+// without steps the previous plan's list is cleared rather than kept.
+func TestExitPlanStartsTheChecklist(t *testing.T) {
+	tests := []struct {
+		name     string
+		steps    []string
+		want     []string
+		mentions string
+	}{
+		{name: "steps given", steps: []string{"build it", "ship it"}, want: []string{"build it", "ship it"}, mentions: "Its 2 steps"},
+		{name: "no steps", mentions: "Record the plan's steps with TodoWrite"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e, store := newExitPlan(t)
+			_ = store.Replace([]plan.Item{{Content: "research step", Status: plan.StatusInProgress}})
+			in, _ := json.Marshal(ExitPlanModeInput{Plan: "Ship it.", Steps: tc.steps})
+			res, _ := e.Execute(context.Background(), Context{Plan: &fakePlanner{approved: true}}, in)
+			var got []string
+			for _, it := range store.Items() {
+				got = append(got, it.Content)
+			}
+			if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+				t.Errorf("checklist = %q, want %q", got, tc.want)
+			}
+			if !strings.Contains(res[0].Content, tc.mentions) || !strings.Contains(res[0].Content, "the list is what is followed") {
+				t.Errorf("result = %q", res[0].Content)
+			}
+		})
+	}
+}

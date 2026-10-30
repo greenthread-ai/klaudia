@@ -33,8 +33,16 @@ func planVisible(snap plan.Snapshot) bool {
 // over-long line safely, but a step that wraps turns a fixed-height panel into
 // one whose height depends on the prose, and the row budget above is the
 // whole reason the panel cannot crowd out the input.
+//
+// Titled "Plan" only once a plan is approved; before that it is the model's
+// working list, and calling it the plan is how a research checklist came to
+// read as the approved plan's steps.
 func renderPlan(snap plan.Snapshot, collapsed bool, width int) string {
-	return renderWorkList(snap, "Plan", "", collapsed, width)
+	title := "Steps"
+	if snap.Approved {
+		title = "Plan"
+	}
+	return renderWorkList(snap, title, "", collapsed, width)
 }
 
 // renderWorkList is renderPlan for any step list: title names whose list it is

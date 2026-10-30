@@ -188,7 +188,8 @@ func (s *Store) TakeReloaded() (string, bool) {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("Carry on from there, and keep the list current with TodoWrite — it is what the user sees.")
+	b.WriteString("Carry on from there, and keep the list current with TodoWrite — it is what the user sees. " +
+		"Where the list and the approved text differ, the list is what is followed.")
 	return b.String(), true
 }
 
@@ -201,6 +202,7 @@ func parsePlan(body string) (prose string, items []Item) {
 		before = body
 	}
 	prose = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(before), "# Plan"))
+	prose = strings.TrimSpace(strings.TrimPrefix(prose, followedNote))
 	for _, ln := range strings.Split(after, "\n") {
 		ln = strings.TrimSpace(ln)
 		for _, bullet := range []string{"- ", "* "} {
@@ -290,11 +292,46 @@ func (s *Store) Path() string {
 // definition multi-step work the user has blessed, where an ad-hoc three-item
 // list the model keeps for its own benefit has no claim on disk. The cost of
 // being wrong about that is one stale file.
+//
+// The step list is kept: this is "approve what is here", which is what
+// /plan run does with a list the model kept without ExitPlanMode. A newly
+// approved plan goes through ApproveNew instead.
 func (s *Store) Approve(prose string) error {
 	s.mu.Lock()
 	s.approved = true
 	s.prose = prose
 	s.rev++
+	return s.commitApprovalLocked()
+}
+
+// ApproveNew records a newly approved plan: its prose, and steps — the plan's
+// own list, all pending — in place of whatever list was there.
+//
+// Approve kept the old list, so the moment a plan was approved the file and
+// the panel showed the previous plan's steps under it until the model next
+// called TodoWrite. Measured across the transcripts: the previous plan's 4–12
+// steps at nearly every approval, once for 2h11m, and a plan run reading the
+// file in that window follows the wrong list. A plan with no steps given gets
+// an empty list, which the panel hides, rather than a wrong one.
+func (s *Store) ApproveNew(prose string, steps []string) error {
+	items := make([]Item, 0, len(steps))
+	for _, st := range steps {
+		if st = strings.TrimSpace(st); st != "" {
+			items = append(items, Item{Content: st, Status: StatusPending})
+		}
+	}
+	s.mu.Lock()
+	s.approved = true
+	s.prose = prose
+	s.items = items
+	s.reloaded = false
+	s.rev++
+	return s.commitApprovalLocked()
+}
+
+// commitApprovalLocked writes the artefact and notifies observers; it
+// releases s.mu, which the caller holds.
+func (s *Store) commitApprovalLocked() error {
 	path := s.pathLocked()
 	body := s.renderLocked()
 	snap := s.snapshotLocked()
@@ -351,6 +388,12 @@ func notify(observers []func(Snapshot), snap Snapshot) {
 // parsers would see no tracker at all and report nothing missing.
 const ProgressHeading = "## Progress"
 
+// followedNote opens the artefact and says which half is in charge. The prose
+// is what was approved; the checklist is revised as work goes, and nothing
+// said which one the work followed, so when the two drifted the user could not
+// tell. parsePlan strips it on the way back in.
+const followedNote = "_The plan as approved. The checklist under Progress is the current list: it is revised as work goes, and it is what the work follows._"
+
 // inProgressMarker follows the step being worked on; parsePlan reads it back.
 const inProgressMarker = "_(in progress)_"
 
@@ -359,6 +402,8 @@ const inProgressMarker = "_(in progress)_"
 func (s *Store) renderLocked() string {
 	var b strings.Builder
 	b.WriteString("# Plan\n\n")
+	b.WriteString(followedNote)
+	b.WriteString("\n\n")
 	if prose := strings.TrimSpace(s.prose); prose != "" {
 		b.WriteString(prose)
 		b.WriteString("\n\n")

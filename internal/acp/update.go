@@ -59,6 +59,10 @@ type translator struct {
 	// concurrently, so two tools' events can reach Emit from two goroutines.
 	suppressed map[string]bool
 
+	// replayedPlan is the last TodoWrite list seen while replaying a history;
+	// see replay.
+	replayedPlan []planEntry
+
 	// readFile supplies a file's pre-edit contents for a Write diff. A field so
 	// tests do not have to touch the disk; nil means os.ReadFile.
 	readFile func(path string) ([]byte, error)
