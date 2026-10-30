@@ -70,6 +70,9 @@ type Store struct {
 	approved bool
 	prose    string
 	path     string
+	// reloaded is set by Open when it found an approved plan, and cleared by
+	// TakeReloaded: the conversation still has to be told about it.
+	reloaded bool
 	// rev counts changes. A frontend that has been sent rev N needs nothing
 	// until rev moves, and comparing two integers is how the agent loop decides
 	// whether a tool batch changed the plan without diffing item lists.
@@ -122,6 +125,106 @@ func (s Snapshot) Remaining() int {
 // PathFor(configRoot, sessionID). An empty path disables the artefact: the list
 // still works in memory, which is what tests and callers with no session want.
 func New(path string) *Store { return &Store{path: path} }
+
+// Open is New, plus whatever plan was already approved at path.
+//
+// --resume reuses the session id, so it reuses the file, and the plan in it
+// is the one the user approved. Without this the store came back empty: the
+// panel showed nothing, the model had no step list, and the only record of
+// where the work stood was whatever the model had copied into project
+// knowledge — which is how a long session ended up with 136 progress entries
+// there, each one a confirmation prompt. The file exists only once a plan is
+// approved, so finding it means approved. A missing or unreadable file is an
+// empty store, as before.
+func Open(path string) *Store {
+	s := New(path)
+	if path == "" {
+		return s
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return s
+	}
+	prose, items := parsePlan(string(data))
+	s.approved, s.prose, s.items, s.reloaded = true, prose, items, true
+	// Non-zero, so the loop's first plan check announces the reloaded plan
+	// rather than reading revision 0 as "nothing to show".
+	s.rev = 1
+	return s
+}
+
+// TakeReloaded reports, once, that the store holds a plan Open reloaded, with
+// the note that tells the model about it.
+//
+// Reloading the store was not enough on its own. Measured: a resumed session
+// put the plan in its panel, and the model, asked for the plan, said there was
+// none — it knows the plan only from its own TodoWrite calls, and after a
+// compaction those are gone from the history.
+func (s *Store) TakeReloaded() (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.reloaded {
+		return "", false
+	}
+	s.reloaded = false
+	var b strings.Builder
+	b.WriteString("# Approved plan, restored on resume\n")
+	b.WriteString("This session's approved plan")
+	if s.path != "" {
+		b.WriteString(" (" + s.path + ")")
+	}
+	b.WriteString(" is still in effect. Its steps as last recorded:\n")
+	if len(s.items) == 0 {
+		b.WriteString("_No steps recorded yet._\n")
+	}
+	for _, it := range s.items {
+		box := "[ ]"
+		if it.Done() {
+			box = "[x]"
+		}
+		b.WriteString("- " + box + " " + it.Content)
+		if it.Status == StatusInProgress {
+			b.WriteString(" " + inProgressMarker)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("Carry on from there, and keep the list current with TodoWrite — it is what the user sees.")
+	return b.String(), true
+}
+
+// parsePlan reads back what renderLocked writes, tolerating the hand edits a
+// user is invited to make: "*" bullets and "[X]" boxes.
+func parsePlan(body string) (prose string, items []Item) {
+	before, after, found := strings.Cut(body, "\n"+ProgressHeading)
+	if !found {
+		// No checklist at all: keep the whole file as the plan's prose.
+		before = body
+	}
+	prose = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(before), "# Plan"))
+	for _, ln := range strings.Split(after, "\n") {
+		ln = strings.TrimSpace(ln)
+		for _, bullet := range []string{"- ", "* "} {
+			ln = strings.TrimPrefix(ln, bullet)
+		}
+		var status string
+		switch {
+		case strings.HasPrefix(ln, "[x] "), strings.HasPrefix(ln, "[X] "):
+			status = StatusCompleted
+		case strings.HasPrefix(ln, "[ ] "):
+			status = StatusPending
+		default:
+			continue
+		}
+		content := strings.TrimSpace(ln[4:])
+		if c, ok := strings.CutSuffix(content, inProgressMarker); ok && status == StatusPending {
+			content, status = strings.TrimSpace(c), StatusInProgress
+		}
+		if content != "" {
+			items = append(items, Item{Content: content, Status: status})
+		}
+	}
+	return prose, items
+}
 
 // PathFor is where a session's approved plan lives under the config root
 // (~/.klaudia): one file per session, so concurrent sessions in one repo — and
@@ -248,6 +351,9 @@ func notify(observers []func(Snapshot), snap Snapshot) {
 // parsers would see no tracker at all and report nothing missing.
 const ProgressHeading = "## Progress"
 
+// inProgressMarker follows the step being worked on; parsePlan reads it back.
+const inProgressMarker = "_(in progress)_"
+
 // renderLocked builds the artefact: the approved prose, then the step list as a
 // checkbox section.
 func (s *Store) renderLocked() string {
@@ -276,7 +382,7 @@ func (s *Store) renderLocked() string {
 			// Marked in the text, not with a third box state: `- [~]` is not a
 			// checkbox to any Markdown renderer, and goal's parsers count
 			// "- [ ]" and "- [x]" only.
-			b.WriteString(" _(in progress)_")
+			b.WriteString(" " + inProgressMarker)
 		}
 		b.WriteString("\n")
 	}

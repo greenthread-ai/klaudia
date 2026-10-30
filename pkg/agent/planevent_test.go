@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -149,5 +150,46 @@ func TestTheNextTurnResendsThePlanOnce(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("plan events = %d, want 1", n)
+	}
+}
+
+// A resumed session's plan is told to the model on its first prompt, and only
+// that one. Measured before: the panel showed the reloaded plan while the
+// model, asked, said there was none.
+func TestReloadedPlanIsToldOnTheFirstPrompt(t *testing.T) {
+	path := plan.PathFor(t.TempDir(), "sess")
+	made := plan.New(path)
+	_ = made.Approve("Ship it.")
+	_ = made.Replace([]plan.Item{{Content: "build it", Status: plan.StatusInProgress}})
+	store := plan.Open(path)
+
+	lastUserText := func(msgs []anthropic.BetaMessageParam) string {
+		for i := len(msgs) - 1; i >= 0; i-- {
+			if msgs[i].Role == anthropic.BetaMessageParamRoleUser {
+				var b strings.Builder
+				for _, c := range msgs[i].Content {
+					if c.OfText != nil {
+						b.WriteString(c.OfText.Text)
+					}
+				}
+				return b.String()
+			}
+		}
+		return ""
+	}
+	end := func() anthropic.BetaMessage {
+		var m anthropic.BetaMessage
+		_ = json.Unmarshal([]byte(`{"role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"ok"}]}`), &m)
+		return m
+	}
+	for i, want := range []bool{true, false} {
+		p := &droppingProvider{turns: []anthropic.BetaMessage{end()}}
+		if _, err := New(p, tools.NewRegistry()).Run(context.Background(), Options{Prompt: "carry on", Model: "test", Plan: store}, nil); err != nil {
+			t.Fatal(err)
+		}
+		got := lastUserText(p.sent[0].Messages)
+		if told := strings.Contains(got, "build it _(in progress)_"); told != want {
+			t.Errorf("turn %d: plan told = %v, want %v\n%s", i+1, told, want, got)
+		}
 	}
 }

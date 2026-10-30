@@ -6,6 +6,19 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **`--resume` brings the approved plan back.** The plan was written to
+  `~/.klaudia/plans/<session-id>.md` on approval, but a resumed session started
+  with an empty step list: no panel, and the model, asked, said there was no
+  plan (measured). It knows the plan only from its own `TodoWrite` calls, which
+  a compaction removes — so progress was being copied into project knowledge
+  instead, one approval prompt each (38 in one session). `plan.Open` reloads
+  the file (prose, steps and the in-progress step, tolerating hand edits), the
+  panel shows it at once, and the first prompt after the resume tells the
+  model the steps, once. ACP sessions reopen theirs the same way.
+- **The Memory tool says what not to store.** Its description now sends task
+  progress to `TodoWrite` and git history, and reserves project knowledge —
+  read into every later session and approved each time — for a few durable
+  lessons.
 - **"N earlier thinking block(s) dropped" no longer repeats every turn.** The
   API drops a thinking block whose earlier context changed, for one request
   only; the history kept it, so it was re-sent and dropped again on every

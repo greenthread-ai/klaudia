@@ -1393,8 +1393,9 @@ func run(cmd *cobra.Command, opts *options) error {
 	// ExitPlanMode writes the approved plan through to
 	// ~/.klaudia/plans/<session-id>.md — keyed by session so two sessions in
 	// one repo cannot overwrite each other's plan, and resolved after the
-	// resume branch above so --resume keeps writing the same file.
-	planStore := plan.New(plan.PathFor(session.ConfigRoot(), sessionID))
+	// resume branch above so --resume reopens the same file — plan.Open loads
+	// the approved plan and its step list back.
+	planStore := plan.Open(plan.PathFor(session.ConfigRoot(), sessionID))
 	regOpts := []tools.RegOption{
 		tools.WithBrowserEngine(browserEngine),
 		tools.WithJobStore(jobStore),
@@ -1999,7 +2000,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			// Keyed by the ACP session id, not the process's: the process-wide
 			// planStore is the one plan per process, and ACP runs many.
 			Plan: func(id string) *plan.Store {
-				return plan.New(plan.PathFor(session.ConfigRoot(), id))
+				return plan.Open(plan.PathFor(session.ConfigRoot(), id))
 			},
 			LoadHistory:   acpLoadHistory(cwd),
 			ListSessions:  func() []acp.SessionSummary { return acpSessions(cwd) },

@@ -252,3 +252,36 @@ func TestParseMemoryDuration(t *testing.T) {
 		t.Error("expected garbage to fail")
 	}
 }
+
+// The guidance that keeps task progress out of project knowledge lives in the
+// description and in the scope field. Rewording the field once dropped its
+// enum and description together without an error (an escaped comma the
+// schema tag does not support), so both are pinned.
+func TestMemoryGuidanceKeepsProgressOutOfKnowledge(t *testing.T) {
+	m, err := NewMemory(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Properties map[string]struct {
+			Enum        []string `json:"enum"`
+			Description string   `json:"description"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(m.InputSchema(), &s); err != nil {
+		t.Fatal(err)
+	}
+	scope := s.Properties["scope"]
+	if strings.Join(scope.Enum, ",") != "session,project" {
+		t.Errorf("scope enum = %v, want [session project]", scope.Enum)
+	}
+	if !strings.Contains(scope.Description, "never task progress") {
+		t.Errorf("scope description lost its guidance: %q", scope.Description)
+	}
+	d, _ := m.Description(context.Background())
+	for _, w := range []string{"TodoWrite", "approval", "session note"} {
+		if !strings.Contains(d, w) {
+			t.Errorf("description lacks %q", w)
+		}
+	}
+}

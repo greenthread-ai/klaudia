@@ -404,6 +404,14 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		userMsg := anthropic.NewBetaUserMessage(promptBlocks(opts.Prompt, injected)...)
 		tellMode(messages, &userMsg, permission.CurrentMode(opts.Permission))
 		tellDirs(messages, &userMsg, opts.ExtraDirs)
+		// A plan reloaded on resume reaches the model here, once, on the new
+		// message rather than anywhere earlier: an edit before it would
+		// invalidate the history's thinking blocks.
+		if opts.Plan != nil {
+			if note, ok := opts.Plan.TakeReloaded(); ok {
+				userMsg.Content = append(userMsg.Content, anthropic.NewBetaTextBlock(note))
+			}
+		}
 		messages = append(messages, userMsg)
 		rec("user", userMsg)
 	}

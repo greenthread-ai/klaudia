@@ -17,7 +17,7 @@ import (
 // MemoryInput is the Memory tool's input.
 type MemoryInput struct {
 	Operation   string `json:"operation" jsonschema:"enum=search,enum=add,enum=view,enum=recent,enum=stale,enum=by_tag,enum=promote,enum=supersede,enum=remove,description=Operation to perform"`
-	Scope       string `json:"scope,omitempty" jsonschema:"enum=session,enum=project,description=Where to write for operation=add: session (default) writes .klaudia/MEMORY.md; project writes .klaudia/KNOWLEDGE.md"`
+	Scope       string `json:"scope,omitempty" jsonschema:"enum=session,enum=project,description=Where to write for operation=add: session (default) writes .klaudia/MEMORY.md; project writes .klaudia/KNOWLEDGE.md — read into every later session and approved by the user each time: durable lessons only and never task progress"`
 	Query       string `json:"query,omitempty" jsonschema:"description=Search terms (required for operation=search). For operation=remove: terms that pick out the one session note to forget"`
 	Content     string `json:"content,omitempty" jsonschema:"description=The note to store (required for operation=add)"`
 	Tag         string `json:"tag,omitempty" jsonschema:"description=Frontmatter tag to filter on (required for operation=by_tag)"`
@@ -71,7 +71,14 @@ func (m *Memory) Description(context.Context) (string, error) {
 		"requires `name`), \"supersede\" (record that `name` is replaced by `replacement` " +
 		"— rewrites both files' frontmatter).\n\n" +
 		"Search early when resuming work. Use `stale` to audit aged context; promote " +
-		"validated lessons to project knowledge.", nil
+		"validated lessons to project knowledge.\n\n" +
+		"What does not belong here: progress on the task in hand — steps done, what is " +
+		"next, what was just committed. Track that with TodoWrite: the plan survives " +
+		"compaction and --resume, and the user watches it. Git history already records " +
+		"what landed. Project knowledge (scope=\"project\") is read into the system prompt " +
+		"of every later session in this project and each write needs the user's approval, " +
+		"so reserve it for a few short, durable lessons that will still be true next " +
+		"month; when unsure, write a session note instead.", nil
 }
 
 func (m *Memory) InputSchema() json.RawMessage { return m.schema.Raw }

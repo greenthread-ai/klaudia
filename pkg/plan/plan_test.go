@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -335,5 +336,114 @@ func TestCompletedCountsDoneItems(t *testing.T) {
 	}}
 	if got := snap.Completed(); got != 1 {
 		t.Errorf("Completed() = %d, want 1", got)
+	}
+}
+
+// --resume reuses the session id and so the file, but the store came back
+// empty: no panel, no step list, and the next update could not keep the plan
+// it had approved. Open must give back what was written.
+func TestOpenRestoresTheApprovedPlan(t *testing.T) {
+	path := PathFor(t.TempDir(), "sess")
+	steps := []Item{
+		{Content: "classify commands", Status: StatusCompleted},
+		{Content: "gate on the verdict", Status: StatusInProgress},
+		{Content: "document it", Status: StatusPending},
+	}
+	first := New(path)
+	if err := first.Approve("## Approach\n\nRework the gate."); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Replace(steps); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened := Open(path)
+	snap := reopened.Snapshot()
+	if !snap.Approved {
+		t.Error("a reopened plan is not approved")
+	}
+	if len(snap.Items) != len(steps) {
+		t.Fatalf("items = %+v, want %+v", snap.Items, steps)
+	}
+	for i := range steps {
+		if snap.Items[i].Content != steps[i].Content || snap.Items[i].Status != steps[i].Status {
+			t.Errorf("item %d = %+v, want %+v", i, snap.Items[i], steps[i])
+		}
+	}
+	if snap.Rev == 0 {
+		t.Error("revision 0: the loop's first plan check would announce nothing")
+	}
+	if reopened.Render() != first.Render() {
+		t.Errorf("round trip changed the file:\n--- before\n%s\n--- after\n%s", first.Render(), reopened.Render())
+	}
+
+	// The update that follows a resume rewrites the file; the approved
+	// prose must survive it.
+	if err := reopened.Replace([]Item{{Content: "document it", Status: StatusCompleted}}); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := os.ReadFile(path)
+	if !strings.Contains(string(body), "Rework the gate.") {
+		t.Errorf("the update after a resume lost the plan:\n%s", body)
+	}
+}
+
+func TestOpenEdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		file      *string // nil: no file
+		approved  bool
+		items     []Item
+		proseWant string
+	}{
+		{name: "no file is an empty store", file: nil},
+		{name: "approved with no steps yet", file: ptr("# Plan\n\nDo X.\n\n## Progress\n\n_No steps recorded yet._\n"),
+			approved: true, proseWant: "Do X."},
+		{name: "hand-edited bullets and boxes", file: ptr("# Plan\n\nDo X.\n\n## Progress\n\n* [X] a\n- [ ] b _(in progress)_\n- [ ]   c\nnot a step\n"),
+			approved: true, proseWant: "Do X.",
+			items: []Item{{Content: "a", Status: StatusCompleted}, {Content: "b", Status: StatusInProgress}, {Content: "c", Status: StatusPending}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "plan.md")
+			if tc.file != nil {
+				if err := os.WriteFile(path, []byte(*tc.file), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s := Open(path)
+			snap := s.Snapshot()
+			if snap.Approved != tc.approved {
+				t.Errorf("approved = %v, want %v", snap.Approved, tc.approved)
+			}
+			if fmt.Sprint(snap.Items) != fmt.Sprint(tc.items) && !(len(snap.Items) == 0 && len(tc.items) == 0) {
+				t.Errorf("items = %+v, want %+v", snap.Items, tc.items)
+			}
+			if tc.approved && !strings.Contains(s.Render(), tc.proseWant) {
+				t.Errorf("prose lost: %s", s.Render())
+			}
+		})
+	}
+}
+
+func ptr(s string) *string { return &s }
+
+// The model knows the plan only from its own TodoWrite calls, which a
+// compaction removes; a reloaded plan has to be told to it, once.
+func TestTakeReloadedOnce(t *testing.T) {
+	path := PathFor(t.TempDir(), "sess")
+	s := New(path)
+	_ = s.Approve("Do X.")
+	_ = s.Replace([]Item{{Content: "a", Status: StatusCompleted}, {Content: "b", Status: StatusInProgress}})
+	if _, ok := s.TakeReloaded(); ok {
+		t.Error("a plan made in this process is not a reloaded one")
+	}
+	r := Open(path)
+	note, ok := r.TakeReloaded()
+	if !ok || !strings.Contains(note, "- [x] a") || !strings.Contains(note, "- [ ] b _(in progress)_") || !strings.Contains(note, "TodoWrite") {
+		t.Errorf("note = %q, %v", note, ok)
+	}
+	if _, again := r.TakeReloaded(); again {
+		t.Error("the note was handed out twice")
 	}
 }
