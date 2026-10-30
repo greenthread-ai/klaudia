@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.7.1 — 2026-10-30
+
 ### Fixed
 - **Approving a plan no longer shows the previous plan's steps.** Approval kept
   whatever checklist was already there, so at the moment a plan was approved
