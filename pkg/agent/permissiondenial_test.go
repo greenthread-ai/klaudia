@@ -144,3 +144,35 @@ func TestApprovedPlanCanRunTheCommandItWasRefused(t *testing.T) {
 		t.Errorf("the harness blamed the model for its own refusal: %q", got)
 	}
 }
+
+// subjectTool asks, and says which part of its action the ask is about.
+type subjectTool struct{ *stubBash }
+
+func (subjectTool) PermissionRequest(json.RawMessage) permission.PermissionRequest {
+	return permission.PermissionRequest{Specifier: "cd /repo"}
+}
+func (subjectTool) CheckPermissions(permission.Context, permission.PermissionRequest) permission.Decision {
+	return permission.Decision{Behavior: permission.Ask, Message: "why", Subject: "git tag v1"}
+}
+
+// The approval request names the decision's subject over the request's
+// Specifier, so the prompt headline is the part being asked about.
+func TestApprovalNamesTheDecisionsSubject(t *testing.T) {
+	var got string
+	approver := ApproverFunc(func(_ context.Context, req ApprovalRequest) permission.Decision {
+		got = req.Specifier
+		return permission.Decision{Behavior: permission.Deny, Message: "no"}
+	})
+	_, err := New(&scriptedProvider{turns: []anthropic.BetaMessage{
+		toolUseTurn(t, "tu1", "Bash", map[string]any{"command": "cd /repo && git tag v1"}),
+	}}, tools.NewRegistry(subjectTool{&stubBash{}})).Run(context.Background(), Options{
+		Prompt: "go", Approver: approver,
+		Permission: permission.Context{Mode: permission.StaticMode(permission.ModePlan)},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "git tag v1" {
+		t.Errorf("approval specifier = %q, want the decision's subject", got)
+	}
+}

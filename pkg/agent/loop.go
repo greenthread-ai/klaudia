@@ -118,6 +118,13 @@ type CompactionRecorder interface {
 	RecordCompaction(summary string) error
 }
 
+// ThinkingDropRecorder is a Recorder that can also note thinking blocks the
+// API dropped. Optional, asserted on the turn's own Recorder for the same
+// reason as CompactionRecorder.
+type ThinkingDropRecorder interface {
+	RecordThinkingDropped(note string) error
+}
+
 // Options configures a single Run.
 type Options struct {
 	Prompt    string
@@ -489,7 +496,23 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 
 		l.rememberPrefix(prefix)
 		estimateAtSend := compaction.EstimateTokens(messages)
-		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages)
+		var dropped []api.InputTransformation
+		assistant, finalText, err := l.streamTurn(ctx, params, emit, opts.PartialMessages, func(ts []api.InputTransformation) { dropped = ts })
+		// The API dropped these blocks for this request only; the history
+		// still holds them, and left alone they went out again every turn
+		// and were dropped again (measured live). Remove them now, so the
+		// notice is once per event and the next request carries no dead
+		// weight. Done on error too: the blocks are just as invalid.
+		messages = withoutThinkingSigned(messages, droppedSignatures(dropped))
+		// Into the transcript as well as onto the screen: a notice reaches
+		// nobody once the session ends, and the constant drops in resumed
+		// sessions went undiagnosed for days because nothing on disk said
+		// they had happened.
+		if note := droppedThinkingNote(dropped); note != "" {
+			if r, ok := opts.Recorder.(ThinkingDropRecorder); ok {
+				_ = r.RecordThinkingDropped(note)
+			}
+		}
 		if err != nil && api.IsThinkingBindingError(err) && !bindingRecovered {
 			// A thinking block failed preserved thinking's check on an
 			// endpoint where drop_block could not be asked for: the history
@@ -842,7 +865,7 @@ func (l *Loop) Complete(ctx context.Context, prompt string, model anthropic.Mode
 	if lvl := compaction.SummaryEffort(effort); lvl != api.EffortUnset {
 		params.OutputConfig.Effort = anthropic.BetaOutputConfigEffort(lvl)
 	}
-	assistant, text, err := l.streamTurn(ctx, params, nil, nil)
+	assistant, text, err := l.streamTurn(ctx, params, nil, nil, nil)
 	if err != nil {
 		return "", err
 	}
@@ -910,7 +933,7 @@ func (l *Loop) summarize(ctx context.Context, messages []anthropic.BetaMessagePa
 				req.Betas = prefix.betas
 			}
 		}
-		assistant, _, err := l.streamTurn(ctx, req, nil, nil)
+		assistant, _, err := l.streamTurn(ctx, req, nil, nil, nil)
 		if err != nil {
 			if !api.IsContextOverflow(err) || attempt == maxSummaryShrinks {
 				return "", err
@@ -940,7 +963,10 @@ func (l *Loop) summarize(ctx context.Context, messages []anthropic.BetaMessagePa
 // assistant-text events as deltas arrive, and returns the assembled message.
 // rawSink, if non-nil, receives the raw stream events for partial-message
 // output; it is nil for compaction summary turns.
-func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, emit Emitter, rawSink func(anthropic.BetaRawMessageStreamEventUnion)) (anthropic.BetaMessage, string, error) {
+//
+// onDropped, if non-nil, receives the transformations the API applied to this
+// request — the thinking blocks it dropped (see withoutThinkingSigned).
+func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, emit Emitter, rawSink func(anthropic.BetaRawMessageStreamEventUnion), onDropped func([]api.InputTransformation)) (anthropic.BetaMessage, string, error) {
 	sink := api.StreamSink{
 		OnText: func(delta string) {
 			if emit != nil {
@@ -951,6 +977,9 @@ func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewPa
 		OnTransformations: func(ts []api.InputTransformation) {
 			if note := droppedThinkingNote(ts); note != "" && emit != nil {
 				emit(Event{Type: EventNotice, Content: note})
+			}
+			if onDropped != nil {
+				onDropped(ts)
 			}
 		},
 	}
@@ -1407,10 +1436,13 @@ func (l *Loop) dispatchCall(ctx context.Context, tu anthropic.BetaToolUseBlock, 
 			approver = DenyAll
 		}
 		ad := approver.Approve(ctx, ApprovalRequest{
-			ToolName:   tu.Name,
-			ToolUseID:  tu.ID,
-			Input:      raw,
-			Specifier:  req.Specifier,
+			ToolName:  tu.Name,
+			ToolUseID: tu.ID,
+			Input:     raw,
+			// The decision's subject when it has one: for a Bash line the
+			// Specifier is its first command, which is not necessarily the
+			// part the decision is asking about.
+			Specifier:  firstNonEmpty(decision.Subject, req.Specifier),
 			Suggestion: decision.Message,
 		})
 		if ad.Behavior != permission.Allow {
@@ -1826,4 +1858,14 @@ func maxTokensAdvice(h api.Hints) string {
 		return ""
 	}
 	return " (set " + h.MaxTokens + " to avoid the wasted round-trip)"
+}
+
+// firstNonEmpty returns the first of ss that is not empty.
+func firstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }

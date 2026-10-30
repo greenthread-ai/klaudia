@@ -68,18 +68,36 @@ func (m Mutation) rank() int {
 // independently, and a writing redirection disqualifies the line whatever the
 // program: `echo` inspects, `echo x > main.go` does not.
 func InspectCommand(cmd string) (Mutation, string) {
+	m, reason, _ := InspectCommandPart(cmd)
+	return m, reason
+}
+
+// InspectCommandPart is InspectCommand plus the component the verdict is
+// about: the simple command that set it, or "" when it is the line as a whole
+// (a redirect, or a line that would not parse).
+//
+// A permission prompt needs it for its headline. It used to show the line's
+// first command, so plan mode asking about `git tag` in
+// `cd <repo> && git log … ; git tag --sort=…` read "run command cd <repo>"
+// — naming the one part that was never in question.
+func InspectCommandPart(cmd string) (Mutation, string, string) {
 	a, err := bashparser.Parse(cmd)
 	if err != nil {
-		return MutationUnclear, "the command line could not be parsed"
+		return MutationUnclear, "the command line could not be parsed", ""
 	}
 	if len(a.Commands) == 0 && len(a.Redirects) == 0 {
-		return MutationUnclear, "no command was found on the line"
+		return MutationUnclear, "no command was found on the line", ""
 	}
 	return inspectAnalysis(a, 0)
 }
 
-// inspectAnalysis judges a parsed line by its worst component.
-func inspectAnalysis(a bashparser.Analysis, depth int) (Mutation, string) {
+// commandText is a simple command as typed, for naming it.
+func commandText(c bashparser.Command) string {
+	return strings.TrimSpace(c.Name + " " + strings.Join(c.Args, " "))
+}
+
+// inspectAnalysis judges a parsed line by its worst component, and names it.
+func inspectAnalysis(a bashparser.Analysis, depth int) (Mutation, string, string) {
 	// Redirections first. They hang off the statement rather than the call, so
 	// a line whose every program is read-only can still be a write — this is
 	// the one project-write case ClassifyCommandIn already detects, and the
@@ -91,16 +109,16 @@ func inspectAnalysis(a bashparser.Analysis, depth int) (Mutation, string) {
 			continue
 		}
 		if !r.Literal || strings.TrimSpace(r.Target) == "" {
-			return MutationPresent, "it redirects output to a file"
+			return MutationPresent, "it redirects output to a file", ""
 		}
-		return MutationPresent, fmt.Sprintf("it redirects output to %s", r.Target)
+		return MutationPresent, fmt.Sprintf("it redirects output to %s", r.Target), ""
 	}
 
-	verdict, reason := MutationNone, ""
+	verdict, reason, part := MutationNone, "", ""
 	for _, c := range a.Commands {
 		m, why := inspectOne(c, depth)
 		if m.rank() > verdict.rank() {
-			verdict, reason = m, why
+			verdict, reason, part = m, why, commandText(c)
 			if verdict == MutationPresent {
 				// Nothing a later component says can soften this, and the
 				// first offender is the one worth naming.
@@ -108,7 +126,7 @@ func inspectAnalysis(a bashparser.Analysis, depth int) (Mutation, string) {
 			}
 		}
 	}
-	return verdict, reason
+	return verdict, reason, part
 }
 
 // inspectOne judges a single simple command.
@@ -133,7 +151,8 @@ func inspectOne(c bashparser.Command, depth int) (Mutation, string) {
 		if err != nil {
 			return MutationUnclear, fmt.Sprintf("the script passed to %s could not be parsed", prog)
 		}
-		return inspectAnalysis(inner, depth+1)
+		m, why, _ := inspectAnalysis(inner, depth+1)
+		return m, why
 	}
 
 	if m, why, known := inspectSubcommand(prog, args); known {
@@ -211,6 +230,13 @@ func inspectSubcommand(prog string, args []bashparser.Word) (m Mutation, reason 
 		// `git` with only flags it does not understand.
 		return MutationUnclear, fmt.Sprintf("%s was called with no subcommand", prog), true
 	}
+	// Before mutates: `git stash` stashes, but `git stash list` reads, and
+	// `git tag` / `git branch` create something only when given a name.
+	if lists, has := table.listOnly[sub]; has {
+		if rest, literal := literalsAfter(args, sub); literal && lists(rest) {
+			return MutationNone, "", true
+		}
+	}
 	if why, found := table.mutates[sub]; found {
 		return MutationPresent, why, true
 	}
@@ -232,6 +258,10 @@ type subcommandTable struct {
 	// nested names a second table to consult for subcommands that are
 	// themselves multiplexers.
 	nested map[string]string
+	// listOnly holds subcommands that only list in some argument shapes,
+	// given the words after the subcommand. A shape the rule does not accept
+	// falls through to mutates or, failing that, asks.
+	listOnly map[string]func(rest []string) bool
 }
 
 // subcommands covers git and go, which is where the measured plan-mode session
@@ -241,6 +271,16 @@ type subcommandTable struct {
 // this list is meant to grow.
 var subcommands = map[string]subcommandTable{
 	"git": {
+		// Measured: `git tag --sort=-creatordate --format=…` asked during a
+		// planning session, and `git stash list` was refused outright,
+		// because the bare subcommands write.
+		listOnly: map[string]func([]string) bool{
+			"tag":    gitTagLists,
+			"branch": gitBranchLists,
+			"remote": gitRemoteLists,
+			"stash":  func(r []string) bool { return len(r) > 0 && (r[0] == "list" || r[0] == "show") },
+			"config": gitConfigReads,
+		},
 		reads: set(
 			"status", "log", "diff", "show", "blame", "grep", "shortlog",
 			"describe", "rev-parse", "rev-list", "ls-files", "ls-tree",
@@ -343,3 +383,100 @@ func set(names ...string) map[string]bool {
 // Moving somewhere cannot write; a redirect after it is still judged on its
 // own, so `cd /etc && echo x > passwd` stays a write.
 var directoryBuiltins = map[string]bool{"cd": true, "pushd": true, "popd": true}
+
+// literalsAfter returns the literal words following sub, false if any of them
+// is an expansion — a word nobody can read cannot be shown to only list.
+func literalsAfter(args []bashparser.Word, sub string) ([]string, bool) {
+	var out []string
+	for _, w := range args[indexOf(args, sub)+1:] {
+		if !w.Literal {
+			return nil, false
+		}
+		out = append(out, w.Text)
+	}
+	return out, true
+}
+
+// flagName is a flag without its "=value".
+func flagName(a string) string {
+	if i := strings.IndexByte(a, '='); i >= 0 {
+		return a[:i]
+	}
+	return a
+}
+
+// listsWith implements the shape git tag and git branch share: with no
+// arguments, or only listing flags, they list; a list-mode flag (-l, --list,
+// --contains, --merged, …) makes positionals patterns or commits rather than
+// names to create; and any flag outside the set — -d, -m, -f, -a for tag — is
+// not a listing.
+func listsWith(rest []string, listing, listMode map[string]bool) bool {
+	inList, positional := false, false
+	for _, a := range rest {
+		if !strings.HasPrefix(a, "-") {
+			positional = true
+			continue
+		}
+		f := flagName(a)
+		// -n<num> (tag annotations) is a short flag with an attached value.
+		if strings.HasPrefix(f, "-n") && !strings.HasPrefix(f, "--") {
+			f = "-n"
+		}
+		if !listing[f] && !listMode[f] {
+			return false
+		}
+		if listMode[f] {
+			inList = true
+		}
+	}
+	return !positional || inList
+}
+
+func gitTagLists(rest []string) bool {
+	return listsWith(rest,
+		set("-n", "--sort", "--format", "--column", "--no-column", "-i", "--ignore-case", "--omit-empty", "--color"),
+		set("-l", "--list", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at"))
+}
+
+func gitBranchLists(rest []string) bool {
+	return listsWith(rest,
+		set("-a", "--all", "-r", "--remotes", "-v", "-vv", "--verbose", "--sort", "--format", "--column", "--no-column",
+			"-i", "--ignore-case", "--omit-empty", "--color", "--no-color", "--abbrev", "--no-abbrev", "--show-current"),
+		set("-l", "--list", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at"))
+}
+
+func gitRemoteLists(rest []string) bool {
+	if len(rest) == 0 {
+		return true
+	}
+	switch rest[0] {
+	case "-v", "--verbose":
+		return len(rest) == 1
+	case "get-url", "show":
+		return true
+	}
+	return false
+}
+
+// gitConfigReads accepts the getters, in both the flag form and the
+// subcommand form git 2.46 added, and refuses anything that also sets.
+func gitConfigReads(rest []string) bool {
+	if len(rest) > 0 && (rest[0] == "get" || rest[0] == "list") {
+		for _, a := range rest[1:] {
+			if a == "--edit" || a == "-e" {
+				return false
+			}
+		}
+		return true
+	}
+	getter := false
+	for _, a := range rest {
+		switch flagName(a) {
+		case "--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l", "--get-color", "--get-colorbool":
+			getter = true
+		case "--unset", "--unset-all", "--add", "--replace-all", "--rename-section", "--remove-section", "-e", "--edit":
+			return false
+		}
+	}
+	return getter
+}

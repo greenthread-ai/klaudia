@@ -85,6 +85,11 @@ const (
 type Decision struct {
 	Behavior Behavior
 	Message  string
+	// Subject, when set, is the part of the action the decision is about, for
+	// a frontend to name in place of the request's Specifier. Bash's
+	// Specifier is the line's first command, which is the wrong thing to show
+	// when the decision is about a later one.
+	Subject string
 }
 
 // Context carries the active mode for a run.

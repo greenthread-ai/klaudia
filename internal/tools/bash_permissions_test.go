@@ -110,3 +110,29 @@ func TestBashOutsidePlanModeIsUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// The prompt's headline was the line's first command, so plan mode asking
+// about `git tag` in `cd <repo> && … ; git tag …` read "run command cd <repo>"
+// (reported). The decision now names the component it is about.
+func TestPlanModeDecisionNamesTheComponentItIsAbout(t *testing.T) {
+	b, err := NewBash(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name, command, subject string
+	}{
+		{name: "an ask about a later component", command: "cd /repo && git log -1; cargo check", subject: "cargo check"},
+		{name: "a refusal about a later component", command: "cd /repo && rm -rf build", subject: "rm -rf build"},
+		{name: "a redirect is about the whole line", command: "cd /repo && git log > out.txt", subject: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, _ := json.Marshal(BashInput{Command: tc.command})
+			d := permission.Check(permission.Context{Mode: permission.StaticMode(permission.ModePlan)}, b, b.PermissionRequest(raw))
+			if d.Subject != tc.subject {
+				t.Errorf("subject = %q, want %q", d.Subject, tc.subject)
+			}
+		})
+	}
+}

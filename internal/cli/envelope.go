@@ -61,6 +61,19 @@ func (m multiRecorder) RecordCompaction(summary string) error {
 	return first
 }
 
+// RecordThinkingDropped forwards like RecordCompaction, for the same reason.
+func (m multiRecorder) RecordThinkingDropped(note string) error {
+	var first error
+	for _, r := range m {
+		if tr, ok := r.(agent.ThinkingDropRecorder); ok {
+			if err := tr.RecordThinkingDropped(note); err != nil && first == nil {
+				first = err
+			}
+		}
+	}
+	return first
+}
+
 func (m multiRecorder) Record(role string, message json.RawMessage) error {
 	var first error
 	for _, r := range m {

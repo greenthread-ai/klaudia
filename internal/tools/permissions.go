@@ -42,13 +42,15 @@ func execClassDecision(pctx permission.Context, req permission.PermissionRequest
 	if cmd == "" {
 		cmd = req.Specifier
 	}
-	switch m, reason := trust.InspectCommand(cmd); m {
+	m, reason, part := trust.InspectCommandPart(cmd)
+	switch m {
 	case trust.MutationNone:
 		return permission.Decision{Behavior: permission.Allow}
 	case trust.MutationPresent:
 		return permission.Decision{
 			Behavior: permission.Deny,
 			Message:  "plan mode does not change files, and " + reason + ". Research it instead, or ask the user to leave plan mode.",
+			Subject:  part,
 		}
 	default:
 		// Unclear asks rather than refuses. The classifier is an allowlist and
@@ -58,6 +60,7 @@ func execClassDecision(pctx permission.Context, req permission.PermissionRequest
 		return permission.Decision{
 			Behavior: permission.Ask,
 			Message:  "Plan mode is read-only and " + reason + ".",
+			Subject:  part,
 		}
 	}
 }

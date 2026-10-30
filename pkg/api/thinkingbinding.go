@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -16,10 +17,12 @@ import (
 // passed (PR #63).
 //
 // The safety net: once the conversation holds a thinking block, requests ask
-// the API to drop a mismatched block (and every block after it) instead of
-// refusing, and the response lists each drop in input_transformations, which
-// the loop reports. The model then re-plans without that reasoning: degraded,
-// not broken. Setting the field also opts an unenforced account into the
+// the API to drop a mismatched block instead of refusing, and the response
+// lists each drop in input_transformations, which the loop reports and then
+// removes from its history (resolveDropped) — the API drops a block for one
+// request only, so a kept block was dropped again every turn. Measured live:
+// only the mismatched block goes; blocks written after it stay valid. The
+// model re-plans without that reasoning: degraded, not broken. Setting the field also opts an unenforced account into the
 // check, so the drops are visible from any account, which is how the causes
 // are found and fixed.
 
@@ -36,6 +39,43 @@ type InputTransformation struct {
 	Type   string `json:"type"`
 	Reason string `json:"reason"`
 	Path   string `json:"path"`
+	// Signature identifies the dropped block in the caller's history: its
+	// thinking signature (or redacted-thinking data), resolved by the client
+	// from the request it actually sent. The path cannot be used for that
+	// directly — it indexes the shaped request, and shaping adds and removes
+	// messages (tool reveals) — but the signature survives shaping untouched.
+	// Empty when the path did not resolve to a thinking block.
+	Signature string `json:"-"`
+}
+
+// resolveDropped fills in each transformation's Signature from the request
+// that was sent.
+//
+// It exists because a drop is permanent and the caller did not know it. The
+// API drops a mismatched block for that request only; the caller's history
+// still holds it, so it went out again on every later request and was dropped
+// again — measured live: a system-prompt change at one request, then the same
+// block dropped at messages.1.content.0 on every request after. That is the
+// "N earlier thinking block(s) dropped" notice repeating every turn of a
+// resumed session. With the signature the loop removes the block once, and
+// (measured) the next request reports nothing and later blocks stay valid.
+func resolveDropped(ts []InputTransformation, params anthropic.BetaMessageNewParams) {
+	for i := range ts {
+		var m, c int
+		if _, err := fmt.Sscanf(ts[i].Path, "messages.%d.content.%d", &m, &c); err != nil {
+			continue
+		}
+		if m < 0 || m >= len(params.Messages) || c < 0 || c >= len(params.Messages[m].Content) {
+			continue
+		}
+		b := params.Messages[m].Content[c]
+		switch {
+		case b.OfThinking != nil:
+			ts[i].Signature = b.OfThinking.Signature
+		case b.OfRedactedThinking != nil:
+			ts[i].Signature = b.OfRedactedThinking.Data
+		}
+	}
 }
 
 // historyHasThinking reports whether any assistant message carries a thinking

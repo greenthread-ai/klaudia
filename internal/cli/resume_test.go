@@ -155,6 +155,44 @@ func TestBoundaryIsInvisibleToTheFullReader(t *testing.T) {
 	}
 }
 
+// A thinking-drop line is diagnostic only. Neither the full reader nor resume
+// may see it — and in particular it must not end a resume's "after the
+// boundary" run, or a drop recorded after a compaction would cut it short.
+func TestThinkingDropLineIsInvisibleToReaders(t *testing.T) {
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	cwd := t.TempDir()
+	const id = "11111111-2222-3333-4444-777777777777"
+	tr, err := session.NewTranscript(session.Meta{SessionID: id, CWD: cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = tr.Record("user", json.RawMessage(`{"role":"user","content":"a"}`))
+	_ = tr.RecordCompaction("S")
+	_ = tr.Record("user", json.RawMessage(`{"role":"user","content":"b"}`))
+	_ = tr.RecordThinkingDropped("3 earlier thinking block(s) dropped")
+	_ = tr.Record("user", json.RawMessage(`{"role":"user","content":"c"}`))
+	_ = tr.Close()
+
+	raw, _ := os.ReadFile(tr.Path())
+	if !strings.Contains(string(raw), `"subtype":"thinking_dropped"`) {
+		t.Fatalf("no drop line written:\n%s", raw)
+	}
+	entries, err := session.Read(tr.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 {
+		t.Errorf("Read returned %d entries, want the 3 messages", len(entries))
+	}
+	msgs, ok, err := resumeFromSummary(cwd, id)
+	if err != nil || !ok {
+		t.Fatalf("resume: ok=%v err=%v", ok, err)
+	}
+	if got := texts(msgs); len(got) != 3 || got[1] != "b" || got[2] != "c" {
+		t.Errorf("resumed %q, want the summary then b, c", got)
+	}
+}
+
 func texts(msgs []anthropic.BetaMessageParam) []string {
 	var out []string
 	for _, m := range msgs {

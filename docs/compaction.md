@@ -37,9 +37,22 @@ What Klaudia does about it (PR #63):
 
 - **Safety net.** Once the history holds thinking, the Anthropic client asks
   for `block_binding` `drop_block` (beta `thinking-binding-controls-2026-08-01`):
-  a mismatched block is dropped, with every block after it, instead of the
-  request failing, and each drop is a notice. Where that cannot be asked for,
-  the 400 is recovered once by removing all thinking (`stripThinking`).
+  a mismatched block is dropped instead of the request failing. Measured live,
+  only the mismatched block goes; blocks written after it stay valid. Where
+  that cannot be asked for, the 400 is recovered once by removing all thinking
+  (`stripThinking`).
+- **A dropped block is removed from the history**, once. The API drops it for
+  one request only, so a history that kept it re-sent it every turn and had
+  it dropped again — measured: the same block at `messages.1.content.0` on
+  every request of a resumed session, which is the notice that kept
+  reappearing. The client resolves each reported path against the request it
+  actually sent (shaping adds messages, so the path does not index the
+  caller's history) and hands back the block's signature; the loop removes
+  that block (`withoutThinkingSigned`), and the next request reports nothing.
+  The usual trigger is a resume: the old blocks were signed against the
+  previous process's system prompt, which a new date, branch or project
+  knowledge note changes. Each drop is a notice and a `thinking_dropped` line
+  in the transcript.
 - **Microcompact stands aside** for those conversations: the client asks the
   API to clear old tool results itself (`clear_tool_uses`, below), which does
   not count as an edit. A provider without that keeps microcompact.

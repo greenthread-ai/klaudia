@@ -203,6 +203,18 @@ What the implementation settled that the design left open:
   the programs that only write when asked (`sed -i`, `find -delete`, `sort -o`,
   `yq -i`) — the third exists because the bare forms, `sed -n '1,40p'` and
   `find . -name`, are a Read and a Glob and are what research runs.
+- **List-only forms of writing subcommands read.** `git tag`, `git branch`,
+  `git remote`, `git stash` and `git config` write in their bare or named
+  forms but only list in others, so they carry per-subcommand rules
+  (`subcommandTable.listOnly`) checked before `mutates`: `git tag --sort=…`,
+  `git branch --merged main`, `git stash list` and `git config --get` read;
+  `git tag v1`, `git branch -d x` and `git config k v` still ask, and
+  `git stash` / `git stash pop` are still refused. Measured: `git tag` asked
+  during a planning session and `git stash list` was refused outright.
+- **A prompt names the part it is about.** `trust.InspectCommandPart` returns
+  the component its verdict is about, carried as `permission.Decision.Subject`
+  into the approval request's headline. It was the line's first command, so
+  an ask about `git tag` read "run command cd <repo>".
 - **`go build` and `go test` are denied**, not asked about, on the user's call:
   plan mode is for anything that does not modify files, and `go build
   ./cmd/klaudia` drops a binary in the working directory while `go test` runs

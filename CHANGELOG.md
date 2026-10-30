@@ -5,6 +5,29 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+- **"N earlier thinking block(s) dropped" no longer repeats every turn.** The
+  API drops a thinking block whose earlier context changed, for one request
+  only; the history kept it, so it was re-sent and dropped again on every
+  request for the rest of the session. Measured end to end on a session
+  resumed after a project-knowledge note had changed its system prompt: the
+  notice 6 times over 3 turns before, once after. The client now resolves each
+  dropped block to its signature from the request it sent, and the loop
+  removes it from the history. Each drop is also recorded in the transcript as
+  a `thinking_dropped` line, so it can be counted afterwards. The usual trigger
+  is resuming after the system prompt changed (a new date, branch, or project
+  knowledge note); per-request shaping such as cache breakpoints was measured
+  not to cause it.
+- **Plan mode reads the list-only forms of git subcommands that otherwise
+  write.** `git tag --sort=…`, `git branch -vv`, `git remote -v`,
+  `git stash list` and `git config --get` now run; `git stash list` was
+  refused outright before, because bare `git stash` writes. Creating,
+  deleting or setting still asks, and `git stash` / `git stash pop` are still
+  refused.
+- **A permission prompt names the part of a command it is about.** Its
+  headline was the line's first command, so plan mode asking about `git tag`
+  in `cd <repo> && … ; git tag …` read "run command cd <repo>".
+
 ## v0.7.0 — 2026-10-29
 
 ### Added

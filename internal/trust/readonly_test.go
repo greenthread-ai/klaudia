@@ -62,6 +62,31 @@ func TestInspectCommand(t *testing.T) {
 		{name: "a redirection at the end of a chain", cmd: "git status && git log > out", want: MutationPresent, reason: "out"},
 		{name: "a redirection to an unreadable target", cmd: "git log > $OUT", want: MutationPresent, reason: "redirects output"},
 
+		// The list-only forms of subcommands that otherwise write. Measured:
+		// `git tag --sort=… --format=…` asked in a planning session, and
+		// `git stash list` was refused outright because bare stash writes.
+		{name: "git tag listing", cmd: "git tag --sort=-creatordate --format='%(refname:short) %(creatordate:short)'", want: MutationNone},
+		{name: "git tag with a list pattern", cmd: "git tag -l 'v0.*'", want: MutationNone},
+		{name: "git tag containing a commit", cmd: "git tag --contains HEAD", want: MutationNone},
+		{name: "git tag creating a tag", cmd: "git tag v1.0", want: MutationUnclear},
+		{name: "git tag deleting a tag", cmd: "git tag -d v1.0", want: MutationUnclear},
+		{name: "git branch listing", cmd: "git branch -vv --sort=-committerdate", want: MutationNone},
+		{name: "git branch merged into main", cmd: "git branch --merged main", want: MutationNone},
+		{name: "git branch creating a branch", cmd: "git branch feature", want: MutationUnclear},
+		{name: "git branch deleting a branch", cmd: "git branch -d old", want: MutationUnclear},
+		{name: "git remote -v", cmd: "git remote -v", want: MutationNone},
+		{name: "git remote get-url", cmd: "git remote get-url origin", want: MutationNone},
+		{name: "git remote add", cmd: "git remote add x https://example.com/x.git", want: MutationUnclear},
+		{name: "git stash list", cmd: "git stash list", want: MutationNone},
+		{name: "git stash show", cmd: "git stash show -p stash@{0}", want: MutationNone},
+		{name: "git stash still stashes", cmd: "git stash", want: MutationPresent, reason: "stashes"},
+		{name: "git stash pop still writes", cmd: "git stash pop", want: MutationPresent, reason: "stashes"},
+		{name: "git config getter", cmd: "git config --get remote.origin.url", want: MutationNone},
+		{name: "git config get subcommand", cmd: "git config get user.email", want: MutationNone},
+		{name: "git config setter", cmd: "git config user.email x@y.z", want: MutationUnclear},
+		{name: "git config unset", cmd: "git config --get x --unset y", want: MutationUnclear},
+		{name: "a list form built from an expansion", cmd: "git tag $FLAGS", want: MutationUnclear},
+
 		// Changing directory writes nothing. Its absence made plan mode ask
 		// about `cd <repo> && grep …`, the commonest research line there is.
 		{name: "cd before a read", cmd: `cd /repo && grep -n "^T1" docs/BACKLOG.md | cut -c1-230; grep -n Kind internal/*.go | head`, want: MutationNone},

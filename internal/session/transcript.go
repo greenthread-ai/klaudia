@@ -109,6 +109,12 @@ func (t *Transcript) RecordPartialCompaction(summary string, kept int) error {
 	return t.recordSystem(Entry{Subtype: SubtypePartialCompact, Content: summary, Kept: kept})
 }
 
+// RecordThinkingDropped notes that the API dropped thinking blocks, with the
+// notice that was shown, so a session's drops can be counted from its file.
+func (t *Transcript) RecordThinkingDropped(note string) error {
+	return t.recordSystem(Entry{Subtype: SubtypeThinkingDropped, Content: note})
+}
+
 // recordSystem appends a system line, chained like any other.
 func (t *Transcript) recordSystem(e Entry) error {
 	id := uuid.NewString()

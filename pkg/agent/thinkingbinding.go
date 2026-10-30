@@ -82,3 +82,58 @@ func stripThinking(messages []anthropic.BetaMessageParam) []anthropic.BetaMessag
 	}
 	return out
 }
+
+// withoutThinkingSigned removes the thinking blocks with the given signatures
+// (or redacted-thinking data) from history, leaving every other block alone.
+//
+// Removing a block from the middle is safe here, unlike in general: the API
+// already removed it from the conversation it worked from, so the blocks it
+// wrote after are bound to the history without it — measured live, the next
+// request reports no drops and the newer blocks stay valid. An assistant
+// message left empty gets the same placeholder stripThinking uses.
+func withoutThinkingSigned(messages []anthropic.BetaMessageParam, sigs []string) []anthropic.BetaMessageParam {
+	if len(sigs) == 0 {
+		return messages
+	}
+	dead := make(map[string]bool, len(sigs))
+	for _, s := range sigs {
+		dead[s] = true
+	}
+	out := make([]anthropic.BetaMessageParam, len(messages))
+	for i, m := range messages {
+		out[i] = m
+		if m.Role != anthropic.BetaMessageParamRoleAssistant {
+			continue
+		}
+		var kept []anthropic.BetaContentBlockParamUnion
+		changed := false
+		for _, b := range m.Content {
+			if (b.OfThinking != nil && dead[b.OfThinking.Signature]) ||
+				(b.OfRedactedThinking != nil && dead[b.OfRedactedThinking.Data]) {
+				changed = true
+				continue
+			}
+			kept = append(kept, b)
+		}
+		if !changed {
+			continue
+		}
+		if len(kept) == 0 {
+			kept = []anthropic.BetaContentBlockParamUnion{anthropic.NewBetaTextBlock("(reasoning omitted)")}
+		}
+		out[i].Content = kept
+	}
+	return out
+}
+
+// droppedSignatures picks out the signatures the client resolved for the
+// dropped blocks; a transformation it could not resolve has none.
+func droppedSignatures(ts []api.InputTransformation) []string {
+	var sigs []string
+	for _, t := range ts {
+		if t.Signature != "" {
+			sigs = append(sigs, t.Signature)
+		}
+	}
+	return sigs
+}

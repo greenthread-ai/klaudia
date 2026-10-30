@@ -152,3 +152,33 @@ func TestServerSideClearingFallsBackWhereRejected(t *testing.T) {
 		t.Error("the client still claims to clear after the endpoint refused")
 	}
 }
+
+// A drop is reported by path, and the path indexes the request as shaped by
+// this client; the caller's history is indexed differently once tool reveals
+// add messages. The client resolves each path against what it sent, so the
+// caller can remove the block by its signature. Without that the caller kept
+// the block, re-sent it every turn, and the API dropped it again every turn
+// (measured live).
+func TestDroppedBlocksAreNamedBySignature(t *testing.T) {
+	drop := func(path string) string {
+		return `{"type":"thinking_dropped","reason":"prefix_binding_mismatch","path":"` + path + `"}`
+	}
+	// One line: it goes out as an SSE data line.
+	c, _ := bodyServer(t, "["+strings.Join([]string{
+		drop("messages.1.content.0"), drop("messages.1.content.1"), drop("messages.9.content.0"), drop("system"),
+	}, ",")+"]", false)
+	var got []InputTransformation
+	sink := StreamSink{OnTransformations: func(ts []InputTransformation) { got = ts }}
+	if _, err := c.StreamTurn(context.Background(), withThinkingHistory(), sink); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"sig", "", "", ""} // a thinking block; a text block; out of range; not a block path
+	if len(got) != len(want) {
+		t.Fatalf("got %d transformations, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		if got[i].Signature != w {
+			t.Errorf("%s: signature %q, want %q", got[i].Path, got[i].Signature, w)
+		}
+	}
+}

@@ -257,6 +257,7 @@ func (c *Client) streamOnce(ctx context.Context, params anthropic.BetaMessageNew
 		}
 		if sink.OnTransformations != nil {
 			if ts := transformationsOf(ev); len(ts) > 0 {
+				resolveDropped(ts, params)
 				sink.OnTransformations(ts)
 			}
 		}

@@ -178,6 +178,11 @@ type Entry struct {
 // summary.
 const SubtypeCompactBoundary = "compact_boundary"
 
+// SubtypeThinkingDropped records that the API dropped thinking blocks from a
+// request, Content being the notice shown for it. Diagnostic only: no reader
+// rebuilds anything from it, and every reader skips it.
+const SubtypeThinkingDropped = "thinking_dropped"
+
 // SubtypePartialCompact marks a "summarise up to here": Content is a summary
 // that replaced every entry above the last Kept ones, which stay verbatim.
 // A subtype of its own rather than compact_boundary with an extra field: a

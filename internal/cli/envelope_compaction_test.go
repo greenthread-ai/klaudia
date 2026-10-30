@@ -37,3 +37,25 @@ func TestMultiRecorderForwardsTheBoundary(t *testing.T) {
 		t.Errorf("wrapped transcript got %q, want [S]", tr.got)
 	}
 }
+
+func (m *markingRecorder) RecordThinkingDropped(s string) error {
+	m.got = append(m.got, "dropped:"+s)
+	return nil
+}
+
+// The headless path wraps the transcript, so the drop note must be forwarded
+// through the wrapper or it never reaches the file.
+func TestMultiRecorderForwardsThinkingDrops(t *testing.T) {
+	tr := &markingRecorder{}
+	var r agent.Recorder = multiRecorder{plainRecorder{}, nil, tr}
+	dr, ok := r.(agent.ThinkingDropRecorder)
+	if !ok {
+		t.Fatal("multiRecorder does not implement ThinkingDropRecorder")
+	}
+	if err := dr.RecordThinkingDropped("N"); err != nil {
+		t.Fatal(err)
+	}
+	if len(tr.got) != 1 || tr.got[0] != "dropped:N" {
+		t.Errorf("wrapped transcript got %q", tr.got)
+	}
+}
