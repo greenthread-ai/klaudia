@@ -275,8 +275,9 @@ names it. The status bar tracks model · mode · tokens, and context once it
 is half way to auto-compact (amber, with what is left, from 80%). Long
 output is kept in full: the preview tells you its number and `/last <n>` opens
 it in `$PAGER`, where searching and copying are your pager's job. While the
-model works through a plan its step list sits above the prompt — `Ctrl+T`
-collapses it to one line — and disappears once every step is done. `/search`,
+model works through a plan its step list sits above the prompt (**Plan** once
+approved, **Steps** before) — `Ctrl+T` collapses it to one line — and
+disappears once every step is done. `/search`,
 `/outline` and `/errors` index the session, and `/open <path:line>` sends a
 reference copied from a stack trace straight to `$EDITOR`.
 
@@ -1166,9 +1167,13 @@ model researches, then presents a plan, and you pick:
    followed by one verification turn, and the run ends with a single summary.
 3. **No — keep planning** (`n`): say what should change; it goes to the model.
 
-The approved plan is saved to `~/.klaudia/plans/<session-id>.md` and kept in
-step with the model's `TodoWrite` list, which the live panel above the prompt
-shows (`Ctrl+T` collapses it). `/plan run [N]` resumes a plan with steps left
+The approved plan is saved to `~/.klaudia/plans/<session-id>.md`: the plan as
+approved, then a checklist of its steps. Approval starts that checklist from
+the plan's own steps (a new plan replaces the previous one's list), and the
+model keeps it current with `TodoWrite` as work goes; where the two differ,
+the checklist is what the work follows. The live panel above the prompt shows
+it — titled **Plan** once a plan is approved and **Steps** for a working list
+that is not — and `Ctrl+T` collapses it. `--resume` reloads it. `/plan run [N]` resumes a plan with steps left
 (up to N turns, default 10), and `/plan stop` — or Esc — halts it. `/plan off`
 leaves plan mode without a plan. Questions the model asks (`AskUserQuestion`)
 use the same picker: ↑↓ or a digit, Enter to confirm, and the last row to

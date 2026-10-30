@@ -174,7 +174,12 @@ Bash?": its summary becomes the title and its scope becomes readable content.
 checklist, which is the entire point of the tool; left as a tool call the user
 sees a raw JSON array. Statuses pass through unmapped because the tool's three
 are spelled exactly as ACP's, and anything else the model invents becomes
-`pending` so a malformed status cannot produce an entry a client rejects.
+`pending` so a malformed status cannot produce an entry a client rejects. The
+plan is posted from the session's plan store when it changes, not from the
+call's input, which arrives before the tool has validated anything. On
+`session/load` the stored plan is posted once after the replay; only a list
+that never reached the store (unapproved lists are not written to disk) falls
+back to the last `TodoWrite` in the history.
 
 **`Edit` sends its own `old_string`/`new_string` as the diff.** Reconstructing a
 whole-file diff would mean reimplementing `Edit`'s replacement rules here, and a

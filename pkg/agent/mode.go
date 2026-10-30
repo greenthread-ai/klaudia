@@ -52,8 +52,9 @@ func modeClause(mode permission.Mode) string {
 			"available and you are expected to use them: `git log`, `git diff`, `git status`, " +
 			"`ls`, `sed -n`, `go doc`, `go list`. A command nothing can classify will ask the user " +
 			"rather than be refused. Research the request properly, then present the plan with " +
-			"ExitPlanMode, and note explicitly anything you could not verify because verifying " +
-			"it would have required changing something."
+			"ExitPlanMode — passing its steps, which become the checklist the user watches once " +
+			"it is approved — and note explicitly anything you could not verify because " +
+			"verifying it would have required changing something."
 	case permission.ModeBypassPermissions:
 		return "\n\n# Permission mode: bypass permissions\n" +
 			"Permission checks and the host gate are both off for this session; the user has " +
