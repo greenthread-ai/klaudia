@@ -124,7 +124,8 @@ func (m *Model) startTurn(prompt string) tea.Cmd {
 		res, err := m.run(ctx, turn)
 		m.events <- doneMsg{res: res, err: err}
 	}()
-	return tea.Batch(m.spin.Tick, m.sw.Reset(), m.sw.Start())
+	m.clock.begin(m.clockNow())
+	return m.spin.Tick
 }
 
 func (m *Model) renderEvent(ev agent.Event) {

@@ -135,6 +135,10 @@ func TestFmtDuration(t *testing.T) {
 		500 * time.Millisecond:          "500ms",
 		12300 * time.Millisecond:        "12.3s",
 		(2*time.Minute + 5*time.Second): "2m05s",
+		// Hours, because a 5h41m wait rendered as "341m00s".
+		(59*time.Minute + 59*time.Second): "59m59s",
+		(time.Hour + 5*time.Minute):       "1h05m",
+		(5*time.Hour + 41*time.Minute):    "5h41m",
 	}
 	for d, want := range cases {
 		if got := fmtDuration(d); got != want {

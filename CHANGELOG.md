@@ -5,6 +5,20 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+### Fixed
+- **The turn timer no longer counts time spent waiting on you.** It kept
+  running while a question, permission prompt or plan approval sat
+  unanswered, so after an `AskUserQuestion` left overnight the spinner read
+  "thinking… 5h47m" — measured from the transcript: 5h41m of that was the
+  question, and the API answered in 40s. The timer now pauses while the turn
+  waits on you, the end line reports the wait separately ("done in 1m00s
+  (+5h41m waiting for you)"), and "quiet for…" restarts after you answer. It
+  is also a wall clock now: the old stopwatch counted ticks, so it
+  under-reported when the screen was busy, and the goal loop could start an
+  iteration with it frozen (its stop and start were separate messages that
+  could arrive in either order). Durations of an hour or more read "5h41m",
+  not "341m00s".
+
 ## v0.7.1 — 2026-10-30
 
 ### Fixed

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
-	"charm.land/bubbles/v2/stopwatch"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
@@ -614,7 +613,10 @@ type Model struct {
 	// nav indexes the conversation for /search, /errors and /outline.
 	nav []navEntry
 	// Elapsed-run stopwatch and per-turn cancel (Esc interrupts the model).
-	sw         stopwatch.Model
+	clock turnClock
+	// now is the turn clock's time source; nil is time.Now. Tests set it to
+	// let hours pass while a question waits.
+	now        func() time.Time
 	turnCancel context.CancelFunc
 	// streamBuf holds the not-yet-printed part of the in-progress assistant
 	// message; scan tracks how much of it is safe to commit to scrollback, and
@@ -657,7 +659,6 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 		ctx:     ctx,
 		input:   in,
 		spin:    sp,
-		sw:      stopwatch.New(stopwatch.WithInterval(100 * time.Millisecond)),
 		state:   stateIdle,
 		history: history,
 		sess:    sess,
@@ -736,7 +737,28 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 
 // setState changes the UI state and re-syncs the layout (the running and idle
 // states reserve different numbers of bottom rows).
+// clockNow is the turn clock's current time.
+func (m *Model) clockNow() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return time.Now()
+}
+
 func (m *Model) setState(s uiState) {
+	// The turn clock counts working time only: paused while the turn waits on
+	// the user's answer, resumed when it runs again. See turnClock.
+	switch {
+	case waitsOnUser(s):
+		m.clock.pause(m.clockNow())
+	case s == stateRunning:
+		if waitsOnUser(m.state) {
+			// Back from the user: the last event is from before the
+			// question, and "quiet for 5h41m" would blame the model for it.
+			m.lastEventAt = m.clockNow()
+		}
+		m.clock.resume(m.clockNow())
+	}
 	m.state = s
 	m.syncInputHeight()
 }
@@ -949,8 +971,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitForEvent()
 
 	case doneMsg:
-		elapsed := m.sw.Elapsed()
-		stopSW := m.sw.Stop()
+		now := m.clockNow()
+		m.clock.resume(now) // a turn that ended mid-question stops waiting now
+		total, waited := m.clock.total(now), m.clock.waiting(now)
+		elapsed := total - waited
+		m.clock = turnClock{}
 		m.turnCancel = nil
 		m.steer.forgetShown()
 		m.liveAgents = nil   // an interrupted turn leaves no result to clear them
@@ -974,7 +999,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.appendLine(hintStyle.Render("  ⚠ " + note))
 				}
 			}
-			m.appendLine(bannerStyle.Render("  ✓ done in " + fmtDuration(elapsed) + throughput(msg.res.OutputTokens, elapsed-m.takeToolTime())))
+			// Throughput divides by the model's own time: the turn's wall time
+			// less tool time, which already includes any wait on the user
+			// (approvals and questions happen while a call is pending).
+			m.appendLine(bannerStyle.Render("  ✓ done in " + fmtDuration(elapsed) + waitNote(waited) + throughput(msg.res.OutputTokens, total-m.takeToolTime())))
 		}
 		// Goal loop: decide now whether another iteration follows, because
 		// that decides whether this turn gets a completion block of its own.
@@ -1028,7 +1056,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if loopPrompt != "" {
 			m.settleState(stateRunning)
-			return m, tea.Batch(m.waitForEvent(), m.startTurn(loopPrompt), stopSW)
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(loopPrompt))
 		}
 		// A queued message becomes the next turn. Two sources, in priority
 		// order: one the user escalated to "interrupt and send now" (captured at
@@ -1056,12 +1084,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					next = note + "\n\n" + next
 				}
 			}
-			return m, tea.Batch(m.waitForEvent(), m.startTurn(next), stopSW)
+			return m, tea.Batch(m.waitForEvent(), m.startTurn(next))
 		}
 		m.settleState(stateIdle)
 		m.input.Focus()
 		m.notifyTurnEnd(elapsed, msg.err)
-		return m, tea.Batch(textarea.Blink, m.waitForEvent(), stopSW, m.scheduleIdleCompact())
+		return m, tea.Batch(textarea.Blink, m.waitForEvent(), m.scheduleIdleCompact())
 
 	case idleCompactMsg:
 		return m, m.onIdleCompact(msg)
@@ -1127,10 +1155,6 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spin, cmd = m.spin.Update(msg)
 		return m, cmd
 
-	case stopwatch.TickMsg, stopwatch.StartStopMsg, stopwatch.ResetMsg:
-		var cmd tea.Cmd
-		m.sw, cmd = m.sw.Update(msg)
-		return m, cmd
 	}
 
 	var cmd tea.Cmd

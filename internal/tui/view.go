@@ -77,6 +77,10 @@ func fmtDuration(d time.Duration) string {
 		return fmt.Sprintf("%dms", d.Milliseconds())
 	case d < time.Minute:
 		return fmt.Sprintf("%.1fs", d.Seconds())
+	case d >= time.Hour:
+		// "341m00s" is unreadable; turns and waits do run this long.
+		h := int(d.Hours())
+		return fmt.Sprintf("%dh%02dm", h, int(d.Minutes())-h*60)
 	default:
 		m := int(d.Minutes())
 		s := int(d.Seconds()) - m*60
@@ -279,14 +283,14 @@ func (m *Model) bottomView() string {
 		if m.cancelling {
 			hint = "  (Ctrl+C to force quit)"
 		}
-		work := m.spin.View() + label + bannerStyle.Render(m.sw.View()) + hintStyle.Render(hint)
+		work := m.spin.View() + label + bannerStyle.Render(liveElapsed(m.clock.working(m.clockNow()))) + hintStyle.Render(hint)
 		// Surface "stuck" by tracking time since the last event the renderer
 		// saw. Suppressed during cancellation — "cancelling… quiet for 12s"
 		// is a worse signal than "cancelling…". 30s threshold picked so a
 		// fast turn never sees the suffix; a long API call or tool-bound
 		// stall does. Re-evaluated every spinner tick (spinner.Dot, 100ms).
 		if !m.cancelling && !m.lastEventAt.IsZero() {
-			if q := time.Since(m.lastEventAt); q > 30*time.Second {
+			if q := m.clockNow().Sub(m.lastEventAt); q > 30*time.Second {
 				work += hintStyle.Render(fmt.Sprintf("  · quiet for %s", fmtDuration(q)))
 			}
 		}
