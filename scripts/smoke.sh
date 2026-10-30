@@ -10,6 +10,10 @@
 #
 # Usage: scripts/smoke.sh
 set -euo pipefail
+# A CDPATH in the caller's environment makes `cd` print the directory it
+# resolved, so ROOT="$(cd … && pwd)" captured the path twice and the script
+# died on its first cd (reported: a release dry run from an interactive shell).
+unset CDPATH
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$(mktemp -d)/klaudia"
