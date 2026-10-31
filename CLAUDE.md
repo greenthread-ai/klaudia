@@ -32,6 +32,7 @@ other products (see docs/roadmap.md, "The extraction"); it must not import
 - **pkg/api** - Provider abstraction: Anthropic client + OpenAI-compatible shim, model sizing, tuning
 - **pkg/permission** - The three permission modes (a leaf package)
 - **pkg/plan** - The session plan: step list + the approved-plan artefact
+- **pkg/imagefit** - Keeps images inside the API's size limits (the stricter one past 20 images in a request)
 - **pkg/schema** - Type/schema definitions
 - **pkg/tool** - The tool contract: `Tool`, `Registry`, `Context`, `Result`, the spill store and the approver interfaces (`internal/tools` aliases them)
 

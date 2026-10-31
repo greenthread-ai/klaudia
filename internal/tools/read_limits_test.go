@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"image"
 	"image/png"
@@ -89,11 +90,56 @@ func TestReadImageChecks(t *testing.T) {
 	for name, data := range map[string][]byte{
 		"empty.png": {},
 		"page.png":  []byte("<!doctype html><html>404</html>"),
-		"huge.png":  pngBytes(t, 9000, 10),
 	} {
 		res := readWith(t, r, dir, map[string]any{"file_path": write(name, data)})
 		if !res.IsError || len(res.Images) != 0 {
 			t.Errorf("%s: %+v, want a refusal and no image", name, res)
 		}
+	}
+}
+
+// An image over the size every request can carry is scaled down on read, not
+// sent at full size. A screenshot read at full size was fine on its own and
+// then, once the conversation held more than 20 images, made every request
+// 400 (measured: 21 screenshots of 2634×2042 stranded a goshapp session). An
+// image over the absolute limit is scaled too, rather than refused.
+func TestReadScalesLargeImages(t *testing.T) {
+	dir := t.TempDir()
+	r, _ := NewRead()
+	tests := []struct {
+		name   string
+		w, h   int
+		ww, wh int
+		note   bool
+	}{
+		{name: "the reported screenshot", w: 2634, h: 2042, ww: 2000, wh: 1550, note: true},
+		{name: "over the absolute limit", w: 9000, h: 10, ww: 2000, wh: 2, note: true},
+		{name: "already small enough", w: 1600, h: 1000, ww: 1600, wh: 1000},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := filepath.Join(dir, strings.ReplaceAll(tc.name, " ", "-")+".png")
+			if err := os.WriteFile(p, pngBytes(t, tc.w, tc.h), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			res := readWith(t, r, dir, map[string]any{"file_path": p})
+			if res.IsError || len(res.Images) != 1 {
+				t.Fatalf("read: %+v", res)
+			}
+			raw, err := base64.StdEncoding.DecodeString(res.Images[0].Base64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Width != tc.ww || cfg.Height != tc.wh {
+				t.Errorf("sent %dx%d, want %dx%d", cfg.Width, cfg.Height, tc.ww, tc.wh)
+			}
+			if got := strings.Contains(res.Content, "scaled from"); got != tc.note {
+				t.Errorf("content %q: scaled note present = %v, want %v", res.Content, got, tc.note)
+			}
+		})
 	}
 }

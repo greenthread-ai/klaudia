@@ -6,6 +6,21 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **Screenshots no longer strand a session.** Once a request holds more than
+  20 images, the API applies a stricter per-image size limit to every one of
+  them, old ones included — so a screenshot that was fine when it was read
+  made every request 400 once enough others followed, and nothing in the
+  history ever shrank. Measured: a goshapp session holding 21 screenshots of
+  2634×2042 and 2748×1954 was rejected on every request ("exceed max allowed
+  size for many-image requests: 3000 pixels", although none exceeds 3000).
+  `Read` now scales an image to 2000 px on its longest side (the size
+  Anthropic documents as safe on every platform), noting it in the result;
+  before each request, a history over 20 images has any larger image fitted,
+  once, with a notice — which also recovers a session already stuck; and if
+  the API names a lower limit, the history is fitted to that and the request
+  retried, once. An image too large for the absolute limit is now scaled
+  rather than refused. Pure Go: new `pkg/imagefit` (PNG, JPEG, GIF; WebP is
+  measured but not resized).
 - **The turn timer no longer counts time spent waiting on you.** It kept
   running while a question, permission prompt or plan approval sat
   unanswered, so after an `AskUserQuestion` left overnight the spinner read

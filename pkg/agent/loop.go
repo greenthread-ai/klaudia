@@ -22,6 +22,7 @@ import (
 
 	"github.com/greenthread-ai/klaudia/pkg/api"
 	"github.com/greenthread-ai/klaudia/pkg/compaction"
+	"github.com/greenthread-ai/klaudia/pkg/imagefit"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/plan"
 	"github.com/greenthread-ai/klaudia/pkg/schema"
@@ -425,6 +426,8 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 	overflowRecovered := false
 	thinkingRecovered := false
 	bindingRecovered := false // preserved-thinking 400 recovered once (stripThinking)
+	imagesRecovered := false  // many-image 400 recovered once (fitImagesForRequest)
+	imageSideLimit := imagefit.MaxSide
 	maxTokensLowered := false
 	// The last batch of a Run that stops on MaxTurns or a halt has no next turn
 	// to report it, and the panel would show the step before until the user
@@ -483,6 +486,16 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// nothing on a clean history.
 		messages = sanitizeMessages(messages)
 
+		// More than 20 images in a request puts every one of them under a
+		// stricter size limit, old ones included, and one over it is a 400 on
+		// every request from then on. Fitted once and kept; see imagelimit.go.
+		if fitted, scaled, omitted := fitImagesForRequest(messages, imageSideLimit); scaled+omitted > 0 {
+			messages = fitted
+			if emit != nil {
+				emit(Event{Type: EventNotice, Content: imageFitNote(scaled, omitted, imageSideLimit)})
+			}
+		}
+
 		// Repair any message with empty content (e.g. an old refusal recorded with
 		// content: null) before sending — the Anthropic API otherwise rejects the
 		// whole request with "messages.<i>.content: Field required".
@@ -519,6 +532,22 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		if note := droppedThinkingNote(dropped); note != "" {
 			if r, ok := opts.Recorder.(ThinkingDropRecorder); ok {
 				_ = r.RecordThinkingDropped(note)
+			}
+		}
+		if limit, ok := api.ManyImageLimit(err); ok && !imagesRecovered {
+			// The API's many-image limit is lower than the one fitted to
+			// above (it differs by platform). Fit to what it says, once.
+			imagesRecovered = true
+			if limit < imageSideLimit {
+				imageSideLimit = limit
+			}
+			fitted, scaled, omitted := fitImagesForRequest(messages, imageSideLimit)
+			if scaled+omitted > 0 {
+				messages = fitted
+				if emit != nil {
+					emit(Event{Type: EventNotice, Content: imageFitNote(scaled, omitted, imageSideLimit)})
+				}
+				continue
 			}
 		}
 		if err != nil && api.IsThinkingBindingError(err) && !bindingRecovered {

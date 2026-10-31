@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/greenthread-ai/klaudia/internal/native/pdf"
+	"github.com/greenthread-ai/klaudia/pkg/imagefit"
 	"github.com/greenthread-ai/klaudia/pkg/permission"
 	"github.com/greenthread-ai/klaudia/pkg/schema"
 )
@@ -61,16 +62,28 @@ func readImage(path string) ([]Result, error) {
 	default:
 		return []Result{{Content: fmt.Sprintf("%s is named like an image but its content is %s, which cannot be shown as one.", path, mediaType), IsError: true}}, nil
 	}
+	// Scale an oversized image down before it enters the conversation. It is
+	// kept at a size every later request can carry: once a request holds more
+	// than 20 images the API applies a stricter per-image limit to all of
+	// them, and a screenshot read at full size then made every request 400 for
+	// the rest of the session (see package imagefit). Scaling also comes
+	// before the byte limit, so a large screenshot is shrunk, not refused.
+	note := ""
+	if f, err := imagefit.Fit(data, mediaType, imagefit.MaxSide); err == nil && f.Changed {
+		data, mediaType = f.Data, f.MediaType
+		note = fmt.Sprintf(" — scaled from %dx%d to %dx%d", f.From.X, f.From.Y, f.To.X, f.To.Y)
+	}
 	if len(data) > maxImageBytes {
 		return []Result{{Content: fmt.Sprintf("%s is %d bytes, over the %d-byte limit for an image; resize or compress it first (e.g. with ImageMagick: convert in.png -resize 50%% out.png).", path, len(data), maxImageBytes), IsError: true}}, nil
 	}
-	// No webp decoder is linked, so a webp's size goes unchecked here.
+	// A WebP cannot be decoded here, so it can be neither measured nor
+	// scaled; one larger than the API's absolute limit is refused.
 	if cfg, _, err := image.DecodeConfig(bytes.NewReader(data)); err == nil && (cfg.Width > maxImageSide || cfg.Height > maxImageSide) {
 		return []Result{{Content: fmt.Sprintf("%s is %dx%d pixels, over the %d-pixel limit on a side; resize it first.", path, cfg.Width, cfg.Height, maxImageSide), IsError: true}}, nil
 	}
 
 	return []Result{{
-		Content: fmt.Sprintf("[image: %s]", path),
+		Content: fmt.Sprintf("[image: %s%s]", path, note),
 		Images:  []ResultImage{{MediaType: mediaType, Base64: base64.StdEncoding.EncodeToString(data)}},
 	}}, nil
 }
