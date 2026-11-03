@@ -169,7 +169,7 @@ func TestThinkingDropLineIsInvisibleToReaders(t *testing.T) {
 	_ = tr.Record("user", json.RawMessage(`{"role":"user","content":"a"}`))
 	_ = tr.RecordCompaction("S")
 	_ = tr.Record("user", json.RawMessage(`{"role":"user","content":"b"}`))
-	_ = tr.RecordThinkingDropped("3 earlier thinking block(s) dropped")
+	_ = tr.RecordThinkingDropped("3 earlier thinking block(s) dropped", nil)
 	_ = tr.Record("user", json.RawMessage(`{"role":"user","content":"c"}`))
 	_ = tr.Close()
 
@@ -190,6 +190,65 @@ func TestThinkingDropLineIsInvisibleToReaders(t *testing.T) {
 	}
 	if got := texts(msgs); len(got) != 3 || got[1] != "b" || got[2] != "c" {
 		t.Errorf("resumed %q, want the summary then b, c", got)
+	}
+}
+
+// A block the live loop removed after the API dropped it stays removed on
+// resume. The blocks written after the drop were signed against the history
+// without it, so a resume that put it back changed their prefix and the API
+// dropped all of them — measured: every resume of one session dropped every
+// block since its last compaction (371, 525, 619, 637), each time including
+// the blocks the previous resumed process had written and the API accepted.
+func TestResumeRemovesThinkingTheLoopDropped(t *testing.T) {
+	t.Setenv("KLAUDIA_CONFIG_DIR", t.TempDir())
+	cwd := t.TempDir()
+	const id = "11111111-2222-3333-4444-888888888888"
+	tr, err := session.NewTranscript(session.Meta{SessionID: id, CWD: cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistant := func(sig, text string) json.RawMessage {
+		return json.RawMessage(`{"role":"assistant","content":[{"type":"thinking","thinking":"r","signature":"` + sig + `"},{"type":"text","text":"` + text + `"}]}`)
+	}
+	_ = tr.RecordCompaction("S")
+	_ = tr.Record("assistant", assistant("stale", "earlier"))
+	_ = tr.Record("user", json.RawMessage(`{"role":"user","content":"next"}`))
+	_ = tr.RecordThinkingDropped("1 earlier thinking block(s) dropped", []string{"stale"})
+	_ = tr.Record("assistant", assistant("fresh", "later"))
+	_ = tr.Close()
+
+	raw, _ := os.ReadFile(tr.Path())
+	if strings.Contains(string(raw), `"dropped":["stale"]`) {
+		t.Errorf("the signature itself was written; the line should carry its key")
+	}
+
+	sigs := func(msgs []anthropic.BetaMessageParam) string {
+		var out []string
+		for _, m := range msgs {
+			for _, b := range m.Content {
+				if b.OfThinking != nil {
+					out = append(out, b.OfThinking.Signature)
+				}
+			}
+		}
+		return strings.Join(out, ",")
+	}
+	summary, ok, err := resumeFromSummary(cwd, id)
+	if err != nil || !ok {
+		t.Fatalf("resume: ok=%v err=%v", ok, err)
+	}
+	if got := sigs(summary); got != "fresh" {
+		t.Errorf("summary resume carried thinking %q, want only fresh", got)
+	}
+	if got := texts(summary); len(got) != 4 || got[1] != "earlier" {
+		t.Errorf("summary resume = %q: the rest of the dropped block's turn must stay", got)
+	}
+	full, err := acpLoadHistory(cwd)(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sigs(full); got != "fresh" {
+		t.Errorf("full load carried thinking %q, want only fresh", got)
 	}
 }
 

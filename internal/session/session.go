@@ -172,6 +172,9 @@ type Entry struct {
 	// Kept is how many messages before a partial compaction stayed as they
 	// were ("partial_compact" only).
 	Kept int `json:"kept,omitempty"`
+	// Dropped holds a ThinkingKey for each thinking block the loop removed
+	// from its history ("thinking_dropped" only); see DroppedThinking.
+	Dropped []string `json:"dropped,omitempty"`
 }
 
 // SubtypeCompactBoundary marks the point where history was replaced by a
@@ -179,8 +182,9 @@ type Entry struct {
 const SubtypeCompactBoundary = "compact_boundary"
 
 // SubtypeThinkingDropped records that the API dropped thinking blocks from a
-// request, Content being the notice shown for it. Diagnostic only: no reader
-// rebuilds anything from it, and every reader skips it.
+// request, Content being the notice shown for it and Dropped the blocks the
+// loop then removed from its history. Read and ReadForResume skip it; resume
+// applies it through DroppedThinking.
 const SubtypeThinkingDropped = "thinking_dropped"
 
 // SubtypePartialCompact marks a "summarise up to here": Content is a summary

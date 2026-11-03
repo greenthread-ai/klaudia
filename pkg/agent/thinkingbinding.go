@@ -83,15 +83,17 @@ func stripThinking(messages []anthropic.BetaMessageParam) []anthropic.BetaMessag
 	return out
 }
 
-// withoutThinkingSigned removes the thinking blocks with the given signatures
+// WithoutThinkingSigned removes the thinking blocks with the given signatures
 // (or redacted-thinking data) from history, leaving every other block alone.
+// Exported for resume, which has to remove what the live loop removed or the
+// resumed history differs from the one later blocks were signed against.
 //
 // Removing a block from the middle is safe here, unlike in general: the API
 // already removed it from the conversation it worked from, so the blocks it
 // wrote after are bound to the history without it — measured live, the next
 // request reports no drops and the newer blocks stay valid. An assistant
 // message left empty gets the same placeholder stripThinking uses.
-func withoutThinkingSigned(messages []anthropic.BetaMessageParam, sigs []string) []anthropic.BetaMessageParam {
+func WithoutThinkingSigned(messages []anthropic.BetaMessageParam, sigs []string) []anthropic.BetaMessageParam {
 	if len(sigs) == 0 {
 		return messages
 	}
@@ -99,6 +101,13 @@ func withoutThinkingSigned(messages []anthropic.BetaMessageParam, sigs []string)
 	for _, s := range sigs {
 		dead[s] = true
 	}
+	return WithoutThinkingWhere(messages, func(sig string) bool { return dead[sig] })
+}
+
+// WithoutThinkingWhere is WithoutThinkingSigned with the test as a function,
+// for a caller that holds the signatures in another form (a transcript keeps
+// a hash of each).
+func WithoutThinkingWhere(messages []anthropic.BetaMessageParam, dropped func(signature string) bool) []anthropic.BetaMessageParam {
 	out := make([]anthropic.BetaMessageParam, len(messages))
 	for i, m := range messages {
 		out[i] = m
@@ -108,8 +117,8 @@ func withoutThinkingSigned(messages []anthropic.BetaMessageParam, sigs []string)
 		var kept []anthropic.BetaContentBlockParamUnion
 		changed := false
 		for _, b := range m.Content {
-			if (b.OfThinking != nil && dead[b.OfThinking.Signature]) ||
-				(b.OfRedactedThinking != nil && dead[b.OfRedactedThinking.Data]) {
+			if (b.OfThinking != nil && dropped(b.OfThinking.Signature)) ||
+				(b.OfRedactedThinking != nil && dropped(b.OfRedactedThinking.Data)) {
 				changed = true
 				continue
 			}

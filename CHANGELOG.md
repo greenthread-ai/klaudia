@@ -6,6 +6,17 @@ port mirrors (see `internal/version`).
 ## Unreleased
 
 ### Fixed
+- **A resumed session no longer drops all of its earlier reasoning every
+  time.** When the API dropped a thinking block, Klaudia removed it from the
+  live history but not from the transcript, so the next resume put it back.
+  That changed what every later block had been signed against, and the API
+  dropped them all. Measured on one session: each resume dropped every
+  thinking block since the last compaction (371, 525, 619, 637), each time
+  including blocks the API had accepted in the previous process. The
+  `thinking_dropped` line now records which blocks were removed (a hash of
+  each signature), and `--resume`, `--resume --full` and ACP `session/load`
+  remove them as well. A session recorded before this drops once more on its
+  next resume and is stable after that.
 - **Screenshots no longer strand a session.** Once a request holds more than
   20 images, the API applies a stricter per-image size limit to every one of
   them, old ones included — so a screenshot that was fine when it was read

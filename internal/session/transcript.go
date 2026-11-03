@@ -110,9 +110,14 @@ func (t *Transcript) RecordPartialCompaction(summary string, kept int) error {
 }
 
 // RecordThinkingDropped notes that the API dropped thinking blocks, with the
-// notice that was shown, so a session's drops can be counted from its file.
-func (t *Transcript) RecordThinkingDropped(note string) error {
-	return t.recordSystem(Entry{Subtype: SubtypeThinkingDropped, Content: note})
+// notice that was shown, so a session's drops can be counted from its file,
+// and a key for each block the loop removed, so a resume removes them too.
+func (t *Transcript) RecordThinkingDropped(note string, signatures []string) error {
+	var keys []string
+	for _, s := range signatures {
+		keys = append(keys, ThinkingKey(s))
+	}
+	return t.recordSystem(Entry{Subtype: SubtypeThinkingDropped, Content: note, Dropped: keys})
 }
 
 // recordSystem appends a system line, chained like any other.

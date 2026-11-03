@@ -62,11 +62,11 @@ func (m multiRecorder) RecordCompaction(summary string) error {
 }
 
 // RecordThinkingDropped forwards like RecordCompaction, for the same reason.
-func (m multiRecorder) RecordThinkingDropped(note string) error {
+func (m multiRecorder) RecordThinkingDropped(note string, signatures []string) error {
 	var first error
 	for _, r := range m {
 		if tr, ok := r.(agent.ThinkingDropRecorder); ok {
-			if err := tr.RecordThinkingDropped(note); err != nil && first == nil {
+			if err := tr.RecordThinkingDropped(note, signatures); err != nil && first == nil {
 				first = err
 			}
 		}

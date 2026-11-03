@@ -48,11 +48,21 @@ What Klaudia does about it (PR #63):
   reappearing. The client resolves each reported path against the request it
   actually sent (shaping adds messages, so the path does not index the
   caller's history) and hands back the block's signature; the loop removes
-  that block (`withoutThinkingSigned`), and the next request reports nothing.
+  that block (`WithoutThinkingSigned`), and the next request reports nothing.
   The usual trigger is a resume: the old blocks were signed against the
   previous process's system prompt, which a new date, branch or project
   knowledge note changes. Each drop is a notice and a `thinking_dropped` line
   in the transcript.
+- **A resume removes it too.** The `thinking_dropped` line carries a key for
+  each removed block (`session.ThinkingKey`, a hash of the signature), and
+  every reader that rebuilds a conversation — `--resume`, `--resume --full`,
+  ACP `session/load` — removes those blocks (`session.DroppedThinking`). Without
+  that, the transcript put the block back, which changed the prefix of every
+  block written after the drop: the API dropped all of them. Measured on one
+  session: each resume dropped every block since its last compaction (371,
+  525, 619, 637), including the blocks the previous resumed process had
+  written and the API had accepted. A transcript written before the keys
+  existed drops once more on its next resume and is stable after.
 - **Microcompact stands aside** for those conversations: the client asks the
   API to clear old tool results itself (`clear_tool_uses`, below), which does
   not count as an edit. A provider without that keeps microcompact.

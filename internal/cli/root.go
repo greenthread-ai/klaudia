@@ -81,7 +81,20 @@ func resumeFromSummary(cwd, sessionID string) ([]anthropic.BetaMessageParam, boo
 	if err != nil {
 		return nil, false, err
 	}
-	return append(compaction.ReplaceWithSummary(summary), rest...), true, nil
+	return withoutRecordedDrops(path, append(compaction.ReplaceWithSummary(summary), rest...)), true, nil
+}
+
+// withoutRecordedDrops removes from a history rebuilt from the transcript at
+// path the thinking blocks the live loop had removed (session.DroppedThinking
+// says why every reader that resumes a conversation needs this). A transcript
+// whose drop lines cannot be read resumes as it is: the API drops the blocks
+// again, once, which is the failure being avoided rather than a worse one.
+func withoutRecordedDrops(path string, msgs []anthropic.BetaMessageParam) []anthropic.BetaMessageParam {
+	keys, err := session.DroppedThinking(path)
+	if err != nil || len(keys) == 0 {
+		return msgs
+	}
+	return agent.WithoutThinkingWhere(msgs, func(sig string) bool { return keys[session.ThinkingKey(sig)] })
 }
 
 func compactAndPersist(ctx context.Context, history []anthropic.BetaMessageParam, compact tui.CompactFunc, onSummary func(string)) ([]anthropic.BetaMessageParam, string, error) {
@@ -388,11 +401,16 @@ func acpTranscript(cwd string, mode permission.Mode, model string, limits api.Mo
 // cost of the longer history is the same cost --resume --full pays.
 func acpLoadHistory(cwd string) func(string) ([]anthropic.BetaMessageParam, error) {
 	return func(sessionID string) ([]anthropic.BetaMessageParam, error) {
-		entries, err := session.Read(session.ExistingPath(cwd, sessionID))
+		path := session.ExistingPath(cwd, sessionID)
+		entries, err := session.Read(path)
 		if err != nil {
 			return nil, fmt.Errorf("no session %s in this project: %w", sessionID, err)
 		}
-		return session.Messages(entries)
+		msgs, err := session.Messages(entries)
+		if err != nil {
+			return nil, err
+		}
+		return withoutRecordedDrops(path, msgs), nil
 	}
 }
 
@@ -1207,7 +1225,8 @@ func run(cmd *cobra.Command, opts *options) error {
 			initialMessages = seeded
 			fmt.Fprintln(cmd.ErrOrStderr(), "resuming from compacted summary (--full for the entire transcript)")
 		} else {
-			entries, rerr := session.Read(session.ExistingPath(cwd, resumeID))
+			path := session.ExistingPath(cwd, resumeID)
+			entries, rerr := session.Read(path)
 			if rerr != nil {
 				return fmt.Errorf("resume %s: %w", resumeID, rerr)
 			}
@@ -1215,6 +1234,7 @@ func run(cmd *cobra.Command, opts *options) error {
 			if rerr != nil {
 				return fmt.Errorf("resume %s: %w", resumeID, rerr)
 			}
+			initialMessages = withoutRecordedDrops(path, initialMessages)
 		}
 		if !opts.forkSession {
 			sessionID = resumeID // continue appending to the same transcript

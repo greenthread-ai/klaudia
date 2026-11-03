@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/greenthread-ai/klaudia/pkg/agent"
@@ -38,8 +39,8 @@ func TestMultiRecorderForwardsTheBoundary(t *testing.T) {
 	}
 }
 
-func (m *markingRecorder) RecordThinkingDropped(s string) error {
-	m.got = append(m.got, "dropped:"+s)
+func (m *markingRecorder) RecordThinkingDropped(s string, sigs []string) error {
+	m.got = append(m.got, "dropped:"+s+":"+strings.Join(sigs, ","))
 	return nil
 }
 
@@ -52,10 +53,10 @@ func TestMultiRecorderForwardsThinkingDrops(t *testing.T) {
 	if !ok {
 		t.Fatal("multiRecorder does not implement ThinkingDropRecorder")
 	}
-	if err := dr.RecordThinkingDropped("N"); err != nil {
+	if err := dr.RecordThinkingDropped("N", []string{"sig"}); err != nil {
 		t.Fatal(err)
 	}
-	if len(tr.got) != 1 || tr.got[0] != "dropped:N" {
+	if len(tr.got) != 1 || tr.got[0] != "dropped:N:sig" {
 		t.Errorf("wrapped transcript got %q", tr.got)
 	}
 }

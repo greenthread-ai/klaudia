@@ -122,8 +122,16 @@ type CompactionRecorder interface {
 // ThinkingDropRecorder is a Recorder that can also note thinking blocks the
 // API dropped. Optional, asserted on the turn's own Recorder for the same
 // reason as CompactionRecorder.
+//
+// signatures are the blocks the loop removed from its history (see
+// WithoutThinkingSigned). A resume has to remove them too: the blocks written
+// after a drop are bound to the history without the dropped block, so a
+// transcript that puts it back changes their prefix and the API drops every
+// one of them — measured: each resume of one session dropped every block since
+// its last compaction (371, 525, 619, 637), including the ones the previous
+// resumed process had written and the API had accepted.
 type ThinkingDropRecorder interface {
-	RecordThinkingDropped(note string) error
+	RecordThinkingDropped(note string, signatures []string) error
 }
 
 // Options configures a single Run.
@@ -524,14 +532,16 @@ func (l *Loop) run(ctx context.Context, opts Options, emit Emitter) (Result, err
 		// and were dropped again (measured live). Remove them now, so the
 		// notice is once per event and the next request carries no dead
 		// weight. Done on error too: the blocks are just as invalid.
-		messages = withoutThinkingSigned(messages, droppedSignatures(dropped))
+		removed := droppedSignatures(dropped)
+		messages = WithoutThinkingSigned(messages, removed)
 		// Into the transcript as well as onto the screen: a notice reaches
 		// nobody once the session ends, and the constant drops in resumed
 		// sessions went undiagnosed for days because nothing on disk said
-		// they had happened.
-		if note := droppedThinkingNote(dropped); note != "" {
+		// they had happened. The signatures go with it, so a resume removes
+		// the same blocks this history no longer has.
+		if note := droppedThinkingNote(dropped); note != "" || len(removed) > 0 {
 			if r, ok := opts.Recorder.(ThinkingDropRecorder); ok {
-				_ = r.RecordThinkingDropped(note)
+				_ = r.RecordThinkingDropped(note, removed)
 			}
 		}
 		if limit, ok := api.ManyImageLimit(err); ok && !imagesRecovered {
@@ -1002,7 +1012,7 @@ func (l *Loop) summarize(ctx context.Context, messages []anthropic.BetaMessagePa
 // output; it is nil for compaction summary turns.
 //
 // onDropped, if non-nil, receives the transformations the API applied to this
-// request — the thinking blocks it dropped (see withoutThinkingSigned).
+// request — the thinking blocks it dropped (see WithoutThinkingSigned).
 func (l *Loop) streamTurn(ctx context.Context, params anthropic.BetaMessageNewParams, emit Emitter, rawSink func(anthropic.BetaRawMessageStreamEventUnion), onDropped func([]api.InputTransformation)) (anthropic.BetaMessage, string, error) {
 	sink := api.StreamSink{
 		OnText: func(delta string) {

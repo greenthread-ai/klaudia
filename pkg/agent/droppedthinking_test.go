@@ -104,12 +104,20 @@ func TestDroppedThinkingIsRemovedFromHistory(t *testing.T) {
 	if len(rec.notes) != 1 || rec.notes[0] != notices[0] {
 		t.Errorf("transcript notes = %q, want the one notice", rec.notes)
 	}
+	// With the signature, so a resume can remove the same block.
+	if len(rec.sigs) != 1 || strings.Join(rec.sigs[0], ",") != "stale" {
+		t.Errorf("transcript signatures = %q, want [stale]", rec.sigs)
+	}
 }
 
-type dropRecorder struct{ notes []string }
+type dropRecorder struct {
+	notes []string
+	sigs  [][]string
+}
 
 func (r *dropRecorder) Record(string, json.RawMessage) error { return nil }
-func (r *dropRecorder) RecordThinkingDropped(note string) error {
+func (r *dropRecorder) RecordThinkingDropped(note string, sigs []string) error {
 	r.notes = append(r.notes, note)
+	r.sigs = append(r.sigs, sigs)
 	return nil
 }
