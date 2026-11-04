@@ -735,8 +735,6 @@ func New(ctx context.Context, run RunFunc, history []anthropic.BetaMessageParam,
 	return m
 }
 
-// setState changes the UI state and re-syncs the layout (the running and idle
-// states reserve different numbers of bottom rows).
 // clockNow is the turn clock's current time.
 func (m *Model) clockNow() time.Time {
 	if m.now != nil {
@@ -745,6 +743,8 @@ func (m *Model) clockNow() time.Time {
 	return time.Now()
 }
 
+// setState changes the UI state and re-syncs the layout (the running and idle
+// states reserve different numbers of bottom rows).
 func (m *Model) setState(s uiState) {
 	// The turn clock counts working time only: paused while the turn waits on
 	// the user's answer, resumed when it runs again. See turnClock.
