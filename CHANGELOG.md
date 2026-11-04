@@ -5,6 +5,8 @@ port mirrors (see `internal/version`).
 
 ## Unreleased
 
+## v0.7.2 — 2026-11-04
+
 ### Fixed
 - **A resumed session no longer drops all of its earlier reasoning every
   time.** When the API dropped a thinking block, Klaudia removed it from the
